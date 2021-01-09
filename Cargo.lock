@@ -575,8 +575,10 @@ dependencies = [
 name = "minimint"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "futures",
  "hbbft",
+ "rand 0.6.5",
  "structopt",
  "tokio",
  "tokio-stream",
