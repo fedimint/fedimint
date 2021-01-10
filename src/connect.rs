@@ -12,7 +12,7 @@ pub async fn connect_to_all(cfg: &Config) -> HashMap<u16, TcpStream> {
     info!("Starting mint {}", cfg.identity);
     let listener = spawn(await_peers(cfg.get_my_port(), cfg.get_incoming_count()));
 
-    sleep(Duration::from_millis(500)).await;
+    sleep(Duration::from_millis(5000)).await;
 
     debug!("Beginning to connect to peers");
 
