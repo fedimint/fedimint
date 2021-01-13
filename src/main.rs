@@ -22,6 +22,7 @@ use tracing::{debug, error, info, warn};
 mod config;
 mod connect;
 mod keygen;
+mod mint;
 mod net;
 mod peer;
 
