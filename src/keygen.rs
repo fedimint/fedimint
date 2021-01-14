@@ -1,5 +1,7 @@
 use crate::config::Config;
 use crate::peer::Peer;
+use blindsign::keypair::BlindKeypair;
+use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
 use futures::future::try_join_all;
 use hbbft::crypto::{PublicKey, PublicKeySet, SecretKey, SecretKeyShare};
 use hbbft::sync_key_gen::{Ack, Part, PartOutcome, SyncKeyGen};
@@ -17,45 +19,64 @@ pub async fn generate_keys<R: Rng>(
     rng: &mut R,
     mut peers: HashMap<u16, TcpStream>,
 ) -> (
-    Vec<(u16, TcpStream, PublicKey)>,
+    Vec<(u16, TcpStream, PublicKey, RistrettoPoint)>,
     PublicKeySet,
     SecretKey,
     SecretKeyShare,
 ) {
     info!("Beginning distributed key generation");
-    let sec_key: SecretKey = rng.gen();
-    let pub_key = sec_key.public_key();
+    let hbbft_sec_key: SecretKey = rng.gen();
+    let hbbft_pub_key = hbbft_sec_key.public_key();
+
+    let mint_keys = BlindKeypair::generate().unwrap();
+    let mint_sec_key = mint_keys.private();
+    let mint_pub_key = mint_keys.public();
 
     // Exchange pub keys
     for (_, peer_socket) in peers.iter_mut() {
         peer_socket
-            .write_all(&pub_key.to_bytes())
+            .write_all(&hbbft_pub_key.to_bytes())
             .await
-            .expect("Failed to send pub key to peer");
+            .expect("Failed to send hbbft pub key to peer");
+        peer_socket
+            .write_all(&mint_pub_key.compress().0)
+            .await
+            .expect("Failed to send mint pub key to peer");
     }
 
     let mut peers = try_join_all(peers.into_iter().map(|(id, peer_socket)| {
         (async move |id: u16,
                      mut peer_socket: TcpStream|
-                    -> Result<(u16, TcpStream, PublicKey), std::io::Error> {
+                    -> Result<(u16, TcpStream, PublicKey, RistrettoPoint), std::io::Error> {
             let mut key_buffer = [0u8; 48];
             peer_socket.read_exact(&mut key_buffer).await?;
-            Ok((id, peer_socket, PublicKey::from_bytes(key_buffer).unwrap()))
+            let hbbft_pub_key = PublicKey::from_bytes(key_buffer).unwrap();
+
+            let mut key_buffer = [0u8; 32];
+            peer_socket.read_exact(&mut key_buffer).await?;
+            let mint_pub_key = CompressedRistretto(key_buffer).decompress().unwrap();
+
+            Ok((id, peer_socket, hbbft_pub_key, mint_pub_key))
         })(id, peer_socket)
     }))
     .await
     .expect("Error collecting peer pub keys");
 
-    let pub_keys = once((cfg.identity, pub_key.clone()))
-        .chain(peers.iter().map(|(id, _, key)| (*id, key.clone())))
+    let pub_keys = once((cfg.identity, hbbft_pub_key.clone()))
+        .chain(peers.iter().map(|(id, _, key, _)| (*id, key.clone())))
         .collect::<BTreeMap<_, _>>();
 
     // Generate proposal
     let thresh = max_faulty(cfg.federation_size as usize);
     debug!("Max faulty nodes: {}", thresh);
-    let (mut kg, proposal) =
-        SyncKeyGen::new(cfg.identity, sec_key.clone(), pub_keys.clone(), thresh, rng)
-            .expect("Failed to instantiate keygen algorithm");
+    let (mut kg, proposal) = SyncKeyGen::new(
+        cfg.identity,
+        hbbft_sec_key.clone(),
+        pub_keys.clone(),
+        thresh,
+        rng,
+    )
+    .expect("Failed to instantiate keygen algorithm");
 
     let ack = kg
         .handle_part(&cfg.identity, proposal.clone().unwrap(), rng)
@@ -73,7 +94,7 @@ pub async fn generate_keys<R: Rng>(
     let proposal_bin = bincode::serialize(proposal.as_ref().expect("No proposal was generated"))
         .expect("Can't encode proposal");
     let proposal_len = proposal_bin.len();
-    for (peer, peer_socket, _) in peers.iter_mut() {
+    for (peer, peer_socket, _, _) in peers.iter_mut() {
         peer_socket
             .write_u64(proposal_len as u64)
             .await
@@ -87,7 +108,7 @@ pub async fn generate_keys<R: Rng>(
 
     // Receive and ack proposals
     let mut acks = vec![ack];
-    for (peer, peer_socket, _) in peers.iter_mut() {
+    for (peer, peer_socket, _, _) in peers.iter_mut() {
         let len = peer_socket
             .read_u64()
             .await
@@ -119,7 +140,7 @@ pub async fn generate_keys<R: Rng>(
     let mut ack_sent = 0;
     let mut ack_received = 0;
     // sending all acks to all peers
-    for (peer, peer_socket, _) in peers.iter_mut() {
+    for (peer, peer_socket, _, _) in peers.iter_mut() {
         debug!("Sending acks to {}", peer);
         for ack in acks.iter() {
             let ack_bin = bincode::serialize(ack).expect("Could not serialize ACK");
@@ -136,7 +157,7 @@ pub async fn generate_keys<R: Rng>(
         }
     }
 
-    for (peer, peer_socket, _) in peers.iter_mut() {
+    for (peer, peer_socket, _, _) in peers.iter_mut() {
         for _ in 0..cfg.federation_size {
             let len = peer_socket
                 .read_u64()
@@ -162,5 +183,5 @@ pub async fn generate_keys<R: Rng>(
 
     info!("Finished generating keys");
 
-    (peers, pub_key_set, sec_key, secret_key_share.unwrap())
+    (peers, pub_key_set, hbbft_sec_key, secret_key_share.unwrap())
 }

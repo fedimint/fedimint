@@ -41,13 +41,14 @@ async fn main() {
 
     let mut peers = peers
         .into_iter()
-        .map(|(id, conn, pubkey)| {
+        .map(|(id, conn, hbbft_pub_key, mint_pub_key)| {
             (
                 id,
                 Peer {
                     id,
                     conn: net::Framed::new(conn.compat()),
-                    pubkey,
+                    hbbft_pub_key,
+                    mint_pub_key,
                 },
             )
         })
@@ -60,7 +61,7 @@ async fn main() {
         sec_key.clone(),
         peers
             .values()
-            .map(|peer| (peer.id, peer.pubkey.clone()))
+            .map(|peer| (peer.id, peer.hbbft_pub_key.clone()))
             .chain(once((cfg.identity, sec_key.public_key())))
             .collect(),
     );
