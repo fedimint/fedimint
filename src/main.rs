@@ -46,7 +46,7 @@ async fn main() {
                 id,
                 Peer {
                     id,
-                    conn: net::Framed::new(conn.compat()),
+                    conn: net::framed::Framed::new(conn.compat()),
                     hbbft_pub_key,
                     mint_pub_key,
                 },

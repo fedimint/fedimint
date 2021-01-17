@@ -1,4 +1,4 @@
-use crate::net::Framed;
+use crate::net::framed::Framed;
 use crate::HoneyBadgerMessage;
 use curve25519_dalek::ristretto::RistrettoPoint;
 use hbbft::crypto::PublicKey;
