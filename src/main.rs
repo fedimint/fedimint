@@ -41,14 +41,13 @@ async fn main() {
 
     let mut peers = peers
         .into_iter()
-        .map(|(id, conn, hbbft_pub_key, mint_pub_key)| {
+        .map(|(id, conn, hbbft_pub_key)| {
             (
                 id,
                 Peer {
                     id,
                     conn: net::framed::Framed::new(conn.compat()),
                     hbbft_pub_key,
-                    mint_pub_key,
                 },
             )
         })
