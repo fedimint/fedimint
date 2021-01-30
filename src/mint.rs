@@ -8,7 +8,7 @@ use tbs::{
 };
 
 #[derive(Debug)]
-struct Mint {
+pub struct Mint {
     sec_key: SecretKeyShare,
     pub_key_shares: Vec<PublicKeyShare>,
     pub_key: AggregatePublicKey,
@@ -16,16 +16,16 @@ struct Mint {
     spendbook: HashSet<Message>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct SignRequest(Vec<BlindedMessage>);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PartialSigResponse(Vec<(BlindedMessage, BlindedSignatureShare)>);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct SigResponse(Vec<(BlindedMessage, BlindedSignature)>);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct Coin(Message, Signature);
 
 impl Mint {

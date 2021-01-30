@@ -1,11 +1,13 @@
 #![feature(async_closure)]
 
+use crate::mint::{PartialSigResponse, RequestId};
 use crate::peer::Peer;
 use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
-use hbbft::honey_badger::{EncryptionSchedule, HoneyBadger, SubsetHandlingStrategy};
+use hbbft::honey_badger::{Batch, EncryptionSchedule, HoneyBadger, SubsetHandlingStrategy};
 use hbbft::{NetworkInfo, Target};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::iter::once;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -26,8 +28,15 @@ mod mint;
 mod net;
 mod peer;
 
-type Transaction = u64;
+const TBS_THRESHOLD: usize = 3;
+
 type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+enum ConsensusItem {
+    IssuanceRequest(mint::SignRequest),
+    PartiallySignedRequest(u16, mint::PartialSigResponse),
+}
 
 #[tokio::main]
 async fn main() {
@@ -67,7 +76,7 @@ async fn main() {
             .collect(),
     );
 
-    let mut hb: HoneyBadger<Vec<Transaction>, _> = HoneyBadger::builder(Arc::new(net_info))
+    let mut hb: HoneyBadger<Vec<ConsensusItem>, _> = HoneyBadger::builder(Arc::new(net_info))
         //.encryption_schedule(EncryptionSchedule::Always)
         //.max_future_epochs(2)
         //.subset_handling_strategy(SubsetHandlingStrategy::Incremental)
@@ -76,8 +85,11 @@ async fn main() {
 
     sleep(Duration::from_millis(2000));
 
-    let (send_prop, mut receive_prop) = channel(1);
-    spawn(proposal_source((cfg.identity as u64) * 1000, send_prop));
+    let mut mint = mint::Mint::new(tbs_sk, tbs_pks, TBS_THRESHOLD);
+    let mut outstanding_consensus_items = HashSet::new();
+    let mut psigs = HashMap::<u64, Vec<(u16, PartialSigResponse)>>::new();
+    let mut wake_up = interval(Duration::from_millis(15_000));
+    let mut bsigs = HashMap::new();
 
     loop {
         let receive_msg = select_all(
@@ -87,10 +99,9 @@ async fn main() {
         );
 
         let step = select! {
-            proposal = receive_prop.recv(), if !hb.has_input() => {
-                let proposal = proposal.unwrap();
-                debug!("Sending proposal {}", proposal);
-                hb.propose(&vec![proposal], &mut rng)
+            _ = wake_up.tick() => {
+                let proposal = outstanding_consensus_items.iter().cloned().collect();
+                hb.propose(&proposal, &mut rng)
             },
             ((peer, peer_msg), _, _) = receive_msg => {
                 hb.handle_message(&peer, peer_msg)
@@ -120,20 +131,43 @@ async fn main() {
         }
 
         if !step.output.is_empty() {
-            info!("Round result: {:?}", step.output);
+            info!("Processing output {:?} ", step.output);
+        }
+
+        for batch in step.output {
+            let batch: Batch<Vec<ConsensusItem>, u16> = batch;
+
+            for (peer, ci) in batch
+                .contributions
+                .into_iter()
+                .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
+            {
+                outstanding_consensus_items.remove(&ci);
+                match ci {
+                    ConsensusItem::IssuanceRequest(req) => {
+                        outstanding_consensus_items.insert(ConsensusItem::PartiallySignedRequest(
+                            cfg.identity,
+                            mint.sign(req),
+                        ));
+                    }
+                    ConsensusItem::PartiallySignedRequest(peer, psig) => {
+                        let req_id = psig.id();
+                        let req_psigs = psigs.entry(req_id).or_default();
+                        req_psigs.push((peer, psig));
+                        if req_psigs.len() > TBS_THRESHOLD {
+                            // FIXME: handle error case, report, retain psigs and retry
+                            let bsig = mint.combine(&req_psigs).expect("Some mint is faulty");
+                            bsigs.insert(req_id, bsig);
+                            psigs.remove(&req_id);
+                        }
+                    }
+                };
+            }
         }
 
         if !step.fault_log.is_empty() {
             warn!("Faults: {:?}", step.fault_log);
         }
-    }
-}
-
-async fn proposal_source(mut base: u64, sender: Sender<u64>) {
-    let mut proposal_source = interval(Duration::from_secs(10));
-    while let _ = proposal_source.tick().await {
-        sender.send(base).await;
-        base += 1;
     }
 }
 
