@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ServerConfig;
 use crate::mint::{RequestId, SigResponse, SignRequest};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -7,6 +7,7 @@ use tide::prelude::*;
 use tide::{Body, Request, Response};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
+use tracing::{debug, info};
 
 type BsigDB = Arc<Mutex<HashMap<u64, SigResponse>>>;
 
@@ -17,7 +18,7 @@ struct State {
 }
 
 pub async fn run_server(
-    cfg: Config,
+    cfg: ServerConfig,
     request_sender: Sender<SignRequest>,
     bsig_receiver: Receiver<SigResponse>,
 ) {
@@ -49,7 +50,7 @@ async fn request_issuance(mut req: Request<State>) -> tide::Result {
 }
 
 async fn fetch_sig(mut req: Request<State>) -> tide::Result {
-    let req_id = match req
+    let req_id: u64 = match req
         .param("req_id")
         .expect("Request id not supplied")
         .parse()
@@ -58,8 +59,12 @@ async fn fetch_sig(mut req: Request<State>) -> tide::Result {
         Err(_) => return Ok(Response::new(400)),
     };
 
+    info!("got req for id: {}", req_id);
+
     if let Some(sig) = req.state().bsigs.lock().await.get(&req_id) {
-        Ok(Body::from_json(sig).expect("encoding error").into())
+        let body = Body::from_json(sig).expect("encoding error");
+        debug!("response body: {:?}", body);
+        Ok(body.into())
     } else {
         Ok(Response::new(404))
     }

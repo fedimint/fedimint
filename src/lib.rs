@@ -1,11 +1,13 @@
 #![feature(async_closure)]
 
-use crate::mint::{PartialSigResponse, RequestId};
+use crate::mint::{Coin, PartialSigResponse, RequestId, SigResponse, SignRequest};
 use crate::peer::Peer;
 use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, EncryptionSchedule, HoneyBadger, SubsetHandlingStrategy};
 use hbbft::{NetworkInfo, Target};
+use rand::{thread_rng, Rng};
+use reqwest::{Error, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::iter::once;
@@ -13,6 +15,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
+use tbs::{blind_message, unblind_signature, Aggregatable, Message};
 use tokio::select;
 use tokio::spawn;
 use tokio::sync::mpsc::{channel, Sender};
@@ -38,9 +41,8 @@ enum ConsensusItem {
     PartiallySignedRequest(u16, mint::PartialSigResponse),
 }
 
-#[tokio::main]
-async fn main() {
-    let cfg: config::Config = StructOpt::from_args();
+pub async fn server() {
+    let cfg: config::ServerConfig = StructOpt::from_args();
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
     let mut rng = rand::rngs::OsRng::new().expect("Failed to get RNG");
 
@@ -89,7 +91,7 @@ async fn main() {
     let mut wake_up = interval(Duration::from_millis(15_000));
 
     let (bsig_sender, bsig_receiver) = channel(4);
-    let (consensus_sender, consensus_receiver) = channel(4);
+    let (consensus_sender, mut consensus_receiver) = channel(4);
     spawn(net::api::run_server(
         cfg.clone(),
         consensus_sender,
@@ -110,7 +112,11 @@ async fn main() {
             },
             ((peer, peer_msg), _, _) = receive_msg => {
                 hb.handle_message(&peer, peer_msg)
-            }
+            },
+            ci = consensus_receiver.recv() => {
+                outstanding_consensus_items.insert(ConsensusItem::IssuanceRequest(ci.unwrap()));
+                continue;
+            },
         }
         .expect("Failed to process HBBFT input");
 
@@ -135,12 +141,10 @@ async fn main() {
             }
         }
 
-        if !step.output.is_empty() {
-            info!("Processing output {:?} ", step.output);
-        }
+        if !step.output.is_empty() {}
 
         for batch in step.output {
-            let batch: Batch<Vec<ConsensusItem>, u16> = batch;
+            info!("Processing output of epoch {}", batch.epoch);
 
             for (peer, ci) in batch
                 .contributions
@@ -162,7 +166,10 @@ async fn main() {
                         if req_psigs.len() > TBS_THRESHOLD {
                             // FIXME: handle error case, report, retain psigs and retry
                             let bsig = mint.combine(&req_psigs).expect("Some mint is faulty");
-                            bsig_sender.send(bsig);
+                            bsig_sender
+                                .send(bsig)
+                                .await
+                                .expect("Could not send blind sig to API");
                             psigs.remove(&req_id);
                         }
                     }
@@ -187,4 +194,60 @@ async fn receive_from_peer(peer: &mut Peer) -> (u16, HoneyBadgerMessage) {
     debug!("Received msg from peer {}", peer.id);
 
     (peer.id, msg)
+}
+
+pub async fn client() {
+    let pk = keygen::fake_pub_keys().aggregate(TBS_THRESHOLD);
+    let cfg: config::ClientConfig = StructOpt::from_args();
+    let (nonces, bmsgs): (Vec<_>, _) = (0..cfg.amount)
+        .map(|_| {
+            let nonce: [u8; 32] = thread_rng().gen();
+            let (bkey, bmsg) = blind_message(Message::from_bytes(&nonce));
+            ((nonce, bkey), bmsg)
+        })
+        .unzip();
+
+    let req = SignRequest(bmsgs);
+    let client = reqwest::Client::new();
+    client
+        .put(&format!("{}/issuance", cfg.url))
+        .json(&req)
+        .send()
+        .await
+        .expect("API error");
+
+    let resp: SigResponse = loop {
+        let url = format!("{}/issuance/{}", cfg.url, req.id());
+
+        println!("looking for coins: {}", url);
+
+        let api_resp = client.get(&url).send().await;
+        match api_resp {
+            Ok(r) => {
+                if r.status() == StatusCode::OK {
+                    break r.json().await.expect("invalid reply");
+                } else {
+                    println!("Status: {:?}", r.status());
+                }
+            }
+            Err(e) => {
+                if e.status() != Some(StatusCode::NOT_FOUND) {
+                    panic!("Error: {:?}", e);
+                }
+            }
+        };
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+    };
+
+    let coins: Vec<Coin> = resp
+        .0
+        .into_iter()
+        .zip(nonces)
+        .map(|((_, sig), (nonce, bkey))| {
+            let sig = unblind_signature(bkey, sig);
+            Coin(nonce, sig)
+        })
+        .collect();
+
+    assert!(coins.iter().all(|c| c.verify(pk)));
 }

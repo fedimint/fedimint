@@ -1,13 +1,13 @@
 use structopt::StructOpt;
 
 #[derive(Debug, Clone, StructOpt)]
-pub struct Config {
+pub struct ServerConfig {
     pub federation_size: u16,
     pub identity: u16,
     pub base_port: u16,
 }
 
-impl Config {
+impl ServerConfig {
     pub fn get_my_port(&self) -> u16 {
         self.base_port + self.identity
     }
@@ -18,4 +18,10 @@ impl Config {
     pub fn get_incoming_count(&self) -> u16 {
         self.identity
     }
+}
+
+#[derive(StructOpt)]
+pub struct ClientConfig {
+    pub url: String,
+    pub amount: usize,
 }

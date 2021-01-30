@@ -3,9 +3,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use tbs::{
-    combine_shares, sign_blinded_msg, Aggregatable, AggregatePublicKey, BlindedMessage,
+    combine_shares, sign_blinded_msg, verify, Aggregatable, AggregatePublicKey, BlindedMessage,
     BlindedSignature, BlindedSignatureShare, Message, PublicKeyShare, SecretKeyShare, Signature,
 };
+use tracing::info;
 
 #[derive(Debug)]
 pub struct Mint {
@@ -13,20 +14,20 @@ pub struct Mint {
     pub_key_shares: Vec<PublicKeyShare>,
     pub_key: AggregatePublicKey,
     threshold: usize,
-    spendbook: HashSet<Message>,
+    spendbook: HashSet<[u8; 32]>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SignRequest(Vec<BlindedMessage>);
+pub struct SignRequest(pub Vec<BlindedMessage>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PartialSigResponse(Vec<(BlindedMessage, BlindedSignatureShare)>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SigResponse(Vec<(BlindedMessage, BlindedSignature)>);
+pub struct SigResponse(pub Vec<(BlindedMessage, BlindedSignature)>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct Coin(Message, Signature);
+pub struct Coin(pub [u8; 32], pub Signature);
 
 impl Mint {
     pub fn new(sec_key: SecretKeyShare, pub_keys: Vec<PublicKeyShare>, threshold: usize) -> Mint {
@@ -78,6 +79,7 @@ impl Mint {
                     }
                 })
                 .collect::<Vec<_>>();
+            info!("combining {} sig shares: {:?}", partial_sig.len(), sigs);
             let bsig = combine_shares(comp_msg, &sigs, &self.pub_key_shares, self.threshold);
             bsigs.push((comp_msg, bsig));
         }
@@ -86,11 +88,21 @@ impl Mint {
     }
 
     pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
-        coins.into_iter().all(|c| self.spendbook.insert(c.0))
+        coins.into_iter().all(|c| {
+            let unspent = self.spendbook.insert(c.0);
+            let valid = verify(Message::from_bytes(&c.0), c.1, self.pub_key);
+            unspent && valid
+        })
     }
 
     pub fn threshold(&self) -> usize {
         self.threshold
+    }
+}
+
+impl Coin {
+    pub fn verify(&self, pk: AggregatePublicKey) -> bool {
+        verify(Message::from_bytes(&self.0), self.1, pk)
     }
 }
 

@@ -6,7 +6,7 @@ PIDS=()
 cargo build
 
 for ((ID=$2; ID<SIZE; ID++)); do
-  (RUST_LOG=debug target/debug/minimint $SIZE $ID 5000 2>&1 | sed -e "s/^/mint $ID: /" ) &
+  (RUST_LOG=debug target/debug/server $SIZE $ID 5000 2>&1 | sed -e "s/^/mint $ID: /" ) &
   PIDS+=( "$!" )
 done
 

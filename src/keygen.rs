@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ServerConfig;
 use crate::peer::Peer;
 use futures::future::try_join_all;
 use hbbft::crypto::{PublicKey, PublicKeySet, SecretKey, SecretKeyShare};
@@ -14,7 +14,7 @@ use tokio::net::TcpStream;
 use tracing::{debug, error, info};
 
 pub async fn generate_keys<R: Rng>(
-    cfg: &Config,
+    cfg: &ServerConfig,
     rng: &mut R,
     mut peers: HashMap<u16, TcpStream>,
 ) -> (
@@ -205,4 +205,8 @@ fn fake_tbs_keygen(id: u16) -> (tbs::SecretKeyShare, Vec<tbs::PublicKeyShare>) {
         .collect::<Vec<_>>();
 
     (sks[id as usize], pks)
+}
+
+pub fn fake_pub_keys() -> Vec<tbs::PublicKeyShare> {
+    fake_tbs_keygen(0).1
 }

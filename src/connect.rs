@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::ServerConfig;
 use futures::future::try_join_all;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -8,7 +8,7 @@ use tokio::spawn;
 use tokio::time::sleep;
 use tracing::{debug, error, info};
 
-pub async fn connect_to_all(cfg: &Config) -> HashMap<u16, TcpStream> {
+pub async fn connect_to_all(cfg: &ServerConfig) -> HashMap<u16, TcpStream> {
     info!("Starting mint {}", cfg.identity);
     let listener = spawn(await_peers(cfg.get_my_port(), cfg.get_incoming_count()));
 
