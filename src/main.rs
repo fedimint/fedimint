@@ -41,9 +41,7 @@ enum ConsensusItem {
 #[tokio::main]
 async fn main() {
     let cfg: config::Config = StructOpt::from_args();
-    tracing_subscriber::fmt()
-        .with_max_level(Level::DEBUG)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
     let mut rng = rand::rngs::OsRng::new().expect("Failed to get RNG");
 
     let connections = connect::connect_to_all(&cfg).await;
@@ -89,7 +87,14 @@ async fn main() {
     let mut outstanding_consensus_items = HashSet::new();
     let mut psigs = HashMap::<u64, Vec<(u16, PartialSigResponse)>>::new();
     let mut wake_up = interval(Duration::from_millis(15_000));
-    let mut bsigs = HashMap::new();
+
+    let (bsig_sender, bsig_receiver) = channel(4);
+    let (consensus_sender, consensus_receiver) = channel(4);
+    spawn(net::api::run_server(
+        cfg.clone(),
+        consensus_sender,
+        bsig_receiver,
+    ));
 
     loop {
         let receive_msg = select_all(
@@ -157,7 +162,7 @@ async fn main() {
                         if req_psigs.len() > TBS_THRESHOLD {
                             // FIXME: handle error case, report, retain psigs and retry
                             let bsig = mint.combine(&req_psigs).expect("Some mint is faulty");
-                            bsigs.insert(req_id, bsig);
+                            bsig_sender.send(bsig);
                             psigs.remove(&req_id);
                         }
                     }
