@@ -8,6 +8,7 @@ use rand::Rng;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::iter::once;
+use tbs::PublicKeyShare;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info};
@@ -21,6 +22,8 @@ pub async fn generate_keys<R: Rng>(
     PublicKeySet,
     SecretKey,
     SecretKeyShare,
+    Vec<tbs::PublicKeyShare>,
+    tbs::SecretKeyShare,
 ) {
     info!("Beginning distributed key generation");
     let hbbft_sec_key: SecretKey = rng.gen();
@@ -168,5 +171,38 @@ pub async fn generate_keys<R: Rng>(
 
     info!("Finished generating keys");
 
-    (peers, pub_key_set, hbbft_sec_key, secret_key_share.unwrap())
+    let (sk, pks) = fake_tbs_keygen(cfg.identity);
+    (
+        peers,
+        pub_key_set,
+        hbbft_sec_key,
+        secret_key_share.unwrap(),
+        pks,
+        sk,
+    )
+}
+
+// FIXME: implement dist key gen for TBS scheme or make dist keygen optional through config
+fn fake_tbs_keygen(id: u16) -> (tbs::SecretKeyShare, Vec<tbs::PublicKeyShare>) {
+    let sec_hex = [
+        "2000000000000000459a4897f4d630953495e7a78b1eb2e0e71b0f8731133eff14cc1c3590b6c370",
+        "2000000000000000457d7986563f38a89ebf3b8005c09254ba84cc5d4b148e563bf6e1ca259c8d08",
+        "20000000000000004660aa75b7a73fbb07468e588205311c92c52b3e6ded17e1a99d448a0e294514",
+        "20000000000000004743db64181047ce70cce030ff4acfe369068b1e8fc6a16b1845a749f7b5fc1f",
+        "200000000000000048260c5479784ee1d95233097c906dab4147eafeb09f2bf686ec0909e042b42b",
+    ];
+
+    let sks = sec_hex
+        .iter()
+        .map(|&sk| {
+            let bytes = hex::decode(sk).unwrap();
+            bincode::deserialize(&bytes).unwrap()
+        })
+        .collect::<Vec<tbs::SecretKeyShare>>();
+    let pks = sks
+        .iter()
+        .map(tbs::SecretKeyShare::to_pub_key_share)
+        .collect::<Vec<_>>();
+
+    (sks[id as usize], pks)
 }

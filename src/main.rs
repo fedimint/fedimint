@@ -32,11 +32,13 @@ type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 #[tokio::main]
 async fn main() {
     let cfg: config::Config = StructOpt::from_args();
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    tracing_subscriber::fmt()
+        .with_max_level(Level::DEBUG)
+        .init();
     let mut rng = rand::rngs::OsRng::new().expect("Failed to get RNG");
 
     let connections = connect::connect_to_all(&cfg).await;
-    let (peers, pub_key_set, sec_key, sec_key_share) =
+    let (peers, pub_key_set, sec_key, sec_key_share, tbs_pks, tbs_sk) =
         keygen::generate_keys(&cfg, &mut rng, connections).await;
 
     let mut peers = peers

@@ -562,6 +562,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+
+[[package]]
 name = "hex_fmt"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -688,6 +694,7 @@ dependencies = [
  "bincode",
  "futures",
  "hbbft",
+ "hex",
  "rand 0.6.5",
  "serde",
  "structopt",
@@ -1414,7 +1421,7 @@ dependencies = [
 [[package]]
 name = "tbs"
 version = "0.1.0"
-source = "git+***REMOVED***#ecc55ec438fef80706fb434dfe8950b92b1b1519"
+source = "git+***REMOVED***#787052c4c4ffbd06e164764c6ecf9d0cc5c18c04"
 dependencies = [
  "bls12_381",
  "ff",
