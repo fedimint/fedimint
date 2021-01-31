@@ -12,6 +12,4 @@ done
 
 read -p "Press enter to stop processes"
 
-for PID in "${PIDS[@]}"; do
-  kill $PID
-done
+kill 0
