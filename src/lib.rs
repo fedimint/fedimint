@@ -25,6 +25,8 @@ use tokio::time::{interval, sleep};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing::Level;
 use tracing::{debug, error, info, warn};
+use tracing_subscriber::filter::Directive;
+use tracing_subscriber::EnvFilter;
 
 pub mod config;
 mod connect;
@@ -44,12 +46,17 @@ enum ConsensusItem {
 }
 
 pub async fn server() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::from_default_env().add_directive("minimint=info".parse().unwrap()),
+        )
+        .init();
+
     let opts: config::ServerOpts = StructOpt::from_args();
     let cfg: config::ServerConfig = config::load_from_file(&opts.cfg_path);
 
     let tbs_threshold = cfg.peers.len() - cfg.max_faulty() - 1;
 
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
     let mut rng = rand::rngs::OsRng::new().expect("Failed to get RNG");
 
     let mut connections = connect::connect_to_all(&cfg).await;
