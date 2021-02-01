@@ -18,8 +18,11 @@ pub struct ServerConfig {
     pub api_port: u16,
 
     pub peers: BTreeMap<u16, Peer>,
+    #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sk: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKey>,
+    #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sks: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
     pub tbs_sks: tbs::SecretKeyShare,
 }
@@ -28,6 +31,7 @@ pub struct ServerConfig {
 pub struct Peer {
     pub hbbft_port: u16,
     pub api_port: u16,
+    #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk: hbbft::crypto::PublicKey,
     pub tbs_pks: tbs::PublicKeyShare,
 }
@@ -64,4 +68,29 @@ pub struct ClientConfig {
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
     let mut file = std::fs::File::open(path).expect("Can't read cfg file.");
     serde_json::from_reader(file).expect("Could not parse cfg file.")
+}
+
+mod serde_binary_human_readable {
+    use serde::de::{DeserializeOwned, Error};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<T: Serialize, S: Serializer>(x: &T, s: S) -> Result<S::Ok, S::Error> {
+        if s.is_human_readable() {
+            let bytes =
+                bincode::serialize(x).map_err(|e| serde::ser::Error::custom(format!("{:?}", e)))?;
+            s.serialize_str(&hex::encode(&bytes))
+        } else {
+            Serialize::serialize(x, s)
+        }
+    }
+
+    pub fn deserialize<'d, T: DeserializeOwned, D: Deserializer<'d>>(d: D) -> Result<T, D::Error> {
+        if d.is_human_readable() {
+            let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
+                .map_err(serde::de::Error::custom)?;
+            bincode::deserialize(&bytes).map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+        } else {
+            Deserialize::deserialize(d)
+        }
+    }
 }
