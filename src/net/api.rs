@@ -1,9 +1,7 @@
 use crate::config::ServerConfig;
 use crate::mint::{RequestId, SigResponse, SignRequest};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::sync::Arc;
-use tide::prelude::*;
 use tide::{Body, Request, Response};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
@@ -49,7 +47,7 @@ async fn request_issuance(mut req: Request<State>) -> tide::Result {
     Ok(Response::new(200))
 }
 
-async fn fetch_sig(mut req: Request<State>) -> tide::Result {
+async fn fetch_sig(req: Request<State>) -> tide::Result {
     let req_id: u64 = match req
         .param("req_id")
         .expect("Request id not supplied")

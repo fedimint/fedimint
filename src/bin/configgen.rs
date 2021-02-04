@@ -48,7 +48,7 @@ fn main() {
         let mut path: PathBuf = opts.cfg_path.clone();
         path.push(format!("server-{}.json", id));
 
-        let mut file = std::fs::File::create(path).expect("Could not create cfg file");
+        let file = std::fs::File::create(path).expect("Could not create cfg file");
         let cfg = ServerConfig {
             identity: *id,
             hbbft_port: opts.hbbft_base_port + *id,
@@ -59,18 +59,18 @@ fn main() {
             hbbft_pk_set: netinf.public_key_set().clone(),
             tbs_sks: tbs_sks.clone(),
         };
-        serde_json::to_writer_pretty(file, &cfg);
+        serde_json::to_writer_pretty(file, &cfg).unwrap();
     }
 
     let mut client_cfg_file_path: PathBuf = opts.cfg_path.clone();
     client_cfg_file_path.push("client.json");
 
-    let mut client_cfg_file =
+    let client_cfg_file =
         std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
 
     let client_cfg = ClientConfig {
         url: format!("http://127.0.0.1:{}", opts.api_base_port),
         mint_pk: tbs_pk,
     };
-    serde_json::to_writer_pretty(client_cfg_file, &client_cfg);
+    serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }

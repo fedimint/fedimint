@@ -2,7 +2,6 @@ use futures::{AsyncRead, AsyncWrite};
 use futures::{Sink, Stream};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::io::Error;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};

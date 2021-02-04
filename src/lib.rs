@@ -1,31 +1,26 @@
 #![feature(async_closure)]
 
-use crate::mint::{Coin, CombineError, PartialSigResponse, RequestId, SigResponse, SignRequest};
+use crate::mint::{Coin, PartialSigResponse, RequestId, SigResponse, SignRequest};
 use crate::net::framed::Framed;
-use crate::peer::Peer;
 use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
-use hbbft::honey_badger::{Batch, EncryptionSchedule, HoneyBadger, SubsetHandlingStrategy};
+use hbbft::honey_badger::HoneyBadger;
 use hbbft::{NetworkInfo, Target};
 use rand::{thread_rng, Rng};
-use reqwest::{Error, Response, StatusCode};
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::iter::once;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
-use tbs::{blind_message, unblind_signature, Aggregatable, Message};
+use tbs::{blind_message, unblind_signature, Message};
 use tokio::net::TcpStream;
 use tokio::select;
 use tokio::spawn;
-use tokio::sync::mpsc::{channel, Sender};
+use tokio::sync::mpsc::channel;
 use tokio::time::{interval, sleep};
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::Level;
+use tokio_util::compat::Compat;
 use tracing::{debug, error, info, trace, warn};
-use tracing_subscriber::filter::Directive;
 use tracing_subscriber::EnvFilter;
 
 pub mod config;
@@ -35,7 +30,6 @@ mod connect;
 // mod keygen;
 mod mint;
 mod net;
-mod peer;
 
 type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 
@@ -70,16 +64,13 @@ pub async fn server() {
             .collect(),
     );
 
-    let mut hb: HoneyBadger<Vec<ConsensusItem>, _> = HoneyBadger::builder(Arc::new(net_info))
-        //.encryption_schedule(EncryptionSchedule::Always)
-        //.max_future_epochs(2)
-        //.subset_handling_strategy(SubsetHandlingStrategy::Incremental)
-        .build();
+    let mut hb: HoneyBadger<Vec<ConsensusItem>, _> =
+        HoneyBadger::builder(Arc::new(net_info)).build();
     info!("Created Honey Badger instance");
 
     sleep(Duration::from_millis(2000)).await;
 
-    let mut mint = mint::Mint::new(
+    let mint = mint::Mint::new(
         cfg.tbs_sks.clone(),
         cfg.peers
             .values()

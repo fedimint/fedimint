@@ -2,13 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify, verify_blind_share, Aggregatable,
     AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, Message,
     PublicKeyShare, SecretKeyShare, Signature,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 pub struct Mint {
@@ -74,7 +73,7 @@ impl Mint {
             .iter()
             .map(|(idx, _)| *idx)
             .collect::<counter::Counter<_>>();
-        if let Some((peer, num)) = peer_contrib_counts.into_iter().find(|(_, cnt)| **cnt > 1) {
+        if let Some((peer, _)) = peer_contrib_counts.into_iter().find(|(_, cnt)| **cnt > 1) {
             return (
                 Err(CombineError::MultiplePeerContributions(*peer)),
                 MintShareErrors(vec![]),
@@ -167,10 +166,6 @@ impl Mint {
             let valid = verify(Message::from_bytes(&c.0), c.1, self.pub_key);
             unspent && valid
         })
-    }
-
-    pub fn threshold(&self) -> usize {
-        self.threshold
     }
 }
 

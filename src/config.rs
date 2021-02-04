@@ -66,12 +66,12 @@ pub struct ClientConfig {
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
-    let mut file = std::fs::File::open(path).expect("Can't read cfg file.");
+    let file = std::fs::File::open(path).expect("Can't read cfg file.");
     serde_json::from_reader(file).expect("Could not parse cfg file.")
 }
 
 mod serde_binary_human_readable {
-    use serde::de::{DeserializeOwned, Error};
+    use serde::de::DeserializeOwned;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     pub fn serialize<T: Serialize, S: Serializer>(x: &T, s: S) -> Result<S::Ok, S::Error> {
