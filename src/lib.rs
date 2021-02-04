@@ -1,6 +1,6 @@
 #![feature(async_closure)]
 
-use crate::mint::{Coin, PartialSigResponse, RequestId, SigResponse, SignRequest};
+use crate::mint::{Coin, CombineError, PartialSigResponse, RequestId, SigResponse, SignRequest};
 use crate::net::framed::Framed;
 use crate::peer::Peer;
 use futures::future::select_all;
@@ -24,7 +24,7 @@ use tokio::sync::mpsc::{channel, Sender};
 use tokio::time::{interval, sleep};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing::Level;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::filter::Directive;
 use tracing_subscriber::EnvFilter;
 
@@ -47,9 +47,7 @@ enum ConsensusItem {
 
 pub async fn server() {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive("minimint=info".parse().unwrap()),
-        )
+        .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     let opts: config::ServerOpts = StructOpt::from_args();
@@ -79,7 +77,7 @@ pub async fn server() {
         .build();
     info!("Created Honey Badger instance");
 
-    sleep(Duration::from_millis(2000));
+    sleep(Duration::from_millis(2000)).await;
 
     let mut mint = mint::Mint::new(
         cfg.tbs_sks.clone(),
@@ -90,7 +88,7 @@ pub async fn server() {
         tbs_threshold,
     );
     let mut outstanding_consensus_items = HashSet::new();
-    let mut psigs = HashMap::<u64, Vec<(u16, PartialSigResponse)>>::new();
+    let mut psigs = HashMap::<u64, Vec<(usize, PartialSigResponse)>>::new();
     let mut wake_up = interval(Duration::from_millis(15_000));
 
     let (bsig_sender, bsig_receiver) = channel(4);
@@ -110,7 +108,8 @@ pub async fn server() {
 
         let step = select! {
             _ = wake_up.tick() => {
-                let proposal = outstanding_consensus_items.iter().cloned().collect();
+                let proposal = outstanding_consensus_items.iter().cloned().collect::<Vec<_>>();
+                debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
                 hb.propose(&proposal, &mut rng)
             },
             ((peer, peer_msg), _, _) = receive_msg => {
@@ -124,7 +123,7 @@ pub async fn server() {
         .expect("Failed to process HBBFT input");
 
         for msg in step.messages {
-            debug!("Sending message to {:?}", msg.target);
+            trace!("Sending message to {:?}", msg.target);
             match msg.target {
                 Target::All => {
                     for peer in connections.values_mut() {
@@ -142,36 +141,68 @@ pub async fn server() {
             }
         }
 
-        if !step.output.is_empty() {}
-
         for batch in step.output {
             info!("Processing output of epoch {}", batch.epoch);
 
-            for (peer, ci) in batch
-                .contributions
-                .into_iter()
-                .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
-            {
+            for (peer, ci) in batch.contributions.into_iter().flat_map(|(peer, cis)| {
+                debug!("Peer {} contributed {} items", peer, cis.len());
+                cis.into_iter().map(move |ci| (peer, ci))
+            }) {
+                trace!("Processing consensus item {:?} from peer {}", ci, peer);
                 outstanding_consensus_items.remove(&ci);
                 match ci {
                     ConsensusItem::IssuanceRequest(req) => {
+                        debug!("Signing issuance request {}", req.id());
+                        let signed_req = mint.sign(req);
                         outstanding_consensus_items.insert(ConsensusItem::PartiallySignedRequest(
                             cfg.identity,
-                            mint.sign(req),
+                            signed_req.clone(),
                         ));
+                        psigs
+                            .entry(signed_req.id())
+                            .or_default()
+                            .push((cfg.identity as usize, signed_req));
                     }
                     ConsensusItem::PartiallySignedRequest(peer, psig) => {
                         let req_id = psig.id();
+                        debug!(
+                            "Received sig share from peer {} for issuance {}",
+                            peer, req_id
+                        );
                         let req_psigs = psigs.entry(req_id).or_default();
-                        req_psigs.push((peer, psig));
+
+                        // Add sig share if we don't already have it
+                        if req_psigs
+                            .iter()
+                            .find(|(ref p, _)| *p == peer as usize)
+                            .is_none()
+                        {
+                            // FIXME: check if shares are actually duplicates, ring alarm otherwise
+                            req_psigs.push((peer as usize, psig));
+                        }
                         if req_psigs.len() > tbs_threshold {
-                            // FIXME: handle error case, report, retain psigs and retry
-                            let bsig = mint.combine(&req_psigs).expect("Some mint is faulty");
-                            bsig_sender
-                                .send(bsig)
-                                .await
-                                .expect("Could not send blind sig to API");
-                            psigs.remove(&req_id);
+                            debug!(
+                                "Trying to combine sig shares for issuance request {}",
+                                req_id
+                            );
+                            let (bsig, errors) = mint.combine(req_psigs.clone());
+                            if !errors.0.is_empty() {
+                                warn!("Peer sent faulty share: {:?}", errors);
+                            }
+
+                            match bsig {
+                                Ok(bsig) => {
+                                    debug!("Successfully combined signature shares for issuance request {}", req_id);
+                                    bsig_sender
+                                        .send(bsig)
+                                        .await
+                                        .expect("Could not send blind sig to API");
+                                    psigs.remove(&req_id);
+                                }
+                                Err(e) => {
+                                    error!("Warn: could not combine shares: {:?}", e);
+                                }
+                            }
                         }
                     }
                 };
@@ -194,7 +225,7 @@ async fn receive_from_peer(
         .expect("Stream closed unexpectedly")
         .expect("Error receiving peer message");
 
-    debug!("Received msg from peer {}", id);
+    trace!("Received msg from peer {}", id);
 
     (id, msg)
 }
@@ -244,10 +275,10 @@ pub async fn client() {
     };
 
     let coins: Vec<Coin> = resp
-        .0
+        .1
         .into_iter()
         .zip(nonces)
-        .map(|((_, sig), (nonce, bkey))| {
+        .map(|(sig, (nonce, bkey))| {
             let sig = unblind_signature(bkey, sig);
             Coin(nonce, sig)
         })
