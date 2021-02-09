@@ -167,6 +167,18 @@ impl Mint {
             unspent && valid
         })
     }
+
+    pub fn reissue(
+        &mut self,
+        coins: Vec<Coin>,
+        new_tokens: SignRequest,
+    ) -> Option<PartialSigResponse> {
+        if self.spend(coins) {
+            Some(self.sign(new_tokens))
+        } else {
+            None
+        }
+    }
 }
 
 impl Coin {

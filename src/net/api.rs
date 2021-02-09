@@ -1,23 +1,61 @@
 use crate::config::ServerConfig;
-use crate::mint::{RequestId, SigResponse, SignRequest};
+use crate::mint::{Coin, RequestId, SigResponse, SignRequest};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tide::{Body, Request, Response};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 type BsigDB = Arc<Mutex<HashMap<u64, SigResponse>>>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct State {
     bsigs: BsigDB,
-    req_sender: Sender<SignRequest>,
+    req_sender: Sender<ClientRequest>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct PegInRequest {
+    pub blind_tokens: SignRequest,
+    pub proof: (), // TODO: implement pegin
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct ReissuanceRequest {
+    pub coins: Vec<Coin>,
+    pub blind_tokens: SignRequest,
+    pub sig: (), // TODO: impl signing
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct PegOutRequest {
+    pub address: (), // TODO: implement pegout
+    pub coins: Vec<Coin>,
+    pub sig: (), // TODO: impl signing
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub enum ClientRequest {
+    PegIn(PegInRequest),
+    Reissuance(ReissuanceRequest),
+    PegOut(PegOutRequest),
+}
+
+impl ClientRequest {
+    pub fn dbg_type_name(&self) -> &'static str {
+        match self {
+            ClientRequest::PegIn(_) => "peg-in",
+            ClientRequest::Reissuance(_) => "reissuance",
+            ClientRequest::PegOut(_) => "peg-out",
+        }
+    }
 }
 
 pub async fn run_server(
     cfg: ServerConfig,
-    request_sender: Sender<SignRequest>,
+    request_sender: Sender<ClientRequest>,
     bsig_receiver: Receiver<SigResponse>,
 ) {
     let bsigs = Arc::new(Mutex::new(HashMap::new()));
@@ -37,10 +75,12 @@ pub async fn run_server(
 }
 
 async fn request_issuance(mut req: Request<State>) -> tide::Result {
-    let sig_req: SignRequest = req.body_json().await?;
+    trace!("Received API request {:?}", req);
+    let sig_req: PegInRequest = req.body_json().await?;
+    debug!("Sending valid peg-in request to consensus");
     req.state()
         .req_sender
-        .send(sig_req)
+        .send(ClientRequest::PegIn(sig_req))
         .await
         .expect("Could not submit sign request to consensus");
 

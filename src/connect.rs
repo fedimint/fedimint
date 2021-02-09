@@ -1,6 +1,6 @@
 use crate::config::ServerConfig;
+use crate::consensus::HoneyBadgerMessage;
 use crate::net::framed::Framed;
-use crate::HoneyBadgerMessage;
 use futures::future::try_join_all;
 use std::collections::HashMap;
 use std::time::Duration;
