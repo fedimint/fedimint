@@ -188,7 +188,26 @@ impl FediMint {
                         .or_default()
                         .push((self.cfg.identity as usize, signed_req));
                 }
-                ConsensusItem::ClientRequest(_) => {
+                ConsensusItem::ClientRequest(ClientRequest::Reissuance(req)) => {
+                    let signed_request = match self.mint.reissue(req.coins, req.blind_tokens) {
+                        Some(sr) => sr,
+                        None => {
+                            warn!("Rejected reissuance request proposed by peer {}", peer);
+                            continue;
+                        }
+                    };
+                    debug!("Signed reissuance request {}", signed_request.id());
+                    self.outstanding_consensus_items
+                        .insert(ConsensusItem::PartiallySignedRequest(
+                            self.cfg.identity,
+                            signed_request.clone(),
+                        ));
+                    self.partial_blind_signatures
+                        .entry(signed_request.id())
+                        .or_default()
+                        .push((self.cfg.identity as usize, signed_request));
+                }
+                ConsensusItem::ClientRequest(ClientRequest::PegOut(req)) => {
                     unimplemented!()
                 }
                 ConsensusItem::PartiallySignedRequest(peer, psig) => {

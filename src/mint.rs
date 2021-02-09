@@ -173,7 +173,7 @@ impl Mint {
         coins: Vec<Coin>,
         new_tokens: SignRequest,
     ) -> Option<PartialSigResponse> {
-        if self.spend(coins) {
+        if coins.len() >= new_tokens.0.len() && self.spend(coins) {
             Some(self.sign(new_tokens))
         } else {
             None
