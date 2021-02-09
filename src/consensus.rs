@@ -1,7 +1,7 @@
 use crate::config::ServerConfig;
-use crate::connect::connect_to_all;
 use crate::mint::{Mint, PartialSigResponse, RequestId, SigResponse};
 use crate::net::api::ClientRequest;
+use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
 use crate::{mint, net};
 use futures::future::select_all;

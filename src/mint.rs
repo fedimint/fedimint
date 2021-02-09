@@ -9,6 +9,7 @@ use tbs::{
 };
 use tracing::{debug, warn};
 
+/// Federated mint member mint
 #[derive(Debug)]
 pub struct Mint {
     key_idx: usize,
@@ -19,15 +20,19 @@ pub struct Mint {
     spendbook: HashSet<[u8; 32]>,
 }
 
+/// Request to blind sign a certain amount of coins
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct SignRequest(pub Vec<BlindedMessage>);
 
+/// Blind signature share for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PartialSigResponse(Vec<(BlindedMessage, BlindedSignatureShare)>);
 
+/// Blind signature for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct SigResponse(pub u64, pub Vec<BlindedSignature>);
 
+/// A cryptographic coin consisting of a token and a threshold signature by the federated mint
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct Coin(pub [u8; 32], pub Signature);
 
@@ -51,6 +56,7 @@ impl Mint {
         }
     }
 
+    /// Generate our signature share for a `SignRequest`
     pub fn sign(&self, req: SignRequest) -> PartialSigResponse {
         PartialSigResponse(
             req.0
@@ -63,6 +69,8 @@ impl Mint {
         )
     }
 
+    /// Try to combine signature shares to a complete signature, filtering out invalid contributions
+    /// and reporting peer misbehaviour.
     pub fn combine(
         &self,
         partial_sigs: Vec<(usize, PartialSigResponse)>,
@@ -160,6 +168,8 @@ impl Mint {
         )
     }
 
+    /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
+    /// false otherwise.
     pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
         coins.into_iter().all(|c| {
             let unspent = self.spendbook.insert(c.0);
@@ -168,6 +178,8 @@ impl Mint {
         })
     }
 
+    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
+    /// was greater or equal to the ones to be issued and they were all unspent and valid.
     pub fn reissue(
         &mut self,
         coins: Vec<Coin>,

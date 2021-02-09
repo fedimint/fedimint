@@ -1,10 +1,13 @@
 #![feature(async_closure)]
 
+/// Configuration structs for server and client
 pub mod config;
-mod connect;
-// Distributed keygen is deactivated for now since we lack an implementation for our TBS protocol
-// and it slows down testing. Eventually it will be extracted into a distributed config generator.
-// mod keygen;
+
+/// The actual implementation of the federated mint
 pub mod consensus;
+
+/// The implementation of mint primitives
 pub mod mint;
+
+/// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;

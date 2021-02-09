@@ -7,6 +7,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tracing::{debug, trace};
 
+// FIXME: look into using tokio for that, I  just didn't know it was a core component by now
 pub struct Framed<S, T> {
     stream: S,
     write_buffer: Vec<u8>,
