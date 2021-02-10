@@ -3,24 +3,33 @@ use minimint::mint::{Coin, RequestId, SigResponse, SignRequest};
 use minimint::net::api::{PegInRequest, ReissuanceRequest};
 use rand::Rng;
 use reqwest::StatusCode;
+use std::process::exit;
 use structopt::StructOpt;
 use tbs::{blind_message, unblind_signature, BlindingKey, Message};
 use tokio::time::Duration;
+use tracing::{debug, error, info};
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     let opts: ClientOpts = StructOpt::from_args();
     let cfg: ClientConfig = load_from_file(&opts.cfg_path);
 
-    println!("Issuing coins");
+    info!("Sending peg-in request for {} coins", opts.issue_amt);
     let (req_id, nonces) = request_issuance(&cfg, opts.issue_amt).await;
     let coins = fetch_coins(&cfg, req_id, nonces).await;
     assert!(coins.iter().all(|c| c.verify(cfg.mint_pk)));
+    info!("Received {} valid coins", coins.len());
 
-    println!("Reissuing coins");
+    info!("Sending reissuance request for {} coins", coins.len());
     let (req_id, nonces) = request_reissuance(&cfg, coins).await;
     let coins = fetch_coins(&cfg, req_id, nonces).await;
     assert!(coins.iter().all(|c| c.verify(cfg.mint_pk)));
+    info!("Received {} valid coins", coins.len());
 }
 
 async fn fetch_coins(
@@ -32,7 +41,7 @@ async fn fetch_coins(
     let resp: SigResponse = loop {
         let url = format!("{}/issuance/{}", cfg.url, req_id);
 
-        println!("looking for coins: {}", url);
+        debug!("looking for coins: {}", url);
 
         let api_resp = client.get(&url).send().await;
         match api_resp {
@@ -40,7 +49,7 @@ async fn fetch_coins(
                 if r.status() == StatusCode::OK {
                     break r.json().await.expect("invalid reply");
                 } else {
-                    println!("Status: {:?}", r.status());
+                    debug!("Status: {:?}", r.status());
                 }
             }
             Err(e) => {
@@ -88,12 +97,17 @@ async fn request_issuance(
         proof: (),
     };
     let client = reqwest::Client::new();
-    client
+    let res = client
         .put(&format!("{}/issuance/pegin", cfg.url))
         .json(&req)
         .send()
         .await
         .expect("API error");
+
+    if res.status() != StatusCode::OK {
+        error!("API returned error when pegging in: {:?}", res.status());
+        exit(-1);
+    }
 
     (req_id, nonces)
 }
@@ -110,12 +124,17 @@ async fn request_reissuance(
         sig: (),
     };
     let client = reqwest::Client::new();
-    client
+    let res = client
         .put(&format!("{}/issuance/reissue", cfg.url))
         .json(&req)
         .send()
         .await
         .expect("API error");
+
+    if res.status() != StatusCode::OK {
+        error!("API returned error when reissuing: {:?}", res.status());
+        exit(-1);
+    }
 
     (req_id, nonces)
 }
