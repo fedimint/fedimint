@@ -1,6 +1,8 @@
 use crate::config::ServerConfig;
 use crate::mint::{Coin, RequestId, SigResponse, SignRequest};
+use crate::musig;
 use serde::{Deserialize, Serialize};
+use sha3::Sha3_256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tide::{Body, Request, Response};
@@ -26,7 +28,7 @@ pub struct PegInRequest {
 pub struct ReissuanceRequest {
     pub coins: Vec<Coin>,
     pub blind_tokens: SignRequest,
-    pub sig: (), // TODO: impl signing
+    pub sig: musig::Sig,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -50,6 +52,15 @@ impl ClientRequest {
             ClientRequest::Reissuance(_) => "reissuance",
             ClientRequest::PegOut(_) => "peg-out",
         }
+    }
+}
+
+impl ReissuanceRequest {
+    pub fn digest(&self) -> Sha3_256 {
+        let mut digest = Sha3_256::default();
+        bincode::serialize_into(&mut digest, &self.coins).unwrap();
+        bincode::serialize_into(&mut digest, &self.blind_tokens).unwrap();
+        digest
     }
 }
 

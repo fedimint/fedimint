@@ -6,14 +6,16 @@ use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::typenum::U32;
 use sha3::{Digest, Sha3_256 as Sha256};
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PubKey(Point);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Sig {
     r: Point,
     s: Scalar<Public>,
 }
+
+impl Eq for Sig {} // FIXME: check why it doesn't work otherwise
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SecKey(Scalar);

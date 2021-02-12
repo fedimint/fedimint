@@ -1,5 +1,6 @@
 use crate::config::ServerConfig;
 use crate::mint::{Mint, PartialSigResponse, RequestId, SigResponse};
+use crate::musig;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
@@ -117,22 +118,38 @@ impl FediMint {
             );
 
             let step = select! {
-            _ = wake_up.tick() => {
-                let proposal = self.outstanding_consensus_items.iter().cloned().collect::<Vec<_>>();
-                debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
-                hb.propose(&proposal, &mut self.rng)
-            },
-            ((peer, peer_msg), _, _) = receive_msg => {
-                hb.handle_message(&peer, peer_msg)
-            },
-            Some(ci) = self.client_req_receiver.recv() => {
-                // FIXME: check validity
-                debug!("Received request from API: {}", ci.dbg_type_name());
-                self.outstanding_consensus_items.insert(ConsensusItem::ClientRequest(ci));
-                continue;
-            },
-        }
-                .expect("Failed to process HBBFT input");
+                _ = wake_up.tick() => {
+                    let proposal = self.outstanding_consensus_items.iter().cloned().collect::<Vec<_>>();
+                    debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
+                    hb.propose(&proposal, &mut self.rng)
+                },
+                ((peer, peer_msg), _, _) = receive_msg => {
+                    hb.handle_message(&peer, peer_msg)
+                },
+                Some(ci) = self.client_req_receiver.recv() => {
+                    match ci {
+                        ClientRequest::Reissuance(ref reissuance_req) => {
+                            let pub_keys = reissuance_req.coins
+                                .iter()
+                                .map(|c| c.0.clone())
+                                .collect::<Vec<_>>();
+                            if !musig::verify(reissuance_req.digest(), reissuance_req.sig.clone(), &pub_keys) {
+                                warn!("Rejecting invalid reissuance request");
+                                continue;
+                            }
+                        },
+                        _ => {
+                            // FIXME: validate other request types or move validation elsewhere
+                        }
+                    }
+
+                    // FIXME: check validity
+                    debug!("Received request from API: {}", ci.dbg_type_name());
+                    self.outstanding_consensus_items.insert(ConsensusItem::ClientRequest(ci));
+                    continue;
+                },
+            }
+            .expect("Failed to process HBBFT input");
 
             for msg in step.messages {
                 trace!("Sending message to {:?}", msg.target);

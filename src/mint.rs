@@ -1,3 +1,4 @@
+use crate::musig;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
@@ -17,7 +18,7 @@ pub struct Mint {
     pub_key_shares: Vec<PublicKeyShare>,
     pub_key: AggregatePublicKey,
     threshold: usize,
-    spendbook: HashSet<[u8; 32]>,
+    spendbook: HashSet<musig::PubKey>, // FIXME: make newtype for nonce pubkey: name=serial number?
 }
 
 /// Request to blind sign a certain amount of coins
@@ -34,7 +35,7 @@ pub struct SigResponse(pub u64, pub Vec<BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct Coin(pub [u8; 32], pub Signature);
+pub struct Coin(pub musig::PubKey, pub Signature);
 
 impl Mint {
     /// Constructs a new ming
@@ -172,8 +173,12 @@ impl Mint {
     /// false otherwise.
     pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
         coins.into_iter().all(|c| {
-            let unspent = self.spendbook.insert(c.0);
-            let valid = verify(Message::from_bytes(&c.0), c.1, self.pub_key);
+            let unspent = self.spendbook.insert(c.0.clone());
+            let valid = verify(
+                Message::from_bytes(&bincode::serialize(&c.0).unwrap()), // FIXME: use digest, don't allocate
+                c.1,
+                self.pub_key,
+            );
             unspent && valid
         })
     }
@@ -195,7 +200,11 @@ impl Mint {
 
 impl Coin {
     pub fn verify(&self, pk: AggregatePublicKey) -> bool {
-        verify(Message::from_bytes(&self.0), self.1, pk)
+        verify(
+            Message::from_bytes(&bincode::serialize(&self.0).unwrap()),
+            self.1,
+            pk,
+        )
     }
 }
 
