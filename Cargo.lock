@@ -1488,8 +1488,10 @@ dependencies = [
  "hex",
  "rand 0.6.5",
  "reqwest",
+ "secp256kfun",
  "serde",
  "serde_json",
+ "sha3",
  "structopt",
  "tbs",
  "tide",
@@ -2208,6 +2210,29 @@ checksum = "e3042af939fca8c3453b7af0f1c66e533a15a86169e39de2657310ade8f98d3c"
 dependencies = [
  "ring",
  "untrusted",
+]
+
+[[package]]
+name = "secp256kfun"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7f0201818b6f04d9859eeecee9ef8b59937e3cf1c5b9b69e7f611baaedc9484"
+dependencies = [
+ "digest",
+ "rand_core 0.5.1",
+ "secp256kfun_parity_backend",
+ "serde",
+ "subtle",
+]
+
+[[package]]
+name = "secp256kfun_parity_backend"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "197c74957bf4e4c5c18459285535235b0548ceee403b7dc7ce85fb9493095271"
+dependencies = [
+ "crunchy",
+ "subtle",
 ]
 
 [[package]]
