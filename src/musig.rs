@@ -1,10 +1,10 @@
-use secp256kfun::marker::{ChangeMark, NonZero, Normal, Public, Secret, Zero};
+use secp256kfun::marker::{ChangeMark, NonZero, Normal, Public, Secret};
 use secp256kfun::op::{point_add, scalar_add, scalar_mul};
 use secp256kfun::rand_core::{CryptoRng, RngCore};
 use secp256kfun::{g, Point, Scalar, G};
 use serde::{Deserialize, Serialize};
-use sha3::Sha3_256 as Sha256;
-use std::io::Write;
+use sha3::digest::generic_array::typenum::U32;
+use sha3::{Digest, Sha3_256 as Sha256};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PubKey(Point);
@@ -30,15 +30,11 @@ impl SecKey {
 }
 
 pub fn sign<'a>(
-    msg: &[u8],
+    msg: impl Digest<OutputSize = U32>,
     secret_keys: impl Iterator<Item = &'a SecKey> + Clone,
     mut rng: impl RngCore + CryptoRng,
 ) -> Sig {
-    let msg_hash = {
-        let mut m_hasher = Sha256::default();
-        m_hasher.write_all(msg).unwrap();
-        Scalar::from_hash(m_hasher)
-    };
+    let msg_hash = Scalar::from_hash(msg);
 
     let pub_keys = secret_keys
         .clone()
@@ -58,7 +54,7 @@ pub fn sign<'a>(
                     bincode::serialize_into(&mut c_hasher, &pk).unwrap();
                     bincode::serialize_into(&mut c_hasher, &r_pub).unwrap();
                     bincode::serialize_into(&mut c_hasher, &pub_keys).unwrap();
-                    c_hasher.write_all(msg).unwrap();
+                    bincode::serialize_into(&mut c_hasher, &msg_hash).unwrap();
                     Scalar::from_hash(c_hasher)
                 };
 
@@ -80,12 +76,8 @@ pub fn sign<'a>(
     }
 }
 
-pub fn verify(msg: &[u8], sig: Sig, pks: &[PubKey]) -> bool {
-    let msg_hash = {
-        let mut m_hasher = Sha256::default();
-        m_hasher.write_all(msg).unwrap();
-        Scalar::from_hash(m_hasher)
-    };
+pub fn verify(msg: impl Digest<OutputSize = U32>, sig: Sig, pks: &[PubKey]) -> bool {
+    let msg_hash = Scalar::from_hash(msg);
     let Sig { r, s } = sig;
 
     let pk_msg_sum = pks
@@ -98,7 +90,7 @@ pub fn verify(msg: &[u8], sig: Sig, pks: &[PubKey]) -> bool {
                 bincode::serialize_into(&mut c_hasher, &pk).unwrap();
                 bincode::serialize_into(&mut c_hasher, &r).unwrap();
                 bincode::serialize_into(&mut c_hasher, &pks).unwrap();
-                c_hasher.write_all(msg).unwrap();
+                bincode::serialize_into(&mut c_hasher, &msg_hash).unwrap();
                 Scalar::from_hash(c_hasher)
             };
 
@@ -144,7 +136,8 @@ pub mod rng_adapt {
 mod tests {
     use crate::musig::rng_adapt::RngAdaptor;
     use crate::musig::{sign, verify, SecKey};
-    use secp256kfun::Scalar;
+    use sha3::{Digest, Sha3_256};
+    use std::io::Write;
 
     #[test]
     fn round_trip() {
@@ -155,7 +148,9 @@ mod tests {
         let pks = secrets.iter().map(SecKey::to_public).collect::<Vec<_>>();
 
         let msg = b"Hello World!";
-        let sig = sign(&msg[..], secrets.iter(), rng);
-        assert!(verify(&msg[..], sig, &pks));
+        let mut digest = Sha3_256::new();
+        digest.write_all(&msg[..]).unwrap();
+        let sig = sign(digest.clone(), secrets.iter(), rng);
+        assert!(verify(digest, sig, &pks));
     }
 }
