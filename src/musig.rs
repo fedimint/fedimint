@@ -78,15 +78,13 @@ pub fn sign<'a>(
     }
 }
 
-pub fn verify(msg: impl Digest<OutputSize = U32>, sig: Sig, pks: &[PubKey]) -> bool {
+pub fn verify(msg: impl Digest<OutputSize = U32>, sig: Sig, pks: &[&PubKey]) -> bool {
     let msg_hash = Scalar::from_hash(msg);
     let Sig { r, s } = sig;
 
     let pk_msg_sum = pks
         .iter()
-        .map(|pk| {
-            let pk = pk.0.clone();
-
+        .map(|&pk| {
             let c = {
                 let mut c_hasher = Sha256::default();
                 bincode::serialize_into(&mut c_hasher, &pk).unwrap();
@@ -96,7 +94,7 @@ pub fn verify(msg: impl Digest<OutputSize = U32>, sig: Sig, pks: &[PubKey]) -> b
                 Scalar::from_hash(c_hasher)
             };
 
-            g!(c * (msg_hash * pk))
+            g!(c * (msg_hash * { &pk.0 }))
         })
         .fold(r, |a, b| {
             Normal::change_mark(NonZero::change_mark(point_add(&a, &b)).unwrap())

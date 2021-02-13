@@ -18,7 +18,7 @@ pub struct Mint {
     pub_key_shares: Vec<PublicKeyShare>,
     pub_key: AggregatePublicKey,
     threshold: usize,
-    spendbook: HashSet<musig::PubKey>, // FIXME: make newtype for nonce pubkey: name=serial number?
+    spendbook: HashSet<CoinNonce>,
 }
 
 /// Request to blind sign a certain amount of coins
@@ -35,7 +35,10 @@ pub struct SigResponse(pub u64, pub Vec<BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct Coin(pub musig::PubKey, pub Signature);
+pub struct Coin(pub CoinNonce, pub Signature);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct CoinNonce(pub musig::PubKey);
 
 impl Mint {
     /// Constructs a new ming
@@ -205,6 +208,10 @@ impl Coin {
             self.1,
             pk,
         )
+    }
+
+    pub fn spend_key(&self) -> &musig::PubKey {
+        &self.0 .0
     }
 }
 

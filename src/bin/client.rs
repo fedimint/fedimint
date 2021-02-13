@@ -1,9 +1,8 @@
 use minimint::config::{load_from_file, ClientConfig, ClientOpts};
-use minimint::mint::{Coin, RequestId, SigResponse, SignRequest};
+use minimint::mint::{Coin, CoinNonce, RequestId, SigResponse, SignRequest};
 use minimint::musig;
 use minimint::musig::SecKey;
 use minimint::net::api::{PegInRequest, ReissuanceRequest};
-use rand::Rng;
 use reqwest::StatusCode;
 use sha3::Sha3_256;
 use std::process::exit;
@@ -71,7 +70,10 @@ async fn fetch_coins(
         .zip(keys)
         .map(|(sig, (spend_key, bkey))| {
             let sig = unblind_signature(bkey, sig);
-            (spend_key.clone(), Coin(spend_key.to_public(), sig))
+            (
+                spend_key.clone(),
+                Coin(CoinNonce(spend_key.to_public()), sig),
+            )
         })
         .collect()
 }

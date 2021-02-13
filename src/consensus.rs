@@ -1,5 +1,5 @@
 use crate::config::ServerConfig;
-use crate::mint::{Mint, PartialSigResponse, RequestId, SigResponse};
+use crate::mint::{Coin, Mint, PartialSigResponse, RequestId, SigResponse};
 use crate::musig;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
@@ -131,7 +131,7 @@ impl FediMint {
                         ClientRequest::Reissuance(ref reissuance_req) => {
                             let pub_keys = reissuance_req.coins
                                 .iter()
-                                .map(|c| c.0.clone())
+                                .map(Coin::spend_key)
                                 .collect::<Vec<_>>();
                             if !musig::verify(reissuance_req.digest(), reissuance_req.sig.clone(), &pub_keys) {
                                 warn!("Rejecting invalid reissuance request");
