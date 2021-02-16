@@ -1486,9 +1486,9 @@ dependencies = [
  "futures",
  "hbbft",
  "hex",
+ "musig",
  "rand 0.6.5",
  "reqwest",
- "secp256kfun",
  "serde",
  "serde_json",
  "sha3",
@@ -1534,6 +1534,17 @@ checksum = "5a33c1b55807fbed163481b5ba66db4b2fa6cde694a5027be10fb724206c5897"
 dependencies = [
  "socket2",
  "winapi",
+]
+
+[[package]]
+name = "musig"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "rand 0.6.5",
+ "secp256kfun",
+ "serde",
+ "sha3",
 ]
 
 [[package]]

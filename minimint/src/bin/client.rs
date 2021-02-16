@@ -1,8 +1,8 @@
 use minimint::client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use minimint::config::{load_from_file, ClientConfig, ClientOpts};
 use minimint::mint::{RequestId, SigResponse};
-use minimint::musig;
 use minimint::net::api::{PegInRequest, ReissuanceRequest};
+use musig;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
 use sha3::Sha3_256;

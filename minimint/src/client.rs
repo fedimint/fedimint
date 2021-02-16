@@ -1,5 +1,5 @@
 use crate::mint::{Coin, CoinNonce, RequestId, SigResponse, SignRequest};
-use crate::musig;
+use musig;
 use rand::{CryptoRng, RngCore};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;

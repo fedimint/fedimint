@@ -12,9 +12,9 @@ counter = "0.5.2"
 futures = "0.3.9"
 hbbft = "0.1.1"
 hex = "0.4.2"
+musig = { path = "../crypto/musig" }
 rand = "0.6.5"
 reqwest = { version = "0.11.0", features = [ "rustls-tls", "json" ], default-features = false }
-secp256kfun = { version = "0.4.1", features = [ "serde" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.61"
 sha3 = "0.9.1"

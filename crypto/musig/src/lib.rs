@@ -1,3 +1,5 @@
+#![feature(iterator_fold_self)]
+
 use secp256kfun::marker::{ChangeMark, NonZero, Normal, Public, Secret};
 use secp256kfun::op::{point_add, scalar_add, scalar_mul};
 use secp256kfun::rand_core::{CryptoRng, RngCore};
@@ -134,8 +136,8 @@ pub mod rng_adapt {
 
 #[cfg(test)]
 mod tests {
-    use crate::musig::rng_adapt::RngAdaptor;
-    use crate::musig::{sign, verify, SecKey};
+    use crate::rng_adapt::RngAdaptor;
+    use crate::{sign, verify, SecKey};
     use sha3::{Digest, Sha3_256};
     use std::io::Write;
 

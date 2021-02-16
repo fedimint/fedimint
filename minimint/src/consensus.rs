@@ -1,6 +1,5 @@
 use crate::config::ServerConfig;
 use crate::mint::{Coin, Mint, PartialSigResponse, RequestId, SigResponse};
-use crate::musig;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
@@ -9,6 +8,7 @@ use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger};
 use hbbft::{NetworkInfo, Target};
+use musig;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-use crate::musig;
+use musig;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use std::collections::hash_map::DefaultHasher;

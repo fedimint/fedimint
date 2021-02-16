@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "crypto/musig",
     "crypto/tbs",
     "minimint"
 ]
