@@ -2575,8 +2575,8 @@ dependencies = [
 [[package]]
 name = "tbs"
 version = "0.1.0"
-source = "git+***REMOVED***#069367ff65c0ad57e39aa14db9211a9431abfa12"
 dependencies = [
+ "bincode",
  "bls12_381",
  "ff",
  "group",
@@ -2586,6 +2586,7 @@ dependencies = [
  "rand_chacha 0.2.2",
  "serde",
  "sha3",
+ "structopt",
 ]
 
 [[package]]

@@ -1,0 +1,22 @@
+[package]
+name = "tbs"
+version = "0.1.0"
+authors = ["elsirion <elsirion@protonmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bls12_381 = { version = "0.3.1" }
+ff = "0.8.0"
+group = "0.8.0"
+hex = "0.4.2"
+log = "0.4.14"
+rand = { version = "0.7" }
+rand_chacha = "0.2.0"
+serde = { version = "1.0", features = ["derive"] }
+sha3 = "0.9.1"
+
+[dev-dependencies]
+structopt = "0.3.21"
+bincode = "1.3.1"
