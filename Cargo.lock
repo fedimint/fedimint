@@ -1494,6 +1494,7 @@ dependencies = [
  "sha3",
  "structopt",
  "tbs",
+ "thiserror",
  "tide",
  "tokio",
  "tokio-stream",
@@ -2574,7 +2575,7 @@ dependencies = [
 [[package]]
 name = "tbs"
 version = "0.1.0"
-source = "git+***REMOVED***#a3c608a7b3fe33ebbf6c61570ffb7b8453e4c348"
+source = "git+***REMOVED***#069367ff65c0ad57e39aa14db9211a9431abfa12"
 dependencies = [
  "bls12_381",
  "ff",

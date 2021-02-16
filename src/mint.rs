@@ -1,5 +1,6 @@
 use crate::musig;
 use serde::{Deserialize, Serialize};
+use sha3::Sha3_256;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
@@ -212,6 +213,14 @@ impl Coin {
 
     pub fn spend_key(&self) -> &musig::PubKey {
         &self.0 .0
+    }
+}
+
+impl CoinNonce {
+    pub fn to_message(&self) -> Message {
+        let mut hasher = Sha3_256::default();
+        bincode::serialize_into(&mut hasher, &self.0).unwrap();
+        Message::from_hash(hasher)
     }
 }
 

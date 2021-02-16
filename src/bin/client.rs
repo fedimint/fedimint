@@ -1,13 +1,13 @@
+use minimint::client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use minimint::config::{load_from_file, ClientConfig, ClientOpts};
-use minimint::mint::{Coin, CoinNonce, RequestId, SigResponse, SignRequest};
+use minimint::mint::{RequestId, SigResponse};
 use minimint::musig;
-use minimint::musig::SecKey;
 use minimint::net::api::{PegInRequest, ReissuanceRequest};
+use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
 use sha3::Sha3_256;
 use std::process::exit;
 use structopt::StructOpt;
-use tbs::{blind_message, unblind_signature, BlindingKey, Message};
 use tokio::time::Duration;
 use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
@@ -20,30 +20,33 @@ async fn main() {
         )
         .init();
 
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+
     let opts: ClientOpts = StructOpt::from_args();
     let cfg: ClientConfig = load_from_file(&opts.cfg_path);
 
     info!("Sending peg-in request for {} coins", opts.issue_amt);
-    let (req_id, keys) = request_issuance(&cfg, opts.issue_amt).await;
-    let coins = fetch_coins(&cfg, req_id, keys).await;
-    assert!(coins.iter().all(|(_, c)| c.verify(cfg.mint_pk)));
+    let issuance_req = request_issuance(&cfg, opts.issue_amt, &mut rng).await;
+    let coins = fetch_coins(&cfg, issuance_req)
+        .await
+        .expect("Couldn't qcquire coins");
     info!("Received {} valid coins", coins.len());
 
     info!("Sending reissuance request for {} coins", coins.len());
-    let (req_id, keys) = request_reissuance(&cfg, coins).await;
-    let coins = fetch_coins(&cfg, req_id, keys).await;
-    assert!(coins.iter().all(|(_, c)| c.verify(cfg.mint_pk)));
+    let issuance_req = request_reissuance(&cfg, coins, &mut rng).await;
+    let coins = fetch_coins(&cfg, issuance_req)
+        .await
+        .expect("Couldn't qcquire coins");
     info!("Received {} valid coins", coins.len());
 }
 
 async fn fetch_coins(
     cfg: &ClientConfig,
-    req_id: u64,
-    keys: Vec<(musig::SecKey, BlindingKey)>,
-) -> Vec<(musig::SecKey, Coin)> {
+    req: IssuanceRequest,
+) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
     let client = reqwest::Client::new();
     let resp: SigResponse = loop {
-        let url = format!("{}/issuance/{}", cfg.url, req_id);
+        let url = format!("{}/issuance/{}", cfg.url, req.id());
 
         debug!("looking for coins: {}", url);
 
@@ -65,42 +68,15 @@ async fn fetch_coins(
         tokio::time::sleep(Duration::from_millis(5000)).await;
     };
 
-    resp.1
-        .into_iter()
-        .zip(keys)
-        .map(|(sig, (spend_key, bkey))| {
-            let sig = unblind_signature(bkey, sig);
-            (
-                spend_key.clone(),
-                Coin(CoinNonce(spend_key.to_public()), sig),
-            )
-        })
-        .collect()
-}
-
-fn generate_signing_request(amount: usize) -> (Vec<(musig::SecKey, BlindingKey)>, SignRequest) {
-    let mut rng = rand::rngs::OsRng::new().unwrap();
-
-    let (nonces, bmsgs): (Vec<_>, _) = (0..amount)
-        .map(|_| {
-            let spend_key = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng));
-            let (bkey, bmsg) = blind_message(Message::from_bytes(
-                &bincode::serialize(&spend_key.to_public()).unwrap(),
-            ));
-            ((spend_key, bkey), bmsg)
-        })
-        .unzip();
-
-    let sig_req = SignRequest(bmsgs);
-    (nonces, sig_req)
+    req.finalize(resp, cfg.mint_pk)
 }
 
 async fn request_issuance(
     cfg: &ClientConfig,
     amount: usize,
-) -> (u64, Vec<(musig::SecKey, BlindingKey)>) {
-    let (nonces, sig_req) = generate_signing_request(amount);
-    let req_id = sig_req.id();
+    mut rng: impl RngCore + CryptoRng,
+) -> IssuanceRequest {
+    let (issuance_request, sig_req) = IssuanceRequest::new(amount, &mut rng);
     let req = PegInRequest {
         blind_tokens: sig_req,
         proof: (),
@@ -118,17 +94,20 @@ async fn request_issuance(
         exit(-1);
     }
 
-    (req_id, nonces)
+    issuance_request
 }
 
 async fn request_reissuance(
     cfg: &ClientConfig,
-    old_coins: Vec<(musig::SecKey, Coin)>,
-) -> (u64, Vec<(SecKey, BlindingKey)>) {
-    let (keys, sig_req) = generate_signing_request(old_coins.len());
-    let req_id = sig_req.id();
+    old_coins: Vec<SpendableCoin>,
+    mut rng: impl RngCore + CryptoRng,
+) -> IssuanceRequest {
+    let (issuance_req, sig_req) = IssuanceRequest::new(old_coins.len(), &mut rng);
 
-    let (spend_keys, coins): (Vec<_>, Vec<_>) = old_coins.into_iter().unzip();
+    let (spend_keys, coins): (Vec<_>, Vec<_>) = old_coins
+        .into_iter()
+        .map(|sc| (sc.spend_key, sc.coin))
+        .unzip();
 
     let mut digest = Sha3_256::default();
     bincode::serialize_into(&mut digest, &coins).unwrap();
@@ -154,5 +133,5 @@ async fn request_reissuance(
         exit(-1);
     }
 
-    (req_id, keys)
+    issuance_req
 }

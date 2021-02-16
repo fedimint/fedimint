@@ -20,6 +20,7 @@ serde_json = "1.0.61"
 sha3 = "0.9.1"
 structopt = "0.3.21"
 tbs = { git = "***REMOVED***" }
+thiserror = "1.0.23"
 tide = "0.16.0"
 tokio = { version = "1.0.1", features = ["full"] }
 tokio-stream = "0.1.1"
