@@ -178,11 +178,7 @@ impl Mint {
     pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
         coins.into_iter().all(|c| {
             let unspent = self.spendbook.insert(c.0.clone());
-            let valid = verify(
-                Message::from_bytes(&bincode::serialize(&c.0).unwrap()), // FIXME: use digest, don't allocate
-                c.1,
-                self.pub_key,
-            );
+            let valid = c.verify(self.pub_key);
             unspent && valid
         })
     }
@@ -204,11 +200,7 @@ impl Mint {
 
 impl Coin {
     pub fn verify(&self, pk: AggregatePublicKey) -> bool {
-        verify(
-            Message::from_bytes(&bincode::serialize(&self.0).unwrap()),
-            self.1,
-            pk,
-        )
+        verify(self.0.to_message(), self.1, pk)
     }
 
     pub fn spend_key(&self) -> &musig::PubKey {

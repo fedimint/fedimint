@@ -133,6 +133,7 @@ impl FediMint {
                                 .iter()
                                 .map(Coin::spend_key)
                                 .collect::<Vec<_>>();
+                                // FIXME: add pre-validation (check spendbook/sig without spending)
                             if !musig::verify(reissuance_req.digest(), reissuance_req.sig.clone(), &pub_keys) {
                                 warn!("Rejecting invalid reissuance request");
                                 continue;
