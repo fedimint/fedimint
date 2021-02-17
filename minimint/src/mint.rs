@@ -1,13 +1,10 @@
-use musig;
+use mint_api::{Coin, CoinNonce, PartialSigResponse, RequestId, SigResponse, SignRequest};
 use serde::{Deserialize, Serialize};
-use sha3::Sha3_256;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use tbs::{
-    combine_valid_shares, min_shares, sign_blinded_msg, verify, verify_blind_share, Aggregatable,
-    AggregatePublicKey, BlindedMessage, BlindedSignature, BlindedSignatureShare, Message,
-    PublicKeyShare, SecretKeyShare, Signature,
+    combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
+    AggregatePublicKey, BlindedMessage, BlindedSignatureShare, PublicKeyShare, SecretKeyShare,
 };
 use tracing::{debug, warn};
 
@@ -21,25 +18,6 @@ pub struct Mint {
     threshold: usize,
     spendbook: HashSet<CoinNonce>,
 }
-
-/// Request to blind sign a certain amount of coins
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SignRequest(pub Vec<BlindedMessage>);
-
-/// Blind signature share for a [`SignRequest`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct PartialSigResponse(Vec<(BlindedMessage, BlindedSignatureShare)>);
-
-/// Blind signature for a [`SignRequest`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SigResponse(pub u64, pub Vec<BlindedSignature>);
-
-/// A cryptographic coin consisting of a token and a threshold signature by the federated mint
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct Coin(pub CoinNonce, pub Signature);
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct CoinNonce(pub musig::PubKey);
 
 impl Mint {
     /// Constructs a new ming
@@ -195,54 +173,6 @@ impl Mint {
         } else {
             None
         }
-    }
-}
-
-impl Coin {
-    pub fn verify(&self, pk: AggregatePublicKey) -> bool {
-        verify(self.0.to_message(), self.1, pk)
-    }
-
-    pub fn spend_key(&self) -> &musig::PubKey {
-        &self.0 .0
-    }
-}
-
-impl CoinNonce {
-    pub fn to_message(&self) -> Message {
-        let mut hasher = Sha3_256::default();
-        bincode::serialize_into(&mut hasher, &self.0).unwrap();
-        Message::from_hash(hasher)
-    }
-}
-
-pub trait RequestId {
-    fn id(&self) -> u64;
-}
-
-impl RequestId for SignRequest {
-    fn id(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.0.hash(&mut hasher);
-        hasher.finish()
-    }
-}
-
-impl RequestId for PartialSigResponse {
-    fn id(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.0
-            .iter()
-            .map(|(msg, _)| msg)
-            .collect::<Vec<_>>()
-            .hash(&mut hasher);
-        hasher.finish()
-    }
-}
-
-impl RequestId for SigResponse {
-    fn id(&self) -> u64 {
-        self.0
     }
 }
 

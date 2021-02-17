@@ -3,5 +3,6 @@
 members = [
     "crypto/musig",
     "crypto/tbs",
-    "minimint"
+    "minimint",
+    "mint-api"
 ]

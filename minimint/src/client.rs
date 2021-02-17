@@ -1,10 +1,8 @@
-use crate::mint::{Coin, CoinNonce, RequestId, SigResponse, SignRequest};
+use mint_api::{Coin, CoinNonce, IssuanceId, RequestId, SigResponse, SignRequest};
 use musig;
 use rand::{CryptoRng, RngCore};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
-
-type IssuanceId = u64;
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
 /// information to generate one spendable coin once the blind signature arrives.

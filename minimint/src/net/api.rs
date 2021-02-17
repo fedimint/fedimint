@@ -1,8 +1,6 @@
 use crate::config::ServerConfig;
-use crate::mint::{Coin, RequestId, SigResponse, SignRequest};
-use musig;
+use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, RequestId, SigResponse};
 use serde::{Deserialize, Serialize};
-use sha3::Sha3_256;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tide::{Body, Request, Response};
@@ -19,26 +17,6 @@ struct State {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct PegInRequest {
-    pub blind_tokens: SignRequest,
-    pub proof: (), // TODO: implement pegin
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct ReissuanceRequest {
-    pub coins: Vec<Coin>,
-    pub blind_tokens: SignRequest,
-    pub sig: musig::Sig,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct PegOutRequest {
-    pub address: (), // TODO: implement pegout
-    pub coins: Vec<Coin>,
-    pub sig: (), // TODO: impl signing
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum ClientRequest {
     PegIn(PegInRequest),
     Reissuance(ReissuanceRequest),
@@ -52,15 +30,6 @@ impl ClientRequest {
             ClientRequest::Reissuance(_) => "reissuance",
             ClientRequest::PegOut(_) => "peg-out",
         }
-    }
-}
-
-impl ReissuanceRequest {
-    pub fn digest(&self) -> Sha3_256 {
-        let mut digest = Sha3_256::default();
-        bincode::serialize_into(&mut digest, &self.coins).unwrap();
-        bincode::serialize_into(&mut digest, &self.blind_tokens).unwrap();
-        digest
     }
 }
 

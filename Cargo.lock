@@ -1486,6 +1486,7 @@ dependencies = [
  "futures",
  "hbbft",
  "hex",
+ "mint-api",
  "musig",
  "rand 0.6.5",
  "reqwest",
@@ -1511,6 +1512,17 @@ checksum = "0f2d26ec3309788e423cfbf68ad1800f061638098d76a83681af979dc4eda19d"
 dependencies = [
  "adler",
  "autocfg 1.0.1",
+]
+
+[[package]]
+name = "mint-api"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "musig",
+ "serde",
+ "sha3",
+ "tbs",
 ]
 
 [[package]]

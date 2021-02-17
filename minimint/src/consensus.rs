@@ -1,5 +1,5 @@
 use crate::config::ServerConfig;
-use crate::mint::{Coin, Mint, PartialSigResponse, RequestId, SigResponse};
+use crate::mint::Mint;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
@@ -8,6 +8,7 @@ use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger};
 use hbbft::{NetworkInfo, Target};
+use mint_api::{Coin, PartialSigResponse, RequestId, SigResponse};
 use musig;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,7 @@ use tracing::{debug, error, info, trace, warn};
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 enum ConsensusItem {
     ClientRequest(ClientRequest),
-    PartiallySignedRequest(u16, mint::PartialSigResponse),
+    PartiallySignedRequest(u16, mint_api::PartialSigResponse),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
