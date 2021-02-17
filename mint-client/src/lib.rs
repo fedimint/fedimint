@@ -1,5 +1,4 @@
 use mint_api::{Coin, CoinNonce, IssuanceId, RequestId, SigResponse, SignRequest};
-use musig;
 use rand::{CryptoRng, RngCore};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;

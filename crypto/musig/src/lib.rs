@@ -153,6 +153,6 @@ mod tests {
         let mut digest = Sha3_256::new();
         digest.write_all(&msg[..]).unwrap();
         let sig = sign(digest.clone(), secrets.iter(), rng);
-        assert!(verify(digest, sig, &pks));
+        assert!(verify(digest, sig, &pks.iter().collect::<Vec<_>>()));
     }
 }

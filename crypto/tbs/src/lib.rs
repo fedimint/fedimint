@@ -213,8 +213,6 @@ mod tests {
         blind_message, combine_valid_shares, dealer_keygen, sign_blinded_msg, unblind_signature,
         verify, Aggregatable, Message,
     };
-    use rand::seq::SliceRandom;
-    use rand::thread_rng;
 
     #[test]
     fn test_keygen() {
