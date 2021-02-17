@@ -874,6 +874,7 @@ dependencies = [
  "counter",
  "mint-api",
  "tbs",
+ "thiserror",
  "tracing",
 ]
 

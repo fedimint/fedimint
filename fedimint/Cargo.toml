@@ -10,4 +10,5 @@ edition = "2018"
 counter = "0.5.2"
 mint-api = { path = "../mint-api" }
 tbs = { path = "../crypto/tbs" }
+thiserror = "1.0.23"
 tracing ="0.1.22"

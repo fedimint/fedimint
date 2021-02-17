@@ -5,6 +5,7 @@ use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
     AggregatePublicKey, BlindedMessage, BlindedSignatureShare, PublicKeyShare, SecretKeyShare,
 };
+use thiserror::Error;
 use tracing::{debug, warn};
 
 /// Federated mint member mint
@@ -63,9 +64,9 @@ impl Mint {
             .iter()
             .map(|(idx, _)| *idx)
             .collect::<counter::Counter<_>>();
-        if let Some((peer, _)) = peer_contrib_counts.into_iter().find(|(_, cnt)| **cnt > 1) {
+        if let Some((peer, count)) = peer_contrib_counts.into_iter().find(|(_, cnt)| **cnt > 1) {
             return (
-                Err(CombineError::MultiplePeerContributions(*peer)),
+                Err(CombineError::MultiplePeerContributions(*peer, *count)),
                 MintShareErrors(vec![]),
             );
         }
@@ -127,8 +128,13 @@ impl Mint {
                     .collect::<Vec<_>>();
 
                 // Check that there are still sufficient
-                if valid_sigs.len() < min_shares(self.pub_key_shares.len(), self.threshold) {
-                    return Err(CombineError::TooFewValidShares);
+                let min_shares = min_shares(self.pub_key_shares.len(), self.threshold);
+                if valid_sigs.len() < min_shares {
+                    return Err(CombineError::TooFewValidShares(
+                        valid_sigs.len(),
+                        partial_sigs.len(),
+                        min_shares,
+                    ));
                 }
 
                 Ok(combine_valid_shares(
@@ -240,9 +246,14 @@ pub enum MintErrorType {
     DifferentNonce,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
 pub enum CombineError {
-    TooFewValidShares,
+    #[error(
+        "Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid"
+    )]
+    TooFewValidShares(usize, usize, usize),
+    #[error("We could not find our own contribution in the provided shares, so we have no validation reference")]
     NoOwnContribution,
-    MultiplePeerContributions(usize),
+    #[error("Peer {0} contributed {1} shares, 1 expected")]
+    MultiplePeerContributions(usize, usize),
 }
