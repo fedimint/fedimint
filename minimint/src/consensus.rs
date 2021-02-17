@@ -1,9 +1,9 @@
-use crate::mint::Mint;
+use crate::net;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
-use crate::{mint, net};
 use config::ServerConfig;
+use fedimint::Mint;
 use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger};
@@ -57,7 +57,7 @@ pub struct FediMint {
 
 impl FediMint {
     pub async fn init(rng: impl RngCore + 'static, cfg: ServerConfig) -> Self {
-        let mint = mint::Mint::new(
+        let mint = fedimint::Mint::new(
             cfg.tbs_sks.clone(),
             cfg.peers
                 .values()

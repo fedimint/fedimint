@@ -1,5 +1,4 @@
 use mint_api::{Coin, CoinNonce, PartialSigResponse, RequestId, SigResponse, SignRequest};
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
 use tbs::{
@@ -231,17 +230,17 @@ where
 }
 
 /// Represents an array of mint indexes that delivered faulty shares
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MintShareErrors(pub Vec<(usize, MintErrorType)>);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum MintErrorType {
     InvalidSignature,
     DifferentLengthAnswer,
     DifferentNonce,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum CombineError {
     TooFewValidShares,
     NoOwnContribution,

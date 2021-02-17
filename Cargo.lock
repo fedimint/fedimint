@@ -868,6 +868,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint"
+version = "0.1.0"
+dependencies = [
+ "counter",
+ "mint-api",
+ "tbs",
+ "tracing",
+]
+
+[[package]]
 name = "femme"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1497,7 +1507,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "config",
- "counter",
+ "fedimint",
  "futures",
  "hbbft",
  "hex",
