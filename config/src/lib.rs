@@ -6,11 +6,13 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use tbs::AggregatePublicKey;
 
+#[cfg(feature = "server")]
 #[derive(StructOpt)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub identity: u16,
@@ -27,6 +29,7 @@ pub struct ServerConfig {
     pub tbs_sks: tbs::SecretKeyShare,
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
     pub hbbft_port: u16,
@@ -36,6 +39,7 @@ pub struct Peer {
     pub tbs_pks: tbs::PublicKeyShare,
 }
 
+#[cfg(feature = "server")]
 impl ServerConfig {
     pub fn get_hbbft_port(&self) -> u16 {
         self.hbbft_port
@@ -53,12 +57,14 @@ impl ServerConfig {
     }
 }
 
+#[cfg(feature = "client")]
 #[derive(StructOpt)]
 pub struct ClientOpts {
     pub cfg_path: PathBuf,
     pub issue_amt: usize,
 }
 
+#[cfg(feature = "client")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub url: String,
@@ -70,6 +76,7 @@ pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
     serde_json::from_reader(file).expect("Could not parse cfg file.")
 }
 
+#[cfg(any(feature = "client", feature = "server"))]
 mod serde_binary_human_readable {
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

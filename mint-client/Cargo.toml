@@ -15,7 +15,7 @@ thiserror = "1.0.23"
 
 [dev-dependencies]
 bincode = "1.3.1"
-config = { path = "../config" }
+config = { path = "../config", features = [ "client" ] }
 reqwest = { version = "0.11.0", features = [ "rustls-tls", "json" ], default-features = false }
 serde_json = "1.0.61"
 sha3 = "0.9.1"
