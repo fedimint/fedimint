@@ -573,6 +573,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "config"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "hbbft",
+ "hex",
+ "rand 0.6.5",
+ "serde",
+ "serde_json",
+ "structopt",
+ "tbs",
+]
+
+[[package]]
 name = "const_fn"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1482,16 +1496,16 @@ name = "minimint"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "config",
  "counter",
  "futures",
  "hbbft",
  "hex",
  "mint-api",
+ "mint-client",
  "musig",
  "rand 0.6.5",
- "reqwest",
  "serde",
- "serde_json",
  "sha3",
  "structopt",
  "tbs",
@@ -1523,6 +1537,26 @@ dependencies = [
  "serde",
  "sha3",
  "tbs",
+]
+
+[[package]]
+name = "mint-client"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "config",
+ "mint-api",
+ "musig",
+ "rand 0.6.5",
+ "reqwest",
+ "serde_json",
+ "sha3",
+ "structopt",
+ "tbs",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

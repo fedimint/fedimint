@@ -1,9 +1,9 @@
-use crate::config::ServerConfig;
 use crate::mint::Mint;
 use crate::net::api::ClientRequest;
 use crate::net::connect::connect_to_all;
 use crate::net::framed::Framed;
 use crate::{mint, net};
+use config::ServerConfig;
 use futures::future::select_all;
 use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger};

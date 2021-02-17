@@ -1,8 +1,10 @@
 [workspace]
 
 members = [
+    "config",
     "crypto/musig",
     "crypto/tbs",
     "minimint",
-    "mint-api"
+    "mint-api",
+    "mint-client",
 ]

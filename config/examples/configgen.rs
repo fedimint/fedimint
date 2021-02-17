@@ -1,5 +1,5 @@
+use config::{ClientConfig, Peer, ServerConfig};
 use hbbft::crypto::serde_impl::SerdeSecret;
-use minimint::config::{ClientConfig, Peer, ServerConfig};
 use rand::rngs::OsRng;
 use std::collections::BTreeMap;
 use std::path::PathBuf;

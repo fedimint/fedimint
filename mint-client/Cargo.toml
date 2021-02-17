@@ -1,5 +1,5 @@
 [package]
-name = "minimint"
+name = "mint-client"
 version = "0.1.0"
 authors = ["elsirion <elsirion@protonmail.com>"]
 edition = "2018"
@@ -7,24 +7,19 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bincode = "1.3.1"
-config = { path = "../config" }
-counter = "0.5.2"
-futures = "0.3.9"
-hbbft = "0.1.1"
-hex = "0.4.2"
 mint-api = { path = "../mint-api" }
-mint-client = { path = "../mint-client" }
 musig = { path = "../crypto/musig" }
 rand = "0.6.5"
-serde = { version = "1.0.118", features = [ "derive" ] }
-sha3 = "0.9.1"
-structopt = "0.3.21"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
-tide = "0.16.0"
+
+[dev-dependencies]
+bincode = "1.3.1"
+config = { path = "../config" }
+reqwest = { version = "0.11.0", features = [ "rustls-tls", "json" ], default-features = false }
+serde_json = "1.0.61"
+sha3 = "0.9.1"
+structopt = "0.3.21"
 tokio = { version = "1.0.1", features = ["full"] }
-tokio-stream = "0.1.1"
-tokio-util = { version = "0.6.0", features = [ "compat" ] }
 tracing ="0.1.22"
 tracing-subscriber = "0.2.15"

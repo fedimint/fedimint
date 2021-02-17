@@ -1,4 +1,4 @@
-use crate::config::ServerConfig;
+use config::ServerConfig;
 use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, RequestId, SigResponse};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

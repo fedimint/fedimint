@@ -1,6 +1,6 @@
-use minimint::client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
-use minimint::config::{load_from_file, ClientConfig, ClientOpts};
+use config::{load_from_file, ClientConfig, ClientOpts};
 use mint_api::{PegInRequest, ReissuanceRequest, RequestId, SigResponse};
+use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
