@@ -98,7 +98,7 @@ pub fn dealer_keygen(
     threshold: usize,
     keys: usize,
 ) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
-    let mut rng = OsRng;
+    let mut rng = OsRng; // FIXME: pass rng
     let poly = Poly::<Scalar, Scalar>::random(min_shares(keys, threshold) - 1, &mut rng);
     let (pub_shares, sec_shares) = (1..=keys)
         .map(|idx| {

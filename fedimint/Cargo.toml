@@ -12,3 +12,6 @@ mint-api = { path = "../mint-api" }
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
 tracing ="0.1.22"
+
+[dev-dependencies]
+rand = "0.6.5"

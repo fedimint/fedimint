@@ -873,6 +873,7 @@ version = "0.1.0"
 dependencies = [
  "counter",
  "mint-api",
+ "rand 0.6.5",
  "tbs",
  "thiserror",
  "tracing",

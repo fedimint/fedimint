@@ -57,6 +57,9 @@ impl Mint {
 
     /// Try to combine signature shares to a complete signature, filtering out invalid contributions
     /// and reporting peer misbehaviour.
+    ///
+    /// # Panics:
+    /// * if a supplied peer id is unknown
     pub fn combine(
         &self,
         partial_sigs: Vec<(usize, PartialSigResponse)>,
@@ -205,4 +208,172 @@ pub enum CombineError {
     NoOwnContribution,
     #[error("Peer {0} contributed {1} shares, 1 expected")]
     MultiplePeerContributions(usize, usize),
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{CombineError, Mint, MintErrorType};
+    use mint_api::{RequestId, SignRequest};
+    use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+
+    const THRESHOLD: usize = 1;
+    const MINTS: usize = 5;
+
+    fn build_mints() -> (AggregatePublicKey, Vec<Mint>) {
+        let (pk, pks, sks) = tbs::dealer_keygen(THRESHOLD, MINTS);
+
+        let mints = sks
+            .into_iter()
+            .map(|sk| Mint::new(sk, pks.clone(), THRESHOLD))
+            .collect::<Vec<_>>();
+
+        (pk, mints)
+    }
+
+    #[test]
+    fn test_issuance() {
+        let (pk, mut mints) = build_mints();
+
+        let nonce = Message::from_bytes(&b"test coin"[..]);
+        let (bkey, bmsg) = blind_message(nonce);
+        let req = SignRequest(vec![bmsg, bmsg]);
+
+        let req_id = req.id();
+
+        let psigs = mints
+            .iter()
+            .map(move |m| m.sign(req.clone()))
+            .enumerate()
+            .collect::<Vec<_>>();
+
+        let mint = &mut mints[0];
+
+        // Test happy path
+        let (bsig_res, errors) = mint.combine(psigs.clone());
+        assert!(errors.0.is_empty());
+
+        let bsig = bsig_res.unwrap();
+        assert_eq!(bsig.0, req_id);
+        assert_eq!(bsig.1.len(), 2);
+
+        bsig.1.iter().for_each(|bs| {
+            let sig = unblind_signature(bkey, *bs);
+            assert!(verify(nonce, sig, pk));
+        });
+
+        // Test threshold sig shares
+        let (bsig_res, errors) = mint.combine(psigs[..(MINTS - THRESHOLD)].to_vec());
+        assert!(bsig_res.is_ok());
+        assert!(errors.0.is_empty());
+
+        bsig_res.unwrap().1.iter().for_each(|bs| {
+            let sig = unblind_signature(bkey, *bs);
+            assert!(verify(nonce, sig, pk));
+        });
+
+        // Test too few sig shares
+        let (bsig_res, errors) = mint.combine(psigs[..(MINTS - THRESHOLD - 1)].to_vec());
+        assert_eq!(bsig_res, Err(CombineError::TooFewValidShares(3, 3, 4)));
+        assert!(errors.0.is_empty());
+
+        // Test no own share
+        let (bsig_res, errors) = mint.combine(psigs[1..].to_vec());
+        assert_eq!(bsig_res, Err(CombineError::NoOwnContribution));
+        assert!(errors.0.is_empty());
+
+        // Test multiple peer contributions
+        let (bsig_res, errors) = mint.combine(
+            psigs
+                .iter()
+                .cloned()
+                .chain(std::iter::once(psigs[0].clone()))
+                .collect(),
+        );
+        assert_eq!(bsig_res, Err(CombineError::MultiplePeerContributions(0, 2)));
+        assert!(errors.0.is_empty());
+
+        // Test wrong length response
+        let (bsig_res, errors) = mint.combine(
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, mut psigs)| {
+                    if peer == 1 {
+                        psigs.0.pop();
+                    }
+                    (peer, psigs)
+                })
+                .collect(),
+        );
+        assert!(bsig_res.is_ok());
+        assert!(errors
+            .0
+            .contains(&(1, MintErrorType::DifferentLengthAnswer)));
+
+        let (bsig_res, errors) = mint.combine(
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, mut psig)| {
+                    if peer == 2 {
+                        psig.0[0].1 = psigs[0].1 .0[0].1;
+                    }
+                    (peer, psig)
+                })
+                .collect(),
+        );
+        assert!(bsig_res.is_ok());
+        assert!(errors.0.contains(&(2, MintErrorType::InvalidSignature)));
+
+        let (_bk, bmsg) = blind_message(Message::from_bytes(b"test"));
+        let (bsig_res, errors) = mint.combine(
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, mut psig)| {
+                    if peer == 3 {
+                        psig.0[0].0 = bmsg;
+                    }
+                    (peer, psig)
+                })
+                .collect(),
+        );
+        assert!(bsig_res.is_ok());
+        assert!(errors.0.contains(&(3, MintErrorType::DifferentNonce)));
+    }
+
+    #[test]
+    #[should_panic(expected = "Own key not found among pub keys.")]
+    fn test_new_panic_without_own_pub_key() {
+        let (_pk, pks, sks) = tbs::dealer_keygen(THRESHOLD, MINTS);
+
+        Mint::new(sks[0], pks[1..].to_vec(), THRESHOLD);
+    }
+
+    // FIXME: possibly make this an error
+    #[test]
+    #[should_panic(expected = "index out of bounds: the len is 5 but the index is 42")]
+    fn test_combine_panic_with_unknown_mint_id() {
+        let (_pk, mints) = build_mints();
+
+        let nonce = Message::from_bytes(&b"test coin"[..]);
+        let (_bkey, bmsg) = blind_message(nonce);
+        let req = SignRequest(vec![bmsg]);
+
+        let psigs = mints
+            .iter()
+            .map(move |m| m.sign(req.clone()))
+            .enumerate()
+            .map(
+                |(mint, sig)| {
+                    if mint == 2 {
+                        (42, sig)
+                    } else {
+                        (mint, sig)
+                    }
+                },
+            )
+            .collect::<Vec<_>>();
+        let _ = mints[0].combine(psigs);
+    }
 }

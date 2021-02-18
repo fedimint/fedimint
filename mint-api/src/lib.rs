@@ -10,6 +10,7 @@ pub type IssuanceId = u64;
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct SignRequest(pub Vec<tbs::BlindedMessage>);
 
+// FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PartialSigResponse(pub Vec<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
