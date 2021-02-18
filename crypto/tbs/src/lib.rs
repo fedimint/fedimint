@@ -272,7 +272,7 @@ mod tests {
     fn bench_blinding(bencher: &mut Bencher) {
         bencher.iter(|| {
             let msg = Message::from_bytes(b"Hello World!");
-            let (_bk, _bmsg) = blind_message(msg);
+            blind_message(msg)
         });
     }
 
@@ -282,9 +282,7 @@ mod tests {
         let (_bk, bmsg) = blind_message(msg);
         let (pk, pks, sks) = dealer_keygen(1, 5);
 
-        bencher.iter(|| {
-            let _sig = sign_blinded_msg(bmsg, sks[0]);
-        });
+        bencher.iter(|| sign_blinded_msg(bmsg, sks[0]));
     }
 
     #[bench]
@@ -298,9 +296,7 @@ mod tests {
             .enumerate()
             .collect::<Vec<_>>();
 
-        bencher.iter(move || {
-            let _bsig = combine_valid_shares(shares.clone(), 5, 1);
-        });
+        bencher.iter(move || combine_valid_shares(shares.clone(), 5, 1));
     }
 
     #[bench]
@@ -315,9 +311,7 @@ mod tests {
             .collect::<Vec<_>>();
         let bsig = combine_valid_shares(shares, 5, 1);
 
-        bencher.iter(|| {
-            let _sig = unblind_signature(bk, bsig);
-        });
+        bencher.iter(|| unblind_signature(bk, bsig));
     }
 
     #[bench]
@@ -333,8 +327,6 @@ mod tests {
         let bsig = combine_valid_shares(shares, 5, 1);
         let sig = unblind_signature(bk, bsig);
 
-        bencher.iter(|| {
-            verify(msg, sig, pk);
-        });
+        bencher.iter(|| verify(msg, sig, pk));
     }
 }
