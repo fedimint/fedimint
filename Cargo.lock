@@ -1514,7 +1514,6 @@ dependencies = [
  "hbbft",
  "hex",
  "mint-api",
- "mint-client",
  "musig",
  "rand 0.6.5",
  "serde",
@@ -1524,7 +1523,6 @@ dependencies = [
  "thiserror",
  "tide",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
@@ -2650,7 +2648,6 @@ dependencies = [
  "ff",
  "group",
  "hex",
- "log",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "serde",
@@ -2861,17 +2858,6 @@ dependencies = [
  "rustls",
  "tokio",
  "webpki",
-]
-
-[[package]]
-name = "tokio-stream"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76066865172052eb8796c686f0b441a93df8b08d40a950b062ffb9a426f00edd"
-dependencies = [
- "futures-core",
- "pin-project-lite 0.2.4",
- "tokio",
 ]
 
 [[package]]

@@ -11,7 +11,6 @@ bls12_381 = { version = "0.3.1" }
 ff = "0.8.0"
 group = "0.8.0"
 hex = "0.4.2"
-log = "0.4.14"
 rand = { version = "0.7" }
 rand_chacha = "0.2.0"
 serde = { version = "1.0", features = ["derive"] }
