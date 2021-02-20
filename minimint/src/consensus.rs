@@ -134,9 +134,14 @@ impl FediMint {
                                 .iter()
                                 .map(Coin::spend_key)
                                 .collect::<Vec<_>>();
-                                // FIXME: add pre-validation (check spendbook/sig without spending)
+
                             if !musig::verify(reissuance_req.digest(), reissuance_req.sig.clone(), &pub_keys) {
-                                warn!("Rejecting invalid reissuance request");
+                                warn!("Rejecting invalid reissuance request: invalid tx sig");
+                                continue;
+                            }
+
+                            if !self.mint.validate(&reissuance_req.coins) {
+                                warn!("Rejecting invalid reissuance request: spent or invalid mint sig");
                                 continue;
                             }
                         },

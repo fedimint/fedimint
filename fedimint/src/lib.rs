@@ -165,8 +165,17 @@ impl Mint {
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
     /// false otherwise.
     pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
+        let valid = self.validate(&coins);
+        if valid {
+            self.spendbook.extend(coins.into_iter().map(|c| c.0));
+        }
+        valid
+    }
+
+    /// Checks if coins are unspent and signed
+    pub fn validate(&self, coins: &[Coin]) -> bool {
         coins.into_iter().all(|c| {
-            let unspent = self.spendbook.insert(c.0.clone());
+            let unspent = !self.spendbook.contains(&c.0);
             let valid = c.verify(self.pub_key);
             unspent && valid
         })
