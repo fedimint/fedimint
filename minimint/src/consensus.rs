@@ -4,10 +4,8 @@ use crate::net::connect::Connections;
 use crate::net::framed::Framed;
 use config::ServerConfig;
 use fedimint::Mint;
-use futures::future::select_all;
-use futures::{FutureExt, SinkExt, StreamExt};
 use hbbft::honey_badger::{Batch, HoneyBadger};
-use hbbft::{NetworkInfo, Target};
+use hbbft::NetworkInfo;
 use mint_api::{Coin, PartialSigResponse, RequestId, SigResponse};
 use musig;
 use rand::RngCore;
@@ -181,7 +179,7 @@ impl FediMint {
                         .or_default()
                         .push((self.cfg.identity as usize, signed_request));
                 }
-                ConsensusItem::ClientRequest(ClientRequest::PegOut(req)) => {
+                ConsensusItem::ClientRequest(ClientRequest::PegOut(_req)) => {
                     unimplemented!()
                 }
                 ConsensusItem::PartiallySignedRequest(peer, psig) => {

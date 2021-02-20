@@ -1,4 +1,3 @@
-use crate::consensus::HoneyBadgerMessage;
 use crate::net::framed::Framed;
 use config::ServerConfig;
 use futures::future::select_all;
@@ -7,7 +6,7 @@ use futures::StreamExt;
 use futures::{FutureExt, SinkExt};
 use hbbft::Target;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::future::Future;
 use std::time::Duration;
