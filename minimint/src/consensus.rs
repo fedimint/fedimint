@@ -1,6 +1,6 @@
 use crate::net;
 use crate::net::api::ClientRequest;
-use crate::net::connect::connect_to_all;
+use crate::net::connect::Connections;
 use crate::net::framed::Framed;
 use config::ServerConfig;
 use fedimint::Mint;
@@ -37,9 +37,6 @@ pub struct FediMint {
     rng: Box<dyn RngCore>,
     /// Configuration describing the federation and containing our secrets
     cfg: ServerConfig,
-    /// Peer connections, currently assumed to be static
-    // FIXME: make connections dynamically managed and reliable
-    connections: HashMap<u16, Connection>,
 
     /// Our local mint
     mint: Mint,
@@ -78,7 +75,6 @@ impl FediMint {
             rng: Box::new(rng),
             cfg,
             mint,
-            connections: Default::default(),
             outstanding_consensus_items: Default::default(),
             partial_blind_signatures: Default::default(),
             sig_response_sender: bsig_sender,
@@ -87,8 +83,7 @@ impl FediMint {
     }
 
     pub async fn run(&mut self) {
-        self.connections = connect_to_all(&self.cfg).await;
-        // TODO: check if this is actually sane
+        let mut connections = Connections::connect_to_all(&self.cfg).await;
 
         let net_info = NetworkInfo::new(
             self.cfg.identity,
@@ -112,69 +107,24 @@ impl FediMint {
         let mut wake_up = interval(Duration::from_millis(15_000));
 
         loop {
-            let receive_msg = select_all(
-                self.connections
-                    .iter_mut()
-                    .map(|(id, peer)| receive_from_peer(*id, peer).boxed()),
-            );
-
             let step = select! {
                 _ = wake_up.tick() => {
                     let proposal = self.outstanding_consensus_items.iter().cloned().collect::<Vec<_>>();
                     debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
                     hb.propose(&proposal, &mut self.rng)
                 },
-                ((peer, peer_msg), _, _) = receive_msg => {
+                (peer, peer_msg) = connections.receive() => {
                     hb.handle_message(&peer, peer_msg)
                 },
-                Some(ci) = self.client_req_receiver.recv() => {
-                    match ci {
-                        ClientRequest::Reissuance(ref reissuance_req) => {
-                            let pub_keys = reissuance_req.coins
-                                .iter()
-                                .map(Coin::spend_key)
-                                .collect::<Vec<_>>();
-
-                            if !musig::verify(reissuance_req.digest(), reissuance_req.sig.clone(), &pub_keys) {
-                                warn!("Rejecting invalid reissuance request: invalid tx sig");
-                                continue;
-                            }
-
-                            if !self.mint.validate(&reissuance_req.coins) {
-                                warn!("Rejecting invalid reissuance request: spent or invalid mint sig");
-                                continue;
-                            }
-                        },
-                        _ => {
-                            // FIXME: validate other request types or move validation elsewhere
-                        }
-                    }
-
-                    // FIXME: check validity
-                    debug!("Received request from API: {}", ci.dbg_type_name());
-                    self.outstanding_consensus_items.insert(ConsensusItem::ClientRequest(ci));
+                Some(cr) = self.client_req_receiver.recv() => {
+                    self.handle_client_request(cr);
                     continue;
                 },
             }
             .expect("Failed to process HBBFT input");
 
             for msg in step.messages {
-                trace!("Sending message to {:?}", msg.target);
-                match msg.target {
-                    Target::All => {
-                        for peer in self.connections.values_mut() {
-                            peer.send(&msg.message)
-                                .await
-                                .expect("Failed to send message to peer");
-                        }
-                    }
-                    Target::Node(peer_id) => {
-                        let peer = self.connections.get_mut(&peer_id).expect("Unknown peer");
-                        peer.send(&msg.message)
-                            .await
-                            .expect("Failed to send message to peer");
-                    }
-                }
+                connections.send(&msg.message, &msg.target).await;
             }
 
             for batch in step.output {
@@ -284,19 +234,41 @@ impl FediMint {
     fn tbs_threshold(&self) -> usize {
         self.cfg.peers.len() - self.cfg.max_faulty() - 1
     }
-}
 
-async fn receive_from_peer(
-    id: u16,
-    peer: &mut Framed<Compat<TcpStream>, HoneyBadgerMessage>,
-) -> (u16, HoneyBadgerMessage) {
-    let msg = peer
-        .next()
-        .await
-        .expect("Stream closed unexpectedly")
-        .expect("Error receiving peer message");
+    fn handle_client_request(&mut self, cr: ClientRequest) {
+        debug!("Received request from API: {}", cr.dbg_type_name());
+        match cr {
+            ClientRequest::Reissuance(ref reissuance_req) => {
+                let pub_keys = reissuance_req
+                    .coins
+                    .iter()
+                    .map(Coin::spend_key)
+                    .collect::<Vec<_>>();
 
-    trace!("Received msg from peer {}", id);
+                if !musig::verify(
+                    reissuance_req.digest(),
+                    reissuance_req.sig.clone(),
+                    &pub_keys,
+                ) {
+                    warn!("Rejecting invalid reissuance request: invalid tx sig");
+                    return;
+                }
 
-    (id, msg)
+                if !self.mint.validate(&reissuance_req.coins) {
+                    warn!("Rejecting invalid reissuance request: spent or invalid mint sig");
+                    return;
+                }
+            }
+            _ => {
+                // FIXME: validate other request types or move validation elsewhere
+            }
+        }
+
+        let new = self
+            .outstanding_consensus_items
+            .insert(ConsensusItem::ClientRequest(cr));
+        if !new {
+            warn!("Added consensus item was already in consensus queue");
+        }
+    }
 }
