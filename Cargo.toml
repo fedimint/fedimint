@@ -5,6 +5,7 @@ members = [
     "crypto/musig",
     "crypto/tbs",
     "fedimint",
+    "fediwallet",
     "minimint",
     "mint-api",
     "mint-client",
