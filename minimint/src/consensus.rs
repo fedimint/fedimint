@@ -2,6 +2,7 @@ use crate::net;
 use crate::net::api::ClientRequest;
 use crate::net::connect::Connections;
 use crate::net::framed::Framed;
+use crate::net::PeerConnections;
 use config::ServerConfig;
 use fedimint::Mint;
 use hbbft::honey_badger::{Batch, HoneyBadger};
@@ -122,7 +123,7 @@ impl FediMint {
             .expect("Failed to process HBBFT input");
 
             for msg in step.messages {
-                connections.send(&msg.message, &msg.target).await;
+                connections.send(msg.target, msg.message).await;
             }
 
             for batch in step.output {

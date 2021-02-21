@@ -1,4 +1,6 @@
 use crate::net::framed::Framed;
+use crate::net::PeerConnections;
+use async_trait::async_trait;
 use config::ServerConfig;
 use futures::future::select_all;
 use futures::future::try_join_all;
@@ -8,7 +10,6 @@ use hbbft::Target;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::future::Future;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -74,35 +75,6 @@ where
         Connections { connections: peers }
     }
 
-    pub fn receive<'a>(&'a mut self) -> impl Future<Output = (u16, T)> + 'a {
-        // TODO: optimize, don't throw away remaining futures
-        select_all(
-            self.connections
-                .iter_mut()
-                .map(|(id, peer)| Self::receive_from_peer(*id, peer).boxed()),
-        )
-        .map(|(msg, _, _)| msg)
-    }
-
-    pub async fn send(&mut self, msg: &T, target: &Target<u16>) {
-        trace!("Sending message to {:?}", target);
-        match target {
-            Target::All => {
-                for peer in self.connections.values_mut() {
-                    peer.send(msg)
-                        .await
-                        .expect("Failed to send message to peer");
-                }
-            }
-            Target::Node(peer_id) => {
-                let peer = self.connections.get_mut(&peer_id).expect("Unknown peer");
-                peer.send(msg)
-                    .await
-                    .expect("Failed to send message to peer");
-            }
-        }
-    }
-
     async fn await_peers(port: u16, num_awaited: u16) -> Result<Vec<TcpStream>, std::io::Error> {
         let listener = TcpListener::bind(("127.0.0.1", port))
             .await
@@ -140,5 +112,43 @@ where
         trace!("Received msg from peer {}", id);
 
         (id, msg)
+    }
+}
+
+#[async_trait]
+impl<T> PeerConnections<T> for Connections<T>
+where
+    T: Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
+{
+    type Id = u16;
+
+    async fn send(&mut self, target: Target<Self::Id>, msg: T) {
+        trace!("Sending message to {:?}", target);
+        match target {
+            Target::All => {
+                for peer in self.connections.values_mut() {
+                    peer.send(&msg)
+                        .await
+                        .expect("Failed to send message to peer");
+                }
+            }
+            Target::Node(peer_id) => {
+                let peer = self.connections.get_mut(&peer_id).expect("Unknown peer");
+                peer.send(&msg)
+                    .await
+                    .expect("Failed to send message to peer");
+            }
+        }
+    }
+
+    async fn receive(&mut self) -> (Self::Id, T) {
+        // TODO: optimize, don't throw away remaining futures
+        select_all(
+            self.connections
+                .iter_mut()
+                .map(|(id, peer)| Self::receive_from_peer(id.clone(), peer).boxed()),
+        )
+        .map(|(msg, _, _)| msg)
+        .await
     }
 }

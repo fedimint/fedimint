@@ -2,7 +2,7 @@
 
 SIZE="$1"
 
-cargo build
+cargo build --all-targets
 
 for ((ID=$2; ID<SIZE; ID++)); do
   (target/debug/server cfg/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
