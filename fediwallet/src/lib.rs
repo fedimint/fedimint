@@ -14,6 +14,7 @@ use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::{Address, Amount, Txid};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
@@ -21,11 +22,14 @@ use tracing::{debug, error, trace, warn};
 
 pub type Descriptor = KeyDescriptor<DescriptorPublicKey>;
 
+pub const CONFIRMATION_TARGET: usize = 24;
+
 pub struct Wallet {
     wallet: bdk::wallet::Wallet<ElectrumBlockchain, Tree>,
     consensus_height: u32,
     finalty_delay: u32,
     last_proposal: u32,
+    consensus_feerate: FeeRate,
     signing_key: DescriptorXKey<ExtendedPrivKey>,
     secp: Secp256k1<All>,
 }
@@ -65,35 +69,93 @@ impl Wallet {
             consensus_height: 0,
             finalty_delay,
             last_proposal: 0,
+            consensus_feerate: Default::default(),
             signing_key,
             secp,
         })
     }
 
-    pub fn block_height_proposal(&self) -> Result<u32, WalletError> {
+    pub fn consensus_proposal(&self) -> Result<WalletConsensus, WalletError> {
         let network_height = self.wallet.client().get_height()?;
         let target_height = network_height.saturating_sub(self.finalty_delay);
 
-        if target_height >= self.last_proposal {
-            Ok(target_height)
+        let proposed_height = if target_height >= self.last_proposal {
+            target_height
         } else {
             warn!(
                 "The block height shrunk, new proposal would be {}, but we are sticking to our last block height proposal {}.",
                 target_height,
                 self.last_proposal
             );
-            Ok(self.last_proposal)
-        }
+            self.last_proposal
+        };
+
+        let fee_rate = self.wallet.client().estimate_fee(CONFIRMATION_TARGET)?;
+
+        Ok(WalletConsensus {
+            block_height: proposed_height,
+            fee_rate: fee_rate.as_sat_vb(),
+        })
     }
 
-    pub fn process_block_height_proposals(&mut self, mut proposals: Vec<u32>) {
-        trace!("Received block height proposals {:?}", &proposals);
+    pub fn process_consensus_proposals(&mut self, proposals: Vec<WalletConsensus>) {
+        trace!("Received consensus proposals {:?}", &proposals);
 
         // TODO: also warn on less than 2/3, that should never happen
         if proposals.is_empty() {
-            error!("No block height proposals were submitted this round");
+            error!("No proposals were submitted this round");
             return;
         }
+
+        let (height_proposals, fee_proposals) = proposals
+            .into_iter()
+            .map(|wc| (wc.block_height, wc.fee_rate))
+            .unzip();
+
+        self.process_block_height_proposals(height_proposals);
+        self.process_fee_proposals(fee_proposals);
+    }
+
+    /// # Panics
+    /// * If proposals is empty
+    fn process_fee_proposals(&mut self, proposals: Vec<f32>) {
+        assert!(!proposals.is_empty());
+
+        let mut proposals = proposals
+            .into_iter()
+            .filter(|fee_rate| {
+                let normal = fee_rate.is_normal();
+                if !normal {
+                    warn!(
+                        "Peer submitted invalid fee rate {:?}, filtering it out",
+                        fee_rate
+                    )
+                }
+                normal
+            })
+            .collect::<Vec<_>>();
+
+        if proposals.is_empty() {
+            warn!("No fee rate proposals are left after sanity checking, aborting.");
+            return;
+        }
+
+        proposals.sort_by(|a, b| {
+            a.partial_cmp(b)
+                .expect("We filtered out all non-comparables")
+        });
+
+        let median_proposal = *proposals
+            .get(proposals.len() / 2)
+            .expect("We checked before that proposals aren't empty");
+
+        self.consensus_feerate = FeeRate::from_sat_per_vb(median_proposal);
+    }
+
+    /// # Panics
+    /// * If proposals is empty
+    fn process_block_height_proposals(&mut self, mut proposals: Vec<u32>) {
+        assert!(!proposals.is_empty());
 
         proposals.sort();
         let median_proposal = proposals[proposals.len() / 2];
@@ -133,6 +195,7 @@ impl Wallet {
         recipient: Address,
         amt: Amount,
     ) -> Result<PartiallySignedTransaction, WalletError> {
+        // FIXME: this needs to be deterministic, but probably isn't
         let mut tx_builder = self
             .wallet
             .build_tx()
@@ -172,6 +235,12 @@ impl Wallet {
             .filter_map(|tx| tx.height.map(|height| (tx.txid, height)))
             .collect())
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WalletConsensus {
+    block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
+    fee_rate: f32,     // FIXME: use fixed point arithmetic, just to be on the safe side
 }
 
 #[derive(Debug)]
