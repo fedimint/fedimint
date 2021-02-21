@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use structopt::StructOpt;
+#[cfg(feature = "client")]
 use tbs::AggregatePublicKey;
 
 #[cfg(feature = "server")]
