@@ -14,6 +14,6 @@ async fn main() {
     let opts: ServerOpts = StructOpt::from_args();
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
 
-    let mut fedi_mint = FediMint::init(rand::rngs::OsRng::new().unwrap(), cfg).await;
+    let fedi_mint = FediMint::init(rand::rngs::OsRng::new().unwrap(), cfg).await;
     fedi_mint.run().await;
 }
