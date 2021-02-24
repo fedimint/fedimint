@@ -1,3 +1,6 @@
+use crate::database::{
+    Database, DatabaseDecode, DatabaseEncode, DatabaseError, DecodingError, PrefixSearchable,
+};
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
@@ -7,8 +10,8 @@ use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, Reques
 use musig;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sled::IVec;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
@@ -20,7 +23,7 @@ pub enum ConsensusItem {
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 
-pub struct FediMintConsensus<R: RngCore + CryptoRng> {
+pub struct FediMintConsensus<R: RngCore + CryptoRng, D: Database + PrefixSearchable> {
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
     /// Configuration describing the federation and containing our secrets
@@ -28,15 +31,16 @@ pub struct FediMintConsensus<R: RngCore + CryptoRng> {
 
     /// Our local mint
     pub mint: Mint, //TODO: box dyn trait for testability
-    /// Consensus items that still need to be agreed on, either because they are new or because
-    /// they weren't accepted in previous rounds
-    pub outstanding_consensus_items: HashSet<ConsensusItem>,
+
+    /// KV Database into which all state is persisted to recover from in case of a crash
+    pub db: D,
+
     /// Partial signatures for (re)issuance requests that haven't reached the threshold for
     /// combination yet
     pub partial_blind_signatures: HashMap<u64, Vec<(usize, PartialSigResponse)>>,
 }
 
-impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
+impl<R: RngCore + CryptoRng, D: Database + PrefixSearchable> FediMintConsensus<R, D> {
     pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
         match cr {
@@ -67,9 +71,11 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
         }
 
         let new = self
-            .outstanding_consensus_items
-            .insert(ConsensusItem::ClientRequest(cr));
-        if !new {
+            .db
+            .insert_entry(&ConsensusItem::ClientRequest(cr), &())
+            .expect("DB error");
+
+        if new.is_some() {
             warn!("Added consensus item was already in consensus queue");
         }
 
@@ -89,7 +95,8 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
             cis.into_iter().map(move |ci| (peer, ci))
         }) {
             trace!("Processing consensus item {:?} from peer {}", ci, peer);
-            self.outstanding_consensus_items.remove(&ci);
+            self.db.remove_entry::<_, ()>(&ci).expect("DB error");
+
             match ci {
                 ConsensusItem::ClientRequest(client_request) => {
                     self.process_client_request(peer, client_request)
@@ -106,7 +113,11 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
     }
 
     pub fn get_consensus_proposal(&mut self) -> Vec<ConsensusItem> {
-        self.outstanding_consensus_items.iter().cloned().collect()
+        self.db
+            .find_by_prefix(&ConsensusItemKeyPrefix)
+            .map(|res| res.map(|(ci, ())| ci))
+            .collect::<Result<_, DatabaseError>>()
+            .expect("DB error")
     }
 
     fn process_client_request(&mut self, peer: u16, cr: ClientRequest) {
@@ -126,8 +137,14 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
         let issuance_req = peg_in.blind_tokens;
         debug!("Signing issuance request {}", issuance_req.id());
         let signed_req = self.mint.sign(issuance_req);
-        self.outstanding_consensus_items
-            .insert(ConsensusItem::PartiallySignedRequest(signed_req.clone()));
+
+        self.db
+            .insert_entry(
+                &ConsensusItem::PartiallySignedRequest(signed_req.clone()),
+                &(),
+            )
+            .expect("DB error");
+        // TODO: make atomic
         self.partial_blind_signatures
             .entry(signed_req.id())
             .or_default()
@@ -143,10 +160,14 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
             }
         };
         debug!("Signed reissuance request {}", signed_request.id());
-        self.outstanding_consensus_items
-            .insert(ConsensusItem::PartiallySignedRequest(
-                signed_request.clone(),
-            ));
+
+        self.db
+            .insert_entry(
+                &ConsensusItem::PartiallySignedRequest(signed_request.clone()),
+                &(),
+            )
+            .expect("DB error");
+        // TODO: make atomic
         self.partial_blind_signatures
             .entry(signed_request.id())
             .or_default()
@@ -205,6 +226,39 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
 
     fn tbs_threshold(&self) -> usize {
         self.cfg.peers.len() - self.cfg.max_faulty() - 1
+    }
+}
+
+const DB_PREFIX_CONSENSUS_ITEM: u8 = 1;
+
+impl DatabaseEncode for ConsensusItem {
+    fn to_bytes(&self) -> IVec {
+        let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
+        bincode::serialize_into(&mut bytes, &self).unwrap(); // TODO: use own encoding
+        bytes.into()
+    }
+}
+
+impl DatabaseDecode for ConsensusItem {
+    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+        // TODO: Distinguish key and value encoding
+        if let Some(&typ) = data.first() {
+            if typ != DB_PREFIX_CONSENSUS_ITEM {
+                return Err(DecodingError("Wrong type".into()));
+            }
+        } else {
+            return Err(DecodingError("No type field".into()));
+        }
+
+        bincode::deserialize(&data[1..]).map_err(|e| DecodingError(e.into()))
+    }
+}
+
+struct ConsensusItemKeyPrefix;
+
+impl DatabaseEncode for ConsensusItemKeyPrefix {
+    fn to_bytes(&self) -> IVec {
+        (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
     }
 }
 

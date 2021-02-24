@@ -1,6 +1,7 @@
+use serde::__private::Formatter;
 use sled::IVec;
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use thiserror::Error;
 
@@ -18,20 +19,22 @@ pub trait Database {
         K: DatabaseEncode + DatabaseDecode,
         V: DatabaseEncode + DatabaseDecode;
 
-    fn get_value<K, V>(&self, key: impl AsRef<K>) -> Result<V, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    where
+        K: DatabaseEncode,
+        V: DatabaseEncode + DatabaseDecode;
+
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode;
 }
 
 pub trait PrefixSearchable: Database {
-    type Err: DbErr;
+    type Err: DbErr + 'static;
     type Iter: Iterator<Item = Result<(IVec, IVec), Self::Err>>;
 
-    fn find_by_prefix<KP, K, V>(
-        &self,
-        key_prefix: impl AsRef<KP>,
-    ) -> DbIter<Self::Iter, Self::Err, K, V>
+    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::Err, K, V>
     where
         KP: DatabaseEncode,
         K: DatabaseEncode + DatabaseDecode,
@@ -61,18 +64,32 @@ impl Database for sled::transaction::TransactionalTree {
         }
     }
 
-    fn get_value<K, V>(&self, key: impl AsRef<K>) -> Result<V, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
     {
-        let key_bytes = key.as_ref().to_bytes();
+        let key_bytes = key.to_bytes();
         let value_bytes = match self.get(&key_bytes)? {
             Some(value) => value,
-            None => return Err(DatabaseError::NotFound(key_bytes)),
+            None => return Ok(None),
         };
 
-        Ok(V::from_bytes(&value_bytes)?)
+        Ok(Some(V::from_bytes(&value_bytes)?))
+    }
+
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    where
+        K: DatabaseEncode,
+        V: DatabaseEncode + DatabaseDecode,
+    {
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.remove(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        Ok(Some(V::from_bytes(&value_bytes)?))
     }
 }
 
@@ -88,18 +105,32 @@ impl Database for sled::Tree {
         }
     }
 
-    fn get_value<K, V>(&self, key: impl AsRef<K>) -> Result<V, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
     {
-        let key_bytes = key.as_ref().to_bytes();
+        let key_bytes = key.to_bytes();
         let value_bytes = match self.get(&key_bytes)? {
             Some(value) => value,
-            None => return Err(DatabaseError::NotFound(key_bytes)),
+            None => return Ok(None),
         };
 
-        Ok(V::from_bytes(&value_bytes)?)
+        Ok(Some(V::from_bytes(&value_bytes)?))
+    }
+
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    where
+        K: DatabaseEncode,
+        V: DatabaseEncode + DatabaseDecode,
+    {
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.remove(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        Ok(Some(V::from_bytes(&value_bytes)?))
     }
 }
 
@@ -107,16 +138,13 @@ impl PrefixSearchable for sled::Tree {
     type Err = sled::Error;
     type Iter = sled::Iter;
 
-    fn find_by_prefix<KP, K, V>(
-        &self,
-        key_prefix: impl AsRef<KP>,
-    ) -> DbIter<Self::Iter, Self::Err, K, V>
+    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::Err, K, V>
     where
         KP: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
         K: DatabaseEncode + DatabaseDecode,
     {
-        let prefix_bytes = key_prefix.as_ref().to_bytes();
+        let prefix_bytes = key_prefix.to_bytes();
         DbIter {
             iter: self.scan_prefix(&prefix_bytes),
             _pd: Default::default(),
@@ -151,8 +179,30 @@ where
     }
 }
 
+impl DatabaseEncode for () {
+    fn to_bytes(&self) -> IVec {
+        vec![].into()
+    }
+}
+
+impl DatabaseDecode for () {
+    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+        if data.is_empty() {
+            Ok(())
+        } else {
+            Err(DecodingError("Expected zero bytes for empty tuple".into()))
+        }
+    }
+}
+
 #[derive(Debug, Error)]
-pub enum DecodingError {}
+pub struct DecodingError(pub Box<dyn Error>);
+
+impl Display for DecodingError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
@@ -160,8 +210,6 @@ pub enum DatabaseError {
     DbError(Box<dyn Error>),
     #[error("Decoding error: {0}")]
     DecodingError(DecodingError),
-    #[error("No entry found for key {0:?}")]
-    NotFound(IVec),
 }
 
 pub trait DbErr: Error {}

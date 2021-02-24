@@ -28,6 +28,8 @@ pub struct ServerConfig {
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
     pub tbs_sks: tbs::SecretKeyShare,
+
+    pub db_path: PathBuf,
 }
 
 #[cfg(feature = "server")]

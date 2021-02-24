@@ -53,7 +53,7 @@ pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, c
         rng_gen: Box::new(CloneRngGen(rng.clone())), //FIXME
         cfg: cfg.clone(),
         mint,
-        outstanding_consensus_items: Default::default(),
+        db: sled::open(cfg.db_path).unwrap().open_tree("mint").unwrap(),
         partial_blind_signatures: Default::default(),
     };
 

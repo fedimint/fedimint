@@ -58,6 +58,7 @@ fn main() {
             hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
             hbbft_pk_set: netinf.public_key_set().clone(),
             tbs_sks: tbs_sks.clone(),
+            db_path: format!("cfg/mint-{}.db", *id).into(),
         };
         serde_json::to_writer_pretty(file, &cfg).unwrap();
     }
