@@ -36,7 +36,7 @@ impl ClientRequest {
 pub async fn run_server(
     cfg: ServerConfig,
     request_sender: Sender<ClientRequest>,
-    bsig_receiver: Receiver<SigResponse>,
+    bsig_receiver: Receiver<Vec<SigResponse>>,
 ) {
     let bsigs = Arc::new(Mutex::new(HashMap::new()));
     tokio::spawn(receive_bsigs(bsigs.clone(), bsig_receiver));
@@ -102,8 +102,10 @@ async fn fetch_sig(req: Request<State>) -> tide::Result {
     }
 }
 
-async fn receive_bsigs(db: BsigDB, mut bsig_receiver: Receiver<SigResponse>) {
-    while let Some(bsig) = bsig_receiver.recv().await {
-        db.lock().await.insert(bsig.id(), bsig);
+async fn receive_bsigs(db: BsigDB, mut bsig_receiver: Receiver<Vec<SigResponse>>) {
+    while let Some(bsigs) = bsig_receiver.recv().await {
+        db.lock()
+            .await
+            .extend(bsigs.into_iter().map(|bsig| (bsig.id(), bsig)));
     }
 }

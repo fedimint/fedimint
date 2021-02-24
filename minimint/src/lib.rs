@@ -92,11 +92,12 @@ pub async fn run_minimint(mut rng: impl RngCore + Clone + 'static, cfg: ServerCo
         }
 
         for batch in step.output {
-            for sig in mint_consensus.process_consensus_outcome(batch) {
+            let sigs = mint_consensus.process_consensus_outcome(batch);
+            if !sigs.is_empty() {
                 sig_response_sender
-                    .send(sig)
+                    .send(sigs)
                     .await
-                    .expect("API server died"); // TODO: send entire vecs
+                    .expect("API server died");
             }
         }
 
