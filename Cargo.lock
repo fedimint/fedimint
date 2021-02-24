@@ -1632,6 +1632,7 @@ dependencies = [
  "rayon",
  "serde",
  "sha3",
+ "sled",
  "structopt",
  "tbs",
  "thiserror",

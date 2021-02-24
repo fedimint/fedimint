@@ -18,6 +18,9 @@ use tracing::{debug, info, warn};
 /// The actual implementation of the federated mint
 pub mod consensus;
 
+/// Provides interfaces for ACID-compliant data store backends
+pub mod database;
+
 /// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;
 
