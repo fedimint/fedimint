@@ -1,5 +1,5 @@
 use config::{load_from_file, ServerConfig, ServerOpts};
-use minimint::consensus::FediMint;
+use minimint::run_minimint;
 use structopt::StructOpt;
 use tracing_subscriber::EnvFilter;
 
@@ -13,7 +13,7 @@ async fn main() {
 
     let opts: ServerOpts = StructOpt::from_args();
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
+    let rng = rand::rngs::OsRng::new().expect("Could not initialize RNG");
 
-    let fedi_mint = FediMint::init(rand::rngs::OsRng::new().unwrap(), cfg).await;
-    fedi_mint.run().await;
+    run_minimint(rng, cfg).await;
 }

@@ -1,161 +1,38 @@
-use crate::net;
 use crate::net::api::ClientRequest;
-use crate::net::connect::Connections;
-use crate::net::framed::Framed;
-use crate::net::PeerConnections;
 use config::ServerConfig;
 use fedimint::Mint;
-use hbbft::honey_badger::{Batch, HoneyBadger};
-use hbbft::NetworkInfo;
+use hbbft::honey_badger::Batch;
 use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use musig;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 use thiserror::Error;
-use tokio::net::TcpStream;
-use tokio::select;
-use tokio::spawn;
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::time::{interval, sleep, Duration};
-use tokio_util::compat::Compat;
 use tracing::{debug, error, info, trace, warn};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-enum ConsensusItem {
+pub enum ConsensusItem {
     ClientRequest(ClientRequest),
     PartiallySignedRequest(u16, mint_api::PartialSigResponse),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
-pub type Connection = Framed<Compat<TcpStream>, HoneyBadgerMessage>;
 
-pub struct FediMint {
+pub struct FediMintConsensus {
     /// Cryptographic random number generator used for everything
-    rng: Box<dyn RngCore>,
+    pub rng: Box<dyn RngCore>,
     /// Configuration describing the federation and containing our secrets
-    cfg: ServerConfig,
-
-    /// Sink for completed issuances being given back to clients through the API
-    sig_response_sender: Sender<SigResponse>,
-    /// Stream of client request from API
-    client_req_receiver: Receiver<ClientRequest>,
-}
-
-impl FediMint {
-    pub async fn init(rng: impl RngCore + 'static, cfg: ServerConfig) -> Self {
-        // Start API server
-        let (bsig_sender, bsig_receiver) = channel(4);
-        let (consensus_sender, consensus_receiver) = channel(4);
-        spawn(net::api::run_server(
-            cfg.clone(),
-            consensus_sender,
-            bsig_receiver,
-        ));
-
-        FediMint {
-            rng: Box::new(rng),
-            cfg,
-            sig_response_sender: bsig_sender,
-            client_req_receiver: consensus_receiver,
-        }
-    }
-
-    pub async fn run(mut self) {
-        let mut connections = Connections::connect_to_all(&self.cfg).await;
-
-        let mint = fedimint::Mint::new(
-            self.cfg.tbs_sks.clone(),
-            self.cfg
-                .peers
-                .values()
-                .map(|peer| peer.tbs_pks.clone())
-                .collect(),
-            self.cfg.peers.len() - self.cfg.max_faulty() - 1, //FIXME
-        );
-
-        let mut mint_consensus = FediMintConsensus {
-            rng: Box::new(rand::rngs::OsRng::new().unwrap()), //FIXME
-            cfg: self.cfg.clone(),
-            mint,
-            outstanding_consensus_items: Default::default(),
-            partial_blind_signatures: Default::default(),
-        };
-
-        let net_info = NetworkInfo::new(
-            self.cfg.identity,
-            self.cfg.hbbft_sks.inner().clone(),
-            self.cfg.hbbft_pk_set.clone(),
-            self.cfg.hbbft_sk.inner().clone(),
-            self.cfg
-                .peers
-                .iter()
-                .map(|(id, peer)| (*id, peer.hbbft_pk.clone()))
-                .collect(),
-        );
-
-        let mut hb: HoneyBadger<Vec<ConsensusItem>, _> =
-            HoneyBadger::builder(Arc::new(net_info)).build();
-        info!("Created Honey Badger instance");
-
-        // Wait for other instances to become ready, not strictly necessary
-        sleep(Duration::from_millis(2000)).await;
-
-        let mut wake_up = interval(Duration::from_millis(5_000));
-
-        loop {
-            let step = select! {
-                _ = wake_up.tick(), if !hb.has_input() => {
-                    let proposal = mint_consensus.get_consensus_proposal();
-                    debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
-                    hb.propose(&proposal, &mut self.rng)
-                },
-                (peer, peer_msg) = connections.receive() => {
-                    hb.handle_message(&peer, peer_msg)
-                },
-                Some(cr) = self.client_req_receiver.recv() => {
-                    let _ = mint_consensus.submit_client_request(cr); // TODO: decide where to log
-                    continue;
-                },
-            }
-            .expect("Failed to process HBBFT input");
-
-            for msg in step.messages {
-                connections.send(msg.target, msg.message).await;
-            }
-
-            for batch in step.output {
-                for sig in mint_consensus.process_consensus_outcome(batch) {
-                    self.sig_response_sender
-                        .send(sig)
-                        .await
-                        .expect("API server died"); // TODO: send entire vecs
-                }
-            }
-
-            if !step.fault_log.is_empty() {
-                warn!("Faults: {:?}", step.fault_log);
-            }
-        }
-    }
-}
-
-struct FediMintConsensus {
-    /// Cryptographic random number generator used for everything
-    rng: Box<dyn RngCore>,
-    /// Configuration describing the federation and containing our secrets
-    cfg: ServerConfig,
+    pub cfg: ServerConfig,
 
     /// Our local mint
-    mint: Mint, //TODO: box dyn trait for testability
+    pub mint: Mint, //TODO: box dyn trait for testability
     /// Consensus items that still need to be agreed on, either because they are new or because
     /// they weren't accepted in previous rounds
-    outstanding_consensus_items: HashSet<ConsensusItem>,
+    pub outstanding_consensus_items: HashSet<ConsensusItem>,
     /// Partial signatures for (re)issuance requests that haven't reached the threshold for
     /// combination yet
-    partial_blind_signatures: HashMap<u64, Vec<(usize, PartialSigResponse)>>,
+    pub partial_blind_signatures: HashMap<u64, Vec<(usize, PartialSigResponse)>>,
 }
 
 impl FediMintConsensus {
