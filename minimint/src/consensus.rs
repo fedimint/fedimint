@@ -1,4 +1,5 @@
 use crate::net::api::ClientRequest;
+use crate::rng::RngGenerator;
 use config::ServerConfig;
 use fedimint::Mint;
 use hbbft::honey_badger::Batch;
@@ -18,14 +19,6 @@ pub enum ConsensusItem {
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
-
-/// Cheaply generates a new random number generator. Since these need to be generated often to avoid
-/// locking them when used by different threads the construction should be rather cheap.
-pub trait RngGenerator {
-    type Rng: RngCore + CryptoRng;
-
-    fn get_rng(&self) -> Self::Rng;
-}
 
 pub struct FediMintConsensus<R: RngCore + CryptoRng> {
     /// Cryptographic random number generator used for everything

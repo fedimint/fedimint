@@ -1,9 +1,10 @@
 #![feature(async_closure)]
 #![feature(iterator_fold_self)]
 
-use crate::consensus::{ConsensusItem, FediMintConsensus, RngGenerator};
+use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
+use crate::rng::RngGenerator;
 use config::ServerConfig;
 use hbbft::honey_badger::HoneyBadger;
 use hbbft::NetworkInfo;
@@ -23,6 +24,9 @@ pub mod database;
 
 /// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;
+
+/// Some abstractions to handle randomness
+mod rng;
 
 /// Start all the components of the mintan d plug them together
 pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, cfg: ServerConfig) {
