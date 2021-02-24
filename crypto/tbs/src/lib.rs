@@ -280,7 +280,7 @@ mod tests {
     fn bench_signing(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (_bk, bmsg) = blind_message(msg);
-        let (pk, pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(1, 5);
 
         bencher.iter(|| sign_blinded_msg(bmsg, sks[0]));
     }
@@ -289,7 +289,7 @@ mod tests {
     fn bench_combine(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (_bk, bmsg) = blind_message(msg);
-        let (pk, pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(1, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
@@ -303,7 +303,7 @@ mod tests {
     fn bench_unblind(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (bk, bmsg) = blind_message(msg);
-        let (pk, pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(1, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
@@ -318,7 +318,7 @@ mod tests {
     fn bench_verify(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (bk, bmsg) = blind_message(msg);
-        let (pk, pks, sks) = dealer_keygen(1, 5);
+        let (pk, _pks, sks) = dealer_keygen(1, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
