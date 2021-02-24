@@ -14,7 +14,7 @@ use tracing::{debug, error, info, trace, warn};
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum ConsensusItem {
     ClientRequest(ClientRequest),
-    PartiallySignedRequest(u16, mint_api::PartialSigResponse),
+    PartiallySignedRequest(mint_api::PartialSigResponse),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
@@ -101,7 +101,7 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
                 ConsensusItem::ClientRequest(client_request) => {
                     self.process_client_request(peer, client_request)
                 }
-                ConsensusItem::PartiallySignedRequest(peer, psig) => {
+                ConsensusItem::PartiallySignedRequest(psig) => {
                     if let Some(signature_response) = self.process_partial_signature(peer, psig) {
                         signaturre_responses.push(signature_response);
                     }
@@ -134,10 +134,7 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
         debug!("Signing issuance request {}", issuance_req.id());
         let signed_req = self.mint.sign(issuance_req);
         self.outstanding_consensus_items
-            .insert(ConsensusItem::PartiallySignedRequest(
-                self.cfg.identity,
-                signed_req.clone(),
-            ));
+            .insert(ConsensusItem::PartiallySignedRequest(signed_req.clone()));
         self.partial_blind_signatures
             .entry(signed_req.id())
             .or_default()
@@ -155,7 +152,6 @@ impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
         debug!("Signed reissuance request {}", signed_request.id());
         self.outstanding_consensus_items
             .insert(ConsensusItem::PartiallySignedRequest(
-                self.cfg.identity,
                 signed_request.clone(),
             ));
         self.partial_blind_signatures
