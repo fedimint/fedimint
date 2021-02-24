@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tokio::select;
 use tokio::sync::mpsc::channel;
 use tokio::task::spawn;
-use tokio::time::{interval, sleep, Duration};
+use tokio::time::{interval, Duration};
 use tracing::{debug, info, warn};
 
 /// The actual implementation of the federated mint
@@ -64,9 +64,6 @@ pub async fn run_minimint(mut rng: impl RngCore + Clone + 'static, cfg: ServerCo
     let mut hb: HoneyBadger<Vec<ConsensusItem>, _> =
         HoneyBadger::builder(Arc::new(net_info)).build();
     info!("Created Honey Badger instance");
-
-    // Wait for other instances to become ready, not strictly necessary
-    sleep(Duration::from_millis(2000)).await;
 
     let mut wake_up = interval(Duration::from_millis(5_000));
 
