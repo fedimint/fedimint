@@ -1629,6 +1629,7 @@ dependencies = [
  "mint-api",
  "musig",
  "rand 0.6.5",
+ "rayon",
  "serde",
  "sha3",
  "structopt",

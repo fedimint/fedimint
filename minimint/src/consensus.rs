@@ -4,7 +4,7 @@ use fedimint::Mint;
 use hbbft::honey_badger::Batch;
 use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use musig;
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -19,9 +19,17 @@ pub enum ConsensusItem {
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 
-pub struct FediMintConsensus {
+/// Cheaply generates a new random number generator. Since these need to be generated often to avoid
+/// locking them when used by different threads the construction should be rather cheap.
+pub trait RngGenerator {
+    type Rng: RngCore + CryptoRng;
+
+    fn get_rng(&self) -> Self::Rng;
+}
+
+pub struct FediMintConsensus<R: RngCore + CryptoRng> {
     /// Cryptographic random number generator used for everything
-    pub rng: Box<dyn RngCore>,
+    pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
@@ -35,7 +43,7 @@ pub struct FediMintConsensus {
     pub partial_blind_signatures: HashMap<u64, Vec<(usize, PartialSigResponse)>>,
 }
 
-impl FediMintConsensus {
+impl<R: RngCore + CryptoRng> FediMintConsensus<R> {
     pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
         match cr {

@@ -1,13 +1,13 @@
 #![feature(async_closure)]
 #![feature(iterator_fold_self)]
 
-use crate::consensus::{ConsensusItem, FediMintConsensus};
+use crate::consensus::{ConsensusItem, FediMintConsensus, RngGenerator};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use config::ServerConfig;
 use hbbft::honey_badger::HoneyBadger;
 use hbbft::NetworkInfo;
-use rand::RngCore;
+use rand::{CryptoRng, RngCore};
 use std::sync::Arc;
 use tokio::select;
 use tokio::sync::mpsc::channel;
@@ -22,7 +22,7 @@ pub mod consensus;
 pub mod net;
 
 /// Start all the components of the mintan d plug them together
-pub async fn run_minimint(mut rng: impl RngCore + Clone + 'static, cfg: ServerConfig) {
+pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, cfg: ServerConfig) {
     let (sig_response_sender, sig_response_receiver) = channel(4);
     let (client_req_sender, mut client_req_receiver) = channel(4);
     spawn(net::api::run_server(
@@ -43,7 +43,7 @@ pub async fn run_minimint(mut rng: impl RngCore + Clone + 'static, cfg: ServerCo
     );
 
     let mut mint_consensus = FediMintConsensus {
-        rng: Box::new(rng.clone()), //FIXME
+        rng_gen: Box::new(CloneRngGen(rng.clone())), //FIXME
         cfg: cfg.clone(),
         mint,
         outstanding_consensus_items: Default::default(),
@@ -101,5 +101,15 @@ pub async fn run_minimint(mut rng: impl RngCore + Clone + 'static, cfg: ServerCo
         if !step.fault_log.is_empty() {
             warn!("Faults: {:?}", step.fault_log);
         }
+    }
+}
+
+struct CloneRngGen<T: RngCore + CryptoRng + Clone>(T);
+
+impl<T: RngCore + CryptoRng + Clone> RngGenerator for CloneRngGen<T> {
+    type Rng = T;
+
+    fn get_rng(&self) -> Self::Rng {
+        self.0.clone()
     }
 }
