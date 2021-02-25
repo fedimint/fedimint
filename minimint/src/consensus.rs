@@ -1,6 +1,6 @@
 use crate::database::{
-    Database, DatabaseDecode, DatabaseEncode, DatabaseError, DecodingError, PrefixSearchable,
-    Transactional,
+    Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
+    PrefixSearchable, Transactional,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
@@ -11,7 +11,6 @@ use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, Reques
 use musig;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use sled::IVec;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
@@ -280,16 +279,16 @@ where
 
 const DB_PREFIX_CONSENSUS_ITEM: u8 = 1;
 
-impl DatabaseEncode for ConsensusItem {
-    fn to_bytes(&self) -> IVec {
+impl DatabaseKeyPrefix for ConsensusItem {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
         bincode::serialize_into(&mut bytes, &self).unwrap(); // TODO: use own encoding
         bytes.into()
     }
 }
 
-impl DatabaseDecode for ConsensusItem {
-    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+impl DatabaseKey for ConsensusItem {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         // TODO: Distinguish key and value encoding
         if let Some(&typ) = data.first() {
             if typ != DB_PREFIX_CONSENSUS_ITEM {
@@ -305,8 +304,8 @@ impl DatabaseDecode for ConsensusItem {
 
 struct ConsensusItemKeyPrefix;
 
-impl DatabaseEncode for ConsensusItemKeyPrefix {
-    fn to_bytes(&self) -> IVec {
+impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
         (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
     }
 }
@@ -318,8 +317,8 @@ struct PartialSignatureKey {
     peer_id: u16,
 }
 
-impl DatabaseEncode for PartialSignatureKey {
-    fn to_bytes(&self) -> IVec {
+impl DatabaseKeyPrefix for PartialSignatureKey {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(11);
         bytes.push(DB_PREFIX_PARTIAL_SIG);
         bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
@@ -328,8 +327,8 @@ impl DatabaseEncode for PartialSignatureKey {
     }
 }
 
-impl DatabaseDecode for PartialSignatureKey {
-    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+impl DatabaseKey for PartialSignatureKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() != 11 {
             return Err(DecodingError(
                 "Expected 11 bytes, got something else".into(),
@@ -357,16 +356,14 @@ impl DatabaseDecode for PartialSignatureKey {
     }
 }
 
-impl DatabaseEncode for PartialSigResponse {
-    fn to_bytes(&self) -> IVec {
+impl DatabaseValue for PartialSigResponse {
+    fn to_bytes(&self) -> Vec<u8> {
         bincode::serialize(&self)
             .expect("Serialization error")
             .into()
     }
-}
 
-impl DatabaseDecode for PartialSigResponse {
-    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))
     }
 }
@@ -375,8 +372,8 @@ struct PartialSignaturesPrefixKey {
     request_id: u64,
 }
 
-impl DatabaseEncode for PartialSignaturesPrefixKey {
-    fn to_bytes(&self) -> IVec {
+impl DatabaseKeyPrefix for PartialSignaturesPrefixKey {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(9);
         bytes.push(DB_PREFIX_PARTIAL_SIG);
         bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
