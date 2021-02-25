@@ -1,10 +1,10 @@
 use crate::database::{
-    Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
-    PrefixSearchable, Transactional,
+    BincodeSerialized, ConsensusItemKeyPrefix, PartialSignatureKey, PartialSignaturesPrefixKey,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
+use db_api::{Database, DatabaseError, PrefixSearchable, Transactional};
 use fedimint::Mint;
 use hbbft::honey_badger::Batch;
 use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
@@ -152,7 +152,7 @@ where
                         request_id: signed_req.id(),
                         peer_id: self.cfg.identity,
                     },
-                    &signed_req,
+                    &BincodeSerialized::borrowed(&signed_req),
                 )?;
                 Ok(())
             })
@@ -180,7 +180,7 @@ where
                         request_id: signed_request.id(),
                         peer_id: self.cfg.identity,
                     },
-                    &signed_request,
+                    &BincodeSerialized::borrowed(&signed_request),
                 )?;
 
                 Ok(())
@@ -207,13 +207,13 @@ where
                     request_id: req_id,
                     peer_id: peer,
                 },
-                &partial_sig,
+                &BincodeSerialized::borrowed(&partial_sig),
             )
             .expect("DB error");
 
         if let Some(ex) = existed {
             warn!("Peer {} submitted signature share twice", peer);
-            if ex != partial_sig {
+            if ex.into_owned() != partial_sig {
                 error!("Peer {} submitted two different signature shares", peer);
             }
         }
@@ -223,7 +223,11 @@ where
             .find_by_prefix::<_, PartialSignatureKey, _>(&PartialSignaturesPrefixKey {
                 request_id: req_id,
             })
-            .map(|entry_res| entry_res.map(|(key, value)| (key.peer_id as usize, value)))
+            .map(|entry_res| {
+                entry_res.map(|(key, value): (_, BincodeSerialized<_>)| {
+                    (key.peer_id as usize, value.into_owned())
+                })
+            })
             .collect::<Result<Vec<_>, _>>()
             .expect("DB error");
 
@@ -248,14 +252,19 @@ where
                         .db
                         .find_by_prefix(&PartialSignaturesPrefixKey { request_id: req_id })
                         .map(|entry_res| {
-                            entry_res.map(|(key, _): (PartialSignatureKey, PartialSigResponse)| key)
+                            entry_res.map(
+                                |(key, _): (
+                                    PartialSignatureKey,
+                                    BincodeSerialized<PartialSigResponse>,
+                                )| key,
+                            )
                         })
                         .collect::<Result<Vec<PartialSignatureKey>, _>>()
                         .expect("DB error");
                     self.db
                         .transaction(|tree| {
                             for key in removal_keys.iter() {
-                                tree.remove_entry::<_, PartialSigResponse>(key)?;
+                                tree.remove_entry::<_, BincodeSerialized<PartialSigResponse>>(key)?;
                             }
                             Ok(())
                         })
@@ -274,110 +283,6 @@ where
 
     fn tbs_threshold(&self) -> usize {
         self.cfg.peers.len() - self.cfg.max_faulty() - 1
-    }
-}
-
-const DB_PREFIX_CONSENSUS_ITEM: u8 = 1;
-
-impl DatabaseKeyPrefix for ConsensusItem {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
-        bincode::serialize_into(&mut bytes, &self).unwrap(); // TODO: use own encoding
-        bytes.into()
-    }
-}
-
-impl DatabaseKey for ConsensusItem {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        // TODO: Distinguish key and value encoding
-        if let Some(&typ) = data.first() {
-            if typ != DB_PREFIX_CONSENSUS_ITEM {
-                return Err(DecodingError("Wrong type".into()));
-            }
-        } else {
-            return Err(DecodingError("No type field".into()));
-        }
-
-        bincode::deserialize(&data[1..]).map_err(|e| DecodingError(e.into()))
-    }
-}
-
-struct ConsensusItemKeyPrefix;
-
-impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
-    fn to_bytes(&self) -> Vec<u8> {
-        (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
-    }
-}
-
-const DB_PREFIX_PARTIAL_SIG: u8 = 2;
-
-struct PartialSignatureKey {
-    request_id: u64,
-    peer_id: u16,
-}
-
-impl DatabaseKeyPrefix for PartialSignatureKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(11);
-        bytes.push(DB_PREFIX_PARTIAL_SIG);
-        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
-        bytes.extend_from_slice(&self.peer_id.to_be_bytes()[..]);
-        bytes.into()
-    }
-}
-
-impl DatabaseKey for PartialSignatureKey {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 11 {
-            return Err(DecodingError(
-                "Expected 11 bytes, got something else".into(),
-            ));
-        }
-
-        if data[0] != DB_PREFIX_PARTIAL_SIG {
-            return Err(DecodingError(
-                "Expected partial sig, got something else".into(),
-            ));
-        }
-
-        let mut request_id_bytes = [0u8; 8];
-        request_id_bytes.copy_from_slice(&data[1..9]);
-        let request_id = u64::from_be_bytes(request_id_bytes);
-
-        let mut peer_id_bytes = [0u8; 2];
-        peer_id_bytes.copy_from_slice(&data[9..11]);
-        let peer_id = u16::from_be_bytes(peer_id_bytes);
-
-        Ok(PartialSignatureKey {
-            request_id,
-            peer_id,
-        })
-    }
-}
-
-impl DatabaseValue for PartialSigResponse {
-    fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(&self)
-            .expect("Serialization error")
-            .into()
-    }
-
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))
-    }
-}
-
-struct PartialSignaturesPrefixKey {
-    request_id: u64,
-}
-
-impl DatabaseKeyPrefix for PartialSignaturesPrefixKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(9);
-        bytes.push(DB_PREFIX_PARTIAL_SIG);
-        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
-        bytes.into()
     }
 }
 

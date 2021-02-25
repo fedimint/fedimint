@@ -4,6 +4,7 @@ members = [
     "config",
     "crypto/musig",
     "crypto/tbs",
+    "database",
     "fedimint",
     "fediwallet",
     "minimint",
