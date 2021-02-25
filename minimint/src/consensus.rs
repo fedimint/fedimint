@@ -4,7 +4,7 @@ use crate::database::{
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
-use db_api::{Database, DatabaseError, PrefixSearchable, Transactional};
+use database::{Database, DatabaseError, PrefixSearchable, Transactional};
 use fedimint::Mint;
 use hbbft::honey_badger::Batch;
 use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
@@ -63,7 +63,7 @@ where
                     return Err(ClientRequestError::InvalidTransactionSignature);
                 }
 
-                if !self.mint.validate(&reissuance_req.coins) {
+                if !self.mint.validate(&self.db, &reissuance_req.coins) {
                     warn!("Rejecting invalid reissuance request: spent or invalid mint sig");
                     return Err(ClientRequestError::DeniedByMint);
                 }
@@ -160,17 +160,21 @@ where
     }
 
     fn process_reissuance_request(&mut self, peer: u16, reissuance: ReissuanceRequest) {
-        let signed_request = match self.mint.reissue(reissuance.coins, reissuance.blind_tokens) {
-            Some(sr) => sr,
-            None => {
-                warn!("Rejected reissuance request proposed by peer {}", peer);
-                return;
-            }
-        };
-        debug!("Signed reissuance request {}", signed_request.id());
-
         self.db
             .transaction(|tree| {
+                let signed_request = match self.mint.reissue(
+                    tree,
+                    reissuance.coins.clone(),
+                    reissuance.blind_tokens.clone(),
+                ) {
+                    Some(sr) => sr,
+                    None => {
+                        warn!("Rejected reissuance request proposed by peer {}", peer);
+                        return Ok(());
+                    }
+                };
+                debug!("Signed reissuance request {}", signed_request.id());
+
                 tree.insert_entry(
                     &ConsensusItem::PartiallySignedRequest(signed_request.clone()),
                     &(),

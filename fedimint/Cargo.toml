@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 counter = "0.5.2"
+database = { path = "../database" }
 mint-api = { path = "../mint-api" }
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"

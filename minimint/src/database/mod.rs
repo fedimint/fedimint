@@ -1,5 +1,5 @@
 use crate::consensus::ConsensusItem;
-use db_api::{DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError};
+use database::{DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;

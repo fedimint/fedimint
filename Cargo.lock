@@ -832,7 +832,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
-name = "db-api"
+name = "database"
 version = "0.1.0"
 dependencies = [
  "sled",
@@ -972,6 +972,7 @@ name = "fedimint"
 version = "0.1.0"
 dependencies = [
  "counter",
+ "database",
  "mint-api",
  "rand 0.6.5",
  "tbs",
@@ -1629,7 +1630,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "config",
- "db-api",
+ "database",
  "fedimint",
  "fediwallet",
  "futures",

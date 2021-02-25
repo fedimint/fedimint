@@ -1,8 +1,8 @@
 mod util;
 
 use crate::util::PartialSigZip;
+use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
 use mint_api::{Coin, CoinNonce, PartialSigResponse, RequestId, SigResponse, SignRequest};
-use std::collections::HashSet;
 use std::hash::Hash;
 use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -19,7 +19,6 @@ pub struct Mint {
     pub_key_shares: Vec<PublicKeyShare>,
     pub_key: AggregatePublicKey,
     threshold: usize,
-    spendbook: HashSet<CoinNonce>,
 }
 
 impl Mint {
@@ -38,7 +37,6 @@ impl Mint {
             pub_key_shares: pub_keys,
             pub_key,
             threshold,
-            spendbook: HashSet::new(),
         }
     }
 
@@ -164,35 +162,65 @@ impl Mint {
 
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
     /// false otherwise.
-    pub fn spend(&mut self, coins: Vec<Coin>) -> bool {
-        let valid = self.validate(&coins);
-        if valid {
-            self.spendbook.extend(coins.into_iter().map(|c| c.0));
-        }
-        valid
+    pub fn spend<T: Database>(&self, transaction: &T, coins: Vec<Coin>) -> bool {
+        coins.into_iter().all(|coin| {
+            let valid = coin.verify(self.pub_key);
+            let unspent = transaction
+                .insert_entry(&NonceKey(coin.0), &())
+                .expect("DB error")
+                .is_none();
+            unspent && valid
+        })
     }
 
     /// Checks if coins are unspent and signed
-    pub fn validate(&self, coins: &[Coin]) -> bool {
-        coins.into_iter().all(|c| {
-            let unspent = !self.spendbook.contains(&c.0);
-            let valid = c.verify(self.pub_key);
+    pub fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool {
+        coins.into_iter().all(|coin| {
+            let valid = coin.verify(self.pub_key);
+            let unspent = transaction
+                .get_value::<_, ()>(&NonceKey(coin.0.clone()))
+                .expect("DB error")
+                .is_none();
             unspent && valid
         })
     }
 
     /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
     /// was greater or equal to the ones to be issued and they were all unspent and valid.
-    pub fn reissue(
-        &mut self,
+    pub fn reissue<T: Database>(
+        &self,
+        transaction: &T,
         coins: Vec<Coin>,
         new_tokens: SignRequest,
     ) -> Option<PartialSigResponse> {
-        if coins.len() >= new_tokens.0.len() && self.spend(coins) {
+        if coins.len() >= new_tokens.0.len() && self.spend(transaction, coins) {
             Some(self.sign(new_tokens))
         } else {
             None
         }
+    }
+}
+
+const DB_PREFIX_COIN_NONCE: u8 = 10;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct NonceKey(CoinNonce);
+
+impl DatabaseKeyPrefix for NonceKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![DB_PREFIX_COIN_NONCE];
+        bytes.extend_from_slice(&self.0.to_bytes());
+        bytes
+    }
+}
+
+impl DatabaseKey for NonceKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() == 0 || data[0] != DB_PREFIX_COIN_NONCE {
+            return Err(DecodingError("Wrong prefix".into()));
+        }
+
+        Ok(NonceKey(CoinNonce::from_bytes(data)))
     }
 }
 

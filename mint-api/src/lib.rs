@@ -99,6 +99,16 @@ impl Coin {
 }
 
 impl CoinNonce {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bincode::serialize_into(&mut bytes, &self.0).unwrap();
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        bincode::deserialize(bytes).unwrap()
+    }
+
     pub fn to_message(&self) -> tbs::Message {
         let mut hasher = sha3::Sha3_256::default();
         bincode::serialize_into(&mut hasher, &self.0).unwrap();
