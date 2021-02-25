@@ -10,6 +10,7 @@ use hbbft::honey_badger::Batch;
 use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use musig;
 use rand::{CryptoRng, RngCore};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
@@ -25,7 +26,7 @@ pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 pub struct FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + Transactional,
+    D: Database + PrefixSearchable + Transactional + Sync,
 {
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
@@ -42,7 +43,7 @@ where
 impl<R, D> FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + Transactional,
+    D: Database + PrefixSearchable + Transactional + Sync,
 {
     pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
@@ -86,36 +87,36 @@ where
     }
 
     pub fn process_consensus_outcome(
-        &mut self,
+        &self,
         batch: Batch<Vec<ConsensusItem>, u16>,
     ) -> Vec<SigResponse> {
         info!("Processing output of epoch {}", batch.epoch);
 
-        let mut signaturre_responses = Vec::new();
+        batch
+            .contributions
+            .into_par_iter()
+            .flat_map(|(peer, cis)| {
+                debug!("Peer {} contributed {} items", peer, cis.len());
+                cis.into_par_iter().map(move |ci| (peer, ci))
+            })
+            .filter_map(|(peer, ci)| {
+                trace!("Processing consensus item {:?} from peer {}", ci, peer);
+                self.db.remove_entry::<_, ()>(&ci).expect("DB error");
 
-        for (peer, ci) in batch.contributions.into_iter().flat_map(|(peer, cis)| {
-            debug!("Peer {} contributed {} items", peer, cis.len());
-            cis.into_iter().map(move |ci| (peer, ci))
-        }) {
-            trace!("Processing consensus item {:?} from peer {}", ci, peer);
-            self.db.remove_entry::<_, ()>(&ci).expect("DB error");
-
-            match ci {
-                ConsensusItem::ClientRequest(client_request) => {
-                    self.process_client_request(peer, client_request)
-                }
-                ConsensusItem::PartiallySignedRequest(psig) => {
-                    if let Some(signature_response) = self.process_partial_signature(peer, psig) {
-                        signaturre_responses.push(signature_response);
+                match ci {
+                    ConsensusItem::ClientRequest(client_request) => {
+                        self.process_client_request(peer, client_request);
+                        None
+                    }
+                    ConsensusItem::PartiallySignedRequest(psig) => {
+                        self.process_partial_signature(peer, psig)
                     }
                 }
-            };
-        }
-
-        signaturre_responses
+            })
+            .collect()
     }
 
-    pub fn get_consensus_proposal(&mut self) -> Vec<ConsensusItem> {
+    pub fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
             .find_by_prefix(&ConsensusItemKeyPrefix)
             .map(|res| res.map(|(ci, ())| ci))
@@ -123,7 +124,7 @@ where
             .expect("DB error")
     }
 
-    fn process_client_request(&mut self, peer: u16, cr: ClientRequest) {
+    fn process_client_request(&self, peer: u16, cr: ClientRequest) {
         match cr {
             ClientRequest::PegIn(peg_in) => self.process_peg_in_request(peg_in),
             ClientRequest::Reissuance(reissuance) => {
@@ -135,7 +136,7 @@ where
         };
     }
 
-    fn process_peg_in_request(&mut self, peg_in: PegInRequest) {
+    fn process_peg_in_request(&self, peg_in: PegInRequest) {
         // FIXME: check pegin proof and mark as used (ATOMICITY!!!)
         let issuance_req = peg_in.blind_tokens;
         debug!("Signing issuance request {}", issuance_req.id());
@@ -159,7 +160,7 @@ where
             .expect("DB error");
     }
 
-    fn process_reissuance_request(&mut self, peer: u16, reissuance: ReissuanceRequest) {
+    fn process_reissuance_request(&self, peer: u16, reissuance: ReissuanceRequest) {
         self.db
             .transaction(|tree| {
                 let signed_request = match self.mint.reissue(
@@ -193,7 +194,7 @@ where
     }
 
     fn process_partial_signature(
-        &mut self,
+        &self,
         peer: u16,
         partial_sig: PartialSigResponse,
     ) -> Option<SigResponse> {

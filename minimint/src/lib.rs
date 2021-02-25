@@ -9,7 +9,7 @@ use config::ServerConfig;
 use hbbft::honey_badger::HoneyBadger;
 use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::channel;
 use tokio::task::spawn;
@@ -29,7 +29,10 @@ pub mod net;
 mod rng;
 
 /// Start all the components of the mintan d plug them together
-pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, cfg: ServerConfig) {
+pub async fn run_minimint(
+    mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
+    cfg: ServerConfig,
+) {
     let (sig_response_sender, sig_response_receiver) = channel(4);
     let (client_req_sender, mut client_req_receiver) = channel(4);
     spawn(net::api::run_server(
@@ -50,7 +53,7 @@ pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, c
     );
 
     let mut mint_consensus = FediMintConsensus {
-        rng_gen: Box::new(CloneRngGen(rng.clone())), //FIXME
+        rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
         db: sled::open(cfg.db_path).unwrap().open_tree("mint").unwrap(),
@@ -110,12 +113,12 @@ pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, c
     }
 }
 
-struct CloneRngGen<T: RngCore + CryptoRng + Clone>(T);
+struct CloneRngGen<T: RngCore + CryptoRng + Clone + Send>(Mutex<T>);
 
-impl<T: RngCore + CryptoRng + Clone> RngGenerator for CloneRngGen<T> {
+impl<T: RngCore + CryptoRng + Clone + Send> RngGenerator for CloneRngGen<T> {
     type Rng = T;
 
     fn get_rng(&self) -> Self::Rng {
-        self.0.clone()
+        self.0.lock().unwrap().clone()
     }
 }
