@@ -1,4 +1,5 @@
 use serde::__private::Formatter;
+use sled::transaction::TransactionResult;
 use sled::IVec;
 use std::error::Error;
 use std::fmt::{Debug, Display};
@@ -14,37 +15,51 @@ pub trait DatabaseDecode: Sized {
 }
 
 pub trait Database {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
+    type Err: Error + From<DecodingError>;
+
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode + DatabaseDecode,
         V: DatabaseEncode + DatabaseDecode;
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode;
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode;
 }
 
 pub trait PrefixSearchable: Database {
-    type Err: DbErr + 'static;
-    type Iter: Iterator<Item = Result<(IVec, IVec), Self::Err>>;
+    type IterErr: Error + Into<DatabaseError>;
+    type Iter: Iterator<Item = Result<(IVec, IVec), Self::IterErr>>;
 
-    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::Err, K, V>
+    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::IterErr, K, V>
     where
         KP: DatabaseEncode,
         K: DatabaseEncode + DatabaseDecode,
         V: DatabaseEncode + DatabaseDecode;
 }
 
-pub struct DbIter<Iter, Err, K, V>
+pub trait Transactional: Database {
+    type Transaction: Database<Err = sled::transaction::ConflictableTransactionError<DecodingError>>;
+
+    // FIXME: don't rely on sled here, doing it properly requires GATs though, maybe some other
+    // trick like getting rid of E and A and pinning them to () would be preferable in the meantime
+    fn transaction<F, A>(&self, f: F) -> sled::transaction::TransactionResult<A, DecodingError>
+    where
+        F: Fn(
+            &Self::Transaction,
+        ) -> sled::transaction::ConflictableTransactionResult<A, DecodingError>;
+}
+
+pub struct DbIter<Iter, IterErr, K, V>
 where
-    Iter: Iterator<Item = Result<(IVec, IVec), Err>>,
-    Err: DbErr,
+    Iter: Iterator<Item = Result<(IVec, IVec), IterErr>>,
+    IterErr: Into<DatabaseError>,
     K: DatabaseEncode + DatabaseDecode,
     V: DatabaseEncode + DatabaseDecode,
 {
@@ -53,7 +68,9 @@ where
 }
 
 impl Database for sled::transaction::TransactionalTree {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
+    type Err = sled::transaction::ConflictableTransactionError<DecodingError>;
+
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode + DatabaseDecode,
         V: DatabaseEncode + DatabaseDecode,
@@ -64,7 +81,7 @@ impl Database for sled::transaction::TransactionalTree {
         }
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
@@ -78,7 +95,7 @@ impl Database for sled::transaction::TransactionalTree {
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
@@ -94,7 +111,9 @@ impl Database for sled::transaction::TransactionalTree {
 }
 
 impl Database for sled::Tree {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
+    type Err = DatabaseError;
+
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode + DatabaseDecode,
         V: DatabaseEncode + DatabaseDecode,
@@ -105,7 +124,7 @@ impl Database for sled::Tree {
         }
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
@@ -119,7 +138,7 @@ impl Database for sled::Tree {
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
     where
         K: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
@@ -135,10 +154,10 @@ impl Database for sled::Tree {
 }
 
 impl PrefixSearchable for sled::Tree {
-    type Err = sled::Error;
+    type IterErr = sled::Error;
     type Iter = sled::Iter;
 
-    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::Err, K, V>
+    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<Self::Iter, Self::IterErr, K, V>
     where
         KP: DatabaseEncode,
         V: DatabaseEncode + DatabaseDecode,
@@ -152,10 +171,23 @@ impl PrefixSearchable for sled::Tree {
     }
 }
 
-impl<Iter, Err, K, V> Iterator for DbIter<Iter, Err, K, V>
+impl Transactional for sled::Tree {
+    type Transaction = sled::transaction::TransactionalTree;
+
+    fn transaction<F, A>(&self, f: F) -> TransactionResult<A, DecodingError>
+    where
+        F: Fn(
+            &Self::Transaction,
+        ) -> sled::transaction::ConflictableTransactionResult<A, DecodingError>,
+    {
+        self.transaction(f)
+    }
+}
+
+impl<Iter, IterErr, K, V> Iterator for DbIter<Iter, IterErr, K, V>
 where
-    Iter: Iterator<Item = Result<(IVec, IVec), Err>>,
-    Err: DbErr + 'static,
+    Iter: Iterator<Item = Result<(IVec, IVec), IterErr>>,
+    IterErr: Into<DatabaseError>,
     K: DatabaseEncode + DatabaseDecode,
     V: DatabaseEncode + DatabaseDecode,
 {
@@ -212,18 +244,20 @@ pub enum DatabaseError {
     DecodingError(DecodingError),
 }
 
-pub trait DbErr: Error {}
-impl DbErr for sled::transaction::UnabortableTransactionError {}
-impl DbErr for sled::Error {}
-
 impl From<DecodingError> for DatabaseError {
     fn from(e: DecodingError) -> Self {
         DatabaseError::DecodingError(e)
     }
 }
 
-impl<E: DbErr + 'static> From<E> for DatabaseError {
-    fn from(e: E) -> Self {
-        DatabaseError::DbError(Box::new(e))
+impl From<DecodingError> for sled::transaction::ConflictableTransactionError<DecodingError> {
+    fn from(e: DecodingError) -> Self {
+        sled::transaction::ConflictableTransactionError::Abort(e)
+    }
+}
+
+impl From<sled::Error> for DatabaseError {
+    fn from(e: sled::Error) -> Self {
+        DatabaseError::DbError(e.into())
     }
 }

@@ -1,5 +1,6 @@
 use crate::database::{
     Database, DatabaseDecode, DatabaseEncode, DatabaseError, DecodingError, PrefixSearchable,
+    Transactional,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
@@ -11,7 +12,6 @@ use musig;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sled::IVec;
-use std::collections::HashMap;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
@@ -26,7 +26,8 @@ pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 pub struct FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchables,
+    D: Database + PrefixSearchable + Transactional,
+    D::Err: From<D::IterErr>,
 {
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
@@ -38,16 +39,13 @@ where
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: D,
-
-    /// Partial signatures for (re)issuance requests that haven't reached the threshold for
-    /// combination yet
-    pub partial_blind_signatures: HashMap<u64, Vec<(usize, PartialSigResponse)>>,
 }
 
 impl<R, D> FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchables,
+    D: Database + PrefixSearchable + Transactional,
+    D::Err: From<D::IterErr>,
 {
     pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
@@ -147,16 +145,21 @@ where
         let signed_req = self.mint.sign(issuance_req);
 
         self.db
-            .insert_entry(
-                &ConsensusItem::PartiallySignedRequest(signed_req.clone()),
-                &(),
-            )
+            .transaction(|tree| {
+                tree.insert_entry(
+                    &ConsensusItem::PartiallySignedRequest(signed_req.clone()),
+                    &(),
+                )?;
+                tree.insert_entry(
+                    &PartialSignatureKey {
+                        request_id: signed_req.id(),
+                        peer_id: self.cfg.identity,
+                    },
+                    &signed_req,
+                )?;
+                Ok(())
+            })
             .expect("DB error");
-        // TODO: make atomic
-        self.partial_blind_signatures
-            .entry(signed_req.id())
-            .or_default()
-            .push((self.cfg.identity as usize, signed_req));
     }
 
     fn process_reissuance_request(&mut self, peer: u16, reissuance: ReissuanceRequest) {
@@ -170,16 +173,22 @@ where
         debug!("Signed reissuance request {}", signed_request.id());
 
         self.db
-            .insert_entry(
-                &ConsensusItem::PartiallySignedRequest(signed_request.clone()),
-                &(),
-            )
+            .transaction(|tree| {
+                tree.insert_entry(
+                    &ConsensusItem::PartiallySignedRequest(signed_request.clone()),
+                    &(),
+                )?;
+                tree.insert_entry(
+                    &PartialSignatureKey {
+                        request_id: signed_request.id(),
+                        peer_id: self.cfg.identity,
+                    },
+                    &signed_request,
+                )?;
+
+                Ok(())
+            })
             .expect("DB error");
-        // TODO: make atomic
-        self.partial_blind_signatures
-            .entry(signed_request.id())
-            .or_default()
-            .push((self.cfg.identity as usize, signed_request));
     }
 
     fn process_partial_signature(
@@ -193,23 +202,40 @@ where
             "Received sig share from peer {} for issuance {}",
             peer, req_id
         );
-        let req_psigs = self.partial_blind_signatures.entry(req_id).or_default();
 
-        // Add sig share if we don't already have it
-        if req_psigs
-            .iter()
-            .find(|(ref p, _)| *p == peer as usize)
-            .is_none()
-        {
-            // FIXME: check if shares are actually duplicates, ring alarm otherwise
-            req_psigs.push((peer as usize, partial_sig));
+        let existed = self
+            .db
+            .insert_entry(
+                &PartialSignatureKey {
+                    request_id: req_id,
+                    peer_id: peer,
+                },
+                &partial_sig,
+            )
+            .expect("DB error");
+
+        if let Some(ex) = existed {
+            warn!("Peer {} submitted signature share twice", peer);
+            if ex != partial_sig {
+                error!("Peer {} submitted two different signature shares", peer);
+            }
         }
+
+        let req_psigs = self
+            .db
+            .find_by_prefix::<_, PartialSignatureKey, _>(&PartialSignaturesPrefixKey {
+                request_id: req_id,
+            })
+            .map(|entry_res| entry_res.map(|(key, value)| (key.peer_id as usize, value)))
+            .collect::<Result<Vec<_>, _>>()
+            .expect("DB error");
+
         if req_psigs.len() > tbs_thresh {
             debug!(
                 "Trying to combine sig shares for issuance request {}",
                 req_id
             );
-            let (bsig, errors) = self.mint.combine(req_psigs.clone());
+            let (bsig, errors) = self.mint.combine(req_psigs);
             if !errors.0.is_empty() {
                 warn!("Peer sent faulty share: {:?}", errors);
             }
@@ -220,7 +246,24 @@ where
                         "Successfully combined signature shares for issuance request {}",
                         req_id
                     );
-                    self.partial_blind_signatures.remove(&req_id);
+
+                    let removal_keys = self
+                        .db
+                        .find_by_prefix(&PartialSignaturesPrefixKey { request_id: req_id })
+                        .map(|entry_res| {
+                            entry_res.map(|(key, _): (PartialSignatureKey, PartialSigResponse)| key)
+                        })
+                        .collect::<Result<Vec<PartialSignatureKey>, _>>()
+                        .expect("DB error");
+                    self.db
+                        .transaction(|tree| {
+                            for key in removal_keys.iter() {
+                                tree.remove_entry::<_, PartialSigResponse>(key)?;
+                            }
+                            Ok(())
+                        })
+                        .expect("DB error");
+
                     return Some(bsig);
                 }
                 Err(e) => {
@@ -267,6 +310,79 @@ struct ConsensusItemKeyPrefix;
 impl DatabaseEncode for ConsensusItemKeyPrefix {
     fn to_bytes(&self) -> IVec {
         (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
+    }
+}
+
+const DB_PREFIX_PARTIAL_SIG: u8 = 2;
+
+struct PartialSignatureKey {
+    request_id: u64,
+    peer_id: u16,
+}
+
+impl DatabaseEncode for PartialSignatureKey {
+    fn to_bytes(&self) -> IVec {
+        let mut bytes = Vec::with_capacity(11);
+        bytes.push(DB_PREFIX_PARTIAL_SIG);
+        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
+        bytes.extend_from_slice(&self.peer_id.to_be_bytes()[..]);
+        bytes.into()
+    }
+}
+
+impl DatabaseDecode for PartialSignatureKey {
+    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+        if data.len() != 11 {
+            return Err(DecodingError(
+                "Expected 11 bytes, got something else".into(),
+            ));
+        }
+
+        if data[0] != DB_PREFIX_PARTIAL_SIG {
+            return Err(DecodingError(
+                "Expected partial sig, got something else".into(),
+            ));
+        }
+
+        let mut request_id_bytes = [0u8; 8];
+        request_id_bytes.copy_from_slice(&data[1..9]);
+        let request_id = u64::from_be_bytes(request_id_bytes);
+
+        let mut peer_id_bytes = [0u8; 2];
+        peer_id_bytes.copy_from_slice(&data[9..11]);
+        let peer_id = u16::from_be_bytes(peer_id_bytes);
+
+        Ok(PartialSignatureKey {
+            request_id,
+            peer_id,
+        })
+    }
+}
+
+impl DatabaseEncode for PartialSigResponse {
+    fn to_bytes(&self) -> IVec {
+        bincode::serialize(&self)
+            .expect("Serialization error")
+            .into()
+    }
+}
+
+impl DatabaseDecode for PartialSigResponse {
+    fn from_bytes(data: &IVec) -> Result<Self, DecodingError> {
+        bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))
+    }
+}
+
+struct PartialSignaturesPrefixKey {
+    request_id: u64,
+}
+
+impl DatabaseEncode for PartialSignaturesPrefixKey {
+    fn to_bytes(&self) -> IVec {
+        let mut bytes = Vec::with_capacity(9);
+        bytes.push(DB_PREFIX_PARTIAL_SIG);
+        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
+        bytes.into()
     }
 }
 

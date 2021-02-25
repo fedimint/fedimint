@@ -54,7 +54,6 @@ pub async fn run_minimint(mut rng: impl RngCore + CryptoRng + Clone + 'static, c
         cfg: cfg.clone(),
         mint,
         db: sled::open(cfg.db_path).unwrap().open_tree("mint").unwrap(),
-        partial_blind_signatures: Default::default(),
     };
 
     let net_info = NetworkInfo::new(
