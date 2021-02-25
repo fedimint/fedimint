@@ -27,7 +27,6 @@ pub struct FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
     D: Database + PrefixSearchable + Transactional,
-    D::Err: From<D::IterErr>,
 {
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
@@ -45,7 +44,6 @@ impl<R, D> FediMintConsensus<R, D>
 where
     R: RngCore + CryptoRng,
     D: Database + PrefixSearchable + Transactional,
-    D::Err: From<D::IterErr>,
 {
     pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
