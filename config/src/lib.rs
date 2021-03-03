@@ -71,7 +71,7 @@ pub struct ClientOpts {
 #[cfg(feature = "client")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
-    pub url: String,
+    pub mints: Vec<String>,
     pub mint_pk: AggregatePublicKey,
 }
 

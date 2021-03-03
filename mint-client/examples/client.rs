@@ -4,6 +4,7 @@ use mint_api::{PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
 use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
 use sha3::Sha3_256;
@@ -58,7 +59,7 @@ async fn fetch_coins(
 ) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
     let client = reqwest::Client::new();
     let resp: SigResponse = loop {
-        let url = format!("{}/issuance/{}", cfg.url, req.id());
+        let url = format!("{}/issuance/{}", cfg.mints[0], req.id());
 
         debug!("looking for coins: {}", url);
 
@@ -94,16 +95,19 @@ async fn request_issuance(
         proof: (),
     };
     let client = reqwest::Client::new();
-    let res = client
-        .put(&format!("{}/issuance/pegin", cfg.url))
-        .json(&req)
-        .send()
-        .await
-        .expect("API error");
 
-    if res.status() != StatusCode::OK {
-        error!("API returned error when pegging in: {:?}", res.status());
-        exit(-1);
+    for url in cfg.mints.choose_multiple(&mut rng, 2) {
+        let res = client
+            .put(&format!("{}/issuance/pegin", url))
+            .json(&req)
+            .send()
+            .await
+            .expect("API error");
+
+        if res.status() != StatusCode::OK {
+            error!("API returned error when pegging in: {:?}", res.status());
+            exit(-1);
+        }
     }
 
     issuance_request
@@ -124,8 +128,8 @@ async fn request_reissuance(
     let mut digest = Sha3_256::default();
     bincode::serialize_into(&mut digest, &coins).unwrap();
     bincode::serialize_into(&mut digest, &sig_req).unwrap();
-    let rng = musig::rng_adapt::RngAdaptor(rand::rngs::OsRng::new().unwrap());
-    let sig = musig::sign(digest, spend_keys.iter(), rng);
+    let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
+    let sig = musig::sign(digest, spend_keys.iter(), rng_adapt);
 
     let req = ReissuanceRequest {
         coins,
@@ -133,16 +137,18 @@ async fn request_reissuance(
         sig,
     };
     let client = reqwest::Client::new();
-    let res = client
-        .put(&format!("{}/issuance/reissue", cfg.url))
-        .json(&req)
-        .send()
-        .await
-        .expect("API error");
+    for url in cfg.mints.choose_multiple(&mut rng, 2) {
+        let res = client
+            .put(&format!("{}/issuance/reissue", url))
+            .json(&req)
+            .send()
+            .await
+            .expect("API error");
 
-    if res.status() != StatusCode::OK {
-        error!("API returned error when reissuing: {:?}", res.status());
-        exit(-1);
+        if res.status() != StatusCode::OK {
+            error!("API returned error when reissuing: {:?}", res.status());
+            exit(-1);
+        }
     }
 
     issuance_req
