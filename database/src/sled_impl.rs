@@ -3,8 +3,9 @@ use crate::{
     BatchDb, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter,
     DecodingError, PrefixSearchable, Transactional,
 };
+use sled::transaction::TransactionError;
 use sled::IVec;
-use tracing::error;
+use tracing::{error, trace};
 
 impl Database for sled::transaction::TransactionalTree {
     type Err = sled::transaction::ConflictableTransactionError<DecodingError>;
@@ -129,35 +130,42 @@ impl Transactional for sled::Tree {
 }
 
 impl BatchDb for sled::Tree {
-    fn apply_batch<B>(&self, batch: B) -> Result<(), DatabaseError>
+    fn apply_batch<'b, B>(&self, batch: B) -> Result<(), DatabaseError>
     where
-        B: IntoIterator<Item = BatchItem>,
+        B: IntoIterator<Item = &'b BatchItem> + 'b,
+        B::IntoIter: Clone,
     {
-        for change in batch {
-            match change {
-                BatchItem::InsertNewElement(element) => {
-                    if self
-                        .insert(element.key.to_bytes(), element.value.to_bytes())?
-                        .is_some()
-                    {
-                        error!("Database replaced element! This should not happen!");
+        let batch_iter = batch.into_iter();
+
+        self.transaction(|t| {
+            for change in batch_iter.clone() {
+                match change {
+                    BatchItem::InsertNewElement(element) => {
+                        if t.insert(element.key.to_bytes(), element.value.to_bytes())?
+                            .is_some()
+                        {
+                            error!("Database replaced element! This should not happen!");
+                            trace!("Problematic key: {:?}", element.key);
+                        }
                     }
-                }
-                BatchItem::InsertElement(element) => {
-                    self.insert(element.key.to_bytes(), element.value.to_bytes())?;
-                }
-                BatchItem::DeleteElement(key) => {
-                    if self.remove(key.to_bytes())?.is_none() {
-                        error!("Database deleted absent element! This should not happen!");
+                    BatchItem::InsertElement(element) => {
+                        t.insert(element.key.to_bytes(), element.value.to_bytes())?;
                     }
-                }
-                BatchItem::MaybeDeleteElement(key) => {
-                    self.remove(key.to_bytes())?;
+                    BatchItem::DeleteElement(key) => {
+                        if t.remove(key.to_bytes())?.is_none() {
+                            error!("Database deleted absent element! This should not happen!");
+                            trace!("Problematic key: {:?}", key);
+                        }
+                    }
+                    BatchItem::MaybeDeleteElement(key) => {
+                        t.remove(key.to_bytes())?;
+                    }
                 }
             }
-        }
 
-        Ok(())
+            Ok(())
+        })
+        .map_err(|e: TransactionError| DatabaseError::DbError(e.into()))
     }
 }
 

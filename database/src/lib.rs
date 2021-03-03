@@ -7,7 +7,7 @@ use thiserror::Error;
 pub mod batch;
 pub mod sled_impl;
 
-pub trait DatabaseKeyPrefix {
+pub trait DatabaseKeyPrefix: Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
@@ -15,7 +15,7 @@ pub trait DatabaseKey: Sized + DatabaseKeyPrefix {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
-pub trait SerializableDatabaseValue {
+pub trait SerializableDatabaseValue: Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
@@ -69,9 +69,10 @@ pub trait Transactional: Database {
 }
 
 pub trait BatchDb: Database {
-    fn apply_batch<B>(&self, batch: B) -> Result<(), DatabaseError>
+    fn apply_batch<'b, B>(&self, batch: B) -> Result<(), DatabaseError>
     where
-        B: IntoIterator<Item = BatchItem>;
+        B: IntoIterator<Item = &'b BatchItem> + 'b,
+        B::IntoIter: Clone;
 }
 
 pub struct DbIter<Iter, Bytes, IterErr, K, V>

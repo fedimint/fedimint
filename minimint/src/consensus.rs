@@ -169,10 +169,10 @@ where
         self.db
             .apply_batch(
                 process_items_batches
-                    .into_iter()
-                    .chain(combine_sigs_batches)
+                    .iter()
+                    .chain(combine_sigs_batches.iter())
                     .flatten()
-                    .chain(remove_ci_batch),
+                    .chain(remove_ci_batch.iter()),
             )
             .expect("DB error");
 

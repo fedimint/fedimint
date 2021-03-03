@@ -2,11 +2,13 @@ use crate::{DatabaseKeyPrefix, SerializableDatabaseValue};
 
 pub type Batch = Vec<BatchItem>;
 
+#[derive(Debug)]
 pub struct Element {
     pub key: Box<dyn DatabaseKeyPrefix + Send>,
     pub value: Box<dyn SerializableDatabaseValue + Send>,
 }
 
+#[derive(Debug)]
 pub enum BatchItem {
     /// Inserts element, errors if it already exists
     InsertNewElement(Element),

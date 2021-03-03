@@ -39,7 +39,7 @@ impl<'a, T: Clone> BincodeSerialized<'a, T> {
     }
 }
 
-impl<'a, T: Serialize + Clone> SerializableDatabaseValue for BincodeSerialized<'a, T> {
+impl<'a, T: Serialize + Debug + Clone> SerializableDatabaseValue for BincodeSerialized<'a, T> {
     fn to_bytes(&self) -> Vec<u8> {
         bincode::serialize(&self.0)
             .expect("Serialization error")
@@ -47,7 +47,9 @@ impl<'a, T: Serialize + Clone> SerializableDatabaseValue for BincodeSerialized<'
     }
 }
 
-impl<'a, T: Serialize + DeserializeOwned + Clone> DatabaseValue for BincodeSerialized<'a, T> {
+impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
+    for BincodeSerialized<'a, T>
+{
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         Ok(BincodeSerialized(
             bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))?,
