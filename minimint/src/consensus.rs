@@ -143,6 +143,7 @@ where
                     })
                     .map(move |ci| (peer, ci))
             })
+            .unique_by(|(_, contribution)| contribution.clone())
             .collect::<Vec<_>>();
 
         let (process_items_batches, remove_ci_batch) = batch
