@@ -1,7 +1,9 @@
 use config::{load_from_file, ClientConfig, ClientOpts};
+use futures::future::join_all;
 use mint_api::{PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
+use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
 use sha3::Sha3_256;
@@ -19,14 +21,25 @@ async fn main() {
         )
         .init();
 
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let rng = rand::rngs::OsRng::new().unwrap();
 
     let opts: ClientOpts = StructOpt::from_args();
     let cfg: ClientConfig = load_from_file(&opts.cfg_path);
 
-    info!("Sending peg-in request for {} coins", opts.issue_amt);
-    let issuance_req = request_issuance(&cfg, opts.issue_amt, &mut rng).await;
-    let coins = fetch_coins(&cfg, issuance_req)
+    info!(
+        "Sending peg-in request for {} coins {} times",
+        opts.issue_amt, opts.par
+    );
+
+    let requests = (0..opts.par)
+        .map(|_| roundtrip(rng.clone(), &cfg, opts.issue_amt))
+        .collect::<Vec<_>>();
+    join_all(requests).await;
+}
+
+async fn roundtrip(mut rng: OsRng, cfg: &ClientConfig, amt: usize) {
+    let issuance_req = request_issuance(cfg, amt, &mut rng).await;
+    let coins = fetch_coins(cfg, issuance_req)
         .await
         .expect("Couldn't qcquire coins");
     info!("Received {} valid coins", coins.len());
@@ -35,7 +48,7 @@ async fn main() {
     let issuance_req = request_reissuance(&cfg, coins, &mut rng).await;
     let coins = fetch_coins(&cfg, issuance_req)
         .await
-        .expect("Couldn't qcquire coins");
+        .expect("Couldn't acquire coins");
     info!("Received {} valid coins", coins.len());
 }
 

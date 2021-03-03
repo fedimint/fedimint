@@ -65,6 +65,7 @@ impl ServerConfig {
 pub struct ClientOpts {
     pub cfg_path: PathBuf,
     pub issue_amt: usize,
+    pub par: usize,
 }
 
 #[cfg(feature = "client")]

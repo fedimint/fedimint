@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tide::{Body, Request, Response};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 
 type BsigDB = Arc<Mutex<HashMap<u64, SigResponse>>>;
 
