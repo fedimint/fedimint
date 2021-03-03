@@ -149,7 +149,7 @@ where
             .into_par_iter()
             .map(|(peer, ci)| {
                 trace!("Processing consensus item {:?} from peer {}", ci, peer);
-                let remove_ci = BatchItem::DeleteElement(Box::new(ci.clone()));
+                let remove_ci = BatchItem::MaybeDeleteElement(Box::new(ci.clone()));
 
                 let batch = match ci {
                     ConsensusItem::ClientRequest(client_request) => {
