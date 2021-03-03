@@ -294,7 +294,7 @@ where
             .into_group_map();
 
         req_psigs
-            .into_iter()
+            .into_par_iter()
             .filter_map(|(issuance_id, shares)| {
                 if shares.len() > self.tbs_threshold() {
                     debug!(
