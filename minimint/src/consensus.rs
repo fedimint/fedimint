@@ -164,16 +164,20 @@ where
             })
             .unzip::<_, _, Vec<DbBatch>, DbBatch>();
 
-        let (combine_sigs_batches, sigs) = self.finalize_signatures();
-
+        // Apply all consensus-critical changes atomically to the DB
         self.db
             .apply_batch(
                 process_items_batches
                     .iter()
-                    .chain(combine_sigs_batches.iter())
                     .flatten()
                     .chain(remove_ci_batch.iter()),
             )
+            .expect("DB error");
+
+        // Now that we have updated the DB with the epoch results also try to combine signatures
+        let (combine_sigs_batches, sigs) = self.finalize_signatures();
+        self.db
+            .apply_batch(combine_sigs_batches.iter().flatten())
             .expect("DB error");
 
         sigs
