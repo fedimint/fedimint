@@ -6,9 +6,7 @@ use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
-use futures::future::FusedFuture;
 use futures::future::OptionFuture;
-use futures::FutureExt;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
@@ -16,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use tokio::select;
 use tokio::sync::mpsc::channel;
 use tokio::task::spawn;
+use tokio::task::JoinError;
 use tokio::time::{interval, Duration};
 use tracing::{debug, info, trace, warn};
 
@@ -82,7 +81,7 @@ pub async fn run_minimint(
 
     loop {
         let step = select! {
-            _ = wake_up.tick(), if !hb.has_input() && batch_process.is_terminated() => {
+            _ = wake_up.tick(), if !hb.has_input() => {
                 let proposal = mint_consensus.get_consensus_proposal();
                 debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
                 trace!("Proposal: {:?}", proposal);
@@ -93,10 +92,6 @@ pub async fn run_minimint(
             },
             Some(cr) = client_req_receiver.recv() => {
                 let _ = mint_consensus.submit_client_request(cr); // TODO: decide where to log
-                continue;
-            },
-            _ = &mut batch_process, if !batch_process.is_terminated() => {
-                batch_process = None.into(); // Not necessary due to fusing, but here for clarity
                 continue;
             }
         }
@@ -123,10 +118,14 @@ pub async fn run_minimint(
         };
         wake_up.tick().await; // consume first tick immediately
 
-        let batch_mint_consensus = mint_consensus.clone();
-        let batch_sig_response_sender = sig_response_sender.clone();
-        batch_process = Some(
-            spawn(async move {
+        if !output.is_empty() {
+            batch_process.await.map(|join_res: Result<(), JoinError>| {
+                join_res.expect("Last batch process failed")
+            });
+
+            let batch_mint_consensus = mint_consensus.clone();
+            let batch_sig_response_sender = sig_response_sender.clone();
+            batch_process = Some(spawn(async move {
                 for batch in output {
                     let sigs = batch_mint_consensus.process_consensus_outcome(batch);
                     if !sigs.is_empty() {
@@ -136,10 +135,9 @@ pub async fn run_minimint(
                             .expect("API server died");
                     }
                 }
-            })
-            .fuse(),
-        )
-        .into();
+            }))
+            .into();
+        }
 
         if !fault_log.is_empty() {
             warn!("Faults: {:?}", fault_log);
