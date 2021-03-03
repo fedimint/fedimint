@@ -81,11 +81,15 @@ pub async fn run_minimint(
 
     loop {
         let step = select! {
-            _ = wake_up.tick(), if !hb.has_input() => {
-                let proposal = mint_consensus.get_consensus_proposal();
-                debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
-                trace!("Proposal: {:?}", proposal);
-                hb.propose(&proposal, &mut rng)
+            _ = wake_up.tick() => {
+                if !hb.has_input() {
+                    let proposal = mint_consensus.get_consensus_proposal();
+                    debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
+                    trace!("Proposal: {:?}", proposal);
+                    hb.propose(&proposal, &mut rng)
+                } else {
+                    continue
+                }
             },
             (peer, peer_msg) = connections.receive() => {
                 hb.handle_message(&peer, peer_msg)
