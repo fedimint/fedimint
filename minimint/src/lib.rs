@@ -10,7 +10,7 @@ use futures::future::FusedFuture;
 use futures::future::OptionFuture;
 use futures::FutureExt;
 use hbbft::honey_badger::{HoneyBadger, Step};
-use hbbft::NetworkInfo;
+use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
 use std::sync::{Arc, Mutex};
 use tokio::select;
@@ -84,7 +84,7 @@ pub async fn run_minimint(
         let step = select! {
             _ = wake_up.tick(), if !hb.has_input() && batch_process.is_terminated() => {
                 let proposal = mint_consensus.get_consensus_proposal();
-                debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
+                debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
                 trace!("Proposal: {:?}", proposal);
                 hb.propose(&proposal, &mut rng)
             },
