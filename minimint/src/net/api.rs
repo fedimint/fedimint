@@ -91,7 +91,7 @@ async fn fetch_sig(req: Request<State>) -> tide::Result {
         Err(_) => return Ok(Response::new(400)),
     };
 
-    info!("got req for id: {}", req_id);
+    debug!("got req for id: {}", req_id);
 
     if let Some(sig) = req.state().bsigs.lock().await.get(&req_id) {
         let body = Body::from_json(sig).expect("encoding error");
