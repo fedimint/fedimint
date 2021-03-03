@@ -17,7 +17,7 @@ use tokio::select;
 use tokio::sync::mpsc::channel;
 use tokio::task::spawn;
 use tokio::time::{interval, Duration};
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 /// The actual implementation of the federated mint
 pub mod consensus;
@@ -85,6 +85,7 @@ pub async fn run_minimint(
             _ = wake_up.tick(), if !hb.has_input() && batch_process.is_terminated() => {
                 let proposal = mint_consensus.get_consensus_proposal();
                 debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
+                trace!("Proposal: {:?}", proposal);
                 hb.propose(&proposal, &mut rng)
             },
             (peer, peer_msg) = connections.receive() => {
