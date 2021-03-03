@@ -261,28 +261,25 @@ where
 
     fn process_partial_signature(&self, peer: u16, partial_sig: PartialSigResponse) -> DbBatch {
         let req_id = partial_sig.id();
-        debug!(
-            "Received sig share from peer {} for issuance {}",
-            peer, req_id
-        );
 
-        let psig = BatchItem::InsertNewElement(Element::new(
-            PartialSignatureKey {
-                request_id: req_id,
-                peer_id: peer,
-            },
-            BincodeSerialized::owned(partial_sig),
-        ));
+        if peer != self.cfg.identity {
+            debug!(
+                "Received sig share from peer {} for issuance {}",
+                peer, req_id
+            );
+            let psig = BatchItem::InsertNewElement(Element::new(
+                PartialSignatureKey {
+                    request_id: req_id,
+                    peer_id: peer,
+                },
+                BincodeSerialized::owned(partial_sig),
+            ));
 
-        // FIXME: add warning on duplicate inserts again
-        /*if let Some(ex) = existed {
-            warn!("Peer {} submitted signature share twice", peer);
-            if ex.into_owned() != partial_sig {
-                error!("Peer {} submitted two different signature shares", peer);
-            }
-        }*/
-
-        vec![psig]
+            vec![psig]
+        } else {
+            trace!("Received own sig share for issuance {}, ignoring", req_id);
+            vec![]
+        }
     }
 
     fn finalize_signatures(&self) -> (Vec<DbBatch>, Vec<SigResponse>) {
