@@ -48,7 +48,7 @@ where
     R: RngCore + CryptoRng,
     D: Database + PrefixSearchable + Transactional + BatchDb + Sync,
 {
-    pub fn submit_client_request(&mut self, cr: ClientRequest) -> Result<(), ClientRequestError> {
+    pub fn submit_client_request(&self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());
         match cr {
             ClientRequest::Reissuance(ref reissuance_req) => {

@@ -6,7 +6,10 @@ use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
-use hbbft::honey_badger::HoneyBadger;
+use futures::future::FusedFuture;
+use futures::future::OptionFuture;
+use futures::FutureExt;
+use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::NetworkInfo;
 use rand::{CryptoRng, RngCore};
 use std::sync::{Arc, Mutex};
@@ -52,12 +55,12 @@ pub async fn run_minimint(
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
-    let mut mint_consensus = FediMintConsensus {
+    let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
         db: sled::open(cfg.db_path).unwrap().open_tree("mint").unwrap(),
-    };
+    });
 
     let net_info = NetworkInfo::new(
         cfg.identity,
@@ -75,10 +78,11 @@ pub async fn run_minimint(
     info!("Created Honey Badger instance");
 
     let mut wake_up = interval(Duration::from_millis(5_000));
+    let mut batch_process = OptionFuture::from(None);
 
     loop {
         let step = select! {
-            _ = wake_up.tick(), if !hb.has_input() => {
+            _ = wake_up.tick(), if !hb.has_input() && batch_process.is_terminated() => {
                 let proposal = mint_consensus.get_consensus_proposal();
                 debug!("Proposing a contribution with {} consensus items for the next epoch", proposal.len());
                 hb.propose(&proposal, &mut rng)
@@ -90,25 +94,43 @@ pub async fn run_minimint(
                 let _ = mint_consensus.submit_client_request(cr); // TODO: decide where to log
                 continue;
             },
+            _ = &mut batch_process, if !batch_process.is_terminated() => {
+                batch_process = None.into(); // Not necessary due to fusing, but here for clarity
+                continue;
+            }
         }
             .expect("Failed to process HBBFT input");
 
-        for msg in step.messages {
+        let Step {
+            output,
+            fault_log,
+            messages,
+        } = step;
+
+        for msg in messages {
             connections.send(msg.target, msg.message).await;
         }
 
-        for batch in step.output {
-            let sigs = mint_consensus.process_consensus_outcome(batch);
-            if !sigs.is_empty() {
-                sig_response_sender
-                    .send(sigs)
-                    .await
-                    .expect("API server died");
-            }
-        }
+        let batch_mint_consensus = mint_consensus.clone();
+        let batch_sig_response_sender = sig_response_sender.clone();
+        batch_process = Some(
+            spawn(async move {
+                for batch in output {
+                    let sigs = batch_mint_consensus.process_consensus_outcome(batch);
+                    if !sigs.is_empty() {
+                        batch_sig_response_sender
+                            .send(sigs)
+                            .await
+                            .expect("API server died");
+                    }
+                }
+            })
+            .fuse(),
+        )
+        .into();
 
-        if !step.fault_log.is_empty() {
-            warn!("Faults: {:?}", step.fault_log);
+        if !fault_log.is_empty() {
+            warn!("Faults: {:?}", fault_log);
         }
     }
 }
