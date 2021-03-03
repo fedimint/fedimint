@@ -59,7 +59,7 @@ pub async fn run_minimint(
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
-        db: sled::open(cfg.db_path).unwrap().open_tree("mint").unwrap(),
+        db: sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap(),
     });
 
     let net_info = NetworkInfo::new(
@@ -110,6 +110,17 @@ pub async fn run_minimint(
         for msg in messages {
             connections.send(msg.target, msg.message).await;
         }
+
+        wake_up = if output
+            .iter()
+            .all(|batch| batch.contributions.contains_key(&cfg.identity))
+        {
+            interval(Duration::from_millis(5_000))
+        } else {
+            // Don't wait around if we are supposedly lacking behind
+            interval(Duration::from_millis(500))
+        };
+        wake_up.tick().await; // consume first tick immediately
 
         let batch_mint_consensus = mint_consensus.clone();
         let batch_sig_response_sender = sig_response_sender.clone();
