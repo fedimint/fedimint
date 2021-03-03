@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 sled = "0.34.6"
 thiserror = "1.0.23"
+tracing ="0.1.22"

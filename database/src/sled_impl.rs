@@ -1,8 +1,10 @@
+use crate::batch::BatchItem;
 use crate::{
-    Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter, DecodingError,
-    PrefixSearchable, Transactional,
+    BatchDb, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter,
+    DecodingError, PrefixSearchable, Transactional,
 };
 use sled::IVec;
+use tracing::error;
 
 impl Database for sled::transaction::TransactionalTree {
     type Err = sled::transaction::ConflictableTransactionError<DecodingError>;
@@ -123,6 +125,39 @@ impl Transactional for sled::Tree {
         ) -> sled::transaction::ConflictableTransactionResult<A, DecodingError>,
     {
         self.transaction(f)
+    }
+}
+
+impl BatchDb for sled::Tree {
+    fn apply_batch<B>(&self, batch: B) -> Result<(), DatabaseError>
+    where
+        B: IntoIterator<Item = BatchItem>,
+    {
+        for change in batch {
+            match change {
+                BatchItem::InsertNewElement(element) => {
+                    if self
+                        .insert(element.key.to_bytes(), element.value.to_bytes())?
+                        .is_some()
+                    {
+                        error!("Database replaced element! This should not happen!");
+                    }
+                }
+                BatchItem::InsertElement(element) => {
+                    self.insert(element.key.to_bytes(), element.value.to_bytes())?;
+                }
+                BatchItem::DeleteElement(key) => {
+                    if self.remove(key.to_bytes())?.is_none() {
+                        error!("Database deleted absent element! This should not happen!");
+                    }
+                }
+                BatchItem::MaybeDeleteElement(key) => {
+                    self.remove(key.to_bytes())?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

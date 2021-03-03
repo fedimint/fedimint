@@ -1,5 +1,7 @@
 use crate::consensus::ConsensusItem;
-use database::{DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError};
+use database::{
+    DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -21,9 +23,7 @@ pub struct PartialSignatureKey {
 }
 
 #[derive(Debug)]
-pub struct PartialSignaturesPrefixKey {
-    pub request_id: u64,
-}
+pub struct AllPartialSignaturesKey;
 
 impl<'a, T: Clone> BincodeSerialized<'a, T> {
     pub fn borrowed(obj: &'a T) -> BincodeSerialized<'a, T> {
@@ -39,13 +39,15 @@ impl<'a, T: Clone> BincodeSerialized<'a, T> {
     }
 }
 
-impl<'a, T: Serialize + DeserializeOwned + Clone> DatabaseValue for BincodeSerialized<'a, T> {
+impl<'a, T: Serialize + Clone> SerializableDatabaseValue for BincodeSerialized<'a, T> {
     fn to_bytes(&self) -> Vec<u8> {
         bincode::serialize(&self.0)
             .expect("Serialization error")
             .into()
     }
+}
 
+impl<'a, T: Serialize + DeserializeOwned + Clone> DatabaseValue for BincodeSerialized<'a, T> {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         Ok(BincodeSerialized(
             bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))?,
@@ -121,11 +123,8 @@ impl DatabaseKey for PartialSignatureKey {
     }
 }
 
-impl DatabaseKeyPrefix for PartialSignaturesPrefixKey {
+impl DatabaseKeyPrefix for AllPartialSignaturesKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(9);
-        bytes.push(DB_PREFIX_PARTIAL_SIG);
-        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
-        bytes.into()
+        vec![DB_PREFIX_PARTIAL_SIG].into()
     }
 }

@@ -1,8 +1,10 @@
+use crate::batch::BatchItem;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use thiserror::Error;
 
+pub mod batch;
 pub mod sled_impl;
 
 pub trait DatabaseKeyPrefix {
@@ -13,8 +15,11 @@ pub trait DatabaseKey: Sized + DatabaseKeyPrefix {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
-pub trait DatabaseValue: Sized {
+pub trait SerializableDatabaseValue {
     fn to_bytes(&self) -> Vec<u8>;
+}
+
+pub trait DatabaseValue: Sized + SerializableDatabaseValue {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
@@ -63,6 +68,12 @@ pub trait Transactional: Database {
         F: Fn(&Self::Transaction) -> Result<A, <Self::Transaction as Database>::Err>;
 }
 
+pub trait BatchDb: Database {
+    fn apply_batch<B>(&self, batch: B) -> Result<(), DatabaseError>
+    where
+        B: IntoIterator<Item = BatchItem>;
+}
+
 pub struct DbIter<Iter, Bytes, IterErr, K, V>
 where
     Iter: Iterator<Item = Result<(Bytes, Bytes), IterErr>>,
@@ -103,11 +114,13 @@ where
     }
 }
 
-impl DatabaseValue for () {
+impl SerializableDatabaseValue for () {
     fn to_bytes(&self) -> Vec<u8> {
         vec![].into()
     }
+}
 
+impl DatabaseValue for () {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.is_empty() {
             Ok(())

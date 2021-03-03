@@ -1,6 +1,7 @@
 mod util;
 
 use crate::util::PartialSigZip;
+use database::batch::{Batch, BatchItem, Element};
 use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
 use mint_api::{Coin, CoinNonce, PartialSigResponse, RequestId, SigResponse, SignRequest};
 use std::hash::Hash;
@@ -102,7 +103,7 @@ impl Mint {
                         reference_len,
                         sigs.0.len()
                     );
-                    peer_errors.push((*peer, MintErrorType::DifferentLengthAnswer));
+                    peer_errors.push((*peer, PeerErrorType::DifferentLengthAnswer));
                     false
                 } else {
                     true
@@ -120,10 +121,10 @@ impl Mint {
                 let valid_sigs = row
                     .filter_map(|(peer, msg, sig)| {
                         if msg != ref_msg {
-                            peer_errors.push((*peer, MintErrorType::DifferentNonce));
+                            peer_errors.push((*peer, PeerErrorType::DifferentNonce));
                             None
                         } else if !verify_blind_share(*msg, *sig, self.pub_key_shares[*peer]) {
-                            peer_errors.push((*peer, MintErrorType::InvalidSignature));
+                            peer_errors.push((*peer, PeerErrorType::InvalidSignature));
                             None
                         } else {
                             Some((*peer, *sig))
@@ -162,15 +163,28 @@ impl Mint {
 
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
     /// false otherwise.
-    pub fn spend<T: Database>(&self, transaction: &T, coins: Vec<Coin>) -> bool {
-        coins.into_iter().all(|coin| {
-            let valid = coin.verify(self.pub_key);
-            let unspent = transaction
-                .insert_entry(&NonceKey(coin.0), &())
-                .expect("DB error")
-                .is_none();
-            unspent && valid
-        })
+    pub fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError> {
+        coins
+            .into_iter()
+            .map(|coin| {
+                if !coin.verify(self.pub_key) {
+                    return Err(MintError::InvalidCoin);
+                }
+
+                if db
+                    .get_value::<_, ()>(&NonceKey(coin.0.clone()))
+                    .expect("DB error")
+                    .is_some()
+                {
+                    return Err(MintError::SpentCoin);
+                }
+
+                Ok(BatchItem::InsertNewElement(Element {
+                    key: Box::new(NonceKey(coin.0)),
+                    value: Box::new(()),
+                }))
+            })
+            .collect()
     }
 
     /// Checks if coins are unspent and signed
@@ -189,14 +203,17 @@ impl Mint {
     /// was greater or equal to the ones to be issued and they were all unspent and valid.
     pub fn reissue<T: Database>(
         &self,
-        transaction: &T,
+        db: &T,
         coins: Vec<Coin>,
         new_tokens: SignRequest,
-    ) -> Option<PartialSigResponse> {
-        if coins.len() >= new_tokens.0.len() && self.spend(transaction, coins) {
-            Some(self.sign(new_tokens))
+    ) -> Result<(PartialSigResponse, Batch), MintError> {
+        let spent_coins = coins.len();
+        let spend_batch = self.spend(db, coins)?;
+
+        if spent_coins >= new_tokens.0.len() {
+            Ok((self.sign(new_tokens), spend_batch))
         } else {
-            None
+            Err(MintError::TooFewCoins(new_tokens.0.len(), spent_coins))
         }
     }
 }
@@ -226,10 +243,10 @@ impl DatabaseKey for NonceKey {
 
 /// Represents an array of mint indexes that delivered faulty shares
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct MintShareErrors(pub Vec<(usize, MintErrorType)>);
+pub struct MintShareErrors(pub Vec<(usize, PeerErrorType)>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum MintErrorType {
+pub enum PeerErrorType {
     InvalidSignature,
     DifferentLengthAnswer,
     DifferentNonce,
@@ -247,9 +264,19 @@ pub enum CombineError {
     MultiplePeerContributions(usize, usize),
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
+pub enum MintError {
+    #[error("One of the supplied coins had an invalid mint signature")]
+    InvalidCoin,
+    #[error("Too few coins: reissuing {0} but only got {1}")]
+    TooFewCoins(usize, usize),
+    #[error("One of the supplied coins was already spent previously")]
+    SpentCoin,
+}
+
 #[cfg(test)]
 mod test {
-    use crate::{CombineError, Mint, MintErrorType};
+    use crate::{CombineError, Mint, PeerErrorType};
     use mint_api::{RequestId, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
@@ -345,7 +372,7 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors
             .0
-            .contains(&(1, MintErrorType::DifferentLengthAnswer)));
+            .contains(&(1, PeerErrorType::DifferentLengthAnswer)));
 
         let (bsig_res, errors) = mint.combine(
             psigs
@@ -360,7 +387,7 @@ mod test {
                 .collect(),
         );
         assert!(bsig_res.is_ok());
-        assert!(errors.0.contains(&(2, MintErrorType::InvalidSignature)));
+        assert!(errors.0.contains(&(2, PeerErrorType::InvalidSignature)));
 
         let (_bk, bmsg) = blind_message(Message::from_bytes(b"test"));
         let (bsig_res, errors) = mint.combine(
@@ -376,7 +403,7 @@ mod test {
                 .collect(),
         );
         assert!(bsig_res.is_ok());
-        assert!(errors.0.contains(&(3, MintErrorType::DifferentNonce)));
+        assert!(errors.0.contains(&(3, PeerErrorType::DifferentNonce)));
     }
 
     #[test]
