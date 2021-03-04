@@ -1,7 +1,9 @@
 use crate::consensus::ConsensusItem;
+use crate::net::api::ClientRequest;
 use database::{
     DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
 };
+use mint_api::{IssuanceId, RequestId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -14,7 +16,10 @@ const DB_PREFIX_PARTIAL_SIG: u8 = 2;
 pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
 
 #[derive(Debug)]
-pub struct ConsensusItemKeyPrefix;
+pub struct AllConsensusItemsKeyPrefix;
+
+#[derive(Debug)]
+pub struct ConsensusItemKeyPrefix(pub IssuanceId);
 
 #[derive(Debug)]
 pub struct PartialSignatureKey {
@@ -57,7 +62,7 @@ impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
     }
 }
 
-impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
+impl DatabaseKeyPrefix for AllConsensusItemsKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
         (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
     }
@@ -66,6 +71,18 @@ impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
 impl DatabaseKeyPrefix for ConsensusItem {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
+
+        // TODO: maybe generalize id concept to all CIs
+        let issuance_id = match self {
+            ConsensusItem::ClientRequest(ClientRequest::PegIn(pi)) => pi.blind_tokens.id(),
+            ConsensusItem::ClientRequest(ClientRequest::Reissuance(re)) => re.blind_tokens.id(),
+            ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
+                unimplemented!()
+            }
+            ConsensusItem::PartiallySignedRequest(psig) => psig.id(),
+        };
+
+        bytes.extend_from_slice(&issuance_id.to_be_bytes());
         bincode::serialize_into(&mut bytes, &self).unwrap(); // TODO: use own encoding
         bytes.into()
     }
@@ -73,16 +90,17 @@ impl DatabaseKeyPrefix for ConsensusItem {
 
 impl DatabaseKey for ConsensusItem {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        // TODO: Distinguish key and value encoding
-        if let Some(&typ) = data.first() {
-            if typ != DB_PREFIX_CONSENSUS_ITEM {
-                return Err(DecodingError("Wrong type".into()));
-            }
-        } else {
-            return Err(DecodingError("No type field".into()));
+        if data.len() < 9 {
+            return Err(DecodingError("Too short".into()));
         }
 
-        bincode::deserialize(&data[1..]).map_err(|e| DecodingError(e.into()))
+        if data[0] != DB_PREFIX_CONSENSUS_ITEM {
+            return Err(DecodingError("Wrong type".into()));
+        }
+
+        // skip 8 bytes that are the id
+
+        bincode::deserialize(&data[9..]).map_err(|e| DecodingError(e.into()))
     }
 }
 
@@ -127,6 +145,14 @@ impl DatabaseKey for PartialSignatureKey {
 
 impl DatabaseKeyPrefix for AllPartialSignaturesKey {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_PARTIAL_SIG].into()
+        vec![DB_PREFIX_PARTIAL_SIG]
+    }
+}
+
+impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
+        bytes.extend_from_slice(&self.0.to_be_bytes());
+        bytes
     }
 }

@@ -13,7 +13,8 @@ In practice we use [sled](https://docs.rs/sled/) as it is a native rust database
 The Database is split into different key spaces based on prefixing that can be understood as different tables (each
 "table's" content can be retrieved using prefix search). The following "tables" exist:
 
-| Name              | Prefix | Key                                   | Value                           |
-|-------------------|--------|---------------------------------------|---------------------------------|
-| Consensus Items   | 0x01   | serialized `ConsensusItem` (variable) | none                            |
-| Partial Signature | 0x02   | request_id (8 byte), peer_id (8 byte) | serialized `PartialSigResponse` |
+| Name                 | Prefix | Key                                                                                             | Value                           |
+|----------------------|--------|-------------------------------------------------------------------------------------------------|---------------------------------|
+| Consensus Items      | 0x01   | issuance_request_id (8 bytes, 0 if no issuance involved), serialized `ConsensusItem` (variable) | none                            |
+| Partial Signature    | 0x02   | issuance_request_id (8 byte), peer_id (8 byte)                                                  | serialized `PartialSigResponse` |
+| Finalized Signatures | 0x03   | issuance_request_id (8 bytes)                                                                   | serialized `SigResponse`        |

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+// TODO: make collision resistant, needs consensus encode trait -> SHA256
 /// Unique ID for an issuance operation (peg-in or reissuance). This is used to identify the
 /// request in subsequent parts of the blind signing protocol
 pub type IssuanceId = u64;

@@ -1,5 +1,6 @@
 use crate::database::{
-    AllPartialSignaturesKey, BincodeSerialized, ConsensusItemKeyPrefix, PartialSignatureKey,
+    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, BincodeSerialized, ConsensusItemKeyPrefix,
+    PartialSignatureKey,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
@@ -186,7 +187,7 @@ where
 
     pub fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
-            .find_by_prefix(&ConsensusItemKeyPrefix)
+            .find_by_prefix(&AllConsensusItemsKeyPrefix)
             .map(|res| res.map(|(ci, ())| ci))
             .collect::<Result<_, DatabaseError>>()
             .expect("DB error")
@@ -315,15 +316,26 @@ where
                                 issuance_id
                             );
 
+                            let outdated_consensus_items = self
+                                .db
+                                .find_by_prefix::<_, ConsensusItem, ()>(&ConsensusItemKeyPrefix(
+                                    issuance_id,
+                                ))
+                                .map(|res| {
+                                    let key = res.expect("DB error").0;
+                                    BatchItem::DeleteElement(Box::new(key))
+                                });
+
                             // TODO: don't allow shares into the DB after this, e.g. by matching against finalized issuances
-                            let batch = shares
-                                .into_iter()
-                                .map(|(peer, _)| {
-                                    BatchItem::DeleteElement(Box::new(PartialSignatureKey {
-                                        request_id: issuance_id,
-                                        peer_id: peer as u16,
-                                    }))
-                                })
+                            let outdated_sig_shares = shares.into_iter().map(|(peer, _)| {
+                                BatchItem::DeleteElement(Box::new(PartialSignatureKey {
+                                    request_id: issuance_id,
+                                    peer_id: peer as u16,
+                                }))
+                            });
+
+                            let batch = outdated_consensus_items
+                                .chain(outdated_sig_shares)
                                 .collect::<Vec<_>>();
 
                             Some((batch, bsig))
