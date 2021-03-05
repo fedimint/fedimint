@@ -1699,6 +1699,7 @@ dependencies = [
  "bincode",
  "config",
  "futures",
+ "itertools",
  "mint-api",
  "musig",
  "rand 0.6.5",

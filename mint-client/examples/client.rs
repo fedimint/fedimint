@@ -1,5 +1,6 @@
 use config::{load_from_file, ClientConfig, ClientOpts};
-use futures::future::join_all;
+use futures::future::select_all;
+use itertools::Itertools;
 use mint_api::{PegInRequest, ReissuanceRequest, RequestId, SigResponse};
 use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
@@ -10,7 +11,8 @@ use reqwest::StatusCode;
 use sha3::Sha3_256;
 use std::process::exit;
 use structopt::StructOpt;
-use tokio::time::Duration;
+use tokio::select;
+use tokio::time::{Duration, Instant};
 use tracing::{debug, error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -22,35 +24,80 @@ async fn main() {
         )
         .init();
 
-    let rng = rand::rngs::OsRng::new().unwrap();
-
+    let mut rng = rand::rngs::OsRng::new().unwrap();
     let opts: ClientOpts = StructOpt::from_args();
     let cfg: ClientConfig = load_from_file(&opts.cfg_path);
 
-    info!(
-        "Sending peg-in request for {} coins {} times",
-        opts.issue_amt, opts.par
-    );
+    let num_coins = 50 * opts.issuance_per_1000_s / 1000 * opts.issue_amt;
 
-    let requests = (0..opts.par)
-        .map(|_| roundtrip(rng.clone(), &cfg, opts.issue_amt))
-        .collect::<Vec<_>>();
-    join_all(requests).await;
-}
+    info!("Sending peg-in request for {} coins", num_coins);
 
-async fn roundtrip(mut rng: OsRng, cfg: &ClientConfig, amt: usize) {
-    let issuance_req = request_issuance(cfg, amt, &mut rng).await;
-    let coins = fetch_coins(cfg, issuance_req)
+    let issuance_req = request_issuance(&cfg, num_coins, &mut rng).await;
+    let coins = fetch_coins(&cfg, issuance_req)
         .await
         .expect("Couldn't qcquire coins");
-    info!("Received {} valid coins", coins.len());
+    let mut coins = coins
+        .into_iter()
+        .chunks(opts.issue_amt)
+        .into_iter()
+        .map(|chunk| chunk.collect())
+        .collect::<Vec<Vec<_>>>();
 
-    info!("Sending reissuance request for {} coins", coins.len());
+    info!(
+        "Beginning to send {} reissuance requests with {} coins each to two random mints per second",
+        (opts.issuance_per_1000_s as f32) / 1000f32, opts.issue_amt
+    );
+    let mut interval = tokio::time::interval(Duration::from_micros(
+        1_000_000_000 / (opts.issuance_per_1000_s as u64),
+    ));
+    let mut ongoing_requests = vec![];
+    let mut delays = vec![];
+
+    let reissuance = tokio::spawn(reissue(
+        rng.clone(),
+        cfg.clone(),
+        coins.pop().expect("ran out of coins"),
+    ));
+    ongoing_requests.push(reissuance);
+
+    loop {
+        let ongoing_select = select_all(ongoing_requests.iter_mut());
+        select! {
+            _ = interval.tick() => {
+                let reissuance = tokio::spawn(reissue(rng.clone(), cfg.clone(), coins.pop().expect("ran out of coins")));
+                ongoing_requests.push(reissuance);
+            },
+            (result, idx, _) = ongoing_select => {
+                let (delay, new_coins) = result.unwrap();
+                ongoing_requests.remove(idx);
+                coins.push(new_coins);
+                delays.push(delay);
+                let average = delays.iter().map(|d| d.as_secs_f32()).sum::<f32>() / (delays.len() as f32);
+                info!("Finished reissuance after {}s ({}s avg)", delay.as_secs_f32(), average);
+            }
+        }
+    }
+}
+
+async fn reissue(
+    mut rng: OsRng,
+    cfg: ClientConfig,
+    coins: Vec<SpendableCoin>,
+) -> (Duration, Vec<SpendableCoin>) {
+    let begin = Instant::now();
+    debug!("Sending reissuance request for {} coins", coins.len());
     let issuance_req = request_reissuance(&cfg, coins, &mut rng).await;
     let coins = fetch_coins(&cfg, issuance_req)
         .await
         .expect("Couldn't acquire coins");
-    info!("Received {} valid coins", coins.len());
+
+    let time_passed = Instant::now().duration_since(begin);
+    debug!(
+        "Received {} valid coins after {}s",
+        coins.len(),
+        time_passed.as_secs_f32()
+    );
+    (time_passed, coins)
 }
 
 async fn fetch_coins(
