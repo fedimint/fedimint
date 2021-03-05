@@ -9,8 +9,9 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::fmt::Debug;
 
-const DB_PREFIX_CONSENSUS_ITEM: u8 = 1;
-const DB_PREFIX_PARTIAL_SIG: u8 = 2;
+const DB_PREFIX_CONSENSUS_ITEM: u8 = 0x01;
+const DB_PREFIX_PARTIAL_SIG: u8 = 0x02;
+const DB_PREFIX_FINALIZED_SIG: u8 = 0x03;
 
 #[derive(Debug)]
 pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
@@ -29,6 +30,14 @@ pub struct PartialSignatureKey {
 
 #[derive(Debug)]
 pub struct AllPartialSignaturesKey;
+
+#[derive(Debug)]
+pub struct FinalizedSignatureKey {
+    pub issuance_id: IssuanceId,
+}
+
+#[derive(Debug)]
+pub struct DummyValue;
 
 impl<'a, T: Clone> BincodeSerialized<'a, T> {
     pub fn borrowed(obj: &'a T) -> BincodeSerialized<'a, T> {
@@ -154,5 +163,46 @@ impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
         let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
         bytes.extend_from_slice(&self.0.to_be_bytes());
         bytes
+    }
+}
+
+impl DatabaseKeyPrefix for FinalizedSignatureKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![DB_PREFIX_FINALIZED_SIG];
+        bytes.extend_from_slice(&self.issuance_id.to_be_bytes());
+        bytes
+    }
+}
+
+impl DatabaseKey for FinalizedSignatureKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() != 9 {
+            return Err(DecodingError("Too short".into()));
+        }
+
+        if data[0] != DB_PREFIX_FINALIZED_SIG {
+            return Err(DecodingError(
+                "Expected finalized sig, got something else".into(),
+            ));
+        }
+
+        let mut id_bytes = [0; 8];
+        id_bytes.copy_from_slice(&data[1..]);
+
+        Ok(FinalizedSignatureKey {
+            issuance_id: u64::from_be_bytes(id_bytes),
+        })
+    }
+}
+
+impl SerializableDatabaseValue for DummyValue {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![]
+    }
+}
+
+impl DatabaseValue for DummyValue {
+    fn from_bytes(_data: &[u8]) -> Result<Self, DecodingError> {
+        Ok(DummyValue)
     }
 }

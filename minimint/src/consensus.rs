@@ -1,6 +1,6 @@
 use crate::database::{
     AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, BincodeSerialized, ConsensusItemKeyPrefix,
-    PartialSignatureKey,
+    DummyValue, FinalizedSignatureKey, PartialSignatureKey,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
@@ -263,8 +263,24 @@ where
 
     fn process_partial_signature(&self, peer: u16, partial_sig: PartialSigResponse) -> DbBatch {
         let req_id = partial_sig.id();
+        let is_finalized = self
+            .db
+            .get_value::<_, DummyValue>(&FinalizedSignatureKey {
+                issuance_id: req_id,
+            })
+            .expect("DB error")
+            .is_some();
 
-        if peer != self.cfg.identity {
+        if peer == self.cfg.identity {
+            trace!("Received own sig share for issuance {}, ignoring", req_id);
+            vec![]
+        } else if is_finalized {
+            trace!(
+                "Received sig share for finalized issuance {}, ignoring",
+                req_id
+            );
+            vec![]
+        } else {
             debug!(
                 "Received sig share from peer {} for issuance {}",
                 peer, req_id
@@ -278,9 +294,6 @@ where
             ));
 
             vec![psig]
-        } else {
-            trace!("Received own sig share for issuance {}, ignoring", req_id);
-            vec![]
         }
     }
 
@@ -326,7 +339,6 @@ where
                                     BatchItem::DeleteElement(Box::new(key))
                                 });
 
-                            // TODO: don't allow shares into the DB after this, e.g. by matching against finalized issuances
                             let outdated_sig_shares = shares.into_iter().map(|(peer, _)| {
                                 BatchItem::DeleteElement(Box::new(PartialSignatureKey {
                                     request_id: issuance_id,
@@ -334,8 +346,16 @@ where
                                 }))
                             });
 
+                            let sig_key = FinalizedSignatureKey { issuance_id };
+                            let sig_value = BincodeSerialized::owned(bsig.clone());
+                            let sig_insert = BatchItem::InsertNewElement(Element {
+                                key: Box::new(sig_key),
+                                value: Box::new(sig_value),
+                            });
+
                             let batch = outdated_consensus_items
                                 .chain(outdated_sig_shares)
+                                .chain(std::iter::once(sig_insert))
                                 .collect::<Vec<_>>();
 
                             Some((batch, bsig))
