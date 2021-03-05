@@ -6,7 +6,9 @@ use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
+use futures::future::FusedFuture;
 use futures::future::OptionFuture;
+use futures::FutureExt;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
@@ -83,12 +85,16 @@ pub async fn run_minimint(
     loop {
         let step = select! {
             _ = wake_up.tick() => {
-                if !hb.has_input() {
+                let hbbft_ready = !hb.has_input();
+                let batch_processor_ready = batch_process.is_terminated();
+
+                if hbbft_ready && batch_processor_ready {
                     let proposal = mint_consensus.get_consensus_proposal();
                     debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
                     trace!("Proposal: {:?}", proposal);
                     hb.propose(&proposal, &mut rng)
                 } else {
+                    debug!("Skipping wake up, not ready (hbbft: {:?}, batch: {:?})", hbbft_ready, batch_processor_ready);
                     continue
                 }
             },
@@ -98,7 +104,12 @@ pub async fn run_minimint(
             Some(cr) = client_req_receiver.recv() => {
                 let _ = mint_consensus.submit_client_request(cr); // TODO: decide where to log
                 continue;
-            }
+            },
+            res = &mut batch_process, if !batch_process.is_terminated() => {
+                res.map(|r: Result<(), JoinError>| r.expect("Last batch process failed"));
+                batch_process = None.into();
+                continue;
+            },
         }
             .expect("Failed to process HBBFT input");
 
@@ -112,28 +123,31 @@ pub async fn run_minimint(
             connections.send(msg.target, msg.message).await;
         }
 
-        wake_up = if output
-            .iter()
-            .all(|batch| batch.contributions.contains_key(&cfg.identity))
-        {
-            interval(Duration::from_millis(5_000))
-        } else {
-            // Don't wait around if we are supposedly lacking behind
-            interval(Duration::from_millis(500))
-        };
-        wake_up.tick().await; // consume first tick immediately
-
         if !output.is_empty() {
+            wake_up = if output
+                .iter()
+                .all(|batch| batch.contributions.contains_key(&cfg.identity))
+            {
+                interval(Duration::from_millis(5_000))
+            } else {
+                // Don't wait around if we are supposedly lacking behind
+                interval(Duration::from_millis(500))
+            };
+            wake_up.tick().await; // consume first tick immediately
+
             batch_process.await.map(|join_res: Result<(), JoinError>| {
                 join_res.expect("Last batch process failed")
             });
 
             let batch_mint_consensus = mint_consensus.clone();
-            batch_process = Some(spawn(async move {
-                for batch in output {
-                    batch_mint_consensus.process_consensus_outcome(batch);
-                }
-            }))
+            batch_process = Some(
+                spawn(async move {
+                    for batch in output {
+                        batch_mint_consensus.process_consensus_outcome(batch);
+                    }
+                })
+                .fuse(),
+            )
             .into();
         }
 
