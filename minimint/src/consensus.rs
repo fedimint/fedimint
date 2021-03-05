@@ -11,7 +11,7 @@ use database::{BatchDb, Database, DatabaseError, PrefixSearchable, Transactional
 use fedimint::Mint;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId, SigResponse};
+use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId};
 use musig;
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
@@ -90,10 +90,7 @@ where
         Ok(())
     }
 
-    pub fn process_consensus_outcome(
-        &self,
-        batch: Batch<Vec<ConsensusItem>, u16>,
-    ) -> Vec<SigResponse> {
+    pub fn process_consensus_outcome(&self, batch: Batch<Vec<ConsensusItem>, u16>) {
         info!("Processing output of epoch {}", batch.epoch);
 
         // Since the changes to the database will happen all at once we won't be able to handle
@@ -177,12 +174,10 @@ where
             .expect("DB error");
 
         // Now that we have updated the DB with the epoch results also try to combine signatures
-        let (combine_sigs_batches, sigs) = self.finalize_signatures();
+        let combine_sigs_batches = self.finalize_signatures();
         self.db
             .apply_batch(combine_sigs_batches.iter().flatten())
             .expect("DB error");
-
-        sigs
     }
 
     pub fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
@@ -297,7 +292,7 @@ where
         }
     }
 
-    fn finalize_signatures(&self) -> (Vec<DbBatch>, Vec<SigResponse>) {
+    fn finalize_signatures(&self) -> Vec<DbBatch> {
         let req_psigs = self
             .db
             .find_by_prefix::<_, PartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
@@ -347,7 +342,7 @@ where
                             });
 
                             let sig_key = FinalizedSignatureKey { issuance_id };
-                            let sig_value = BincodeSerialized::owned(bsig.clone());
+                            let sig_value = BincodeSerialized::owned(bsig);
                             let sig_insert = BatchItem::InsertNewElement(Element {
                                 key: Box::new(sig_key),
                                 value: Box::new(sig_value),
@@ -358,7 +353,7 @@ where
                                 .chain(std::iter::once(sig_insert))
                                 .collect::<Vec<_>>();
 
-                            Some((batch, bsig))
+                            Some(batch)
                         }
                         Err(e) => {
                             error!("Warn: could not combine shares: {:?}", e);
@@ -369,7 +364,7 @@ where
                     None
                 }
             })
-            .unzip()
+            .collect()
     }
 
     fn tbs_threshold(&self) -> usize {

@@ -35,12 +35,13 @@ pub async fn run_minimint(
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
     cfg: ServerConfig,
 ) {
-    let (sig_response_sender, sig_response_receiver) = channel(4);
+    let sled_db = sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap();
+
     let (client_req_sender, mut client_req_receiver) = channel(4);
     spawn(net::api::run_server(
         cfg.clone(),
+        sled_db.clone(),
         client_req_sender,
-        sig_response_receiver,
     ));
 
     let mut connections = Connections::connect_to_all(&cfg).await;
@@ -58,7 +59,7 @@ pub async fn run_minimint(
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
-        db: sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap(),
+        db: sled_db,
     });
 
     let net_info = NetworkInfo::new(
@@ -128,16 +129,9 @@ pub async fn run_minimint(
             });
 
             let batch_mint_consensus = mint_consensus.clone();
-            let batch_sig_response_sender = sig_response_sender.clone();
             batch_process = Some(spawn(async move {
                 for batch in output {
-                    let sigs = batch_mint_consensus.process_consensus_outcome(batch);
-                    if !sigs.is_empty() {
-                        batch_sig_response_sender
-                            .send(sigs)
-                            .await
-                            .expect("API server died");
-                    }
+                    batch_mint_consensus.process_consensus_outcome(batch);
                 }
             }))
             .into();

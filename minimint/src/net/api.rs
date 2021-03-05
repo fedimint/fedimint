@@ -1,18 +1,16 @@
+use crate::database::{BincodeSerialized, FinalizedSignatureKey};
 use config::ServerConfig;
-use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, RequestId, SigResponse};
+use database::{Database, DatabaseKeyPrefix, DatabaseValue};
+use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
+use sled::Event;
 use tide::{Body, Request, Response};
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, trace};
-
-type BsigDB = Arc<Mutex<HashMap<u64, SigResponse>>>;
 
 #[derive(Clone, Debug)]
 struct State {
-    bsigs: BsigDB,
+    db: sled::Tree, // TODO: abstract
     req_sender: Sender<ClientRequest>,
 }
 
@@ -33,16 +31,9 @@ impl ClientRequest {
     }
 }
 
-pub async fn run_server(
-    cfg: ServerConfig,
-    request_sender: Sender<ClientRequest>,
-    bsig_receiver: Receiver<Vec<SigResponse>>,
-) {
-    let bsigs = Arc::new(Mutex::new(HashMap::new()));
-    tokio::spawn(receive_bsigs(bsigs.clone(), bsig_receiver));
-
+pub async fn run_server(cfg: ServerConfig, db: sled::Tree, request_sender: Sender<ClientRequest>) {
     let state = State {
-        bsigs,
+        db,
         req_sender: request_sender,
     };
     let mut server = tide::with_state(state);
@@ -93,19 +84,45 @@ async fn fetch_sig(req: Request<State>) -> tide::Result {
 
     debug!("got req for id: {}", req_id);
 
-    if let Some(sig) = req.state().bsigs.lock().await.get(&req_id) {
-        let body = Body::from_json(sig).expect("encoding error");
-        debug!("response body: {:?}", body);
-        Ok(body.into())
-    } else {
-        Ok(Response::new(404))
-    }
-}
+    let sig_key = FinalizedSignatureKey {
+        issuance_id: req_id,
+    };
 
-async fn receive_bsigs(db: BsigDB, mut bsig_receiver: Receiver<Vec<SigResponse>>) {
-    while let Some(bsigs) = bsig_receiver.recv().await {
-        db.lock()
-            .await
-            .extend(bsigs.into_iter().map(|bsig| (bsig.id(), bsig)));
+    let db_element = req
+        .state()
+        .db
+        .get_value::<_, BincodeSerialized<SigResponse>>(&sig_key)
+        .expect("DB error");
+    if let Some(sig) = db_element {
+        let body = Body::from_json(&sig.into_owned()).expect("encoding error");
+        debug!("Replying instantly with signature for request {}", req_id);
+        trace!("response body: {:?}", body);
+        return Ok(body.into());
     }
+
+    debug!("Waiting for signature for request {}", req_id);
+    // TODO: migrate to some tokio based server and add timeout
+    while let Some(event) = req.state().db.watch_prefix(sig_key.to_bytes()).await {
+        match event {
+            Event::Insert { key, value } => {
+                assert_eq!(key, sig_key.to_bytes());
+                let sig = BincodeSerialized::<SigResponse>::from_bytes(&value)
+                    .expect("Database decoding error");
+                let body = Body::from_json(&sig.into_owned()).expect("encoding error");
+                debug!("Replying with signature for request after event {}", req_id);
+                trace!("response body: {:?}", body);
+                return Ok(body.into());
+            }
+            Event::Remove { .. } => {
+                // TODO: revisit invariant when introducing epochs
+                panic!("This should never happen")
+            }
+        }
+    }
+
+    debug!(
+        "Timed out while waiting for signature for request {}",
+        req_id
+    );
+    Ok(Response::new(404))
 }
