@@ -5,6 +5,7 @@ use minimint::database::{
     PartialSignatureKey, DB_PREFIX_FINALIZED_SIG,
 };
 use mint_api::{PartialSigResponse, SigResponse};
+use serde::Serialize;
 use std::path::PathBuf;
 use std::str::FromStr;
 use structopt::StructOpt;
@@ -43,6 +44,12 @@ impl DatabaseKeyPrefix for AllFinalizedSignatures {
     }
 }
 
+#[derive(Serialize)]
+struct Element<K, V> {
+    key: K,
+    value: V,
+}
+
 fn main() {
     let opts: Opts = StructOpt::from_args();
 
@@ -62,8 +69,15 @@ fn main() {
                     &AllFinalizedSignatures,
                 )
             {
-                let (key, sig) = item.expect("DB error");
-                serde_json::to_writer_pretty(&mut stdout, &(key, sig.into_owned())).unwrap();
+                let (key, value) = item.expect("DB error");
+                serde_json::to_writer_pretty(
+                    &mut stdout,
+                    &Element {
+                        key,
+                        value: value.into_owned(),
+                    },
+                )
+                .unwrap();
             }
         }
         Tables::PartialSiganture => {
@@ -72,8 +86,15 @@ fn main() {
                     &AllPartialSignaturesKey,
                 )
             {
-                let (key, sig) = item.expect("DB error");
-                serde_json::to_writer_pretty(&mut stdout, &(key, sig.into_owned())).unwrap();
+                let (key, value) = item.expect("DB error");
+                serde_json::to_writer_pretty(
+                    &mut stdout,
+                    &Element {
+                        key,
+                        value: value.into_owned(),
+                    },
+                )
+                .unwrap();
             }
         }
     }
