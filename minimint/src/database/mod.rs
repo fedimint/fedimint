@@ -9,9 +9,9 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::fmt::Debug;
 
-const DB_PREFIX_CONSENSUS_ITEM: u8 = 0x01;
-const DB_PREFIX_PARTIAL_SIG: u8 = 0x02;
-const DB_PREFIX_FINALIZED_SIG: u8 = 0x03;
+pub const DB_PREFIX_CONSENSUS_ITEM: u8 = 0x01;
+pub const DB_PREFIX_PARTIAL_SIG: u8 = 0x02;
+pub const DB_PREFIX_FINALIZED_SIG: u8 = 0x03;
 
 #[derive(Debug)]
 pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
@@ -31,7 +31,7 @@ pub struct PartialSignatureKey {
 #[derive(Debug)]
 pub struct AllPartialSignaturesKey;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct FinalizedSignatureKey {
     pub issuance_id: IssuanceId,
 }
