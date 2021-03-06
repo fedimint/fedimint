@@ -22,7 +22,7 @@ pub struct AllConsensusItemsKeyPrefix;
 #[derive(Debug)]
 pub struct ConsensusItemKeyPrefix(pub IssuanceId);
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct PartialSignatureKey {
     pub request_id: u64,
     pub peer_id: u16,
