@@ -1650,6 +1650,7 @@ dependencies = [
  "rand 0.6.5",
  "rayon",
  "serde",
+ "serde_json",
  "sha3",
  "sled",
  "structopt",
