@@ -1,7 +1,7 @@
 use crate::database::{BincodeSerialized, FinalizedSignatureKey};
 use config::ServerConfig;
 use database::{Database, DatabaseKeyPrefix, DatabaseValue};
-use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse};
+use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse, TransactionId};
 use serde::{Deserialize, Serialize};
 use sled::Event;
 use tide::{Body, Request, Response};
@@ -73,7 +73,7 @@ async fn request_reissuance(mut req: Request<State>) -> tide::Result {
 }
 
 async fn fetch_sig(req: Request<State>) -> tide::Result {
-    let req_id: u64 = match req
+    let req_id: TransactionId = match req
         .param("req_id")
         .expect("Request id not supplied")
         .parse()

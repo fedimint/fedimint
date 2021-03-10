@@ -1,11 +1,18 @@
+use bitcoin_hashes::sha256::Hash as Sha256;
+use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
-// TODO: make collision resistant, needs consensus encode trait -> SHA256
-/// Unique ID for an issuance operation (peg-in or reissuance). This is used to identify the
-/// request in subsequent parts of the blind signing protocol
-pub type IssuanceId = u64;
+pub use bitcoin_hashes::Hash as BitcoinHash;
+use std::io::Write;
+
+const TRANSACTION_ID_MINT_PREFIX: &'static [u8] = b"mint";
+
+hash_newtype!(
+    TransactionId,
+    Sha256,
+    32,
+    doc = "A transaction id for peg-ins, peg-outs and reissuances"
+);
 
 /// Request to blind sign a certain amount of coins
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -18,7 +25,7 @@ pub struct PartialSigResponse(pub Vec<(tbs::BlindedMessage, tbs::BlindedSignatur
 
 /// Blind signature for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SigResponse(pub u64, pub Vec<tbs::BlindedSignature>);
+pub struct SigResponse(pub TransactionId, pub Vec<tbs::BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
@@ -58,31 +65,33 @@ pub struct PegOutRequest {
 /// This object belongs to an issuance operation and thus has an [`IssuanceId`]
 pub trait RequestId {
     /// Calculate [`IssuanceId`]
-    fn id(&self) -> IssuanceId;
+    fn id(&self) -> TransactionId;
 }
 
 impl RequestId for SignRequest {
-    fn id(&self) -> IssuanceId {
-        let mut hasher = DefaultHasher::new();
-        self.0.hash(&mut hasher);
-        hasher.finish()
+    fn id(&self) -> TransactionId {
+        // TODO: replace with consensus encoding
+        let mut hasher = TransactionId::engine();
+        // TODO: maybe use tagged hash?
+        hasher.write_all(TRANSACTION_ID_MINT_PREFIX).unwrap();
+        bincode::serialize_into(&mut hasher, &self.0).expect("encoding error");
+        TransactionId(Sha256::from_engine(hasher))
     }
 }
 
 impl RequestId for PartialSigResponse {
-    fn id(&self) -> IssuanceId {
-        let mut hasher = DefaultHasher::new();
-        self.0
-            .iter()
-            .map(|(msg, _)| msg)
-            .collect::<Vec<_>>()
-            .hash(&mut hasher);
-        hasher.finish()
+    fn id(&self) -> TransactionId {
+        let msgs = self.0.iter().map(|(msg, _)| *msg).collect::<Vec<_>>();
+
+        let mut hasher = Sha256::engine();
+        hasher.write_all(TRANSACTION_ID_MINT_PREFIX).unwrap();
+        bincode::serialize_into(&mut hasher, &msgs).expect("encoding error");
+        TransactionId(Sha256::from_engine(hasher))
     }
 }
 
 impl RequestId for SigResponse {
-    fn id(&self) -> IssuanceId {
+    fn id(&self) -> TransactionId {
         self.0
     }
 }

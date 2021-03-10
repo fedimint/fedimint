@@ -1,4 +1,4 @@
-use mint_api::{Coin, CoinNonce, IssuanceId, RequestId, SigResponse, SignRequest};
+use mint_api::{Coin, CoinNonce, RequestId, SigResponse, SignRequest, TransactionId};
 use rand::{CryptoRng, RngCore};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -20,7 +20,7 @@ pub struct IssuanceRequest {
     /// All coins in this request
     coins: Vec<CoinRequest>,
     /// Request id
-    id: IssuanceId,
+    id: TransactionId,
 }
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
@@ -31,7 +31,7 @@ pub struct SpendableCoin {
 }
 
 impl RequestId for IssuanceRequest {
-    fn id(&self) -> u64 {
+    fn id(&self) -> TransactionId {
         self.id
     }
 }
@@ -112,5 +112,5 @@ pub enum CoinFinalizationError {
     #[error("The blind signature at index {0} is invalid")]
     InvalidSignature(usize),
     #[error("Expected signatures for issuance request {0}, got signatures for request {1}")]
-    InvalidIssuanceId(IssuanceId, IssuanceId),
+    InvalidIssuanceId(TransactionId, TransactionId),
 }

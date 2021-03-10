@@ -3,7 +3,8 @@ use crate::net::api::ClientRequest;
 use database::{
     DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
 };
-use mint_api::{IssuanceId, RequestId};
+use mint_api::BitcoinHash;
+use mint_api::{RequestId, TransactionId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -20,11 +21,11 @@ pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
 pub struct AllConsensusItemsKeyPrefix;
 
 #[derive(Debug)]
-pub struct ConsensusItemKeyPrefix(pub IssuanceId);
+pub struct ConsensusItemKeyPrefix(pub TransactionId);
 
 #[derive(Debug, Serialize)]
 pub struct PartialSignatureKey {
-    pub request_id: u64,
+    pub request_id: TransactionId,
     pub peer_id: u16,
 }
 
@@ -33,7 +34,7 @@ pub struct AllPartialSignaturesKey;
 
 #[derive(Debug, Serialize)]
 pub struct FinalizedSignatureKey {
-    pub issuance_id: IssuanceId,
+    pub issuance_id: TransactionId,
 }
 
 #[derive(Debug)]
@@ -91,7 +92,7 @@ impl DatabaseKeyPrefix for ConsensusItem {
             ConsensusItem::PartiallySignedRequest(psig) => psig.id(),
         };
 
-        bytes.extend_from_slice(&issuance_id.to_be_bytes());
+        bytes.extend_from_slice(&issuance_id[..]);
         bincode::serialize_into(&mut bytes, &self).unwrap(); // TODO: use own encoding
         bytes.into()
     }
@@ -99,7 +100,7 @@ impl DatabaseKeyPrefix for ConsensusItem {
 
 impl DatabaseKey for ConsensusItem {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() < 9 {
+        if data.len() < 33 {
             return Err(DecodingError("Too short".into()));
         }
 
@@ -109,15 +110,15 @@ impl DatabaseKey for ConsensusItem {
 
         // skip 8 bytes that are the id
 
-        bincode::deserialize(&data[9..]).map_err(|e| DecodingError(e.into()))
+        bincode::deserialize(&data[33..]).map_err(|e| DecodingError(e.into()))
     }
 }
 
 impl DatabaseKeyPrefix for PartialSignatureKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(11);
+        let mut bytes = Vec::with_capacity(41);
         bytes.push(DB_PREFIX_PARTIAL_SIG);
-        bytes.extend_from_slice(&self.request_id.to_be_bytes()[..]);
+        bytes.extend_from_slice(&self.request_id[..]);
         bytes.extend_from_slice(&self.peer_id.to_be_bytes()[..]);
         bytes.into()
     }
@@ -125,9 +126,9 @@ impl DatabaseKeyPrefix for PartialSignatureKey {
 
 impl DatabaseKey for PartialSignatureKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 11 {
+        if data.len() != 35 {
             return Err(DecodingError(
-                "Expected 11 bytes, got something else".into(),
+                format!("Expected 35 bytes, got {}", data.len()).into(),
             ));
         }
 
@@ -137,12 +138,10 @@ impl DatabaseKey for PartialSignatureKey {
             ));
         }
 
-        let mut request_id_bytes = [0u8; 8];
-        request_id_bytes.copy_from_slice(&data[1..9]);
-        let request_id = u64::from_be_bytes(request_id_bytes);
+        let request_id = TransactionId::from_slice(&data[1..33]).unwrap();
 
         let mut peer_id_bytes = [0u8; 2];
-        peer_id_bytes.copy_from_slice(&data[9..11]);
+        peer_id_bytes.copy_from_slice(&data[33..]);
         let peer_id = u16::from_be_bytes(peer_id_bytes);
 
         Ok(PartialSignatureKey {
@@ -161,7 +160,7 @@ impl DatabaseKeyPrefix for AllPartialSignaturesKey {
 impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
-        bytes.extend_from_slice(&self.0.to_be_bytes());
+        bytes.extend_from_slice(&self.0[..]);
         bytes
     }
 }
@@ -169,14 +168,14 @@ impl DatabaseKeyPrefix for ConsensusItemKeyPrefix {
 impl DatabaseKeyPrefix for FinalizedSignatureKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![DB_PREFIX_FINALIZED_SIG];
-        bytes.extend_from_slice(&self.issuance_id.to_be_bytes());
+        bytes.extend_from_slice(&self.issuance_id[..]);
         bytes
     }
 }
 
 impl DatabaseKey for FinalizedSignatureKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 9 {
+        if data.len() != 33 {
             return Err(DecodingError("Too short".into()));
         }
 
@@ -186,11 +185,8 @@ impl DatabaseKey for FinalizedSignatureKey {
             ));
         }
 
-        let mut id_bytes = [0; 8];
-        id_bytes.copy_from_slice(&data[1..]);
-
         Ok(FinalizedSignatureKey {
-            issuance_id: u64::from_be_bytes(id_bytes),
+            issuance_id: TransactionId::from_slice(&data[1..]).unwrap(),
         })
     }
 }
