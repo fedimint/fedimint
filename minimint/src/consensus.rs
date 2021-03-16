@@ -11,7 +11,9 @@ use database::{BatchDb, Database, DatabaseError, PrefixSearchable, Transactional
 use fedimint::Mint;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
-use mint_api::{Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, RequestId};
+use mint_api::{
+    BitcoinHash, Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, TransactionId, TxId,
+};
 use musig;
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
@@ -22,7 +24,7 @@ use tracing::{debug, error, info, trace, warn};
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum ConsensusItem {
     ClientRequest(ClientRequest),
-    PartiallySignedRequest(mint_api::PartialSigResponse),
+    PartiallySignedRequest(TransactionId, mint_api::PartialSigResponse),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
@@ -60,7 +62,7 @@ where
                     .collect::<Vec<_>>();
 
                 if !musig::verify(
-                    reissuance_req.digest(),
+                    reissuance_req.id().into_inner(),
                     reissuance_req.sig.clone(),
                     &pub_keys,
                 ) {
@@ -154,8 +156,8 @@ where
                     ConsensusItem::ClientRequest(client_request) => {
                         self.process_client_request(peer, client_request)
                     }
-                    ConsensusItem::PartiallySignedRequest(psig) => {
-                        self.process_partial_signature(peer, psig)
+                    ConsensusItem::PartiallySignedRequest(id, psig) => {
+                        self.process_partial_signature(peer, id, psig)
                     }
                 };
 
@@ -202,17 +204,17 @@ where
 
     fn process_peg_in_request(&self, peg_in: PegInRequest) -> DbBatch {
         // FIXME: check pegin proof and mark as used (ATOMICITY!!!)
-        let issuance_req = peg_in.blind_tokens;
-        debug!("Signing issuance request {}", issuance_req.id());
-        let signed_req = self.mint.sign(issuance_req);
+        let peg_in_id = peg_in.id();
+        debug!("Signing peg-in request {}", peg_in_id);
+        let signed_req = self.mint.sign(peg_in.blind_tokens);
 
         let db_sig_request = BatchItem::InsertNewElement(Element::new(
-            ConsensusItem::PartiallySignedRequest(signed_req.clone()),
+            ConsensusItem::PartiallySignedRequest(peg_in_id, signed_req.clone()),
             (),
         ));
         let db_own_sig_element = BatchItem::InsertNewElement(Element::new(
             PartialSignatureKey {
-                request_id: signed_req.id(),
+                request_id: peg_in_id,
                 peer_id: self.cfg.identity,
             },
             BincodeSerialized::owned(signed_req),
@@ -222,6 +224,8 @@ where
     }
 
     fn process_reissuance_request(&self, peer: u16, reissuance: ReissuanceRequest) -> DbBatch {
+        let reissuance_id = reissuance.id();
+
         let (signed_request, mut batch) = match self.mint.reissue(
             &self.db,
             reissuance.coins.clone(),
@@ -236,15 +240,15 @@ where
                 return vec![];
             }
         };
-        debug!("Signed reissuance request {}", signed_request.id());
+        debug!("Signed reissuance request {}", reissuance_id);
 
         batch.push(BatchItem::InsertNewElement(Element::new(
-            ConsensusItem::PartiallySignedRequest(signed_request.clone()),
+            ConsensusItem::PartiallySignedRequest(reissuance_id, signed_request.clone()),
             (),
         )));
 
         let our_sig_key = PartialSignatureKey {
-            request_id: signed_request.id(),
+            request_id: reissuance_id,
             peer_id: self.cfg.identity,
         };
         let our_sig = BincodeSerialized::owned(signed_request);
@@ -256,8 +260,12 @@ where
         batch
     }
 
-    fn process_partial_signature(&self, peer: u16, partial_sig: PartialSigResponse) -> DbBatch {
-        let req_id = partial_sig.id();
+    fn process_partial_signature(
+        &self,
+        peer: u16,
+        req_id: TransactionId,
+        partial_sig: PartialSigResponse,
+    ) -> DbBatch {
         let is_finalized = self
             .db
             .get_value::<_, DummyValue>(&FinalizedSignatureKey {

@@ -1701,6 +1701,7 @@ name = "mint-client"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitcoin_hashes",
  "config",
  "futures",
  "itertools",

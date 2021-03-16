@@ -1,4 +1,4 @@
-use mint_api::{Coin, CoinNonce, RequestId, SigResponse, SignRequest, TransactionId};
+use mint_api::{Coin, CoinNonce, SigResponse, SignRequest, TransactionId};
 use rand::{CryptoRng, RngCore};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -19,8 +19,6 @@ pub struct CoinRequest {
 pub struct IssuanceRequest {
     /// All coins in this request
     coins: Vec<CoinRequest>,
-    /// Request id
-    id: TransactionId,
 }
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
@@ -30,12 +28,6 @@ pub struct SpendableCoin {
     pub spend_key: musig::SecKey,
 }
 
-impl RequestId for IssuanceRequest {
-    fn id(&self) -> TransactionId {
-        self.id
-    }
-}
-
 impl IssuanceRequest {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
     pub fn new(amount: usize, mut rng: impl RngCore + CryptoRng) -> (IssuanceRequest, SignRequest) {
@@ -43,10 +35,7 @@ impl IssuanceRequest {
             (0..amount).map(|_| CoinRequest::new(&mut rng)).unzip();
 
         let sig_req = SignRequest(blinded_nonces);
-        let issuance_req = IssuanceRequest {
-            coins: requests,
-            id: sig_req.id(),
-        };
+        let issuance_req = IssuanceRequest { coins: requests };
 
         (issuance_req, sig_req)
     }
@@ -59,16 +48,9 @@ impl IssuanceRequest {
         bsigs: SigResponse,
         mint_pub_key: AggregatePublicKey,
     ) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
-        if bsigs.id() != self.id() {
-            return Err(CoinFinalizationError::InvalidIssuanceId(
-                self.id(),
-                bsigs.id(),
-            ));
-        }
-
         self.coins
             .iter()
-            .zip(bsigs.1)
+            .zip(bsigs.0)
             .enumerate()
             .map(|(idx, (coin_req, bsig))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);

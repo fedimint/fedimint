@@ -1,14 +1,14 @@
+use bitcoin_hashes::Hash as BitcoinHash;
 use config::{load_from_file, ClientConfig, ClientOpts};
 use futures::future::select_all;
 use itertools::Itertools;
-use mint_api::{PegInRequest, ReissuanceRequest, RequestId, SigResponse};
+use mint_api::{PegInRequest, ReissuanceRequest, SigResponse, TransactionId, TxId};
 use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
-use sha3::Sha3_256;
 use std::process::exit;
 use structopt::StructOpt;
 use tokio::select;
@@ -32,8 +32,8 @@ async fn main() {
 
     info!("Sending peg-in request for {} coins", num_coins);
 
-    let issuance_req = request_issuance(&cfg, num_coins, &mut rng).await;
-    let coins = fetch_coins(&cfg, issuance_req)
+    let (request_id, issuance_req) = request_issuance(&cfg, num_coins, &mut rng).await;
+    let coins = fetch_coins(&cfg, request_id, issuance_req)
         .await
         .expect("Couldn't qcquire coins");
     let mut coins = coins
@@ -86,8 +86,8 @@ async fn reissue(
 ) -> (Duration, Vec<SpendableCoin>) {
     let begin = Instant::now();
     debug!("Sending reissuance request for {} coins", coins.len());
-    let issuance_req = request_reissuance(&cfg, coins, &mut rng).await;
-    let coins = fetch_coins(&cfg, issuance_req)
+    let (request_id, issuance_req) = request_reissuance(&cfg, coins, &mut rng).await;
+    let coins = fetch_coins(&cfg, request_id, issuance_req)
         .await
         .expect("Couldn't acquire coins");
 
@@ -102,11 +102,12 @@ async fn reissue(
 
 async fn fetch_coins(
     cfg: &ClientConfig,
+    id: TransactionId,
     req: IssuanceRequest,
 ) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
     let client = reqwest::Client::new();
     let resp: SigResponse = loop {
-        let url = format!("{}/issuance/{}", cfg.mints[0], req.id());
+        let url = format!("{}/issuance/{}", cfg.mints[0], id);
 
         debug!("looking for coins: {}", url);
 
@@ -135,7 +136,7 @@ async fn request_issuance(
     cfg: &ClientConfig,
     amount: usize,
     mut rng: impl RngCore + CryptoRng,
-) -> IssuanceRequest {
+) -> (TransactionId, IssuanceRequest) {
     let (issuance_request, sig_req) = IssuanceRequest::new(amount, &mut rng);
     let req = PegInRequest {
         blind_tokens: sig_req,
@@ -157,14 +158,14 @@ async fn request_issuance(
         }
     }
 
-    issuance_request
+    (req.id(), issuance_request)
 }
 
 async fn request_reissuance(
     cfg: &ClientConfig,
     old_coins: Vec<SpendableCoin>,
     mut rng: impl RngCore + CryptoRng,
-) -> IssuanceRequest {
+) -> (TransactionId, IssuanceRequest) {
     let (issuance_req, sig_req) = IssuanceRequest::new(old_coins.len(), &mut rng);
 
     let (spend_keys, coins): (Vec<_>, Vec<_>) = old_coins
@@ -172,11 +173,15 @@ async fn request_reissuance(
         .map(|sc| (sc.spend_key, sc.coin))
         .unzip();
 
-    let mut digest = Sha3_256::default();
+    let mut digest = bitcoin_hashes::sha256::Hash::engine();
     bincode::serialize_into(&mut digest, &coins).unwrap();
     bincode::serialize_into(&mut digest, &sig_req).unwrap();
     let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
-    let sig = musig::sign(digest, spend_keys.iter(), rng_adapt);
+    let sig = musig::sign(
+        bitcoin_hashes::sha256::Hash::from_engine(digest).into_inner(),
+        spend_keys.iter(),
+        rng_adapt,
+    );
 
     let req = ReissuanceRequest {
         coins,
@@ -198,5 +203,5 @@ async fn request_reissuance(
         }
     }
 
-    issuance_req
+    (req.id(), issuance_req)
 }

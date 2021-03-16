@@ -5,8 +5,7 @@ use secp256kfun::op::{point_add, scalar_add, scalar_mul};
 use secp256kfun::rand_core::{CryptoRng, RngCore};
 use secp256kfun::{g, Point, Scalar, G};
 use serde::{Deserialize, Serialize};
-use sha3::digest::generic_array::typenum::U32;
-use sha3::{Digest, Sha3_256 as Sha256};
+use sha3::Sha3_256 as Sha256;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PubKey(Point);
@@ -34,11 +33,11 @@ impl SecKey {
 }
 
 pub fn sign<'a>(
-    msg: impl Digest<OutputSize = U32>,
+    msg: [u8; 32],
     secret_keys: impl Iterator<Item = &'a SecKey> + Clone,
     mut rng: impl RngCore + CryptoRng,
 ) -> Sig {
-    let msg_hash = Scalar::from_hash(msg);
+    let msg_hash = NonZero::change_mark(Scalar::from_bytes_mod_order(msg)).unwrap();
 
     let pub_keys = secret_keys
         .clone()
@@ -80,8 +79,8 @@ pub fn sign<'a>(
     }
 }
 
-pub fn verify(msg: impl Digest<OutputSize = U32>, sig: Sig, pks: &[&PubKey]) -> bool {
-    let msg_hash = Scalar::from_hash(msg);
+pub fn verify(msg: [u8; 32], sig: Sig, pks: &[&PubKey]) -> bool {
+    let msg_hash = Scalar::from_bytes_mod_order(msg);
     let Sig { r, s } = sig;
 
     let pk_msg_sum = pks
@@ -152,7 +151,10 @@ mod tests {
         let msg = b"Hello World!";
         let mut digest = Sha3_256::new();
         digest.write_all(&msg[..]).unwrap();
-        let sig = sign(digest.clone(), secrets.iter(), rng);
-        assert!(verify(digest, sig, &pks.iter().collect::<Vec<_>>()));
+
+        let hash = digest.finalize().into();
+
+        let sig = sign(hash, secrets.iter(), rng);
+        assert!(verify(hash, sig, &pks.iter().collect::<Vec<_>>()));
     }
 }

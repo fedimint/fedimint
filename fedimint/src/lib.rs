@@ -3,7 +3,7 @@ mod util;
 use crate::util::PartialSigZip;
 use database::batch::{Batch, BatchItem, Element};
 use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
-use mint_api::{Coin, CoinNonce, PartialSigResponse, RequestId, SigResponse, SignRequest};
+use mint_api::{Coin, CoinNonce, PartialSigResponse, SigResponse, SignRequest};
 use std::hash::Hash;
 use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -88,7 +88,6 @@ impl Mint {
         };
 
         let reference_msgs = our_contribution.0.iter().map(|(msg, _)| msg);
-        let request_id = our_contribution.id();
 
         let mut peer_errors = vec![];
 
@@ -155,10 +154,7 @@ impl Mint {
             Err(e) => return (Err(e), MintShareErrors(peer_errors)),
         };
 
-        (
-            Ok(SigResponse(request_id, bsigs)),
-            MintShareErrors(peer_errors),
-        )
+        (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
@@ -277,7 +273,7 @@ pub enum MintError {
 #[cfg(test)]
 mod test {
     use crate::{CombineError, Mint, PeerErrorType};
-    use mint_api::{RequestId, SignRequest};
+    use mint_api::SignRequest;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
@@ -302,8 +298,6 @@ mod test {
         let (bkey, bmsg) = blind_message(nonce);
         let req = SignRequest(vec![bmsg, bmsg]);
 
-        let req_id = req.id();
-
         let psigs = mints
             .iter()
             .map(move |m| m.sign(req.clone()))
@@ -317,10 +311,9 @@ mod test {
         assert!(errors.0.is_empty());
 
         let bsig = bsig_res.unwrap();
-        assert_eq!(bsig.0, req_id);
-        assert_eq!(bsig.1.len(), 2);
+        assert_eq!(bsig.0.len(), 2);
 
-        bsig.1.iter().for_each(|bs| {
+        bsig.0.iter().for_each(|bs| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });
@@ -330,7 +323,7 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors.0.is_empty());
 
-        bsig_res.unwrap().1.iter().for_each(|bs| {
+        bsig_res.unwrap().0.iter().for_each(|bs| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });

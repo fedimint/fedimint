@@ -4,7 +4,7 @@ use database::{
     DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
 };
 use mint_api::BitcoinHash;
-use mint_api::{RequestId, TransactionId};
+use mint_api::{TransactionId, TxId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -84,12 +84,12 @@ impl DatabaseKeyPrefix for ConsensusItem {
 
         // TODO: maybe generalize id concept to all CIs
         let issuance_id = match self {
-            ConsensusItem::ClientRequest(ClientRequest::PegIn(pi)) => pi.blind_tokens.id(),
-            ConsensusItem::ClientRequest(ClientRequest::Reissuance(re)) => re.blind_tokens.id(),
+            ConsensusItem::ClientRequest(ClientRequest::PegIn(pi)) => pi.id(),
+            ConsensusItem::ClientRequest(ClientRequest::Reissuance(re)) => re.id(),
             ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
                 unimplemented!()
             }
-            ConsensusItem::PartiallySignedRequest(psig) => psig.id(),
+            ConsensusItem::PartiallySignedRequest(id, _) => *id,
         };
 
         bytes.extend_from_slice(&issuance_id[..]);
