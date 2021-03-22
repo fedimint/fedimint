@@ -180,3 +180,13 @@ impl From<sled::Error> for DatabaseError {
         DatabaseError::DbError(e.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_basic_rw() {
+        let path = tempdir::TempDir::new("fcb-sled-test").unwrap();
+        let db = sled::open(path).unwrap();
+        crate::tests::test_db_impl(&db.open_tree("default").unwrap());
+    }
+}

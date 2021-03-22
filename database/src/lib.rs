@@ -5,6 +5,8 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 pub mod batch;
+#[cfg(test)]
+pub mod mem_impl;
 pub mod sled_impl;
 
 pub trait DatabaseKeyPrefix: Debug {
@@ -151,5 +153,85 @@ pub enum DatabaseError {
 impl From<DecodingError> for DatabaseError {
     fn from(e: DecodingError) -> Self {
         DatabaseError::DecodingError(e)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        Database, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
+        SerializableDatabaseValue,
+    };
+
+    #[derive(Debug)]
+    struct TestKey(u64);
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct TestVal(u64);
+
+    impl DatabaseKeyPrefix for TestKey {
+        fn to_bytes(&self) -> Vec<u8> {
+            self.0.to_be_bytes().to_vec()
+        }
+    }
+
+    impl DatabaseKey for TestKey {
+        fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(data);
+            let num = u64::from_be_bytes(bytes);
+            if num == 0 {
+                Err(DecodingError("Test error".into()))
+            } else {
+                Ok(TestKey(num))
+            }
+        }
+    }
+
+    impl SerializableDatabaseValue for TestVal {
+        fn to_bytes(&self) -> Vec<u8> {
+            self.0.to_be_bytes().to_vec()
+        }
+    }
+
+    impl DatabaseValue for TestVal {
+        fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(data);
+            let num = u64::from_be_bytes(bytes);
+            if num == 0 {
+                Err(DecodingError("Test error".into()))
+            } else {
+                Ok(TestVal(num))
+            }
+        }
+    }
+
+    pub fn test_db_impl<D: Database>(db: &D) {
+        assert!(db
+            .insert_entry(&TestKey(42), &TestVal(1337))
+            .unwrap()
+            .is_none());
+        assert!(db
+            .insert_entry(&TestKey(123), &TestVal(456))
+            .unwrap()
+            .is_none());
+
+        assert_eq!(db.get_value(&TestKey(42)).unwrap(), Some(TestVal(1337)));
+        assert_eq!(db.get_value(&TestKey(123)).unwrap(), Some(TestVal(456)));
+        assert_eq!(db.get_value::<_, TestVal>(&TestKey(43)).unwrap(), None);
+
+        db.insert_entry(&TestKey(42), &TestVal(3301)).unwrap();
+        assert_eq!(db.get_value(&TestKey(42)).unwrap(), Some(TestVal(3301)));
+
+        let removed = db.remove_entry::<_, TestVal>(&TestKey(42)).unwrap();
+        assert_eq!(removed, Some(TestVal(3301)));
+        assert_eq!(db.get_value::<_, TestVal>(&TestKey(42)).unwrap(), None);
+
+        assert!(db
+            .insert_entry(&TestKey(42), &TestVal(0))
+            .unwrap()
+            .is_none());
+        assert!(db.get_value::<_, TestVal>(&TestKey(42)).is_err());
     }
 }
