@@ -1,7 +1,6 @@
-use crate::{Database, DatabaseKey, DatabaseValue, DecodingError};
+use crate::{Database, DatabaseError, DatabaseKey, DatabaseValue};
 use std::collections::BTreeMap;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -19,9 +18,7 @@ impl MemDatabase {
 }
 
 impl Database for MemDatabase {
-    type Err = DummyError;
-
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -37,7 +34,7 @@ impl Database for MemDatabase {
         Ok(old)
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -53,7 +50,7 @@ impl Database for MemDatabase {
         Ok(value)
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -67,20 +64,6 @@ impl Database for MemDatabase {
             .transpose()?;
 
         Ok(old)
-    }
-}
-
-impl From<DecodingError> for DummyError {
-    fn from(_: DecodingError) -> Self {
-        DummyError
-    }
-}
-
-impl Error for DummyError {}
-
-impl Display for DummyError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
     }
 }
 

@@ -7,8 +7,8 @@ use crate::rng::RngGenerator;
 use config::ServerConfig;
 use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
-use database::{BatchDb, Database, DatabaseError, PrefixSearchable, Transactional};
-use fedimint::{FediMint, Mint};
+use database::{BatchDb, Database, DatabaseError, PrefixSearchable};
+use fedimint::FediMint;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
@@ -29,10 +29,11 @@ pub enum ConsensusItem {
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 
-pub struct FediMintConsensus<R, D>
+pub struct FediMintConsensus<R, D, M>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + Transactional + Sync,
+    D: Database + PrefixSearchable + Sync,
+    M: FediMint + Sync,
 {
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
@@ -40,16 +41,17 @@ where
     pub cfg: ServerConfig, // TODO: make custom config
 
     /// Our local mint
-    pub mint: Mint, //TODO: box dyn trait for testability
+    pub mint: M, //TODO: box dyn trait
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: D,
 }
 
-impl<R, D> FediMintConsensus<R, D>
+impl<R, D, M> FediMintConsensus<R, D, M>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + Transactional + BatchDb + Sync,
+    D: Database + PrefixSearchable + BatchDb + Sync,
+    M: FediMint + Sync,
 {
     pub fn submit_client_request(&self, cr: ClientRequest) -> Result<(), ClientRequestError> {
         debug!("Received client request of type {}", cr.dbg_type_name());

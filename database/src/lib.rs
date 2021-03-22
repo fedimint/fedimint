@@ -25,19 +25,17 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 }
 
 pub trait Database {
-    type Err: Error + From<DecodingError>;
-
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue;
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue;
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue;
@@ -58,18 +56,8 @@ pub trait PrefixSearchable: Database {
         V: DatabaseValue;
 }
 
-pub trait Transactional: Database {
-    type TransactionError: Error;
-    type Transaction: Database;
-
-    // FIXME: don't rely on sled here, doing it properly requires GATs though, maybe some other
-    // trick like getting rid of E and A and pinning them to () would be preferable in the meantime
-    fn transaction<F, A>(&self, f: F) -> Result<A, Self::TransactionError>
-    where
-        F: Fn(&Self::Transaction) -> Result<A, <Self::Transaction as Database>::Err>;
-}
-
 pub trait BatchDb: Database {
+    /// Apply a batch atomically
     fn apply_batch<'b, B>(&self, batch: B) -> Result<(), DatabaseError>
     where
         B: IntoIterator<Item = &'b BatchItem> + 'b,

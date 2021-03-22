@@ -1,59 +1,14 @@
 use crate::batch::BatchItem;
 use crate::{
     BatchDb, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter,
-    DecodingError, PrefixSearchable, Transactional,
+    DecodingError, PrefixSearchable,
 };
 use sled::transaction::TransactionError;
 use sled::IVec;
 use tracing::{error, trace};
 
-impl Database for sled::transaction::TransactionalTree {
-    type Err = sled::transaction::ConflictableTransactionError<DecodingError>;
-
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        match self.insert(key.to_bytes(), value.to_bytes())? {
-            Some(old_val_bytes) => Ok(Some(V::from_bytes(&old_val_bytes)?)),
-            None => Ok(None),
-        }
-    }
-
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = match self.get(&key_bytes)? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(V::from_bytes(&value_bytes)?))
-    }
-
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = match self.remove(key_bytes)? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(V::from_bytes(&value_bytes)?))
-    }
-}
-
 impl Database for sled::Tree {
-    type Err = DatabaseError;
-
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, Self::Err>
+    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -64,7 +19,7 @@ impl Database for sled::Tree {
         }
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -78,7 +33,7 @@ impl Database for sled::Tree {
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, Self::Err>
+    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -112,20 +67,6 @@ impl PrefixSearchable for sled::Tree {
             iter: self.scan_prefix(&prefix_bytes),
             _pd: Default::default(),
         }
-    }
-}
-
-impl Transactional for sled::Tree {
-    type TransactionError = sled::transaction::TransactionError<DecodingError>;
-    type Transaction = sled::transaction::TransactionalTree;
-
-    fn transaction<F, A>(&self, f: F) -> sled::transaction::TransactionResult<A, DecodingError>
-    where
-        F: Fn(
-            &Self::Transaction,
-        ) -> sled::transaction::ConflictableTransactionResult<A, DecodingError>,
-    {
-        self.transaction(f)
     }
 }
 
