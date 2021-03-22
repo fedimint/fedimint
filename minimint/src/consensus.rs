@@ -8,7 +8,7 @@ use config::ServerConfig;
 use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
 use database::{BatchDb, Database, DatabaseError, PrefixSearchable, Transactional};
-use fedimint::Mint;
+use fedimint::{FediMint, Mint};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{

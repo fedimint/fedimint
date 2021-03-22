@@ -12,6 +12,48 @@ use tbs::{
 use thiserror::Error;
 use tracing::{debug, warn};
 
+pub trait FediMint {
+    /// Generate our signature share for a `SignRequest`, effectively issuing new tokens.
+    fn sign(&self, req: SignRequest) -> PartialSigResponse;
+
+    /// Try to combine signature shares to a complete signature, filtering out invalid contributions
+    /// and reporting peer misbehaviour.
+    ///
+    /// # Panics:
+    /// * if a supplied peer id is unknown
+    fn combine(
+        &self,
+        partial_sigs: Vec<(usize, PartialSigResponse)>,
+    ) -> (Result<SigResponse, CombineError>, MintShareErrors);
+
+    /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
+    /// false otherwise.
+    fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError>;
+
+    /// Checks if coins are unspent and signed
+    fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool;
+
+    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
+    /// was greater or equal to the ones to be issued and they were all unspent and valid.
+    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
+    /// was greater or equal to the ones to be issued and they were all unspent and valid.
+    fn reissue<T: Database>(
+        &self,
+        db: &T,
+        coins: Vec<Coin>,
+        new_tokens: SignRequest,
+    ) -> Result<(PartialSigResponse, Batch), MintError> {
+        let spent_coins = coins.len();
+        let spend_batch = self.spend(db, coins)?;
+
+        if spent_coins >= new_tokens.0.len() {
+            Ok((self.sign(new_tokens), spend_batch))
+        } else {
+            Err(MintError::TooFewCoins(new_tokens.0.len(), spent_coins))
+        }
+    }
+}
+
 /// Federated mint member mint
 #[derive(Debug)]
 pub struct Mint {
@@ -40,9 +82,10 @@ impl Mint {
             threshold,
         }
     }
+}
 
-    /// Generate our signature share for a `SignRequest`
-    pub fn sign(&self, req: SignRequest) -> PartialSigResponse {
+impl FediMint for Mint {
+    fn sign(&self, req: SignRequest) -> PartialSigResponse {
         PartialSigResponse(
             req.0
                 .into_iter()
@@ -54,12 +97,7 @@ impl Mint {
         )
     }
 
-    /// Try to combine signature shares to a complete signature, filtering out invalid contributions
-    /// and reporting peer misbehaviour.
-    ///
-    /// # Panics:
-    /// * if a supplied peer id is unknown
-    pub fn combine(
+    fn combine(
         &self,
         partial_sigs: Vec<(usize, PartialSigResponse)>,
     ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
@@ -157,9 +195,7 @@ impl Mint {
         (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
-    /// false otherwise.
-    pub fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError> {
+    fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError> {
         coins
             .into_iter()
             .map(|coin| {
@@ -183,8 +219,7 @@ impl Mint {
             .collect()
     }
 
-    /// Checks if coins are unspent and signed
-    pub fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool {
+    fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool {
         coins.into_iter().all(|coin| {
             let valid = coin.verify(self.pub_key);
             let unspent = transaction
@@ -193,24 +228,6 @@ impl Mint {
                 .is_none();
             unspent && valid
         })
-    }
-
-    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
-    /// was greater or equal to the ones to be issued and they were all unspent and valid.
-    pub fn reissue<T: Database>(
-        &self,
-        db: &T,
-        coins: Vec<Coin>,
-        new_tokens: SignRequest,
-    ) -> Result<(PartialSigResponse, Batch), MintError> {
-        let spent_coins = coins.len();
-        let spend_batch = self.spend(db, coins)?;
-
-        if spent_coins >= new_tokens.0.len() {
-            Ok((self.sign(new_tokens), spend_batch))
-        } else {
-            Err(MintError::TooFewCoins(new_tokens.0.len(), spent_coins))
-        }
     }
 }
 
@@ -272,8 +289,10 @@ pub enum MintError {
 
 #[cfg(test)]
 mod test {
-    use crate::{CombineError, Mint, PeerErrorType};
-    use mint_api::SignRequest;
+    use crate::{CombineError, FediMint, Mint, MintError, MintShareErrors, PeerErrorType};
+    use database::batch::Batch;
+    use database::Database;
+    use mint_api::{Coin, PartialSigResponse, SigResponse, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
@@ -432,5 +451,37 @@ mod test {
             )
             .collect::<Vec<_>>();
         let _ = mints[0].combine(psigs);
+    }
+
+    #[test]
+    fn test_reissuance_success() {
+        struct MockMint;
+
+        impl FediMint for MockMint {
+            fn sign(&self, _req: SignRequest) -> PartialSigResponse {
+                PartialSigResponse(vec![])
+            }
+
+            fn combine(
+                &self,
+                _partial_sigs: Vec<(usize, PartialSigResponse)>,
+            ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
+                unimplemented!()
+            }
+
+            fn spend<T: Database>(&self, _db: &T, _coins: Vec<Coin>) -> Result<Batch, MintError> {
+                Ok(vec![])
+            }
+
+            fn validate<T: Database>(&self, _transaction: &T, _coins: &[Coin]) -> bool {
+                true
+            }
+        }
+
+        let mint = MockMint;
+        let db = database::mem_impl::MemDatabase::new();
+
+        // TODO: add testing for amounts once there are more complex checks implemented for reissuance
+        let (_psigs, _batch) = mint.reissue(&db, vec![], SignRequest(vec![])).unwrap();
     }
 }

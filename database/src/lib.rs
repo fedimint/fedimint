@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 pub mod batch;
-#[cfg(test)]
 pub mod mem_impl;
 pub mod sled_impl;
 
