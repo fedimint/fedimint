@@ -3,6 +3,7 @@ use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, 
 use serde::{Deserialize, Serialize};
 
 pub use bitcoin_hashes::Hash as BitcoinHash;
+use std::collections::HashMap;
 
 hash_newtype!(
     TransactionId,
@@ -10,6 +11,23 @@ hash_newtype!(
     32,
     doc = "A transaction id for peg-ins, peg-outs and reissuances"
 );
+
+/// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
+/// this is also why the amount type from rust-bitcoin isn't used instead.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct Amount {
+    pub milli_sat: u64,
+}
+
+/// Represents coins of different denominations.
+///
+/// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
+/// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
+/// coin count per transaction this shouldn't be a problem in practice though.
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct Coins<C> {
+    pub coins: HashMap<Amount, Vec<C>>,
+}
 
 /// Request to blind sign a certain amount of coins
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
@@ -119,5 +137,24 @@ impl CoinNonce {
         let mut hasher = sha3::Sha3_256::default();
         bincode::serialize_into(&mut hasher, &self.0).unwrap();
         tbs::Message::from_hash(hasher)
+    }
+}
+
+impl<C> Coins<C> {
+    pub fn amount(&self) -> Amount {
+        let milli_sat = self
+            .coins
+            .iter()
+            .map(|(tier, coins)| tier.milli_sat * (coins.len() as u64))
+            .sum();
+        Amount { milli_sat }
+    }
+
+    pub fn coin_count(&self) -> usize {
+        self.coins.iter().map(|(_, coins)| coins.len()).sum()
+    }
+
+    pub fn coin_amount_tiers(&self) -> impl Iterator<Item = &Amount> {
+        self.coins.keys()
     }
 }
