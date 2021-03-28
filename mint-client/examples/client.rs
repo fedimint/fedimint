@@ -2,7 +2,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::{load_from_file, ClientConfig, ClientOpts};
 use futures::future::select_all;
 use itertools::Itertools;
-use mint_api::{PegInRequest, ReissuanceRequest, SigResponse, TransactionId, TxId};
+use mint_api::{Amount, Coins, PegInRequest, ReissuanceRequest, SigResponse, TransactionId, TxId};
 use mint_client::{CoinFinalizationError, IssuanceRequest, SpendableCoin};
 use musig;
 use rand::rngs::OsRng;
@@ -28,20 +28,21 @@ async fn main() {
     let opts: ClientOpts = StructOpt::from_args();
     let cfg: ClientConfig = load_from_file(&opts.cfg_path);
 
-    let num_coins = 50 * opts.issuance_per_1000_s / 1000 * opts.issue_amt;
+    let num_coins =
+        Amount::from_msat((50 * opts.issuance_per_1000_s / 1000 * opts.issue_amt) as u64);
 
-    info!("Sending peg-in request for {} coins", num_coins);
-
+    info!("Sent peg-in request for {}", num_coins,);
     let (request_id, issuance_req) = request_issuance(&cfg, num_coins, &mut rng).await;
+
     let coins = fetch_coins(&cfg, request_id, issuance_req)
         .await
-        .expect("Couldn't qcquire coins");
+        .expect("Couldn't acquire coins");
     let mut coins = coins
         .into_iter()
         .chunks(opts.issue_amt)
         .into_iter()
         .map(|chunk| chunk.collect())
-        .collect::<Vec<Vec<_>>>();
+        .collect::<Vec<Coins<_>>>();
 
     info!(
         "Beginning to send {} reissuance requests with {} coins each to two random mints per second",
@@ -64,7 +65,9 @@ async fn main() {
         let ongoing_select = select_all(ongoing_requests.iter_mut());
         select! {
             _ = interval.tick() => {
-                let reissuance = tokio::spawn(reissue(rng.clone(), cfg.clone(), coins.pop().expect("ran out of coins")));
+                let reissue_coins = coins.pop().expect("ran out of coins");
+                info!("Starting reissuance of value {}", reissue_coins.amount());
+                let reissuance = tokio::spawn(reissue(rng.clone(), cfg.clone(), reissue_coins));
                 ongoing_requests.push(reissuance);
             },
             (result, idx, _) = ongoing_select => {
@@ -82,10 +85,10 @@ async fn main() {
 async fn reissue(
     mut rng: OsRng,
     cfg: ClientConfig,
-    coins: Vec<SpendableCoin>,
-) -> (Duration, Vec<SpendableCoin>) {
+    coins: Coins<SpendableCoin>,
+) -> (Duration, Coins<SpendableCoin>) {
     let begin = Instant::now();
-    debug!("Sending reissuance request for {} coins", coins.len());
+    debug!("Sending reissuance request for {}", coins.amount());
     let (request_id, issuance_req) = request_reissuance(&cfg, coins, &mut rng).await;
     let coins = fetch_coins(&cfg, request_id, issuance_req)
         .await
@@ -93,8 +96,8 @@ async fn reissue(
 
     let time_passed = Instant::now().duration_since(begin);
     debug!(
-        "Received {} valid coins after {}s",
-        coins.len(),
+        "Received {} in valid coins after {}s",
+        coins.amount(),
         time_passed.as_secs_f32()
     );
     (time_passed, coins)
@@ -104,7 +107,7 @@ async fn fetch_coins(
     cfg: &ClientConfig,
     id: TransactionId,
     req: IssuanceRequest,
-) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
+) -> Result<Coins<SpendableCoin>, CoinFinalizationError> {
     let client = reqwest::Client::new();
     let resp: SigResponse = loop {
         let url = format!("{}/issuance/{}", cfg.mints[0], id);
@@ -129,15 +132,16 @@ async fn fetch_coins(
         tokio::time::sleep(Duration::from_millis(5000)).await;
     };
 
-    req.finalize(resp, cfg.mint_pk)
+    req.finalize(resp, &cfg.mint_pk)
 }
 
 async fn request_issuance(
     cfg: &ClientConfig,
-    amount: usize,
+    amount: Amount,
     mut rng: impl RngCore + CryptoRng,
 ) -> (TransactionId, IssuanceRequest) {
-    let (issuance_request, sig_req) = IssuanceRequest::new(amount, &mut rng);
+    let (issuance_request, sig_req) =
+        IssuanceRequest::new(amount, &cfg.mint_pk.keys().copied().collect(), &mut rng);
     let req = PegInRequest {
         blind_tokens: sig_req,
         proof: (),
@@ -163,14 +167,18 @@ async fn request_issuance(
 
 async fn request_reissuance(
     cfg: &ClientConfig,
-    old_coins: Vec<SpendableCoin>,
+    old_coins: Coins<SpendableCoin>,
     mut rng: impl RngCore + CryptoRng,
 ) -> (TransactionId, IssuanceRequest) {
-    let (issuance_req, sig_req) = IssuanceRequest::new(old_coins.len(), &mut rng);
+    let (issuance_req, sig_req) = IssuanceRequest::new(
+        old_coins.amount(),
+        &cfg.mint_pk.keys().copied().collect(), // TODO: cache somewhere
+        &mut rng,
+    );
 
-    let (spend_keys, coins): (Vec<_>, Vec<_>) = old_coins
+    let (spend_keys, coins): (Vec<_>, Coins<_>) = old_coins
         .into_iter()
-        .map(|sc| (sc.spend_key, sc.coin))
+        .map(|(amt, sc)| (sc.spend_key, (amt, sc.coin)))
         .unzip();
 
     let mut digest = bitcoin_hashes::sha256::Hash::engine();

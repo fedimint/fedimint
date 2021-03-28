@@ -1,9 +1,15 @@
+#![feature(type_alias_impl_trait)]
+
+use bitcoin_hashes::core::iter::FromIterator;
+use bitcoin_hashes::core::str::FromStr;
 use bitcoin_hashes::sha256::Hash as Sha256;
+pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
+use std::num::ParseIntError;
 
-pub use bitcoin_hashes::Hash as BitcoinHash;
-use std::collections::HashMap;
+pub mod util;
 
 hash_newtype!(
     TransactionId,
@@ -14,7 +20,8 @@ hash_newtype!(
 
 /// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
 /// this is also why the amount type from rust-bitcoin isn't used instead.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
 pub struct Amount {
     pub milli_sat: u64,
 }
@@ -24,23 +31,23 @@ pub struct Amount {
 /// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
 /// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
 /// coin count per transaction this shouldn't be a problem in practice though.
-#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct Coins<C> {
-    pub coins: HashMap<Amount, Vec<C>>,
+    pub coins: BTreeMap<Amount, Vec<C>>,
 }
 
 /// Request to blind sign a certain amount of coins
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SignRequest(pub Vec<tbs::BlindedMessage>);
+pub struct SignRequest(pub Coins<tbs::BlindedMessage>);
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct PartialSigResponse(pub Vec<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
+pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
 
 /// Blind signature for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct SigResponse(pub Vec<tbs::BlindedSignature>);
+pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
@@ -64,7 +71,7 @@ pub struct PegInRequest {
 /// Exchange already signed [`Coin`]s for new coins, breaking the link due to blind signing
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct ReissuanceRequest {
-    pub coins: Vec<Coin>,
+    pub coins: Coins<Coin>,
     pub blind_tokens: SignRequest,
     pub sig: musig::Sig,
 }
@@ -73,7 +80,7 @@ pub struct ReissuanceRequest {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PegOutRequest {
     pub address: (), // TODO: implement pegout
-    pub coins: Vec<Coin>,
+    pub coins: Coins<Coin>,
     pub sig: (), // TODO: impl signing
 }
 
@@ -156,5 +163,144 @@ impl<C> Coins<C> {
 
     pub fn coin_amount_tiers(&self) -> impl Iterator<Item = &Amount> {
         self.coins.keys()
+    }
+
+    pub fn map<F, N, E>(self, f: F) -> Result<Coins<N>, E>
+    where
+        F: Fn(Amount, C) -> Result<N, E>,
+    {
+        let coins = self
+            .coins
+            .into_iter()
+            .map(|(amt, coins)| -> Result<_, E> {
+                let coins = coins
+                    .into_iter()
+                    .map(|coin| f(amt, coin))
+                    .collect::<Result<Vec<_>, E>>()?;
+                Ok((amt, coins))
+            })
+            .collect::<Result<BTreeMap<Amount, Vec<N>>, E>>()?;
+
+        Ok(Coins { coins })
+    }
+
+    pub fn structural_eq<O>(&self, other: &Coins<O>) -> bool {
+        let tier_eq = self.coins.keys().eq(other.coins.keys());
+        let coins_per_tier_eq = self
+            .coins
+            .values()
+            .zip(other.coins.values())
+            .all(|(c1, c2)| c1.len() == c2.len());
+
+        tier_eq && coins_per_tier_eq
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &C)> {
+        self.coins
+            .iter()
+            .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
+    }
+}
+
+impl Coins<()> {
+    pub fn represent_amount(mut amount: Amount, tiers: &BTreeSet<Amount>) -> Coins<()> {
+        let coins = tiers
+            .iter()
+            .rev()
+            .map(|&amount_tier| {
+                let res = amount / amount_tier;
+                amount %= amount_tier;
+                (amount_tier, vec![(); res as usize])
+            })
+            .collect();
+
+        Coins { coins }
+    }
+}
+
+impl Amount {
+    pub fn from_msat(msat: u64) -> Amount {
+        Amount { milli_sat: msat }
+    }
+
+    pub fn from_sat(sat: u64) -> Amount {
+        Amount {
+            milli_sat: sat * 1000,
+        }
+    }
+}
+
+impl<C> FromIterator<(Amount, C)> for Coins<C> {
+    fn from_iter<T: IntoIterator<Item = (Amount, C)>>(iter: T) -> Self {
+        let mut coins = Coins::default();
+        coins.extend(iter);
+        coins
+    }
+}
+
+impl<C> IntoIterator for Coins<C> {
+    type Item = (Amount, C);
+    type IntoIter = impl Iterator<Item = (Amount, C)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.coins
+            .into_iter()
+            .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c)))
+    }
+}
+
+impl<C> Default for Coins<C> {
+    fn default() -> Self {
+        Coins {
+            coins: BTreeMap::default(),
+        }
+    }
+}
+
+impl<C> Extend<(Amount, C)> for Coins<C> {
+    fn extend<T: IntoIterator<Item = (Amount, C)>>(&mut self, iter: T) {
+        for (amount, coin) in iter {
+            self.coins.entry(amount).or_default().push(coin)
+        }
+    }
+}
+
+impl std::fmt::Display for Amount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} msat", self.milli_sat)
+    }
+}
+
+impl std::ops::Rem for Amount {
+    type Output = Amount;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        Amount {
+            milli_sat: self.milli_sat % rhs.milli_sat,
+        }
+    }
+}
+
+impl std::ops::RemAssign for Amount {
+    fn rem_assign(&mut self, rhs: Self) {
+        self.milli_sat %= rhs.milli_sat;
+    }
+}
+
+impl std::ops::Div for Amount {
+    type Output = u64;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.milli_sat / rhs.milli_sat
+    }
+}
+
+impl FromStr for Amount {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Amount {
+            milli_sat: s.parse()?,
+        })
     }
 }

@@ -8,11 +8,11 @@ use config::ServerConfig;
 use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
 use database::{BatchDb, Database, DatabaseError, PrefixSearchable};
-use fedimint::FediMint;
+use fedimint::{FediMint, MintError};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
-    BitcoinHash, Coin, PartialSigResponse, PegInRequest, ReissuanceRequest, TransactionId, TxId,
+    Amount, BitcoinHash, PartialSigResponse, PegInRequest, ReissuanceRequest, TransactionId, TxId,
 };
 use musig;
 use rand::{CryptoRng, RngCore};
@@ -60,7 +60,7 @@ where
                 let pub_keys = reissuance_req
                     .coins
                     .iter()
-                    .map(Coin::spend_key)
+                    .map(|(_, coin)| coin.spend_key())
                     .collect::<Vec<_>>();
 
                 if !musig::verify(
@@ -68,17 +68,48 @@ where
                     reissuance_req.sig.clone(),
                     &pub_keys,
                 ) {
-                    warn!("Rejecting invalid reissuance request: invalid tx sig");
                     return Err(ClientRequestError::InvalidTransactionSignature);
                 }
 
-                if !self.mint.validate(&self.db, &reissuance_req.coins) {
-                    warn!("Rejecting invalid reissuance request: spent or invalid mint sig");
-                    return Err(ClientRequestError::DeniedByMint);
+                self.mint.validate(&self.db, &reissuance_req.coins)?;
+
+                // TODO: refactor tier checking
+                if let Some(&amt) = reissuance_req
+                    .coins
+                    .coin_amount_tiers()
+                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
+                {
+                    return Err(ClientRequestError::InvalidAmountTier(amt));
+                }
+
+                if let Some(&amt) = reissuance_req
+                    .blind_tokens
+                    .0
+                    .coin_amount_tiers()
+                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
+                {
+                    return Err(ClientRequestError::InvalidAmountTier(amt));
                 }
             }
-            _ => {
-                // FIXME: validate other request types or move validation elsewhere
+            // FIXME: validate peg in/out proofs
+            ClientRequest::PegIn(ref peg_in) => {
+                if let Some(&amt) = peg_in
+                    .blind_tokens
+                    .0
+                    .coin_amount_tiers()
+                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
+                {
+                    return Err(ClientRequestError::InvalidAmountTier(amt));
+                }
+            }
+            ClientRequest::PegOut(ref peg_out) => {
+                if let Some(&amt) = peg_out
+                    .coins
+                    .coin_amount_tiers()
+                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
+                {
+                    return Err(ClientRequestError::InvalidAmountTier(amt));
+                }
             }
         }
 
@@ -113,7 +144,7 @@ where
             .unique()
             .filter_map(|ci| match ci {
                 ConsensusItem::ClientRequest(ClientRequest::Reissuance(req)) => {
-                    Some(req.coins.iter().cloned()) // TODO: get rid of clone once MuSig2 lands
+                    Some(req.coins.iter().map(|(_, coin)| coin.clone())) // TODO: get rid of clone once MuSig2 lands
                 }
                 ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
                     unimplemented!()
@@ -137,7 +168,7 @@ where
                         ConsensusItem::ClientRequest(ClientRequest::Reissuance(req)) => req
                             .coins
                             .iter()
-                            .all(|coin| *spent_coins.get(&coin).unwrap() == 1),
+                            .all(|(_, coin)| *spent_coins.get(&coin).unwrap() == 1),
                         ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
                             unimplemented!()
                         }
@@ -208,7 +239,16 @@ where
         // FIXME: check pegin proof and mark as used (ATOMICITY!!!)
         let peg_in_id = peg_in.id();
         debug!("Signing peg-in request {}", peg_in_id);
-        let signed_req = self.mint.sign(peg_in.blind_tokens);
+        let signed_req = match self.mint.sign(peg_in.blind_tokens) {
+            Ok(signed_req) => signed_req,
+            Err(e) => {
+                warn!(
+                    "Error signing a proposed peg-in, proposing peer might be faulty: {}",
+                    e
+                );
+                return vec![];
+            }
+        };
 
         let db_sig_request = BatchItem::InsertNewElement(Element::new(
             ConsensusItem::PartiallySignedRequest(peg_in_id, signed_req.clone()),
@@ -366,7 +406,7 @@ where
                             Some(batch)
                         }
                         Err(e) => {
-                            error!("Warn: could not combine shares: {:?}", e);
+                            error!("Could not combine shares: {}", e);
                             None
                         }
                     }
@@ -386,6 +426,14 @@ where
 pub enum ClientRequestError {
     #[error("Client Reuqest was not authorized with a valid signature")]
     InvalidTransactionSignature,
-    #[error("Client request was denied by mint (double spend or invalid mint signature)")]
-    DeniedByMint,
+    #[error("Client request was denied by mint: {0}")]
+    DeniedByMint(MintError),
+    #[error("Client request uses invalid amount tier: {0}")]
+    InvalidAmountTier(Amount),
+}
+
+impl From<MintError> for ClientRequestError {
+    fn from(e: MintError) -> Self {
+        ClientRequestError::DeniedByMint(e)
+    }
 }

@@ -48,12 +48,27 @@ pub async fn run_minimint(
 
     let mut connections = Connections::connect_to_all(&cfg).await;
 
+    let pub_key_shares = cfg
+        .tbs_sks
+        .keys()
+        .map(|amount| {
+            let pub_keys = cfg
+                .peers
+                .values()
+                .map(|peer| {
+                    peer.tbs_pks
+                        .get(amount)
+                        .expect("Inconsistent amount tiers in config")
+                        .clone()
+                })
+                .collect();
+            (*amount, pub_keys)
+        })
+        .collect();
+
     let mint = fedimint::Mint::new(
         cfg.tbs_sks.clone(),
-        cfg.peers
-            .values()
-            .map(|peer| peer.tbs_pks.clone())
-            .collect(),
+        pub_key_shares,
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
@@ -102,7 +117,9 @@ pub async fn run_minimint(
                 hb.handle_message(&peer, peer_msg)
             },
             Some(cr) = client_req_receiver.recv() => {
-                let _ = mint_consensus.submit_client_request(cr); // TODO: decide where to log
+                if let Err(err) = mint_consensus.submit_client_request(cr) {
+                    warn!("Rejecting invalid reissuance request: {}", err);
+                }
                 continue;
             },
             res = &mut batch_process, if !batch_process.is_terminated() => {

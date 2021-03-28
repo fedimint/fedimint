@@ -1,7 +1,9 @@
-use mint_api::{Coin, CoinNonce, SigResponse, SignRequest, TransactionId};
+use mint_api::{Amount, Coin, CoinNonce, Coins, SigResponse, SignRequest, TransactionId};
 use rand::{CryptoRng, RngCore};
+use std::collections::{BTreeMap, BTreeSet};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
+use tracing::debug;
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
 /// information to generate one spendable coin once the blind signature arrives.
@@ -18,7 +20,7 @@ pub struct CoinRequest {
 /// generate spendable coins once the blind signatures arrive.
 pub struct IssuanceRequest {
     /// All coins in this request
-    coins: Vec<CoinRequest>,
+    coins: Coins<CoinRequest>,
 }
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
@@ -30,9 +32,26 @@ pub struct SpendableCoin {
 
 impl IssuanceRequest {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    pub fn new(amount: usize, mut rng: impl RngCore + CryptoRng) -> (IssuanceRequest, SignRequest) {
-        let (requests, blinded_nonces): (Vec<_>, _) =
-            (0..amount).map(|_| CoinRequest::new(&mut rng)).unzip();
+    pub fn new(
+        amount: Amount,
+        amount_tiers: &BTreeSet<Amount>,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> (IssuanceRequest, SignRequest) {
+        let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
+            Coins::represent_amount(amount, amount_tiers)
+                .into_iter()
+                .map(|(amt, ())| {
+                    let (request, blind_msg) = CoinRequest::new(&mut rng);
+                    ((amt, request), (amt, blind_msg))
+                })
+                .unzip();
+
+        debug!(
+            "Generated issuance request for {} ({} coins, tiers {:?})",
+            amount,
+            requests.coin_count(),
+            requests.coins.keys().collect::<Vec<_>>()
+        );
 
         let sig_req = SignRequest(blinded_nonces);
         let issuance_req = IssuanceRequest { coins: requests };
@@ -46,25 +65,39 @@ impl IssuanceRequest {
     pub fn finalize(
         &self,
         bsigs: SigResponse,
-        mint_pub_key: AggregatePublicKey,
-    ) -> Result<Vec<SpendableCoin>, CoinFinalizationError> {
+        mint_pub_key: &BTreeMap<Amount, AggregatePublicKey>,
+    ) -> Result<Coins<SpendableCoin>, CoinFinalizationError> {
+        if !self.coins.structural_eq(&bsigs.0) {
+            return Err(CoinFinalizationError::WrongMintAnswer);
+        }
+
         self.coins
             .iter()
             .zip(bsigs.0)
             .enumerate()
-            .map(|(idx, (coin_req, bsig))| {
+            .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);
                 let coin = Coin(coin_req.nonce.clone(), sig);
-                if coin.verify(mint_pub_key) {
-                    Ok(SpendableCoin {
+                if coin.verify(
+                    *mint_pub_key
+                        .get(&amt)
+                        .ok_or(CoinFinalizationError::InvalidAmountTier(amt))?,
+                ) {
+                    let coin = SpendableCoin {
                         coin,
                         spend_key: coin_req.spend_key.clone(),
-                    })
+                    };
+
+                    Ok((amt, coin))
                 } else {
                     Err(CoinFinalizationError::InvalidSignature(idx))
                 }
             })
             .collect()
+    }
+
+    pub fn coin_count(&self) -> usize {
+        self.coins.coins.values().map(|v| v.len()).sum()
     }
 }
 
@@ -89,10 +122,12 @@ impl CoinRequest {
 
 #[derive(Error, Debug)]
 pub enum CoinFinalizationError {
-    #[error("Expected {0} blind signatures, got {1}")]
-    WrongSignatureCount(usize, usize),
+    #[error("The returned answer does not fit the request")]
+    WrongMintAnswer,
     #[error("The blind signature at index {0} is invalid")]
     InvalidSignature(usize),
     #[error("Expected signatures for issuance request {0}, got signatures for request {1}")]
     InvalidIssuanceId(TransactionId, TransactionId),
+    #[error("Invalid amount tier {0:?}")]
+    InvalidAmountTier(Amount),
 }

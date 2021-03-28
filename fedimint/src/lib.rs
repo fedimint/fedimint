@@ -1,9 +1,8 @@
-mod util;
-
-use crate::util::PartialSigZip;
 use database::batch::{Batch, BatchItem, Element};
 use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
-use mint_api::{Coin, CoinNonce, PartialSigResponse, SigResponse, SignRequest};
+use mint_api::util::CoinMultiZip;
+use mint_api::{Amount, Coin, CoinNonce, Coins, PartialSigResponse, SigResponse, SignRequest};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -14,7 +13,7 @@ use tracing::{debug, warn};
 
 pub trait FediMint {
     /// Generate our signature share for a `SignRequest`, effectively issuing new tokens.
-    fn sign(&self, req: SignRequest) -> PartialSigResponse;
+    fn sign(&self, req: SignRequest) -> Result<PartialSigResponse, MintError>;
 
     /// Try to combine signature shares to a complete signature, filtering out invalid contributions
     /// and reporting peer misbehaviour.
@@ -28,10 +27,10 @@ pub trait FediMint {
 
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
     /// false otherwise.
-    fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError>;
+    fn spend<T: Database>(&self, db: &T, coins: Coins<Coin>) -> Result<Batch, MintError>;
 
     /// Checks if coins are unspent and signed
-    fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool;
+    fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError>;
 
     /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
     /// was greater or equal to the ones to be issued and they were all unspent and valid.
@@ -40,16 +39,16 @@ pub trait FediMint {
     fn reissue<T: Database>(
         &self,
         db: &T,
-        coins: Vec<Coin>,
+        coins: Coins<Coin>,
         new_tokens: SignRequest,
     ) -> Result<(PartialSigResponse, Batch), MintError> {
-        let spent_coins = coins.len();
+        let spent_coins = coins.amount();
         let spend_batch = self.spend(db, coins)?;
 
-        if spent_coins >= new_tokens.0.len() {
-            Ok((self.sign(new_tokens), spend_batch))
+        if spent_coins >= new_tokens.0.amount() {
+            Ok((self.sign(new_tokens)?, spend_batch))
         } else {
-            Err(MintError::TooFewCoins(new_tokens.0.len(), spent_coins))
+            Err(MintError::TooFewCoins(new_tokens.0.amount(), spent_coins))
         }
     }
 }
@@ -58,9 +57,9 @@ pub trait FediMint {
 #[derive(Debug)]
 pub struct Mint {
     key_idx: usize,
-    sec_key: SecretKeyShare,
-    pub_key_shares: Vec<PublicKeyShare>,
-    pub_key: AggregatePublicKey,
+    sec_key: HashMap<Amount, SecretKeyShare>,
+    pub_key_shares: HashMap<Amount, Vec<PublicKeyShare>>,
+    pub_key: HashMap<Amount, AggregatePublicKey>,
     threshold: usize,
 }
 
@@ -68,33 +67,70 @@ impl Mint {
     /// Constructs a new ming
     ///
     /// # Panics
-    /// If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(sec_key: SecretKeyShare, pub_keys: Vec<PublicKeyShare>, threshold: usize) -> Mint {
-        let pub_key = pub_keys.aggregate(threshold);
+    /// * If the amount tiers for secret and public keys are inconsistent
+    /// * If the pub key belonging to the secret key share is not in the pub key list.
+    pub fn new(
+        sec_key: HashMap<Amount, SecretKeyShare>,
+        pub_keys: HashMap<Amount, Vec<PublicKeyShare>>,
+        threshold: usize,
+    ) -> Mint {
+        // The amount tiers are implicitly provided by the key sets, make sure they are internally
+        // consistent.
+        assert_eq!(
+            sec_key.keys().collect::<HashSet<_>>(),
+            pub_keys.keys().collect::<HashSet<_>>()
+        );
+
+        // Also make sure that every peer has a key for every tier
+        let reference_num_peers = pub_keys
+            .values()
+            .next()
+            .expect("Needs at least one amount tier")
+            .len();
+        assert!(pub_keys
+            .values()
+            .all(|peers| peers.len() == reference_num_peers));
+
+        // Find our key index and make sure we know the private key for all our public key shares
+        let (ref_amt, ref_keys) = pub_keys
+            .iter()
+            .next()
+            .expect("Needs at least one amount tier");
+        let our_idx = ref_keys
+            .iter()
+            .position(|pk| pk == &sec_key[ref_amt].to_pub_key_share())
+            .expect("Own key not found among pub keys.");
+        assert!(pub_keys
+            .iter()
+            .all(|(amt, pub_keys)| pub_keys[our_idx] == sec_key[amt].to_pub_key_share()));
+
+        let aggregate_pub_keys = pub_keys
+            .iter()
+            .map(|(amt, pk)| (*amt, pk.aggregate(threshold)))
+            .collect();
+
         Mint {
-            key_idx: pub_keys
-                .iter()
-                .position(|pk| pk == &sec_key.to_pub_key_share())
-                .expect("Own key not found among pub keys."),
+            key_idx: our_idx,
             sec_key,
             pub_key_shares: pub_keys,
-            pub_key,
+            pub_key: aggregate_pub_keys,
             threshold,
         }
     }
 }
 
 impl FediMint for Mint {
-    fn sign(&self, req: SignRequest) -> PartialSigResponse {
-        PartialSigResponse(
-            req.0
-                .into_iter()
-                .map(|msg| {
-                    let bsig = sign_blinded_msg(msg, self.sec_key);
-                    (msg, bsig)
-                })
-                .collect(),
-        )
+    fn sign(&self, req: SignRequest) -> Result<PartialSigResponse, MintError> {
+        let coins = req.0.map(|amt, msg| {
+            let sec_key = self
+                .sec_key
+                .get(&amt)
+                .ok_or(MintError::InvalidAmountTier(amt))?;
+            let bsig = sign_blinded_msg(msg, *sec_key);
+            Ok((msg, bsig))
+        })?;
+
+        Ok(PartialSigResponse(coins))
     }
 
     fn combine(
@@ -125,22 +161,19 @@ impl FediMint for Mint {
             }
         };
 
-        let reference_msgs = our_contribution.0.iter().map(|(msg, _)| msg);
+        let reference_msgs = our_contribution.0.iter().map(|(_amt, (msg, _sig))| msg);
 
         let mut peer_errors = vec![];
 
-        let reference_len = our_contribution.0.len();
         let partial_sigs = partial_sigs
             .iter()
             .filter(|(peer, sigs)| {
-                if sigs.0.len() != reference_len {
+                if !sigs.0.structural_eq(&our_contribution.0) {
                     warn!(
-                        "Peer {} proposed a sig share of wrong length (expected={}; actual={})",
+                        "Peer {} proposed a sig share of wrong structure (different than ours)",
                         peer,
-                        reference_len,
-                        sigs.0.len()
                     );
-                    peer_errors.push((*peer, PeerErrorType::DifferentLengthAnswer));
+                    peer_errors.push((*peer, PeerErrorType::DifferentStructureSigShare));
                     false
                 } else {
                     true
@@ -151,41 +184,52 @@ impl FediMint for Mint {
             "After length filtering {} sig shares are left.",
             partial_sigs.len()
         );
-        let bsigs = PartialSigZip::new(partial_sigs.as_ref(), reference_len)
-            .zip(reference_msgs)
-            .map(|(row, ref_msg)| {
-                // Filter out invalid peer contributions
-                let valid_sigs = row
-                    .filter_map(|(peer, msg, sig)| {
-                        if msg != ref_msg {
-                            peer_errors.push((*peer, PeerErrorType::DifferentNonce));
-                            None
-                        } else if !verify_blind_share(*msg, *sig, self.pub_key_shares[*peer]) {
-                            peer_errors.push((*peer, PeerErrorType::InvalidSignature));
-                            None
-                        } else {
-                            Some((*peer, *sig))
-                        }
-                    })
-                    .collect::<Vec<_>>();
 
-                // Check that there are still sufficient
-                let min_shares = min_shares(self.pub_key_shares.len(), self.threshold);
-                if valid_sigs.len() < min_shares {
-                    return Err(CombineError::TooFewValidShares(
-                        valid_sigs.len(),
-                        partial_sigs.len(),
-                        min_shares,
-                    ));
-                }
+        let bsigs = CoinMultiZip::new(
+            partial_sigs
+                .iter()
+                .map(|(_peer, sig_share)| sig_share.0.iter())
+                .collect(),
+        )
+        .zip(reference_msgs)
+        .map(|((amt, sig_shares), ref_msg)| {
+            let peer_ids = partial_sigs.iter().map(|(peer, _)| *peer);
 
-                Ok(combine_valid_shares(
-                    valid_sigs,
-                    self.pub_key_shares.len(),
-                    self.threshold,
-                ))
-            })
-            .collect::<Result<Vec<_>, CombineError>>();
+            // Filter out invalid peer contributions
+            let valid_sigs = sig_shares
+                .into_iter()
+                .zip(peer_ids)
+                .filter_map(|((msg, sig), peer)| {
+                    if msg != ref_msg {
+                        peer_errors.push((peer, PeerErrorType::DifferentNonce));
+                        None
+                    } else if !verify_blind_share(*msg, *sig, self.pub_key_shares[&amt][peer]) {
+                        peer_errors.push((peer, PeerErrorType::InvalidSignature));
+                        None
+                    } else {
+                        Some((peer, *sig))
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            // Check that there are still sufficient
+            let min_shares = min_shares(
+                self.pub_key_shares.values().next().unwrap().len(), // get peer count from first amount tier
+                self.threshold,
+            );
+            if valid_sigs.len() < min_shares {
+                return Err(CombineError::TooFewValidShares(
+                    valid_sigs.len(),
+                    partial_sigs.len(),
+                    min_shares,
+                ));
+            }
+
+            let sig = combine_valid_shares(valid_sigs, self.pub_key_shares.len(), self.threshold);
+
+            Ok((amt, sig))
+        })
+        .collect::<Result<Coins<_>, CombineError>>();
 
         let bsigs = match bsigs {
             Ok(bs) => bs,
@@ -195,22 +239,12 @@ impl FediMint for Mint {
         (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    fn spend<T: Database>(&self, db: &T, coins: Vec<Coin>) -> Result<Batch, MintError> {
+    fn spend<T: Database>(&self, db: &T, coins: Coins<Coin>) -> Result<Batch, MintError> {
+        self.validate(db, &coins)?;
+
         coins
             .into_iter()
-            .map(|coin| {
-                if !coin.verify(self.pub_key) {
-                    return Err(MintError::InvalidCoin);
-                }
-
-                if db
-                    .get_value::<_, ()>(&NonceKey(coin.0.clone()))
-                    .expect("DB error")
-                    .is_some()
-                {
-                    return Err(MintError::SpentCoin);
-                }
-
+            .map(|(_, coin)| {
                 Ok(BatchItem::InsertNewElement(Element {
                     key: Box::new(NonceKey(coin.0)),
                     value: Box::new(()),
@@ -219,15 +253,30 @@ impl FediMint for Mint {
             .collect()
     }
 
-    fn validate<T: Database>(&self, transaction: &T, coins: &[Coin]) -> bool {
-        coins.into_iter().all(|coin| {
-            let valid = coin.verify(self.pub_key);
-            let unspent = transaction
-                .get_value::<_, ()>(&NonceKey(coin.0.clone()))
-                .expect("DB error")
-                .is_none();
-            unspent && valid
-        })
+    fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError> {
+        coins
+            .iter()
+            .map(|(amount, coin)| {
+                if !coin.verify(
+                    *self
+                        .pub_key
+                        .get(&amount)
+                        .ok_or(MintError::InvalidAmountTier(amount))?,
+                ) {
+                    return Err(MintError::InvalidSignature);
+                }
+
+                if transaction
+                    .get_value::<_, ()>(&NonceKey(coin.0.clone()))
+                    .expect("DB error")
+                    .is_some()
+                {
+                    return Err(MintError::SpentCoin);
+                }
+
+                Ok(())
+            })
+            .collect::<Result<(), MintError>>()
     }
 }
 
@@ -261,8 +310,9 @@ pub struct MintShareErrors(pub Vec<(usize, PeerErrorType)>);
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum PeerErrorType {
     InvalidSignature,
-    DifferentLengthAnswer,
+    DifferentStructureSigShare,
     DifferentNonce,
+    InvalidAmountTier,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
@@ -281,10 +331,14 @@ pub enum CombineError {
 pub enum MintError {
     #[error("One of the supplied coins had an invalid mint signature")]
     InvalidCoin,
-    #[error("Too few coins: reissuing {0} but only got {1}")]
-    TooFewCoins(usize, usize),
+    #[error("Insufficient coin value: reissuing {0} but only got {1} in coins")]
+    TooFewCoins(Amount, Amount),
     #[error("One of the supplied coins was already spent previously")]
     SpentCoin,
+    #[error("One of the coins had an invalid amount not issued by the mint: {0:?}")]
+    InvalidAmountTier(Amount),
+    #[error("One of the coins had an invalid signature")]
+    InvalidSignature,
 }
 
 #[cfg(test)]
@@ -292,7 +346,7 @@ mod test {
     use crate::{CombineError, FediMint, Mint, MintError, MintShareErrors, PeerErrorType};
     use database::batch::Batch;
     use database::Database;
-    use mint_api::{Coin, PartialSigResponse, SigResponse, SignRequest};
+    use mint_api::{Amount, Coin, Coins, PartialSigResponse, SigResponse, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
@@ -303,7 +357,16 @@ mod test {
 
         let mints = sks
             .into_iter()
-            .map(|sk| Mint::new(sk, pks.clone(), THRESHOLD))
+            .map(|sk| {
+                Mint::new(
+                    [(Amount::from_sat(1), sk)].iter().cloned().collect(),
+                    [(Amount::from_sat(1), pks.clone())]
+                        .iter()
+                        .cloned()
+                        .collect(),
+                    THRESHOLD,
+                )
+            })
             .collect::<Vec<_>>();
 
         (pk, mints)
@@ -315,11 +378,15 @@ mod test {
 
         let nonce = Message::from_bytes(&b"test coin"[..]);
         let (bkey, bmsg) = blind_message(nonce);
-        let req = SignRequest(vec![bmsg, bmsg]);
+        let req = SignRequest(Coins {
+            coins: vec![(Amount::from_sat(1), vec![bmsg, bmsg])]
+                .into_iter()
+                .collect(),
+        });
 
         let psigs = mints
             .iter()
-            .map(move |m| m.sign(req.clone()))
+            .map(move |m| m.sign(req.clone()).unwrap())
             .enumerate()
             .collect::<Vec<_>>();
 
@@ -330,9 +397,9 @@ mod test {
         assert!(errors.0.is_empty());
 
         let bsig = bsig_res.unwrap();
-        assert_eq!(bsig.0.len(), 2);
+        assert_eq!(bsig.0.amount(), Amount::from_sat(2));
 
-        bsig.0.iter().for_each(|bs| {
+        bsig.0.iter().for_each(|(_, bs)| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });
@@ -342,7 +409,7 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors.0.is_empty());
 
-        bsig_res.unwrap().0.iter().for_each(|bs| {
+        bsig_res.unwrap().0.iter().for_each(|(_, bs)| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });
@@ -375,7 +442,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psigs)| {
                     if peer == 1 {
-                        psigs.0.pop();
+                        psigs.0.coins.get_mut(&Amount::from_sat(1)).unwrap().pop();
                     }
                     (peer, psigs)
                 })
@@ -384,7 +451,7 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors
             .0
-            .contains(&(1, PeerErrorType::DifferentLengthAnswer)));
+            .contains(&(1, PeerErrorType::DifferentStructureSigShare)));
 
         let (bsig_res, errors) = mint.combine(
             psigs
@@ -392,7 +459,8 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == 2 {
-                        psig.0[0].1 = psigs[0].1 .0[0].1;
+                        psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].1 =
+                            psigs[0].1 .0.coins[&Amount::from_sat(1)][0].1;
                     }
                     (peer, psig)
                 })
@@ -408,7 +476,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == 3 {
-                        psig.0[0].0 = bmsg;
+                        psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].0 = bmsg;
                     }
                     (peer, psig)
                 })
@@ -423,7 +491,13 @@ mod test {
     fn test_new_panic_without_own_pub_key() {
         let (_pk, pks, sks) = tbs::dealer_keygen(THRESHOLD, MINTS);
 
-        Mint::new(sks[0], pks[1..].to_vec(), THRESHOLD);
+        Mint::new(
+            vec![(Amount::from_sat(1), sks[0])].into_iter().collect(),
+            vec![(Amount::from_sat(1), pks[1..].to_vec())]
+                .into_iter()
+                .collect(),
+            THRESHOLD,
+        );
     }
 
     // FIXME: possibly make this an error
@@ -434,11 +508,11 @@ mod test {
 
         let nonce = Message::from_bytes(&b"test coin"[..]);
         let (_bkey, bmsg) = blind_message(nonce);
-        let req = SignRequest(vec![bmsg]);
+        let req = SignRequest(vec![(Amount::from_sat(1), bmsg)].into_iter().collect());
 
         let psigs = mints
             .iter()
-            .map(move |m| m.sign(req.clone()))
+            .map(move |m| m.sign(req.clone()).unwrap())
             .enumerate()
             .map(
                 |(mint, sig)| {
@@ -458,8 +532,8 @@ mod test {
         struct MockMint;
 
         impl FediMint for MockMint {
-            fn sign(&self, _req: SignRequest) -> PartialSigResponse {
-                PartialSigResponse(vec![])
+            fn sign(&self, _req: SignRequest) -> Result<PartialSigResponse, MintError> {
+                Ok(PartialSigResponse(Coins::default()))
             }
 
             fn combine(
@@ -469,12 +543,16 @@ mod test {
                 unimplemented!()
             }
 
-            fn spend<T: Database>(&self, _db: &T, _coins: Vec<Coin>) -> Result<Batch, MintError> {
+            fn spend<T: Database>(&self, _db: &T, _coins: Coins<Coin>) -> Result<Batch, MintError> {
                 Ok(vec![])
             }
 
-            fn validate<T: Database>(&self, _transaction: &T, _coins: &[Coin]) -> bool {
-                true
+            fn validate<T: Database>(
+                &self,
+                _transaction: &T,
+                _coins: &Coins<Coin>,
+            ) -> Result<(), MintError> {
+                Ok(())
             }
         }
 
@@ -482,6 +560,8 @@ mod test {
         let db = database::mem_impl::MemDatabase::new();
 
         // TODO: add testing for amounts once there are more complex checks implemented for reissuance
-        let (_psigs, _batch) = mint.reissue(&db, vec![], SignRequest(vec![])).unwrap();
+        let (_psigs, _batch) = mint
+            .reissue(&db, Coins::default(), SignRequest(Coins::default()))
+            .unwrap();
     }
 }
