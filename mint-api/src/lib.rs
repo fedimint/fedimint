@@ -1,13 +1,13 @@
 #![feature(type_alias_impl_trait)]
 
-use bitcoin_hashes::core::iter::FromIterator;
-use bitcoin_hashes::core::str::FromStr;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::iter::FromIterator;
 use std::num::ParseIntError;
+use std::str::FromStr;
 
 pub mod util;
 
@@ -34,6 +34,13 @@ pub struct Amount {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct Coins<C> {
     pub coins: BTreeMap<Amount, Vec<C>>,
+}
+
+/// Represents all tiered keys belonging to a certain entity
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Keys<K> {
+    pub keys: BTreeMap<Amount, K>,
 }
 
 /// Request to blind sign a certain amount of coins
@@ -200,6 +207,13 @@ impl<C> Coins<C> {
             .iter()
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
     }
+
+    pub fn has_valid_tiers<K>(&self, keys: &Keys<K>) -> Result<(), InvalidAmountTierError> {
+        match self.coins.keys().find(|amt| !keys.keys.contains_key(amt)) {
+            Some(amt) => Err(InvalidAmountTierError(*amt)),
+            None => Ok(()),
+        }
+    }
 }
 
 impl Coins<()> {
@@ -302,5 +316,20 @@ impl FromStr for Amount {
         Ok(Amount {
             milli_sat: s.parse()?,
         })
+    }
+}
+
+impl<K> Keys<K> {
+    pub fn structural_eq<O>(&self, other: &Keys<O>) -> bool {
+        self.keys.keys().eq(other.keys.keys())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+pub struct InvalidAmountTierError(Amount);
+
+impl std::fmt::Display for InvalidAmountTierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Amount tier unknown to mint: {}", self.0)
     }
 }
