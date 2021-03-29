@@ -1,4 +1,4 @@
-use mint_api::Amount;
+use mint_api::{Amount, Keys};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -73,7 +73,7 @@ pub struct ClientOpts {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub mints: Vec<String>,
-    pub mint_pk: BTreeMap<Amount, AggregatePublicKey>,
+    pub mint_pk: Keys<AggregatePublicKey>,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {

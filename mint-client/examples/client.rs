@@ -140,8 +140,7 @@ async fn request_issuance(
     amount: Amount,
     mut rng: impl RngCore + CryptoRng,
 ) -> (TransactionId, IssuanceRequest) {
-    let (issuance_request, sig_req) =
-        IssuanceRequest::new(amount, &cfg.mint_pk.keys().copied().collect(), &mut rng);
+    let (issuance_request, sig_req) = IssuanceRequest::new(amount, &cfg.mint_pk, &mut rng);
     let req = PegInRequest {
         blind_tokens: sig_req,
         proof: (),
@@ -172,7 +171,7 @@ async fn request_reissuance(
 ) -> (TransactionId, IssuanceRequest) {
     let (issuance_req, sig_req) = IssuanceRequest::new(
         old_coins.amount(),
-        &cfg.mint_pk.keys().copied().collect(), // TODO: cache somewhere
+        &cfg.mint_pk, // TODO: cache somewhere
         &mut rng,
     );
 

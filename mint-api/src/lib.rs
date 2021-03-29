@@ -4,7 +4,7 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -217,9 +217,10 @@ impl<C> Coins<C> {
 }
 
 impl Coins<()> {
-    pub fn represent_amount(mut amount: Amount, tiers: &BTreeSet<Amount>) -> Coins<()> {
+    pub fn represent_amount<K>(mut amount: Amount, tiers: &Keys<K>) -> Coins<()> {
         let coins = tiers
-            .iter()
+            .keys
+            .keys()
             .rev()
             .map(|&amount_tier| {
                 let res = amount / amount_tier;
@@ -323,10 +324,23 @@ impl<K> Keys<K> {
     pub fn structural_eq<O>(&self, other: &Keys<O>) -> bool {
         self.keys.keys().eq(other.keys.keys())
     }
+
+    /// Returns a reference to the key of the specified tier
+    pub fn tier(&self, amount: &Amount) -> Result<&K, InvalidAmountTierError> {
+        self.keys.get(amount).ok_or(InvalidAmountTierError(*amount))
+    }
+}
+
+impl<K> FromIterator<(Amount, K)> for Keys<K> {
+    fn from_iter<T: IntoIterator<Item = (Amount, K)>>(iter: T) -> Self {
+        Keys {
+            keys: iter.into_iter().collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
-pub struct InvalidAmountTierError(Amount);
+pub struct InvalidAmountTierError(pub Amount);
 
 impl std::fmt::Display for InvalidAmountTierError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

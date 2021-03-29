@@ -1,6 +1,8 @@
-use mint_api::{Amount, Coin, CoinNonce, Coins, SigResponse, SignRequest, TransactionId};
+use mint_api::{
+    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+    TransactionId,
+};
 use rand::{CryptoRng, RngCore};
-use std::collections::{BTreeMap, BTreeSet};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
 use tracing::debug;
@@ -32,9 +34,9 @@ pub struct SpendableCoin {
 
 impl IssuanceRequest {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    pub fn new(
+    pub fn new<K>(
         amount: Amount,
-        amount_tiers: &BTreeSet<Amount>,
+        amount_tiers: &Keys<K>,
         mut rng: impl RngCore + CryptoRng,
     ) -> (IssuanceRequest, SignRequest) {
         let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
@@ -65,7 +67,7 @@ impl IssuanceRequest {
     pub fn finalize(
         &self,
         bsigs: SigResponse,
-        mint_pub_key: &BTreeMap<Amount, AggregatePublicKey>,
+        mint_pub_key: &Keys<AggregatePublicKey>,
     ) -> Result<Coins<SpendableCoin>, CoinFinalizationError> {
         if !self.coins.structural_eq(&bsigs.0) {
             return Err(CoinFinalizationError::WrongMintAnswer);
@@ -78,11 +80,7 @@ impl IssuanceRequest {
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);
                 let coin = Coin(coin_req.nonce.clone(), sig);
-                if coin.verify(
-                    *mint_pub_key
-                        .get(&amt)
-                        .ok_or(CoinFinalizationError::InvalidAmountTier(amt))?,
-                ) {
+                if coin.verify(*mint_pub_key.tier(&amt)?) {
                     let coin = SpendableCoin {
                         coin,
                         spend_key: coin_req.spend_key.clone(),
@@ -130,4 +128,10 @@ pub enum CoinFinalizationError {
     InvalidIssuanceId(TransactionId, TransactionId),
     #[error("Invalid amount tier {0:?}")]
     InvalidAmountTier(Amount),
+}
+
+impl From<InvalidAmountTierError> for CoinFinalizationError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        CoinFinalizationError::InvalidAmountTier(e.0)
+    }
 }
