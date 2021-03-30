@@ -37,6 +37,12 @@ pub async fn run_minimint(
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
     cfg: ServerConfig,
 ) {
+    assert_eq!(
+        cfg.peers.keys().max().copied(),
+        Some((cfg.peers.len() as u16) - 1)
+    );
+    assert_eq!(cfg.peers.keys().min().copied(), Some(0));
+
     let sled_db = sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap();
 
     let (client_req_sender, mut client_req_receiver) = channel(4);
@@ -49,21 +55,9 @@ pub async fn run_minimint(
     let mut connections = Connections::connect_to_all(&cfg).await;
 
     let pub_key_shares = cfg
-        .tbs_sks
-        .keys()
-        .map(|amount| {
-            let pub_keys = cfg
-                .peers
-                .values()
-                .map(|peer| {
-                    peer.tbs_pks
-                        .get(amount)
-                        .expect("Inconsistent amount tiers in config")
-                        .clone()
-                })
-                .collect();
-            (*amount, pub_keys)
-        })
+        .peers
+        .values()
+        .map(|peer| peer.tbs_pks.clone())
         .collect();
 
     let mint = fedimint::Mint::new(

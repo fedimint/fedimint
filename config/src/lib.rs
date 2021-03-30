@@ -1,7 +1,7 @@
-use mint_api::{Amount, Keys};
+use mint_api::Keys;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -28,7 +28,7 @@ pub struct ServerConfig {
     pub hbbft_sks: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKeyShare>,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
-    pub tbs_sks: HashMap<Amount, tbs::SecretKeyShare>,
+    pub tbs_sks: Keys<tbs::SecretKeyShare>,
 
     pub db_path: PathBuf,
 }
@@ -40,7 +40,7 @@ pub struct Peer {
     pub api_port: u16,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk: hbbft::crypto::PublicKey,
-    pub tbs_pks: HashMap<Amount, tbs::PublicKeyShare>,
+    pub tbs_pks: Keys<tbs::PublicKeyShare>,
 }
 
 #[cfg(feature = "server")]

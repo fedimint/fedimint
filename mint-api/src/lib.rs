@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::num::ParseIntError;
 use std::str::FromStr;
+use tbs::{PublicKeyShare, SecretKeyShare};
 
 pub mod util;
 
@@ -208,7 +209,7 @@ impl<C> Coins<C> {
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
     }
 
-    pub fn has_valid_tiers<K>(&self, keys: &Keys<K>) -> Result<(), InvalidAmountTierError> {
+    pub fn check_tiers<K>(&self, keys: &Keys<K>) -> Result<(), InvalidAmountTierError> {
         match self.coins.keys().find(|amt| !keys.keys.contains_key(amt)) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
             None => Ok(()),
@@ -328,6 +329,26 @@ impl<K> Keys<K> {
     /// Returns a reference to the key of the specified tier
     pub fn tier(&self, amount: &Amount) -> Result<&K, InvalidAmountTierError> {
         self.keys.get(amount).ok_or(InvalidAmountTierError(*amount))
+    }
+
+    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+        self.keys.keys()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &K)> {
+        self.keys.iter().map(|(amt, key)| (*amt, key))
+    }
+}
+
+impl Keys<SecretKeyShare> {
+    pub fn to_public(&self) -> Keys<PublicKeyShare> {
+        Keys {
+            keys: self
+                .keys
+                .iter()
+                .map(|(amt, key)| (*amt, key.to_pub_key_share()))
+                .collect(),
+        }
     }
 }
 

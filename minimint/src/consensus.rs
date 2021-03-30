@@ -12,7 +12,8 @@ use fedimint::{FediMint, MintError};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
-    Amount, BitcoinHash, PartialSigResponse, PegInRequest, ReissuanceRequest, TransactionId, TxId,
+    Amount, BitcoinHash, InvalidAmountTierError, PartialSigResponse, PegInRequest,
+    ReissuanceRequest, TransactionId, TxId,
 };
 use musig;
 use rand::{CryptoRng, RngCore};
@@ -71,45 +72,20 @@ where
                     return Err(ClientRequestError::InvalidTransactionSignature);
                 }
 
-                self.mint.validate(&self.db, &reissuance_req.coins)?;
-
-                // TODO: refactor tier checking
-                if let Some(&amt) = reissuance_req
-                    .coins
-                    .coin_amount_tiers()
-                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
-                {
-                    return Err(ClientRequestError::InvalidAmountTier(amt));
-                }
-
-                if let Some(&amt) = reissuance_req
+                reissuance_req.coins.check_tiers(&self.cfg.tbs_sks)?;
+                reissuance_req
                     .blind_tokens
                     .0
-                    .coin_amount_tiers()
-                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
-                {
-                    return Err(ClientRequestError::InvalidAmountTier(amt));
-                }
+                    .check_tiers(&self.cfg.tbs_sks)?;
+
+                self.mint.validate(&self.db, &reissuance_req.coins)?;
             }
             // FIXME: validate peg in/out proofs
             ClientRequest::PegIn(ref peg_in) => {
-                if let Some(&amt) = peg_in
-                    .blind_tokens
-                    .0
-                    .coin_amount_tiers()
-                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
-                {
-                    return Err(ClientRequestError::InvalidAmountTier(amt));
-                }
+                peg_in.blind_tokens.0.check_tiers(&self.cfg.tbs_sks)?;
             }
             ClientRequest::PegOut(ref peg_out) => {
-                if let Some(&amt) = peg_out
-                    .coins
-                    .coin_amount_tiers()
-                    .find(|&tier| !self.cfg.tbs_sks.contains_key(tier))
-                {
-                    return Err(ClientRequestError::InvalidAmountTier(amt));
-                }
+                peg_out.coins.check_tiers(&self.cfg.tbs_sks)?;
             }
         }
 
@@ -435,5 +411,11 @@ pub enum ClientRequestError {
 impl From<MintError> for ClientRequestError {
     fn from(e: MintError) -> Self {
         ClientRequestError::DeniedByMint(e)
+    }
+}
+
+impl From<InvalidAmountTierError> for ClientRequestError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        ClientRequestError::InvalidAmountTier(e.0)
     }
 }

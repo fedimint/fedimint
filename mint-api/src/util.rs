@@ -1,7 +1,7 @@
 use crate::Amount;
 use std::marker::PhantomData;
 
-pub struct CoinMultiZip<'a, I, C>
+pub struct TieredMultiZip<'a, I, C>
 where
     I: 'a,
 {
@@ -9,20 +9,20 @@ where
     _pd: PhantomData<&'a C>,
 }
 
-impl<'a, I, C> CoinMultiZip<'a, I, C> {
+impl<'a, I, C> TieredMultiZip<'a, I, C> {
     /// Creates a new MultiZip Iterator from `Coins` iterators. These have to be checked for
     /// structural equality! There also has to be at least one iterator in the `iter` vector.
     pub fn new(iters: Vec<I>) -> Self {
         assert!(iters.len() >= 1);
 
-        CoinMultiZip {
+        TieredMultiZip {
             iters,
             _pd: Default::default(),
         }
     }
 }
 
-impl<'a, I, C> Iterator for CoinMultiZip<'a, I, C>
+impl<'a, I, C> Iterator for TieredMultiZip<'a, I, C>
 where
     I: Iterator<Item = (Amount, C)>,
 {

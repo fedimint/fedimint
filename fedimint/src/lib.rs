@@ -1,8 +1,11 @@
 use database::batch::{Batch, BatchItem, Element};
 use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
-use mint_api::util::CoinMultiZip;
-use mint_api::{Amount, Coin, CoinNonce, Coins, PartialSigResponse, SigResponse, SignRequest};
-use std::collections::{HashMap, HashSet};
+use mint_api::util::TieredMultiZip;
+use mint_api::{
+    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PartialSigResponse, SigResponse,
+    SignRequest,
+};
+use std::collections::HashMap;
 use std::hash::Hash;
 use tbs::{
     combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
@@ -57,8 +60,8 @@ pub trait FediMint {
 #[derive(Debug)]
 pub struct Mint {
     key_idx: usize,
-    sec_key: HashMap<Amount, SecretKeyShare>,
-    pub_key_shares: HashMap<Amount, Vec<PublicKeyShare>>,
+    sec_key: Keys<SecretKeyShare>,
+    pub_key_shares: Vec<Keys<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
     threshold: usize,
 }
@@ -67,47 +70,36 @@ impl Mint {
     /// Constructs a new ming
     ///
     /// # Panics
+    /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
     pub fn new(
-        sec_key: HashMap<Amount, SecretKeyShare>,
-        pub_keys: HashMap<Amount, Vec<PublicKeyShare>>,
+        sec_key: Keys<SecretKeyShare>,
+        pub_keys: Vec<Keys<PublicKeyShare>>,
         threshold: usize,
     ) -> Mint {
+        assert!(sec_key.tiers().count() > 0);
+
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
         // consistent.
-        assert_eq!(
-            sec_key.keys().collect::<HashSet<_>>(),
-            pub_keys.keys().collect::<HashSet<_>>()
-        );
+        assert!(pub_keys.iter().all(|pk| pk.structural_eq(&sec_key)));
 
-        // Also make sure that every peer has a key for every tier
-        let reference_num_peers = pub_keys
-            .values()
-            .next()
-            .expect("Needs at least one amount tier")
-            .len();
-        assert!(pub_keys
-            .values()
-            .all(|peers| peers.len() == reference_num_peers));
+        let ref_pub_key = sec_key.to_public();
 
         // Find our key index and make sure we know the private key for all our public key shares
-        let (ref_amt, ref_keys) = pub_keys
+        let our_idx = pub_keys
             .iter()
-            .next()
-            .expect("Needs at least one amount tier");
-        let our_idx = ref_keys
-            .iter()
-            .position(|pk| pk == &sec_key[ref_amt].to_pub_key_share())
+            .position(|pk| pk == &ref_pub_key)
             .expect("Own key not found among pub keys.");
-        assert!(pub_keys
-            .iter()
-            .all(|(amt, pub_keys)| pub_keys[our_idx] == sec_key[amt].to_pub_key_share()));
 
-        let aggregate_pub_keys = pub_keys
-            .iter()
-            .map(|(amt, pk)| (*amt, pk.aggregate(threshold)))
-            .collect();
+        let aggregate_pub_keys =
+            TieredMultiZip::new(pub_keys.iter().map(|keys| keys.iter()).collect())
+                .map(|(amt, keys)| {
+                    // TODO: avoid this through better aggregation API allowing references or
+                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
+                    (amt, keys.aggregate(threshold))
+                })
+                .collect();
 
         Mint {
             key_idx: our_idx,
@@ -121,11 +113,8 @@ impl Mint {
 
 impl FediMint for Mint {
     fn sign(&self, req: SignRequest) -> Result<PartialSigResponse, MintError> {
-        let coins = req.0.map(|amt, msg| {
-            let sec_key = self
-                .sec_key
-                .get(&amt)
-                .ok_or(MintError::InvalidAmountTier(amt))?;
+        let coins = req.0.map(|amt, msg| -> Result<_, InvalidAmountTierError> {
+            let sec_key = self.sec_key.tier(&amt)?;
             let bsig = sign_blinded_msg(msg, *sec_key);
             Ok((msg, bsig))
         })?;
@@ -185,7 +174,7 @@ impl FediMint for Mint {
             partial_sigs.len()
         );
 
-        let bsigs = CoinMultiZip::new(
+        let bsigs = TieredMultiZip::new(
             partial_sigs
                 .iter()
                 .map(|(_peer, sig_share)| sig_share.0.iter())
@@ -200,10 +189,18 @@ impl FediMint for Mint {
                 .into_iter()
                 .zip(peer_ids)
                 .filter_map(|((msg, sig), peer)| {
+                    let amount_key = match self.pub_key_shares[peer].tier(&amt) {
+                        Ok(key) => key,
+                        Err(_) => {
+                            peer_errors.push((peer, PeerErrorType::InvalidAmountTier));
+                            return None;
+                        }
+                    };
+
                     if msg != ref_msg {
                         peer_errors.push((peer, PeerErrorType::DifferentNonce));
                         None
-                    } else if !verify_blind_share(*msg, *sig, self.pub_key_shares[&amt][peer]) {
+                    } else if !verify_blind_share(*msg, *sig, *amount_key) {
                         peer_errors.push((peer, PeerErrorType::InvalidSignature));
                         None
                     } else {
@@ -213,10 +210,7 @@ impl FediMint for Mint {
                 .collect::<Vec<_>>();
 
             // Check that there are still sufficient
-            let min_shares = min_shares(
-                self.pub_key_shares.values().next().unwrap().len(), // get peer count from first amount tier
-                self.threshold,
-            );
+            let min_shares = min_shares(self.pub_key_shares.len(), self.threshold);
             if valid_sigs.len() < min_shares {
                 return Err(CombineError::TooFewValidShares(
                     valid_sigs.len(),
@@ -341,12 +335,18 @@ pub enum MintError {
     InvalidSignature,
 }
 
+impl From<InvalidAmountTierError> for MintError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        MintError::InvalidAmountTier(e.0)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{CombineError, FediMint, Mint, MintError, MintShareErrors, PeerErrorType};
     use database::batch::Batch;
     use database::Database;
-    use mint_api::{Amount, Coin, Coins, PartialSigResponse, SigResponse, SignRequest};
+    use mint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
@@ -360,9 +360,10 @@ mod test {
             .map(|sk| {
                 Mint::new(
                     [(Amount::from_sat(1), sk)].iter().cloned().collect(),
-                    [(Amount::from_sat(1), pks.clone())]
-                        .iter()
-                        .cloned()
+                    pks.iter()
+                        .map(|pk| Keys {
+                            keys: vec![(Amount::from_sat(1), *pk)].into_iter().collect(),
+                        })
                         .collect(),
                     THRESHOLD,
                 )
@@ -493,8 +494,11 @@ mod test {
 
         Mint::new(
             vec![(Amount::from_sat(1), sks[0])].into_iter().collect(),
-            vec![(Amount::from_sat(1), pks[1..].to_vec())]
-                .into_iter()
+            pks[1..]
+                .iter()
+                .map(|pk| Keys {
+                    keys: vec![(Amount::from_sat(1), *pk)].into_iter().collect(),
+                })
                 .collect(),
             THRESHOLD,
         );
