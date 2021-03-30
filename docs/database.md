@@ -18,3 +18,4 @@ The Database is split into different key spaces based on prefixing that can be u
 | Consensus Items      | 0x01   | issuance_request_id (8 bytes, 0 if no issuance involved), serialized `ConsensusItem` (variable) | none                            |
 | Partial Signature    | 0x02   | issuance_request_id (8 byte), peer_id (8 byte)                                                  | serialized `PartialSigResponse` |
 | Finalized Signatures | 0x03   | issuance_request_id (8 bytes)                                                                   | serialized `SigResponse`        |
+| Used Coins           | 0x10   | coin nonce (unknown bytes, bincode magic currently)                                             | none                            |

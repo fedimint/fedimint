@@ -274,7 +274,7 @@ impl FediMint for Mint {
     }
 }
 
-const DB_PREFIX_COIN_NONCE: u8 = 10;
+const DB_PREFIX_COIN_NONCE: u8 = 0x10;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct NonceKey(CoinNonce);
