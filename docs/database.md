@@ -9,7 +9,7 @@ be used:
 
 In practice we use [sled](https://docs.rs/sled/) as it is a native rust database and seems sufficiently performant.
 
-## Layout
+## Server DB Layout
 The Database is split into different key spaces based on prefixing that can be understood as different tables (each
 "table's" content can be retrieved using prefix search). The following "tables" exist:
 
@@ -19,3 +19,10 @@ The Database is split into different key spaces based on prefixing that can be u
 | Partial Signature    | 0x02   | issuance_request_id (8 byte), peer_id (8 byte)                                                  | serialized `PartialSigResponse` |
 | Finalized Signatures | 0x03   | issuance_request_id (8 bytes)                                                                   | serialized `SigResponse`        |
 | Used Coins           | 0x10   | coin nonce (unknown bytes, bincode magic currently)                                             | none                            |
+
+## Client DB Layout
+
+| Name      | Prefix | Key                                | Value                        |
+|-----------|--------|------------------------------------|------------------------------|
+| Coins     | 0x20   | amount (8 bytes), nonce (32 bytes) | serialized `SpendableCoin`   |
+| Issuances | 0x21   | issuance_id (32 bytes)             | serialized `IssuanceRequest` |
