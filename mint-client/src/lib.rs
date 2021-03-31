@@ -219,6 +219,20 @@ where
             })
             .collect()
     }
+
+    pub fn spend_coins(&self, coins: &Coins<SpendableCoin>) {
+        let batch = coins
+            .iter()
+            .map(|(amount, coin)| {
+                BatchItem::DeleteElement(Box::new(CoinKey {
+                    amount,
+                    nonce: coin.coin.0.clone(),
+                }))
+            })
+            .collect::<Vec<_>>();
+
+        self.db.apply_batch(&batch).expect("DB error");
+    }
 }
 
 impl IssuanceRequest {

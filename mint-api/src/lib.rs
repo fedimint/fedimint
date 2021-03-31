@@ -204,7 +204,7 @@ impl<C> Coins<C> {
         tier_eq && coins_per_tier_eq
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Amount, &C)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &C)> + DoubleEndedIterator {
         self.coins
             .iter()
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
@@ -214,6 +214,31 @@ impl<C> Coins<C> {
         match self.coins.keys().find(|amt| !keys.keys.contains_key(amt)) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
             None => Ok(()),
+        }
+    }
+}
+impl<C> Coins<C>
+where
+    C: Clone,
+{
+    pub fn select_coins(&self, mut amount: Amount) -> Option<Coins<C>> {
+        let coins = self
+            .iter()
+            .rev()
+            .filter_map(|(amt, coin)| {
+                if amount >= amt {
+                    amount -= amt;
+                    Some((amt, (*coin).clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Coins<C>>();
+
+        if amount == Amount::from_msat(0) {
+            Some(coins)
+        } else {
+            None
         }
     }
 }
@@ -309,6 +334,12 @@ impl std::ops::Div for Amount {
 
     fn div(self, rhs: Self) -> Self::Output {
         self.milli_sat / rhs.milli_sat
+    }
+}
+
+impl std::ops::SubAssign for Amount {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.milli_sat -= rhs.milli_sat
     }
 }
 

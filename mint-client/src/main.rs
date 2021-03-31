@@ -4,7 +4,7 @@ use mint_api::{Amount, Coins};
 use mint_client::{MintClient, SpendableCoin};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use tracing::info;
+use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
 #[derive(StructOpt)]
@@ -63,8 +63,16 @@ async fn main() {
         Command::Reissue { .. } => {
             unimplemented!()
         }
-        Command::Spend { .. } => {
-            unimplemented!()
+        Command::Spend { amount } => {
+            match client.coins().select_coins(amount) {
+                Some(outgoing_coins) => {
+                    client.spend_coins(&outgoing_coins);
+                    println!("{}", serialize_coins(&outgoing_coins));
+                }
+                None => {
+                    error!("Not enough funds or in wrong denominations!")
+                }
+            };
         }
         Command::Fetch => {
             for id in client.fetch_all(&mut rng).await.unwrap() {
