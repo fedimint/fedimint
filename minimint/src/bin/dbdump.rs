@@ -1,7 +1,7 @@
-use database::{DatabaseKeyPrefix, PrefixSearchable};
+use database::{BincodeSerialized, DatabaseKeyPrefix, PrefixSearchable};
 use minimint::consensus::ConsensusItem;
 use minimint::database::{
-    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, BincodeSerialized, FinalizedSignatureKey,
+    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, FinalizedSignatureKey,
     PartialSignatureKey, DB_PREFIX_FINALIZED_SIG,
 };
 use mint_api::{PartialSigResponse, SigResponse};

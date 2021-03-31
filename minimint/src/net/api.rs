@@ -1,6 +1,6 @@
-use crate::database::{BincodeSerialized, FinalizedSignatureKey};
+use crate::database::FinalizedSignatureKey;
 use config::ServerConfig;
-use database::{Database, DatabaseKeyPrefix, DatabaseValue};
+use database::{BincodeSerialized, Database, DatabaseKeyPrefix, DatabaseValue};
 use mint_api::{PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse, TransactionId};
 use serde::{Deserialize, Serialize};
 use sled::Event;

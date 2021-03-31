@@ -1,14 +1,31 @@
-use mint_api::{
-    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, SigResponse, SignRequest,
-    TransactionId,
+use bitcoin_hashes::Hash as BitcoinHash;
+use config::ClientConfig;
+use database::{
+    BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError, PrefixSearchable,
 };
+use mint_api::{
+    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, SigResponse,
+    SignRequest, TransactionId, TxId,
+};
+use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
 use tracing::debug;
 
+pub const DB_PREFIX_ISSUANCE: u8 = 0x21;
+
+pub struct MintClient<D> {
+    cfg: ClientConfig,
+    db: D,
+    http_client: reqwest::Client, // TODO: use trait object
+}
+
 /// Client side representation of one coin in an issuance request that keeps all necessary
 /// information to generate one spendable coin once the blind signature arrives.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: musig::SecKey,
@@ -20,6 +37,7 @@ pub struct CoinRequest {
 
 /// Client side representation of an issuance request that keeps all necessary information to
 /// generate spendable coins once the blind signatures arrive.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct IssuanceRequest {
     /// All coins in this request
     coins: Coins<CoinRequest>,
@@ -27,9 +45,82 @@ pub struct IssuanceRequest {
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
 /// belonging to the nonce.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SpendableCoin {
     pub coin: Coin,
     pub spend_key: musig::SecKey,
+}
+
+#[derive(Debug, Clone)]
+pub struct IssuanceKey {
+    issuance_id: TransactionId,
+}
+
+impl<D> MintClient<D>
+where
+    D: Database + PrefixSearchable + Sync,
+{
+    pub fn new(cfg: ClientConfig, db: D) -> Self {
+        MintClient {
+            cfg,
+            db,
+            http_client: Default::default(),
+        }
+    }
+
+    pub async fn peg_in<R: RngCore + CryptoRng>(
+        &self,
+        peg_in_proof: Amount,
+        mut rng: R,
+    ) -> Result<TransactionId, ClientError> {
+        // TODO: use real peg-in proof
+        let amount = peg_in_proof;
+        let (issuance_request, sig_req) = IssuanceRequest::new(amount, &self.cfg.mint_pk, &mut rng);
+        let req = PegInRequest {
+            blind_tokens: sig_req,
+            proof: (),
+        };
+
+        let req_id = req.id();
+        let issuance_key = IssuanceKey {
+            issuance_id: req_id,
+        };
+        let issuance_value = BincodeSerialized::borrowed(&issuance_request);
+        self.db
+            .insert_entry(&issuance_key, &issuance_value)
+            .expect("DB error");
+
+        // Try all mints in random order, break early if enough could be reached
+        let mut successes: usize = 0;
+        for url in self
+            .cfg
+            .mints
+            .choose_multiple(&mut rng, self.cfg.mints.len())
+        {
+            let res = self
+                .http_client
+                .put(&format!("{}/issuance/pegin", url))
+                .json(&req)
+                .send()
+                .await
+                .expect("API error");
+
+            if res.status() == StatusCode::OK {
+                successes += 1;
+            }
+
+            if successes >= 2 {
+                // TODO: make this max-faulty +1
+                break;
+            }
+        }
+
+        if successes == 0 {
+            Err(ClientError::MintError)
+        } else {
+            Ok(req_id)
+        }
+    }
 }
 
 impl IssuanceRequest {
@@ -130,8 +221,37 @@ pub enum CoinFinalizationError {
     InvalidAmountTier(Amount),
 }
 
+#[derive(Error, Debug)]
+pub enum ClientError {
+    #[error("All mints responded with an error")]
+    MintError,
+}
+
 impl From<InvalidAmountTierError> for CoinFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
         CoinFinalizationError::InvalidAmountTier(e.0)
+    }
+}
+
+impl DatabaseKeyPrefix for IssuanceKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(33);
+        bytes.push(DB_PREFIX_ISSUANCE);
+        bytes.extend_from_slice(&self.issuance_id[..]);
+        bytes
+    }
+}
+
+impl DatabaseKey for IssuanceKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() != 33 {
+            Err(DecodingError("IssuanceKey: expected 33 bytes".into()))
+        } else if data[0] != DB_PREFIX_ISSUANCE {
+            Err(DecodingError("IssuanceKey: wrong prefix".into()))
+        } else {
+            Ok(IssuanceKey {
+                issuance_id: TransactionId::from_slice(&data[1..]).unwrap(),
+            })
+        }
     }
 }

@@ -1,13 +1,13 @@
 use crate::database::{
-    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, BincodeSerialized, ConsensusItemKeyPrefix,
-    DummyValue, FinalizedSignatureKey, PartialSignatureKey,
+    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, ConsensusItemKeyPrefix, DummyValue,
+    FinalizedSignatureKey, PartialSignatureKey,
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
-use database::{BatchDb, Database, DatabaseError, PrefixSearchable};
+use database::{BatchDb, BincodeSerialized, Database, DatabaseError, PrefixSearchable};
 use fedimint::{FediMint, MintError};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;

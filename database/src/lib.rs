@@ -1,4 +1,7 @@
 use crate::batch::BatchItem;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
@@ -76,6 +79,9 @@ where
     _pd: PhantomData<(K, V)>,
 }
 
+#[derive(Debug)]
+pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
+
 impl<Iter, Bytes, IterErr, K, V> Iterator for DbIter<Iter, Bytes, IterErr, K, V>
 where
     Iter: Iterator<Item = Result<(Bytes, Bytes), IterErr>>,
@@ -140,6 +146,38 @@ pub enum DatabaseError {
 impl From<DecodingError> for DatabaseError {
     fn from(e: DecodingError) -> Self {
         DatabaseError::DecodingError(e)
+    }
+}
+
+impl<'a, T: Clone> BincodeSerialized<'a, T> {
+    pub fn borrowed(obj: &'a T) -> BincodeSerialized<'a, T> {
+        BincodeSerialized(Cow::Borrowed(obj))
+    }
+
+    pub fn owned(obj: T) -> BincodeSerialized<'static, T> {
+        BincodeSerialized(Cow::Owned(obj))
+    }
+
+    pub fn into_owned(self) -> T {
+        self.0.into_owned()
+    }
+}
+
+impl<'a, T: Serialize + Debug + Clone> SerializableDatabaseValue for BincodeSerialized<'a, T> {
+    fn to_bytes(&self) -> Vec<u8> {
+        bincode::serialize(&self.0)
+            .expect("Serialization error")
+            .into()
+    }
+}
+
+impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
+    for BincodeSerialized<'a, T>
+{
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        Ok(BincodeSerialized(
+            bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))?,
+        ))
     }
 }
 
