@@ -69,6 +69,9 @@ pub struct CoinKey {
     nonce: CoinNonce,
 }
 
+#[derive(Debug, Clone)]
+pub struct CoinKeyPrefix;
+
 impl<D> MintClient<D>
 where
     D: Database + PrefixSearchable + BatchDb + Sync,
@@ -205,6 +208,16 @@ where
         self.db.apply_batch(&batch).expect("DB error");
 
         Ok(ids)
+    }
+
+    pub fn coins(&self) -> Coins<SpendableCoin> {
+        self.db
+            .find_by_prefix::<_, CoinKey, BincodeSerialized<SpendableCoin>>(&CoinKeyPrefix)
+            .map(|res| {
+                let (key, value) = res.expect("DB error");
+                (key.amount, value.into_owned())
+            })
+            .collect()
     }
 }
 
@@ -357,7 +370,7 @@ impl DatabaseKeyPrefix for IssuanceKeyPrefix {
 
 impl DatabaseKeyPrefix for CoinKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(41);
+        let mut bytes = Vec::with_capacity(9);
         bytes.push(DB_PREFIX_COIN);
         bytes.extend_from_slice(&self.amount.milli_sat.to_be_bytes()[..]);
         bytes.extend_from_slice(&self.nonce.to_bytes());
@@ -368,8 +381,8 @@ impl DatabaseKeyPrefix for CoinKey {
 
 impl DatabaseKey for CoinKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 41 {
-            Err(DecodingError("CoinKey: expected 33 bytes".into()))
+        if data.len() < 9 {
+            Err(DecodingError("CoinKey: expected at least 9 bytes".into()))
         } else if data[0] != DB_PREFIX_COIN {
             Err(DecodingError("CoinKey: wrong prefix".into()))
         } else {
@@ -383,5 +396,11 @@ impl DatabaseKey for CoinKey {
 
             Ok(CoinKey { amount, nonce })
         }
+    }
+}
+
+impl DatabaseKeyPrefix for CoinKeyPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_COIN]
     }
 }

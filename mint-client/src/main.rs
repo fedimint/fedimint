@@ -27,6 +27,7 @@ enum Command {
         amount: Amount,
     },
     Fetch,
+    Info,
 }
 
 #[tokio::main]
@@ -68,6 +69,17 @@ async fn main() {
         Command::Fetch => {
             for id in client.fetch_all(&mut rng).await.unwrap() {
                 info!("Fetched coins from issuance {}", id.to_hex());
+            }
+        }
+        Command::Info => {
+            let coins = client.coins();
+            info!(
+                "We own {} coins with a total value of {}",
+                coins.coin_count(),
+                coins.amount()
+            );
+            for (amount, coins) in coins.coins {
+                info!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }
     }
