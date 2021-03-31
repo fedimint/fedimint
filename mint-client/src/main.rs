@@ -16,17 +16,20 @@ struct Options {
 
 #[derive(StructOpt)]
 enum Command {
-    PegIn {
-        amount: Amount,
-    },
+    #[structopt(
+        about = "Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)"
+    )]
+    PegIn { amount: Amount },
+    #[structopt(about = "Reissue tokens received from a third party to avoid double spends")]
     Reissue {
         #[structopt(parse(from_str = parse_coins))]
         coins: Coins<SpendableCoin>,
     },
-    Spend {
-        amount: Amount,
-    },
+    #[structopt(about = "Prepare coins to send to a third party as a payment")]
+    Spend { amount: Amount },
+    #[structopt(about = "Fetch (re-)issued coins and finalize issuance process")]
     Fetch,
+    #[structopt(about = "Display wallet info (holdings, tiers)")]
     Info,
 }
 
@@ -60,8 +63,13 @@ async fn main() {
                 id.to_hex()
             );
         }
-        Command::Reissue { .. } => {
-            unimplemented!()
+        Command::Reissue { coins } => {
+            info!("Starting reissuance transaction for {}", coins.amount());
+            let id = client.reissue(coins, &mut rng).await.unwrap();
+            info!(
+                "Started reissuance {}, please fetch the result later",
+                id.to_hex()
+            );
         }
         Command::Spend { amount } => {
             match client.coins().select_coins(amount) {

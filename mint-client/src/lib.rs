@@ -7,8 +7,8 @@ use database::{
 };
 use futures::future::JoinAll;
 use mint_api::{
-    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, SigResponse,
-    SignRequest, TransactionId, TxId,
+    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, ReissuanceRequest,
+    SigResponse, SignRequest, TransactionId, TxId,
 };
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
@@ -232,6 +232,79 @@ where
             .collect::<Vec<_>>();
 
         self.db.apply_batch(&batch).expect("DB error");
+    }
+
+    pub async fn reissue<R: RngCore + CryptoRng>(
+        &self,
+        coins: Coins<SpendableCoin>,
+        mut rng: R,
+    ) -> Result<TransactionId, ClientError> {
+        let (issuance_request, sig_req) = IssuanceRequest::new(
+            coins.amount(),
+            &self.cfg.mint_pk, // TODO: cache somewhere
+            &mut rng,
+        );
+
+        let (spend_keys, coins): (Vec<_>, Coins<_>) = coins
+            .into_iter()
+            .map(|(amt, sc)| (sc.spend_key, (amt, sc.coin)))
+            .unzip();
+
+        let mut digest = bitcoin_hashes::sha256::Hash::engine();
+        bincode::serialize_into(&mut digest, &coins).unwrap();
+        bincode::serialize_into(&mut digest, &sig_req).unwrap();
+        let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
+        let sig = musig::sign(
+            bitcoin_hashes::sha256::Hash::from_engine(digest).into_inner(),
+            spend_keys.iter(),
+            rng_adapt,
+        );
+
+        let req = ReissuanceRequest {
+            coins,
+            blind_tokens: sig_req,
+            sig,
+        };
+
+        let req_id = req.id();
+        let issuance_key = IssuanceKey {
+            issuance_id: req_id,
+        };
+        let issuance_value = BincodeSerialized::borrowed(&issuance_request);
+        self.db
+            .insert_entry(&issuance_key, &issuance_value)
+            .expect("DB error");
+
+        // Try all mints in random order, break early if enough could be reached
+        let mut successes: usize = 0;
+        for url in self
+            .cfg
+            .mints
+            .choose_multiple(&mut rng, self.cfg.mints.len())
+        {
+            let res = self
+                .http_client
+                .put(&format!("{}/issuance/reissue", url))
+                .json(&req)
+                .send()
+                .await
+                .expect("API error");
+
+            if res.status() == StatusCode::OK {
+                successes += 1;
+            }
+
+            if successes >= 2 {
+                // TODO: make this max-faulty +1
+                break;
+            }
+        }
+
+        if successes == 0 {
+            Err(ClientError::MintError)
+        } else {
+            Ok(req_id)
+        }
     }
 }
 
