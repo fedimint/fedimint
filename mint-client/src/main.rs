@@ -26,6 +26,7 @@ enum Command {
     Spend {
         amount: Amount,
     },
+    Fetch,
 }
 
 #[tokio::main]
@@ -63,6 +64,11 @@ async fn main() {
         }
         Command::Spend { .. } => {
             unimplemented!()
+        }
+        Command::Fetch => {
+            for id in client.fetch_all(&mut rng).await.unwrap() {
+                info!("Fetched coins from issuance {}", id.to_hex());
+            }
         }
     }
 }

@@ -145,6 +145,7 @@ impl CoinNonce {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Self {
+        // FIXME: handle errors or the client can be crashed
         bincode::deserialize(bytes).unwrap()
     }
 

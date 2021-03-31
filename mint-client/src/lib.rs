@@ -1,8 +1,11 @@
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
+use database::batch::{BatchItem, Element};
 use database::{
-    BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError, PrefixSearchable,
+    BatchDb, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError,
+    PrefixSearchable,
 };
+use futures::future::JoinAll;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, SigResponse,
     SignRequest, TransactionId, TxId,
@@ -15,6 +18,7 @@ use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, 
 use thiserror::Error;
 use tracing::debug;
 
+pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_ISSUANCE: u8 = 0x21;
 
 pub struct MintClient<D> {
@@ -56,9 +60,18 @@ pub struct IssuanceKey {
     issuance_id: TransactionId,
 }
 
+#[derive(Debug, Clone)]
+pub struct IssuanceKeyPrefix;
+
+#[derive(Debug, Clone)]
+pub struct CoinKey {
+    amount: Amount,
+    nonce: CoinNonce,
+}
+
 impl<D> MintClient<D>
 where
-    D: Database + PrefixSearchable + Sync,
+    D: Database + PrefixSearchable + BatchDb + Sync,
 {
     pub fn new(cfg: ClientConfig, db: D) -> Self {
         MintClient {
@@ -120,6 +133,78 @@ where
         } else {
             Ok(req_id)
         }
+    }
+
+    pub async fn fetch_all<R: RngCore + CryptoRng>(
+        &self,
+        mut rng: R,
+    ) -> Result<Vec<TransactionId>, ClientError> {
+        let chosen_mint = self
+            .cfg
+            .mints
+            .choose(&mut rng)
+            .expect("We need at least one mint");
+
+        let fetched = self
+            .db
+            .find_by_prefix::<_, IssuanceKey, BincodeSerialized<IssuanceRequest>>(
+                &IssuanceKeyPrefix,
+            )
+            .map(|res| {
+                let (id, issuance) = res.expect("DB error");
+                let id = id.issuance_id;
+                let issuance = issuance.into_owned();
+
+                async move {
+                    let url = format!("{}/issuance/{}", chosen_mint, id);
+                    let response = self
+                        .http_client
+                        .get(&url)
+                        .send()
+                        .await
+                        .map_err(|_| ClientError::MintError);
+
+                    let signature: SigResponse = match response {
+                        Ok(response) if response.status() == StatusCode::OK => {
+                            response.json().await.map_err(|_| ClientError::MintError)
+                        }
+                        _ => Err(ClientError::MintError),
+                    }?;
+
+                    Ok::<_, ClientError>((id, issuance.finalize(signature, &self.cfg.mint_pk)?))
+                }
+            })
+            .collect::<JoinAll<_>>()
+            .await
+            .into_iter()
+            .collect::<Result<Vec<(TransactionId, Coins<SpendableCoin>)>, ClientError>>()?;
+
+        let ids = fetched.iter().map(|(id, _)| *id).collect::<Vec<_>>();
+
+        let batch = fetched
+            .into_iter()
+            .flat_map(|(id, coins)| {
+                coins
+                    .into_iter()
+                    .map(|(amount, coin): (Amount, SpendableCoin)| {
+                        let key = CoinKey {
+                            amount,
+                            nonce: coin.coin.0.clone(),
+                        };
+                        let value = BincodeSerialized::owned(coin);
+                        BatchItem::InsertNewElement(Element {
+                            key: Box::new(key),
+                            value: Box::new(value),
+                        })
+                    })
+                    .chain(std::iter::once(BatchItem::DeleteElement(Box::new(
+                        IssuanceKey { issuance_id: id },
+                    ))))
+            })
+            .collect::<Vec<_>>();
+        self.db.apply_batch(&batch).expect("DB error");
+
+        Ok(ids)
     }
 }
 
@@ -225,11 +310,19 @@ pub enum CoinFinalizationError {
 pub enum ClientError {
     #[error("All mints responded with an error")]
     MintError,
+    #[error("Could not finalize issuance request: {0}")]
+    FinalizationError(CoinFinalizationError),
 }
 
 impl From<InvalidAmountTierError> for CoinFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
         CoinFinalizationError::InvalidAmountTier(e.0)
+    }
+}
+
+impl From<CoinFinalizationError> for ClientError {
+    fn from(e: CoinFinalizationError) -> Self {
+        ClientError::FinalizationError(e)
     }
 }
 
@@ -252,6 +345,43 @@ impl DatabaseKey for IssuanceKey {
             Ok(IssuanceKey {
                 issuance_id: TransactionId::from_slice(&data[1..]).unwrap(),
             })
+        }
+    }
+}
+
+impl DatabaseKeyPrefix for IssuanceKeyPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_ISSUANCE]
+    }
+}
+
+impl DatabaseKeyPrefix for CoinKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(41);
+        bytes.push(DB_PREFIX_COIN);
+        bytes.extend_from_slice(&self.amount.milli_sat.to_be_bytes()[..]);
+        bytes.extend_from_slice(&self.nonce.to_bytes());
+
+        bytes
+    }
+}
+
+impl DatabaseKey for CoinKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() != 41 {
+            Err(DecodingError("CoinKey: expected 33 bytes".into()))
+        } else if data[0] != DB_PREFIX_COIN {
+            Err(DecodingError("CoinKey: wrong prefix".into()))
+        } else {
+            let mut amount_bytes = [0u8; 8];
+            amount_bytes.copy_from_slice(&data[1..9]);
+            let amount = Amount {
+                milli_sat: u64::from_be_bytes(amount_bytes),
+            };
+
+            let nonce = CoinNonce::from_bytes(&data[9..]);
+
+            Ok(CoinKey { amount, nonce })
         }
     }
 }
