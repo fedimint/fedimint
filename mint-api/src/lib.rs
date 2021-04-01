@@ -1,4 +1,4 @@
-#![feature(type_alias_impl_trait)]
+#![feature(min_type_alias_impl_trait)]
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;

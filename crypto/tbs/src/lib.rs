@@ -1,4 +1,3 @@
-#![feature(iterator_fold_self)]
 #![feature(test)]
 
 //! # Threshold Blind Signatures

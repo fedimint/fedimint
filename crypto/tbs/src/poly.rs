@@ -65,14 +65,14 @@ where
                     None
                 }
             })
-            .fold_first(|a, b| a * b)
+            .reduce(|a, b| a * b)
             .expect("Elements may not be empty!")
     };
 
     elements
         .enumerate()
         .map(|(idx, (_, y))| y * lagrange_coefficient(idx))
-        .fold_first(|a, b| a + b)
+        .reduce(|a, b| a + b)
         .expect("Elements may not be empty!")
 }
 

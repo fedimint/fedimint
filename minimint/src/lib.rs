@@ -1,5 +1,4 @@
 #![feature(async_closure)]
-#![feature(iterator_fold_self)]
 
 use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;

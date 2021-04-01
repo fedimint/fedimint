@@ -3,8 +3,8 @@
 This is an experimental implementation of a federated chaumian bank.
 
 ## Running it locally
-I'm currently using rust `nightly-2021-01-15-x86_64-unknown-linux-gnu` for development and some breakage is known in
-newer nightly rust versions.
+I'm currently using rust `rustc 1.53.0-nightly (07e0e2ec2 2021-03-24)` for development. I'll try to keep it up to date
+and eventually get off nightly.
 
 ### Generating config
 You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can

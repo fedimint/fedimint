@@ -1,5 +1,3 @@
-#![feature(iterator_fold_self)]
-
 use secp256kfun::marker::{ChangeMark, NonZero, Normal, Public, Secret};
 use secp256kfun::op::{point_add, scalar_add, scalar_mul};
 use secp256kfun::rand_core::{CryptoRng, RngCore};
@@ -63,7 +61,7 @@ pub fn sign<'a>(
 
                 scalar_mul(&scalar_mul(&sk.0, &c), &msg_hash)
             })
-            .fold_first(|a, b| {
+            .reduce(|a, b| {
                 NonZero::change_mark(scalar_add::<NonZero, NonZero, Secret, Secret>(&a, &b))
                     .unwrap()
             })
