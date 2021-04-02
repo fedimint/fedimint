@@ -1,104 +1,97 @@
-use bdk::bitcoin::Network;
-use bdk::blockchain::{Blockchain, ConfigurableBlockchain, ElectrumBlockchain};
-use bdk::descriptor::Descriptor as KeyDescriptor;
-use bdk::miniscript::descriptor::DescriptorXKey;
-use bdk::miniscript::DescriptorPublicKey;
-use bdk::signer::Signer;
-use bdk::sled::Tree;
-use bdk::wallet::coin_selection::{
-    BranchAndBoundCoinSelection, CoinSelectionAlgorithm, CoinSelectionResult,
-};
-use bdk::wallet::tx_builder::TxOrdering;
-use bdk::{FeeRate, UTXO};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip32::ExtendedPrivKey;
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Address, Amount, Txid};
+use bitcoin::{Network, Txid};
+use bitcoincore_rpc_async::RpcApi;
+use miniscript::{Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
 use thiserror::Error;
 use tracing::{debug, error, trace, warn};
 
-pub type Descriptor = KeyDescriptor<DescriptorPublicKey>;
+pub const CONFIRMATION_TARGET: u16 = 24;
 
-pub const CONFIRMATION_TARGET: usize = 24;
-
-pub struct Wallet {
-    wallet: bdk::wallet::Wallet<ElectrumBlockchain, Tree>,
-    consensus_height: u32,
-    finalty_delay: u32,
-    last_proposal: u32,
-    consensus_feerate: FeeRate,
-    signing_key: DescriptorXKey<ExtendedPrivKey>,
-    secp: Secp256k1<All>,
+#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
+pub struct Feerate {
+    sats_per_kb: u64,
 }
 
-impl Wallet {
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WalletConsensusItem {
+    block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
+    fee_rate: Feerate,
+}
+
+pub struct Wallet<D> {
+    cfg: WalletConfig,
+    consensus_height: u32,
+    last_consensus_height_proposal: u32,
+    consensus_feerate: Feerate,
+    secp: Secp256k1<All>,
+    btc_rpc: bitcoincore_rpc_async::Client,
+    db: D,
+}
+
+pub struct WalletConfig {
+    pub network: Network,
+    pub descriptor: Descriptor<DescriptorPublicKey>,
+    pub signing_key: ExtendedPrivKey,
+    pub finalty_delay: u32,
+    pub default_fee: Feerate,
+}
+
+impl<D> Wallet<D> {
     pub async fn new(
-        descriptor: Descriptor,
-        db_path: &Path,
-        btc_node: &str,
-        network: Network,
-        finalty_delay: u32,
-        signing_key: DescriptorXKey<ExtendedPrivKey>, // change to HSM API
+        cfg: WalletConfig,
+        btc_rpc: bitcoincore_rpc_async::Client,
+        db: D,
     ) -> Result<Self, WalletError> {
-        let db = bdk::sled::open(db_path.join("wallet"))?;
-        let wallet_tree = db.open_tree("wallet")?;
-        let blockchain =
-            ElectrumBlockchain::from_config(&bdk::blockchain::ElectrumBlockchainConfig {
-                url: btc_node.to_owned(),
-                socks5: None,
-                retry: 5, // TODO: make configurable? probably replace with filters
-                timeout: Some(5),
-            })?;
-        let wallet = bdk::wallet::Wallet::new(descriptor, None, network, wallet_tree, blockchain)?;
-
-        let wallet = tokio::task::spawn_blocking(move || -> Result<_, WalletError> {
-            wallet.sync(bdk::blockchain::log_progress(), None)?;
-            Ok(wallet)
-        })
-        .await
-        .unwrap()?;
-
-        let mut secp = Secp256k1::new();
-        secp.randomize(&mut rand::rngs::OsRng::new().unwrap());
+        let bitcoind_net = get_network(&btc_rpc).await?;
+        if bitcoind_net != cfg.network {
+            return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
+        }
 
         Ok(Wallet {
-            wallet,
+            cfg,
             consensus_height: 0,
-            finalty_delay,
-            last_proposal: 0,
-            consensus_feerate: Default::default(),
-            signing_key,
-            secp,
+            last_consensus_height_proposal: 0,
+            consensus_feerate: Feerate { sats_per_kb: 1000 },
+            secp: Default::default(),
+            btc_rpc,
+            db,
         })
     }
 
-    pub fn consensus_proposal(&self) -> Result<WalletConsensus, WalletError> {
-        let network_height = self.wallet.client().get_height()?;
-        let target_height = network_height.saturating_sub(self.finalty_delay);
+    pub async fn consensus_proposal(&self) -> Result<WalletConsensusItem, WalletError> {
+        let network_height = self.btc_rpc.get_block_count().await? as u32;
+        let target_height = network_height.saturating_sub(self.cfg.finalty_delay);
 
-        let proposed_height = if target_height >= self.last_proposal {
+        let proposed_height = if target_height >= self.last_consensus_height_proposal {
             target_height
         } else {
             warn!(
                 "The block height shrunk, new proposal would be {}, but we are sticking to our last block height proposal {}.",
                 target_height,
-                self.last_proposal
+                self.last_consensus_height_proposal
             );
-            self.last_proposal
+            self.last_consensus_height_proposal
         };
 
-        let fee_rate = self.wallet.client().estimate_fee(CONFIRMATION_TARGET)?;
+        let fee_rate = self
+            .btc_rpc
+            .estimate_smart_fee(CONFIRMATION_TARGET, None)
+            .await?
+            .fee_rate
+            .map(|per_kb| Feerate {
+                sats_per_kb: per_kb.as_sat(),
+            })
+            .unwrap_or(self.cfg.default_fee);
 
-        Ok(WalletConsensus {
+        Ok(WalletConsensusItem {
             block_height: proposed_height,
-            fee_rate: fee_rate.as_sat_vb(),
+            fee_rate,
         })
     }
 
-    pub fn process_consensus_proposals(&mut self, proposals: Vec<WalletConsensus>) {
+    pub fn process_consensus_proposals(&mut self, proposals: Vec<WalletConsensusItem>) {
         trace!("Received consensus proposals {:?}", &proposals);
 
         // TODO: also warn on less than 2/3, that should never happen
@@ -118,38 +111,16 @@ impl Wallet {
 
     /// # Panics
     /// * If proposals is empty
-    fn process_fee_proposals(&mut self, proposals: Vec<f32>) {
+    fn process_fee_proposals(&mut self, mut proposals: Vec<Feerate>) {
         assert!(!proposals.is_empty());
 
-        let mut proposals = proposals
-            .into_iter()
-            .filter(|fee_rate| {
-                let normal = fee_rate.is_normal();
-                if !normal {
-                    warn!(
-                        "Peer submitted invalid fee rate {:?}, filtering it out",
-                        fee_rate
-                    )
-                }
-                normal
-            })
-            .collect::<Vec<_>>();
-
-        if proposals.is_empty() {
-            warn!("No fee rate proposals are left after sanity checking, aborting.");
-            return;
-        }
-
-        proposals.sort_by(|a, b| {
-            a.partial_cmp(b)
-                .expect("We filtered out all non-comparables")
-        });
+        proposals.sort();
 
         let median_proposal = *proposals
             .get(proposals.len() / 2)
             .expect("We checked before that proposals aren't empty");
 
-        self.consensus_feerate = FeeRate::from_sat_per_vb(median_proposal);
+        self.consensus_feerate = median_proposal;
     }
 
     /// # Panics
@@ -165,150 +136,35 @@ impl Wallet {
             self.consensus_height = median_proposal;
         } else {
             warn!(
-                "Median proposed consensus block height shrunk from {} to {}, sticking with old value",
-                self.consensus_height, median_proposal
-            );
+                   "Median proposed consensus block height shrunk from {} to {}, sticking with old value",
+                   self.consensus_height, median_proposal
+               );
         }
     }
-
-    pub fn balance(&self) -> Result<Amount, WalletError> {
-        // FIXME: use delayed blockchain instead of after-the-fact filtering
-        let height_map = self.height_map()?;
-
-        let utxos = self.wallet.list_unspent()?;
-        let sats = utxos
-            .into_iter()
-            .filter(|utxo| {
-                height_map
-                    .get(&utxo.outpoint.txid)
-                    .map(|utxo_height| *utxo_height <= self.consensus_height)
-                    .unwrap_or(false) // possibly due to mempool UTXOs that might be returned?
-            })
-            .map(|utxo| utxo.txout.value)
-            .sum();
-
-        Ok(Amount::from_sat(sats))
-    }
-
-    pub async fn create_pegout_tx(
-        &self,
-        recipient: Address,
-        amt: Amount,
-    ) -> Result<PartiallySignedTransaction, WalletError> {
-        // FIXME: this needs to be deterministic, but probably isn't
-        let mut tx_builder = self
-            .wallet
-            .build_tx()
-            .coin_selection(self.coin_selection(BranchAndBoundCoinSelection::new(10_000_000))?);
-
-        tx_builder
-            .add_recipient(recipient.script_pubkey(), amt.as_sat())
-            .enable_rbf()
-            .ordering(TxOrdering::BIP69Lexicographic);
-
-        let (mut tx, meta) = tx_builder.finish()?;
-
-        // Make sure we aren't sending more than we want due to some coin selection snafu
-        assert_eq!(meta.sent, amt.as_sat());
-
-        self.signing_key.sign(&mut tx, None, &self.secp)?;
-
-        Ok(tx)
-    }
-
-    fn coin_selection<S>(
-        &self,
-        selector: S,
-    ) -> Result<ConsensusHeightCoinSelector<S>, WalletError> {
-        Ok(ConsensusHeightCoinSelector {
-            height_map: self.height_map()?,
-            consensus_height: self.consensus_height,
-            inner_selector: selector,
-        })
-    }
-
-    fn height_map(&self) -> Result<HashMap<Txid, u32>, WalletError> {
-        Ok(self
-            .wallet
-            .list_transactions(false)?
-            .into_iter()
-            .filter_map(|tx| tx.height.map(|height| (tx.txid, height)))
-            .collect())
-    }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct WalletConsensus {
-    block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
-    fee_rate: f32,     // FIXME: use fixed point arithmetic, just to be on the safe side
-}
-
-#[derive(Debug)]
-struct ConsensusHeightCoinSelector<S> {
-    height_map: HashMap<Txid, u32>,
-    consensus_height: u32,
-    inner_selector: S,
-}
-
-impl<S: CoinSelectionAlgorithm<D>, D: bdk::database::Database> CoinSelectionAlgorithm<D>
-    for ConsensusHeightCoinSelector<S>
-{
-    fn coin_select(
-        &self,
-        database: &D,
-        required_utxos: Vec<(UTXO, usize)>,
-        optional_utxos: Vec<(UTXO, usize)>,
-        fee_rate: FeeRate,
-        amount_needed: u64,
-        fee_amount: f32,
-    ) -> Result<CoinSelectionResult, bdk::Error> {
-        assert!(required_utxos.is_empty());
-
-        let optional_utxos = optional_utxos
-            .into_iter()
-            .filter(|(utxo, _)| {
-                self.height_map
-                    .get(&utxo.outpoint.txid)
-                    .map(|utxo_height| *utxo_height <= self.consensus_height)
-                    .unwrap_or(false) // possibly due to mempool UTXOs that might be returned?
-            })
-            .collect();
-
-        self.inner_selector.coin_select(
-            database,
-            required_utxos,
-            optional_utxos,
-            fee_rate,
-            amount_needed,
-            fee_amount,
-        )
+async fn get_network(rpc_client: &bitcoincore_rpc_async::Client) -> Result<Network, WalletError> {
+    let bc = rpc_client.get_blockchain_info().await?;
+    match bc.chain.as_str() {
+        "main" => Ok(Network::Bitcoin),
+        "test" => Ok(Network::Testnet),
+        "regtest" => Ok(Network::Regtest),
+        _ => Err(WalletError::UnknownNetwork(bc.chain)),
     }
 }
 
 #[derive(Debug, Error)]
 pub enum WalletError {
-    #[error("Database error: {0:?}")]
-    DbError(bdk::sled::Error),
-    #[error("Electrum error: {0:?}")]
-    BdkError(bdk::Error),
-    #[error("Sign error: {0:?}")]
-    SignError(bdk::signer::SignerError),
+    #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
+    WrongNetwork(Network, Network),
+    #[error("Error querying bitcoind: {0}")]
+    RpcErrot(bitcoincore_rpc_async::Error),
+    #[error("Unknown bitcoin network: {0}")]
+    UnknownNetwork(String),
 }
 
-impl From<bdk::sled::Error> for WalletError {
-    fn from(e: bdk::sled::Error) -> Self {
-        WalletError::DbError(e)
-    }
-}
-
-impl From<bdk::Error> for WalletError {
-    fn from(e: bdk::Error) -> Self {
-        WalletError::BdkError(e)
-    }
-}
-
-impl From<bdk::signer::SignerError> for WalletError {
-    fn from(e: bdk::signer::SignerError) -> Self {
-        WalletError::SignError(e)
+impl From<bitcoincore_rpc_async::Error> for WalletError {
+    fn from(e: bitcoincore_rpc_async::Error) -> Self {
+        WalletError::RpcErrot(e)
     }
 }
