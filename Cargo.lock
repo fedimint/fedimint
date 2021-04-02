@@ -414,6 +414,7 @@ dependencies = [
  "bech32",
  "bitcoin_hashes",
  "secp256k1",
+ "serde",
 ]
 
 [[package]]
@@ -971,8 +972,10 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "bitcoincore-rpc-async",
+ "hex 0.4.3",
  "miniscript",
  "rand 0.6.5",
+ "secp256k1",
  "serde",
  "thiserror",
  "tokio",
@@ -2432,6 +2435,7 @@ checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
 dependencies = [
  "rand 0.6.5",
  "secp256k1-sys",
+ "serde",
 ]
 
 [[package]]

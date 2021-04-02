@@ -1,3 +1,5 @@
+mod txoproof;
+
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::{Network, Txid};
