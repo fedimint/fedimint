@@ -972,7 +972,10 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "bitcoincore-rpc-async",
+ "database",
+ "futures",
  "hex 0.4.3",
+ "itertools",
  "miniscript",
  "rand 0.6.5",
  "secp256k1",

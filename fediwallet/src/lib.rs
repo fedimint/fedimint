@@ -1,14 +1,20 @@
+mod db;
 mod keys;
 mod txoproof;
 
+use crate::db::{BlockHashKey, LastBlock, LastBlockKey};
+use bitcoin::blockdata::constants::genesis_block;
+use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip32::ExtendedPrivKey;
-use bitcoin::{Network, Txid};
+use bitcoin::{BlockHash, Network};
 use bitcoincore_rpc_async::RpcApi;
+use database::batch::{BatchItem, Element};
+use database::{BatchDb, Database};
 use miniscript::{Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 pub const CONFIRMATION_TARGET: u16 = 24;
 
@@ -25,7 +31,6 @@ pub struct WalletConsensusItem {
 
 pub struct Wallet<D> {
     cfg: WalletConfig,
-    consensus_height: u32,
     last_consensus_height_proposal: u32,
     consensus_feerate: Feerate,
     secp: Secp256k1<All>,
@@ -39,9 +44,13 @@ pub struct WalletConfig {
     pub signing_key: ExtendedPrivKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,
+    pub start_consensus_height: u32,
 }
 
-impl<D> Wallet<D> {
+impl<D> Wallet<D>
+where
+    D: Database + BatchDb + Clone + Send + 'static,
+{
     pub async fn new(
         cfg: WalletConfig,
         btc_rpc: bitcoincore_rpc_async::Client,
@@ -52,15 +61,47 @@ impl<D> Wallet<D> {
             return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
         }
 
-        Ok(Wallet {
+        if db
+            .get_value::<_, LastBlock>(&LastBlockKey)
+            .expect("DB error")
+            .is_none()
+        {
+            info!("Initializing new wallet DB.");
+            let genesis = genesis_block(cfg.network);
+            db.apply_batch(
+                vec![
+                    BatchItem::InsertNewElement(Element {
+                        key: Box::new(LastBlockKey),
+                        value: Box::new(LastBlock(0)),
+                    }),
+                    BatchItem::InsertNewElement(Element {
+                        key: Box::new(BlockHashKey(genesis.block_hash())),
+                        value: Box::new(()),
+                    }),
+                ]
+                .iter(),
+            )
+            .expect("DB error");
+        }
+
+        let wallet = Wallet {
             cfg,
-            consensus_height: 0,
             last_consensus_height_proposal: 0,
             consensus_feerate: Feerate { sats_per_kb: 1000 },
             secp: Default::default(),
             btc_rpc,
             db,
-        })
+        };
+
+        info!(
+            "Starting initial wallet sync up to block {}",
+            wallet.cfg.start_consensus_height
+        );
+        wallet
+            .sync_up_to_consensus_heigh(wallet.cfg.start_consensus_height)
+            .await?;
+
+        Ok(wallet)
     }
 
     pub async fn consensus_proposal(&self) -> Result<WalletConsensusItem, WalletError> {
@@ -94,13 +135,16 @@ impl<D> Wallet<D> {
         })
     }
 
-    pub fn process_consensus_proposals(&mut self, proposals: Vec<WalletConsensusItem>) {
+    pub async fn process_consensus_proposals(
+        &mut self,
+        proposals: Vec<WalletConsensusItem>,
+    ) -> Result<(), WalletError> {
         trace!("Received consensus proposals {:?}", &proposals);
 
         // TODO: also warn on less than 2/3, that should never happen
         if proposals.is_empty() {
             error!("No proposals were submitted this round");
-            return;
+            return Ok(());
         }
 
         let (height_proposals, fee_proposals) = proposals
@@ -108,8 +152,8 @@ impl<D> Wallet<D> {
             .map(|wc| (wc.block_height, wc.fee_rate))
             .unzip();
 
-        self.process_block_height_proposals(height_proposals);
         self.process_fee_proposals(fee_proposals);
+        self.process_block_height_proposals(height_proposals).await
     }
 
     /// # Panics
@@ -128,21 +172,76 @@ impl<D> Wallet<D> {
 
     /// # Panics
     /// * If proposals is empty
-    fn process_block_height_proposals(&mut self, mut proposals: Vec<u32>) {
+    async fn process_block_height_proposals(
+        &mut self,
+        mut proposals: Vec<u32>,
+    ) -> Result<(), WalletError> {
         assert!(!proposals.is_empty());
 
         proposals.sort();
         let median_proposal = proposals[proposals.len() / 2];
 
-        if median_proposal >= self.consensus_height {
+        if median_proposal >= self.consensus_height() {
             debug!("Setting consensus block height to {}", median_proposal);
-            self.consensus_height = median_proposal;
+            self.sync_up_to_consensus_heigh(median_proposal).await?;
         } else {
             warn!(
                    "Median proposed consensus block height shrunk from {} to {}, sticking with old value",
-                   self.consensus_height, median_proposal
+                   self.consensus_height(), median_proposal
                );
         }
+
+        Ok(())
+    }
+
+    fn consensus_height(&self) -> u32 {
+        self.db
+            .get_value::<_, LastBlock>(&LastBlockKey)
+            .expect("DB error")
+            .expect("ensured by constructor")
+            .0
+    }
+
+    async fn sync_up_to_consensus_heigh(&self, new_height: u32) -> Result<(), WalletError> {
+        let old_height = self.consensus_height();
+        if new_height < old_height {
+            info!(
+                "Nothing to sync, new height ({}) is lower than old height ({}), doing nothing.",
+                new_height, old_height
+            );
+        }
+
+        if new_height == old_height {
+            debug!("Height didn't change, still at {}", old_height);
+            return Ok(());
+        }
+
+        info!(
+            "New consensus height {}, syncing up ({} blocks to go)",
+            new_height,
+            new_height - old_height
+        );
+
+        let mut batch = Vec::<BatchItem>::with_capacity((new_height - old_height) as usize + 1);
+        for height in ((old_height + 1)..=(new_height)) {
+            if height % 1000 == 0 {
+                debug!("Caught up to block {}", height);
+            }
+
+            let block_hash = self.btc_rpc.get_block_hash(height as u64).await?;
+            batch.push(BatchItem::InsertNewElement(Element {
+                key: Box::new(BlockHashKey(BlockHash::from_inner(block_hash.into_inner()))),
+                value: Box::new(()),
+            }))
+        }
+        batch.push(BatchItem::InsertNewElement(Element {
+            key: Box::new(LastBlockKey),
+            value: Box::new(LastBlock(new_height)),
+        }));
+
+        self.db.apply_batch(batch.iter()).expect("DB error");
+
+        Ok(())
     }
 }
 

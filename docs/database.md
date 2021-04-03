@@ -28,6 +28,7 @@ The following "tables" exist:
 | Used Coins           | 0x10   | coin nonce (unknown bytes, bincode magic currently)                                             | none                            |
 | Blocks               | 0x30   | block hash (32 bytes)                                                                           | block height (4 bytes)          |
 | Our UTXOs            | 0x31   | OutPoint (32 bytes txid + 4 bytes output)                                                       | data necessary for spending     |
+| Last Block           | 0x32   | none                                                                                            | block height (4bytes)           |
 
 ## Client DB Layout
 

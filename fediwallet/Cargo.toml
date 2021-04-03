@@ -9,7 +9,10 @@ edition = "2018"
 [dependencies]
 bitcoin = { version = "0.26.0", features = [ "rand", "serde" ] }
 bitcoincore-rpc-async = "3.0.1"
+database = { path = "../database" }
+futures = "0.3"
 hex = "0.4.3"
+itertools = "0.10.0"
 miniscript = "5.1.0"
 rand = "0.6.0"
 secp256k1 = { version = "0.20.1", features = [ "serde" ] }
