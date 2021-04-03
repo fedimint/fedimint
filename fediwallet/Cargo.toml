@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 bitcoin = { version = "0.26.0", features = [ "rand", "serde" ] }
 bitcoincore-rpc-async = "3.0.1"
+hex = "0.4.3"
 miniscript = "5.1.0"
 rand = "0.6.0"
 secp256k1 = { version = "0.20.1", features = [ "serde" ] }
@@ -16,6 +17,4 @@ serde = { version = "1.0.118", features = [ "derive" ] }
 thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
-
-[dev-dependencies]
-hex = "0.4.3"
+validator = { version = "0.13", features = ["derive"] }

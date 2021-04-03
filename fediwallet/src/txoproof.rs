@@ -5,9 +5,14 @@ use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, PublicKey, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk, TranslatePk2};
 use secp256k1::{Secp256k1, Verification};
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::io::Cursor;
 use thiserror::Error;
+use validator::{Validate, ValidationError};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Validate)]
+#[validate(schema(function = "validate_peg_in_proof"))]
 pub struct PegInProof {
     txout_proof: TxOutProof,
     // check that outputs are not more than u32::max (probably enforced if inclusion proof is checked first)
@@ -85,6 +90,7 @@ impl PegInProof {
         transaction: Transaction,
         tweak_contract_key: secp256k1::PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
+        // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
             return Err(PegInProofError::TransactionNotInProof);
         }
@@ -151,6 +157,57 @@ fn tweak_key<C: Verification>(
     key.add_exp_assign(secp, &tweak[..])
         .expect("tweak is always 32 bytes, other failure modes are negligible");
     key
+}
+
+impl Serialize for TxOutProof {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&hex::encode(&bytes))
+        } else {
+            serializer.serialize_bytes(&bytes)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for TxOutProof {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let hex_str: &str = Deserialize::deserialize(deserializer)?;
+            let bytes =
+                hex::decode(hex_str).map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?;
+            Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
+                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+        } else {
+            let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
+            Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
+                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+        }
+    }
+}
+
+fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), ValidationError> {
+    if !proof.txout_proof.contains_tx(proof.transaction.txid()) {
+        return Err(ValidationError::new(
+            "Supplied transaction is not included in proof",
+        ));
+    }
+
+    if proof.transaction.output.len() > u32::MAX as usize {
+        return Err(ValidationError::new(
+            "Supplied transaction has too many outputs",
+        ));
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
