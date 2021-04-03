@@ -1,3 +1,4 @@
+mod keys;
 mod txoproof;
 
 use bitcoin::secp256k1::{All, Secp256k1};

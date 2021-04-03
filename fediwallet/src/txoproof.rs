@@ -1,14 +1,18 @@
+use crate::keys::CompressedPublicKey;
 use bitcoin::consensus::{Decodable, Encodable};
+use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{BlockHash, BlockHeader, OutPoint, PublicKey, Transaction, Txid};
-use miniscript::Descriptor;
-use serde::{Deserialize, Serialize};
+use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, PublicKey, Transaction, Txid};
+use miniscript::{Descriptor, DescriptorTrait, TranslatePk, TranslatePk2};
+use secp256k1::{Secp256k1, Verification};
+use thiserror::Error;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PegInProof {
     txout_proof: TxOutProof,
+    // check that outputs are not more than u32::max (probably enforced if inclusion proof is checked first)
     transaction: Transaction,
-    tweak_contrtact_key: secp256k1::PublicKey,
+    tweak_contract_key: secp256k1::PublicKey,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +77,88 @@ impl Encodable for TxOutProof {
 
         Ok(written)
     }
+}
+
+impl PegInProof {
+    pub fn new(
+        txout_proof: TxOutProof,
+        transaction: Transaction,
+        tweak_contract_key: secp256k1::PublicKey,
+    ) -> Result<PegInProof, PegInProofError> {
+        if !txout_proof.contains_tx(transaction.txid()) {
+            return Err(PegInProofError::TransactionNotInProof);
+        }
+
+        if transaction.output.len() > u32::MAX as usize {
+            return Err(PegInProofError::TooManyTransactionOutputs);
+        }
+
+        Ok(PegInProof {
+            txout_proof,
+            transaction,
+            tweak_contract_key,
+        })
+    }
+
+    pub fn get_our_tweaked_txos<C: Verification>(
+        &self,
+        secp: &Secp256k1<C>,
+        untweaked_pegin_descriptor: Descriptor<CompressedPublicKey>,
+    ) -> Vec<(OutPoint, Amount)> {
+        let script = untweaked_pegin_descriptor
+            .translate_pk2_infallible(|pk| CompressedPublicKey {
+                key: tweak_key(secp, pk.key, self.tweak_contract_key),
+            })
+            .script_pubkey();
+
+        self.transaction
+            .output
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, txo)| {
+                if txo.script_pubkey == script {
+                    let out_point = OutPoint {
+                        txid: self.transaction.txid(),
+                        vout: idx as u32,
+                    };
+                    Some((out_point, Amount::from_sat(txo.value)))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn proof_block(&self) -> BlockHash {
+        self.txout_proof.block()
+    }
+
+    pub fn tweak_contract_key(&self) -> &secp256k1::PublicKey {
+        &self.tweak_contract_key
+    }
+}
+
+/// Hashes the `tweak` key together with the `key` and uses the result to tweak the `key`
+fn tweak_key<C: Verification>(
+    secp: &Secp256k1<C>,
+    mut key: secp256k1::PublicKey,
+    tweak: secp256k1::PublicKey,
+) -> secp256k1::PublicKey {
+    let mut hasher = HmacEngine::<sha256::Hash>::new(&key.serialize()[..]);
+    hasher.input(&tweak.serialize()[..]);
+    let tweak = Hmac::from_engine(hasher).into_inner();
+
+    key.add_exp_assign(secp, &tweak[..])
+        .expect("tweak is always 32 bytes, other failure modes are negligible");
+    key
+}
+
+#[derive(Debug, Error)]
+pub enum PegInProofError {
+    #[error("Supplied transaction is not included in proof")]
+    TransactionNotInProof,
+    #[error("Supplied transaction has too many outputs")]
+    TooManyTransactionOutputs,
 }
 
 #[cfg(test)]
