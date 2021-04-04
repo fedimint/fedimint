@@ -20,7 +20,7 @@ async fn main() {
 
     let cfg = WalletConfig {
         network: Network::Bitcoin,
-        descriptor: "pkh(xpub661MyMwAqRbcFoma4tsGNgSDDsTQJtNKzWmemTN9DxppP31zdh7YRWeX7JzgfXarphQdPDLYrC3QzBcWpg6tz77tebXKYiFHYu6AVWhHXzj)".parse().unwrap(),
+        peg_in_descriptor: "pkh(xpub661MyMwAqRbcFoma4tsGNgSDDsTQJtNKzWmemTN9DxppP31zdh7YRWeX7JzgfXarphQdPDLYrC3QzBcWpg6tz77tebXKYiFHYu6AVWhHXzj)".parse().unwrap(),
         signing_key: "xprv9s21ZrQH143K3Kh6xsLG1YVUfqcuuReUdHr3y4xXfdHqWEgr69oHsiL3G4NBJqvbwHKYaV876SHNBvDEs6vtBu4ouDh6NS4K4pTPiTbajtR".parse().unwrap(),
         finalty_delay: 100,
         default_fee: Feerate {

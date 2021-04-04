@@ -14,6 +14,7 @@ futures = "0.3"
 hex = "0.4.3"
 itertools = "0.10.0"
 miniscript = "5.1.0"
+mint-api = { path = "../mint-api" }
 rand = "0.6.0"
 secp256k1 = { version = "0.20.1", features = [ "serde" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }

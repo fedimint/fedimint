@@ -113,7 +113,7 @@ impl PegInProof {
     pub fn get_our_tweaked_txos<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
-        untweaked_pegin_descriptor: Descriptor<CompressedPublicKey>,
+        untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
     ) -> Vec<(OutPoint, Amount)> {
         let script = untweaked_pegin_descriptor
             .tweak(self.tweak_contract_key, secp)

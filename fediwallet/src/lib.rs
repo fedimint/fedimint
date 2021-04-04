@@ -1,15 +1,16 @@
 mod db;
 
-use crate::db::{BlockHashKey, LastBlock, LastBlockKey};
+use crate::db::{BlockHashKey, LastBlock, LastBlockKey, UTXOKey};
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip32::ExtendedPrivKey;
-use bitcoin::{BlockHash, Network};
+use bitcoin::{Amount, BlockHash, Network, OutPoint};
 use bitcoincore_rpc_async::RpcApi;
 use database::batch::{BatchItem, Element};
-use database::{BatchDb, Database};
+use database::{BatchDb, BincodeSerialized, Database};
 use miniscript::{Descriptor, DescriptorPublicKey};
+use mint_api::{CompressedPublicKey, PegInProof};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
@@ -38,11 +39,17 @@ pub struct Wallet<D> {
 
 pub struct WalletConfig {
     pub network: Network,
-    pub descriptor: Descriptor<DescriptorPublicKey>,
+    pub peg_in_descriptor: Descriptor<CompressedPublicKey>,
     pub signing_key: ExtendedPrivKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,
     pub start_consensus_height: u32,
+    pub per_utxo_fee: Amount,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SpendableUTXO {
+    PegIn { tweak: secp256k1::PublicKey },
 }
 
 impl<D> Wallet<D>
@@ -242,6 +249,50 @@ where
         self.db.apply_batch(batch.iter()).expect("DB error");
 
         Ok(())
+    }
+
+    fn block_is_known(&self, block_hash: BlockHash) -> bool {
+        self.db
+            .get_value::<_, ()>(&BlockHashKey(block_hash))
+            .expect("DB error")
+            .is_some()
+    }
+
+    pub fn claim_pegin(&self, peg_in_proof: PegInProof) -> Option<mint_api::Amount> {
+        if !self.block_is_known(peg_in_proof.proof_block()) {
+            return None;
+        }
+
+        let our_outputs =
+            peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
+
+        if our_outputs.iter().any(|(out_point, _)| {
+            self.db
+                .get_value::<_, BincodeSerialized<SpendableUTXO>>(&UTXOKey(*out_point))
+                .expect("DB error")
+                .is_none()
+        }) {
+            return None;
+        }
+
+        let amount: u64 = our_outputs.iter().map(|(_, amt)| amt.as_sat()).sum();
+        let fee = self.cfg.per_utxo_fee.as_sat() * our_outputs.len() as u64;
+        let issuance_amount = mint_api::Amount::from_sat(amount.saturating_sub(fee));
+
+        let batch = our_outputs
+            .into_iter()
+            .map(|(out_point, _)| {
+                BatchItem::InsertNewElement(Element {
+                    key: Box::new(UTXOKey(out_point)),
+                    value: Box::new(BincodeSerialized::owned(SpendableUTXO::PegIn {
+                        tweak: *peg_in_proof.tweak_contract_key(),
+                    })),
+                })
+            })
+            .collect::<Vec<_>>();
+        self.db.apply_batch(batch.iter()).expect("DB error");
+
+        Some(issuance_amount)
     }
 }
 

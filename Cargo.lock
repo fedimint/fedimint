@@ -978,6 +978,7 @@ dependencies = [
  "hex 0.4.3",
  "itertools",
  "miniscript",
+ "mint-api",
  "rand 0.6.5",
  "secp256k1",
  "serde",
