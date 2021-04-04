@@ -4,7 +4,7 @@ use miniscript::{MiniscriptKey, ToPublicKey};
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct CompressedPublicKey {
-    pub(crate) key: secp256k1::PublicKey,
+    pub key: secp256k1::PublicKey,
 }
 
 impl MiniscriptKey for CompressedPublicKey {

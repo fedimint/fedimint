@@ -1,6 +1,4 @@
 mod db;
-mod keys;
-mod txoproof;
 
 use crate::db::{BlockHashKey, LastBlock, LastBlockKey};
 use bitcoin::blockdata::constants::genesis_block;
@@ -223,7 +221,7 @@ where
         );
 
         let mut batch = Vec::<BatchItem>::with_capacity((new_height - old_height) as usize + 1);
-        for height in ((old_height + 1)..=(new_height)) {
+        for height in (old_height + 1)..=(new_height) {
             if height % 100 == 0 {
                 debug!("Caught up to block {}", height);
             }

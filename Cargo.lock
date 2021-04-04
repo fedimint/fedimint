@@ -985,7 +985,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "validator",
 ]
 
 [[package]]
@@ -1705,11 +1704,17 @@ name = "mint-api"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitcoin",
  "bitcoin_hashes",
+ "hex 0.4.3",
+ "miniscript",
  "musig",
+ "secp256k1",
  "serde",
  "sha3",
  "tbs",
+ "thiserror",
+ "validator",
 ]
 
 [[package]]

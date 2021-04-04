@@ -10,6 +10,8 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
+mod keys;
+mod txoproof;
 pub mod util;
 
 hash_newtype!(

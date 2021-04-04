@@ -2,8 +2,8 @@ use crate::keys::CompressedPublicKey;
 use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, PublicKey, Transaction, Txid};
-use miniscript::{Descriptor, DescriptorTrait, TranslatePk, TranslatePk2};
+use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -56,7 +56,7 @@ impl Decodable for TxOutProof {
         let mut indices = Vec::new();
         let root = merkle_proof
             .extract_matches(&mut transactions, &mut indices)
-            .map_err(|e| {
+            .map_err(|_| {
                 bitcoin::consensus::encode::Error::ParseFailed("Invalid partial merkle tree")
             })?;
 
@@ -220,7 +220,7 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
-    use crate::txoproof::TxOutProof;
+    use super::TxOutProof;
     use bitcoin::consensus::Decodable;
     use std::io::Cursor;
 
