@@ -21,3 +21,7 @@ thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
 validator = { version = "0.13", features = ["derive"] }
+
+[dev-dependencies]
+sled = "0.34.6"
+tracing-subscriber = "0.2.15"

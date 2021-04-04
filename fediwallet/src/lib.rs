@@ -20,7 +20,7 @@ pub const CONFIRMATION_TARGET: u16 = 24;
 
 #[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
 pub struct Feerate {
-    sats_per_kb: u64,
+    pub sats_per_kb: u64,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -194,7 +194,7 @@ where
         Ok(())
     }
 
-    fn consensus_height(&self) -> u32 {
+    pub fn consensus_height(&self) -> u32 {
         self.db
             .get_value::<_, LastBlock>(&LastBlockKey)
             .expect("DB error")
@@ -224,17 +224,19 @@ where
 
         let mut batch = Vec::<BatchItem>::with_capacity((new_height - old_height) as usize + 1);
         for height in ((old_height + 1)..=(new_height)) {
-            if height % 1000 == 0 {
+            if height % 100 == 0 {
                 debug!("Caught up to block {}", height);
             }
 
+            // TODO: use batching for mainnet syncing
+            trace!("Fetching block hash for block {}", height);
             let block_hash = self.btc_rpc.get_block_hash(height as u64).await?;
             batch.push(BatchItem::InsertNewElement(Element {
                 key: Box::new(BlockHashKey(BlockHash::from_inner(block_hash.into_inner()))),
                 value: Box::new(()),
             }))
         }
-        batch.push(BatchItem::InsertNewElement(Element {
+        batch.push(BatchItem::InsertElement(Element {
             key: Box::new(LastBlockKey),
             value: Box::new(LastBlock(new_height)),
         }));
