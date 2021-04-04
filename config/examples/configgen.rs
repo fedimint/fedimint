@@ -1,3 +1,4 @@
+use bitcoin::Network;
 use config::{ClientConfig, Peer, ServerConfig};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use mint_api::Amount;
@@ -95,6 +96,11 @@ fn main() {
             .iter()
             .map(|&amount| (amount, tbs_keys[&amount].0))
             .collect(),
+        peg_in_descriptor:
+            "pkh(020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae8d)"
+                .parse()
+                .unwrap(), // Dummy
+        network: Network::Regtest,
     };
     serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }

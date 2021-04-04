@@ -1,6 +1,7 @@
 use bitcoin::hashes::Hash;
 use bitcoin::PublicKey;
 use miniscript::{MiniscriptKey, ToPublicKey};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct CompressedPublicKey {
@@ -39,5 +40,15 @@ impl ToPublicKey for CompressedPublicKey {
 impl std::fmt::Display for CompressedPublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.key, f)
+    }
+}
+
+impl FromStr for CompressedPublicKey {
+    type Err = secp256k1::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(CompressedPublicKey {
+            key: secp256k1::PublicKey::from_str(s)?,
+        })
     }
 }

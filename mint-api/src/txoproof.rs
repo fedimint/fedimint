@@ -4,12 +4,16 @@ use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine}
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use secp256k1::{Secp256k1, Verification};
+use secp256k1::{PublicKey, Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::io::Cursor;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
+
+pub trait TweakableDescriptor {
+    fn tweak<C: Verification>(&self, tweak: PublicKey, secp: &Secp256k1<C>) -> Self;
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Validate)]
 #[validate(schema(function = "validate_peg_in_proof"))]
@@ -112,9 +116,7 @@ impl PegInProof {
         untweaked_pegin_descriptor: Descriptor<CompressedPublicKey>,
     ) -> Vec<(OutPoint, Amount)> {
         let script = untweaked_pegin_descriptor
-            .translate_pk2_infallible(|pk| CompressedPublicKey {
-                key: tweak_key(secp, pk.key, self.tweak_contract_key),
-            })
+            .tweak(self.tweak_contract_key, secp)
             .script_pubkey();
 
         self.transaction
@@ -157,6 +159,14 @@ fn tweak_key<C: Verification>(
     key.add_exp_assign(secp, &tweak[..])
         .expect("tweak is always 32 bytes, other failure modes are negligible");
     key
+}
+
+impl TweakableDescriptor for Descriptor<CompressedPublicKey> {
+    fn tweak<C: Verification>(&self, tweak: PublicKey, secp: &Secp256k1<C>) -> Self {
+        self.translate_pk2_infallible(|pk| CompressedPublicKey {
+            key: tweak_key(secp, pk.key, tweak),
+        })
+    }
 }
 
 impl Serialize for TxOutProof {

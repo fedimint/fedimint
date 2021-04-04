@@ -1,4 +1,5 @@
-use mint_api::Keys;
+use bitcoin::Network;
+use mint_api::{Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -74,6 +75,8 @@ pub struct ClientOpts {
 pub struct ClientConfig {
     pub mints: Vec<String>,
     pub mint_pk: Keys<AggregatePublicKey>,
+    pub peg_in_descriptor: PegInDescriptor,
+    pub network: Network,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {

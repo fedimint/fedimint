@@ -641,6 +641,7 @@ name = "config"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "bitcoin",
  "hbbft",
  "hex 0.4.3",
  "mint-api",
@@ -1687,6 +1688,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71f455be59a359d50370c4f587afbc5739c862e684c5afecae80ab93e7474b4e"
 dependencies = [
  "bitcoin",
+ "serde",
 ]
 
 [[package]]
@@ -1723,15 +1725,18 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "bincode",
+ "bitcoin",
  "bitcoin_hashes",
  "config",
  "database",
  "futures",
  "itertools",
+ "miniscript",
  "mint-api",
  "musig",
  "rand 0.6.5",
  "reqwest",
+ "secp256k1",
  "serde",
  "serde_json",
  "sha3",

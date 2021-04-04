@@ -36,3 +36,4 @@ The following "tables" exist:
 |-----------|--------|------------------------------------|------------------------------|
 | Coins     | 0x20   | amount (8 bytes), nonce (32 bytes) | serialized `SpendableCoin`   |
 | Issuances | 0x21   | issuance_id (32 bytes)             | serialized `IssuanceRequest` |
+| Peg-Ins   | 0x22   | secret contract key (32 bytes)     | none                         |

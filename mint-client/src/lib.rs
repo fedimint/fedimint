@@ -1,3 +1,4 @@
+use bitcoin::Address;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use database::batch::{BatchItem, Element};
@@ -6,13 +7,15 @@ use database::{
     PrefixSearchable,
 };
 use futures::future::JoinAll;
+use miniscript::DescriptorTrait;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, ReissuanceRequest,
-    SigResponse, SignRequest, TransactionId, TxId,
+    SigResponse, SignRequest, TransactionId, TweakableDescriptor, TxId, TxOutProof,
 };
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
+use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -20,11 +23,13 @@ use tracing::debug;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_ISSUANCE: u8 = 0x21;
+pub const DB_PREFIX_PEG_IN: u8 = 0x22;
 
 pub struct MintClient<D> {
     cfg: ClientConfig,
     db: D,
     http_client: reqwest::Client, // TODO: use trait object
+    secp: Secp256k1<All>,
 }
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
@@ -72,15 +77,21 @@ pub struct CoinKey {
 #[derive(Debug, Clone)]
 pub struct CoinKeyPrefix;
 
+#[derive(Debug, Clone)]
+pub struct PegInKey {
+    tweak_contract_key: secp256k1::SecretKey,
+}
+
 impl<D> MintClient<D>
 where
     D: Database + PrefixSearchable + BatchDb + Sync,
 {
-    pub fn new(cfg: ClientConfig, db: D) -> Self {
+    pub fn new(cfg: ClientConfig, db: D, secp: Secp256k1<All>) -> Self {
         MintClient {
             cfg,
             db,
             http_client: Default::default(),
+            secp,
         }
     }
 
@@ -306,6 +317,30 @@ where
             Ok(req_id)
         }
     }
+
+    pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
+        let (peg_in_sec_key, peg_in_pub_key) = self.secp.generate_keypair(&mut rng);
+
+        // TODO: check at startup that no bare descriptor is used in config
+        // TODO: check if there are other failure cases
+        let address = self
+            .cfg
+            .peg_in_descriptor
+            .tweak(peg_in_pub_key, &self.secp)
+            .address(self.cfg.network)
+            .expect("Bare descriptors aren't allowed");
+
+        self.db
+            .insert_entry(
+                &PegInKey {
+                    tweak_contract_key: peg_in_sec_key,
+                },
+                &(),
+            )
+            .expect("DB error");
+
+        address
+    }
 }
 
 impl IssuanceRequest {
@@ -489,5 +524,29 @@ impl DatabaseKey for CoinKey {
 impl DatabaseKeyPrefix for CoinKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
         vec![DB_PREFIX_COIN]
+    }
+}
+
+impl DatabaseKeyPrefix for PegInKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(33);
+        bytes.push(DB_PREFIX_PEG_IN);
+        bytes.extend_from_slice(&self.tweak_contract_key[..]);
+        bytes
+    }
+}
+
+impl DatabaseKey for PegInKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() != 33 {
+            Err(DecodingError("PegInKey: expected 33 bytes".into()))
+        } else if data[0] != DB_PREFIX_PEG_IN {
+            Err(DecodingError("PegInKey: wrong prefix".into()))
+        } else {
+            Ok(PegInKey {
+                tweak_contract_key: secp256k1::SecretKey::from_slice(&data[1..])
+                    .map_err(|e| DecodingError(e.into()))?,
+            })
+        }
     }
 }

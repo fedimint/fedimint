@@ -16,6 +16,8 @@ struct Options {
 
 #[derive(StructOpt)]
 enum Command {
+    #[structopt(about = "Generate a new peg-in address, funds sent to it can later be claimed")]
+    PegInAddress,
     #[structopt(
         about = "Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)"
     )]
@@ -52,9 +54,12 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = MintClient::new(cfg, db);
+    let client = MintClient::new(cfg, db, Default::default());
 
     match opts.command {
+        Command::PegInAddress => {
+            println!("{}", client.get_new_pegin_address(&mut rng))
+        }
         Command::PegIn { amount } => {
             info!("Starting peg-in transaction for {}", amount);
             let id = client.peg_in(amount, &mut rng).await.unwrap();

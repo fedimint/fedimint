@@ -14,6 +14,12 @@ mod keys;
 mod txoproof;
 pub mod util;
 
+pub use keys::CompressedPublicKey;
+use miniscript::Descriptor;
+pub use txoproof::{PegInProof, PegInProofError, TweakableDescriptor, TxOutProof};
+
+pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
+
 hash_newtype!(
     TransactionId,
     Sha256,
