@@ -4,7 +4,7 @@ use database::{
     DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
 };
 
-const DB_PREFIX_BLOCK_HASHES: u8 = 0x30;
+const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_LAST_BLOCK: u8 = 0x32;
 
 #[derive(Clone, Debug)]
@@ -18,15 +18,24 @@ pub struct LastBlock(pub u32);
 
 impl DatabaseKeyPrefix for BlockHashKey {
     fn to_bytes(&self) -> Vec<u8> {
-        self.0[..].to_vec()
+        let mut bytes = Vec::with_capacity(33);
+        bytes.push(DB_PREFIX_BLOCK_HASH);
+        bytes.extend_from_slice(&self.0[..]);
+        bytes
     }
 }
 
 impl DatabaseKey for BlockHashKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        Ok(BlockHashKey(
-            BlockHash::from_slice(data).map_err(|e| DecodingError(e.into()))?,
-        ))
+        if data.len() != 33 {
+            Err(DecodingError("BlockHashKey: expected 33 bytes".into()))
+        } else if data[0] != DB_PREFIX_BLOCK_HASH {
+            Err(DecodingError("BlockHashKey: wrong prefix".into()))
+        } else {
+            Ok(BlockHashKey(
+                BlockHash::from_slice(&data[1..]).map_err(|e| DecodingError(e.into()))?,
+            ))
+        }
     }
 }
 
