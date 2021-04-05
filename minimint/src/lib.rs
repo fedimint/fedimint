@@ -65,10 +65,15 @@ pub async fn run_minimint(
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
+    let wallet = fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone())
+        .await
+        .expect("Couldn't create wallet");
+
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
+        wallet,
         db: sled_db,
     });
 

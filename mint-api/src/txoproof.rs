@@ -7,6 +7,7 @@ use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{PublicKey, Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::hash::Hash;
 use std::io::Cursor;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
@@ -15,7 +16,7 @@ pub trait TweakableDescriptor {
     fn tweak<C: Verification>(&self, tweak: PublicKey, secp: &Secp256k1<C>) -> Self;
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Validate)]
+#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate)]
 #[validate(schema(function = "validate_peg_in_proof"))]
 pub struct PegInProof {
     txout_proof: TxOutProof,
@@ -24,7 +25,7 @@ pub struct PegInProof {
     tweak_contract_key: secp256k1::PublicKey,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxOutProof {
     block_header: BlockHeader,
     merkle_proof: PartialMerkleTree,
@@ -218,6 +219,15 @@ fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), ValidationError> {
     }
 
     Ok(())
+}
+
+// TODO: upstream
+impl Hash for TxOutProof {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes).unwrap();
+        state.write(&bytes);
+    }
 }
 
 #[derive(Debug, Error)]

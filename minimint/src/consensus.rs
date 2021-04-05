@@ -9,6 +9,7 @@ use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
 use database::{BatchDb, BincodeSerialized, Database, DatabaseError, PrefixSearchable};
 use fedimint::{FediMint, MintError};
+use fediwallet::Wallet;
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
@@ -43,6 +44,7 @@ where
 
     /// Our local mint
     pub mint: M, //TODO: box dyn trait
+    pub wallet: Wallet<D>,
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: D,
@@ -51,7 +53,7 @@ where
 impl<R, D, M> FediMintConsensus<R, D, M>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + BatchDb + Sync,
+    D: Database + PrefixSearchable + BatchDb + Sync + Send + Clone + 'static,
     M: FediMint + Sync,
 {
     pub fn submit_client_request(&self, cr: ClientRequest) -> Result<(), ClientRequestError> {
@@ -82,6 +84,18 @@ where
             }
             // FIXME: validate peg in/out proofs
             ClientRequest::PegIn(ref peg_in) => {
+                self.wallet
+                    .verify_pigin(&peg_in.proof)
+                    .ok_or(ClientRequestError::InvalidPegIn)?;
+
+                secp256k1::global::SECP256K1
+                    .verify(
+                        &peg_in.id().as_hash().into(),
+                        &peg_in.sig,
+                        peg_in.proof.tweak_contract_key(),
+                    )
+                    .map_err(|_| ClientRequestError::InvalidPegIn)?;
+
                 peg_in.blind_tokens.0.check_tiers(&self.cfg.tbs_sks)?;
             }
             ClientRequest::PegOut(ref peg_out) => {
@@ -212,7 +226,33 @@ where
     }
 
     fn process_peg_in_request(&self, peg_in: PegInRequest) -> DbBatch {
-        // FIXME: check pegin proof and mark as used (ATOMICITY!!!)
+        // TODO: maybe deduplicate verification logic
+        let (mut batch, peg_in_amount) = match self.wallet.claim_pegin(&peg_in.proof) {
+            Some(res) => res,
+            None => {
+                warn!("Received invalid peg-in request from consensus: invalid proof");
+                return vec![];
+            }
+        };
+
+        if secp256k1::global::SECP256K1
+            .verify(
+                &peg_in.id().as_hash().into(),
+                &peg_in.sig,
+                peg_in.proof.tweak_contract_key(),
+            )
+            .is_err()
+        {
+            warn!("Received invalid peg-in request from consensus: invalid signature");
+            return vec![];
+        }
+
+        if peg_in_amount != peg_in.blind_tokens.0.amount() {
+            // TODO: improve abort communication
+            warn!("Received invalid peg-in request from consensus: mismatching amount");
+            return vec![];
+        }
+
         let peg_in_id = peg_in.id();
         debug!("Signing peg-in request {}", peg_in_id);
         let signed_req = match self.mint.sign(peg_in.blind_tokens) {
@@ -237,8 +277,10 @@ where
             },
             BincodeSerialized::owned(signed_req),
         ));
+        batch.push(db_sig_request);
+        batch.push(db_own_sig_element);
 
-        vec![db_sig_request, db_own_sig_element]
+        batch
     }
 
     fn process_reissuance_request(&self, peer: u16, reissuance: ReissuanceRequest) -> DbBatch {
@@ -404,6 +446,8 @@ pub enum ClientRequestError {
     InvalidTransactionSignature,
     #[error("Client request was denied by mint: {0}")]
     DeniedByMint(MintError),
+    #[error("Invalid peg-in")]
+    InvalidPegIn,
     #[error("Client request uses invalid amount tier: {0}")]
     InvalidAmountTier(Amount),
 }

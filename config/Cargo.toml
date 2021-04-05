@@ -23,3 +23,4 @@ tbs = { path = "../crypto/tbs" }
 
 [dev-dependencies]
 rand = "0.6.5"
+miniscript = "5.1.0"

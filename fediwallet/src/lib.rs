@@ -4,23 +4,17 @@ use crate::db::{BlockHashKey, LastBlock, LastBlockKey, UTXOKey};
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::{Amount, BlockHash, Network, OutPoint};
-use bitcoincore_rpc_async::RpcApi;
-use database::batch::{BatchItem, Element};
+use bitcoincore_rpc_async::{Auth, RpcApi};
+use config::{Feerate, WalletConfig};
+use database::batch::{Batch, BatchItem, Element};
 use database::{BatchDb, BincodeSerialized, Database};
-use miniscript::{Descriptor, DescriptorPublicKey};
-use mint_api::{CompressedPublicKey, PegInProof};
+use mint_api::PegInProof;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
 pub const CONFIRMATION_TARGET: u16 = 24;
-
-#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
-pub struct Feerate {
-    pub sats_per_kb: u64,
-}
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WalletConsensusItem {
@@ -37,16 +31,6 @@ pub struct Wallet<D> {
     db: D,
 }
 
-pub struct WalletConfig {
-    pub network: Network,
-    pub peg_in_descriptor: Descriptor<CompressedPublicKey>,
-    pub signing_key: ExtendedPrivKey,
-    pub finalty_delay: u32,
-    pub default_fee: Feerate,
-    pub start_consensus_height: u32,
-    pub per_utxo_fee: Amount,
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SpendableUTXO {
     PegIn { tweak: secp256k1::PublicKey },
@@ -56,11 +40,13 @@ impl<D> Wallet<D>
 where
     D: Database + BatchDb + Clone + Send + 'static,
 {
-    pub async fn new(
-        cfg: WalletConfig,
-        btc_rpc: bitcoincore_rpc_async::Client,
-        db: D,
-    ) -> Result<Self, WalletError> {
+    pub async fn new(cfg: WalletConfig, db: D) -> Result<Self, WalletError> {
+        let btc_rpc = bitcoincore_rpc_async::Client::new(
+            cfg.btc_rpc_address.clone(),
+            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
+        )
+        .await?;
+
         let bitcoind_net = get_network(&btc_rpc).await?;
         if bitcoind_net != cfg.network {
             return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
@@ -258,7 +244,7 @@ where
             .is_some()
     }
 
-    pub fn claim_pegin(&self, peg_in_proof: PegInProof) -> Option<mint_api::Amount> {
+    pub fn verify_pigin(&self, peg_in_proof: &PegInProof) -> Option<Vec<(OutPoint, Amount)>> {
         if !self.block_is_known(peg_in_proof.proof_block()) {
             return None;
         }
@@ -266,14 +252,24 @@ where
         let our_outputs =
             peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
 
+        if our_outputs.len() == 0 {
+            return None;
+        }
+
         if our_outputs.iter().any(|(out_point, _)| {
             self.db
                 .get_value::<_, BincodeSerialized<SpendableUTXO>>(&UTXOKey(*out_point))
                 .expect("DB error")
-                .is_none()
+                .is_some()
         }) {
             return None;
         }
+
+        Some(our_outputs)
+    }
+
+    pub fn claim_pegin(&self, peg_in_proof: &PegInProof) -> Option<(Batch, mint_api::Amount)> {
+        let our_outputs = self.verify_pigin(peg_in_proof)?;
 
         let amount: u64 = our_outputs.iter().map(|(_, amt)| amt.as_sat()).sum();
         let fee = self.cfg.per_utxo_fee.as_sat() * our_outputs.len() as u64;
@@ -290,9 +286,8 @@ where
                 })
             })
             .collect::<Vec<_>>();
-        self.db.apply_batch(batch.iter()).expect("DB error");
 
-        Some(issuance_amount)
+        Some((batch, issuance_amount))
     }
 }
 

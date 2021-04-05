@@ -78,10 +78,11 @@ pub struct CoinNonce(pub musig::PubKey);
 
 /// After sending bitcoins to the federation wallet a client can request the appropriate amount
 /// of coins in return using this request.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct PegInRequest {
     pub blind_tokens: SignRequest,
-    pub proof: (), // TODO: implement pegin
+    pub proof: PegInProof,
+    pub sig: secp256k1::Signature,
 }
 
 /// Exchange already signed [`Coin`]s for new coins, breaking the link due to blind signing
@@ -406,5 +407,14 @@ pub struct InvalidAmountTierError(pub Amount);
 impl std::fmt::Display for InvalidAmountTierError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Amount tier unknown to mint: {}", self.0)
+    }
+}
+
+// TODO: upstream
+impl std::hash::Hash for PegInRequest {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.proof.hash(state);
+        self.blind_tokens.hash(state);
+        self.sig.serialize_compact().hash(state);
     }
 }

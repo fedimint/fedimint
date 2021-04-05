@@ -1,7 +1,9 @@
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::Network;
-use config::{ClientConfig, Peer, ServerConfig};
+use config::{ClientConfig, Feerate, Peer, ServerConfig, WalletConfig};
 use hbbft::crypto::serde_impl::SerdeSecret;
-use mint_api::Amount;
+use miniscript::descriptor::Wsh;
+use mint_api::{Amount, CompressedPublicKey, PegInDescriptor};
 use rand::rngs::OsRng;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -20,10 +22,13 @@ struct Options {
 fn main() {
     let opts: Options = StructOpt::from_args();
     let mut rng = OsRng::new().unwrap();
+    let secp = Secp256k1::new();
+
+    let per_utxo_fee = bitcoin::Amount::from_sat(500);
 
     let ids = 0..opts.nodes;
-    let netinfo =
-        hbbft::NetworkInfo::generate_map(ids, &mut rng).expect("Could not generate HBBFT netinfo");
+    let netinfo = hbbft::NetworkInfo::generate_map(ids.clone(), &mut rng)
+        .expect("Could not generate HBBFT netinfo");
 
     println!(
         "Generating keys such that up to {} peers may fail/be evil",
@@ -39,6 +44,20 @@ fn main() {
             (amount, (tbs_pk, tbs_pks, tbs_sks))
         })
         .collect::<HashMap<_, _>>();
+
+    let btc_pegin_keys = ids
+        .map(|_id| secp.generate_keypair(&mut rng))
+        .collect::<Vec<_>>();
+    let peg_in_desriptor = PegInDescriptor::Wsh(
+        Wsh::new_sortedmulti(
+            tbs_threshold,
+            btc_pegin_keys
+                .iter()
+                .map(|(_, pk)| CompressedPublicKey { key: *pk })
+                .collect(),
+        )
+        .unwrap(),
+    );
 
     let peers = netinfo
         .iter()
@@ -77,6 +96,17 @@ fn main() {
                 .map(|&amount| (amount, tbs_keys[&amount].2[id as usize]))
                 .collect(),
             db_path: format!("cfg/mint-{}.db", id).into(),
+            wallet: WalletConfig {
+                network: Network::Regtest,
+                peg_in_descriptor: peg_in_desriptor.clone(),
+                finalty_delay: 10,
+                default_fee: Feerate { sats_per_kb: 2000 },
+                start_consensus_height: 0,
+                per_utxo_fee,
+                btc_rpc_address: "127.0.0.1:18443".to_string(),
+                btc_rpc_user: "bitcoin".to_string(),
+                btc_rpc_pass: "bitcoin".to_string(),
+            },
         };
         serde_json::to_writer_pretty(file, &cfg).unwrap();
     }
@@ -101,6 +131,7 @@ fn main() {
                 .parse()
                 .unwrap(), // Dummy
         network: Network::Regtest,
+        per_utxo_fee,
     };
     serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }

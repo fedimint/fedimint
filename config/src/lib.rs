@@ -1,5 +1,6 @@
-use bitcoin::Network;
-use mint_api::{Keys, PegInDescriptor};
+use bitcoin::util::bip32::ExtendedPrivKey;
+use bitcoin::{Amount, Network};
+use mint_api::{CompressedPublicKey, Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -13,6 +14,26 @@ use tbs::AggregatePublicKey;
 #[derive(StructOpt)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
+pub struct Feerate {
+    pub sats_per_kb: u64,
+}
+
+// TODO: put config back into functional crates, make cfg-gen dependent on all
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WalletConfig {
+    pub network: Network,
+    pub peg_in_descriptor: PegInDescriptor,
+    pub finalty_delay: u32,
+    pub default_fee: Feerate,
+    pub start_consensus_height: u32,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub per_utxo_fee: Amount,
+    pub btc_rpc_address: String,
+    pub btc_rpc_user: String,
+    pub btc_rpc_pass: String,
 }
 
 #[cfg(feature = "server")]
@@ -32,6 +53,8 @@ pub struct ServerConfig {
     pub tbs_sks: Keys<tbs::SecretKeyShare>,
 
     pub db_path: PathBuf,
+
+    pub wallet: WalletConfig,
 }
 
 #[cfg(feature = "server")]
@@ -77,6 +100,8 @@ pub struct ClientConfig {
     pub mint_pk: Keys<AggregatePublicKey>,
     pub peg_in_descriptor: PegInDescriptor,
     pub network: Network,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub per_utxo_fee: bitcoin::Amount,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {

@@ -644,6 +644,7 @@ dependencies = [
  "bitcoin",
  "hbbft",
  "hex 0.4.3",
+ "miniscript",
  "mint-api",
  "rand 0.6.5",
  "serde",
@@ -973,6 +974,7 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "bitcoincore-rpc-async",
+ "config",
  "database",
  "futures",
  "hex 0.4.3",
@@ -1668,6 +1670,7 @@ dependencies = [
  "musig",
  "rand 0.6.5",
  "rayon",
+ "secp256k1",
  "serde",
  "serde_json",
  "sha3",
@@ -2456,6 +2459,7 @@ version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "733b114f058f260c0af7591434eef4272ae1a8ec2751766d3cb89c6df8d5e450"
 dependencies = [
+ "bitcoin_hashes",
  "rand 0.6.5",
  "secp256k1-sys",
  "serde",
