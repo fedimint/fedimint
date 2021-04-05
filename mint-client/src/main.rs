@@ -1,7 +1,10 @@
+use bitcoin::consensus::Decodable;
+use bitcoin::Transaction;
 use bitcoin_hashes::hex::ToHex;
 use config::{load_from_file, ClientConfig};
-use mint_api::{Amount, Coins};
+use mint_api::{Amount, Coins, TxOutProof};
 use mint_client::{MintClient, SpendableCoin};
+use std::error::Error;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tracing::{error, info};
@@ -21,7 +24,12 @@ enum Command {
     #[structopt(
         about = "Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)"
     )]
-    PegIn { amount: Amount },
+    PegIn {
+        #[structopt(parse(try_from_str = from_hex))]
+        txout_proof: TxOutProof,
+        #[structopt(parse(try_from_str = from_hex))]
+        transaction: Transaction,
+    },
     #[structopt(about = "Reissue tokens received from a third party to avoid double spends")]
     Reissue {
         #[structopt(parse(from_str = parse_coins))]
@@ -60,9 +68,14 @@ async fn main() {
         Command::PegInAddress => {
             println!("{}", client.get_new_pegin_address(&mut rng))
         }
-        Command::PegIn { amount } => {
-            info!("Starting peg-in transaction for {}", amount);
-            let id = client.peg_in(amount, &mut rng).await.unwrap();
+        Command::PegIn {
+            txout_proof,
+            transaction,
+        } => {
+            let id = client
+                .peg_in(txout_proof, transaction, &mut rng)
+                .await
+                .unwrap();
             info!(
                 "Started peg-in {}, please fetch the result later",
                 id.to_hex()
@@ -114,4 +127,9 @@ fn parse_coins(s: &str) -> Coins<SpendableCoin> {
 fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
     let bytes = bincode::serialize(&c).unwrap();
     base64::encode(&bytes)
+}
+
+fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
+    let bytes = hex::decode(s)?;
+    Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
 }

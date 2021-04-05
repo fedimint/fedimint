@@ -1,6 +1,5 @@
-use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::{Amount, Network};
-use mint_api::{CompressedPublicKey, Keys, PegInDescriptor};
+use mint_api::{Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

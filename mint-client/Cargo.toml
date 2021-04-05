@@ -14,12 +14,13 @@ bitcoin_hashes = "0.9.4"
 config = { path = "../config", features = [ "client" ] }
 database = { path = "../database" }
 futures = "0.3.9"
+hex = "0.4.3"
 miniscript = "5.1.0"
 mint-api = { path = "../mint-api" }
 musig = { path = "../crypto/musig" }
 rand = "0.6.5"
 reqwest = { version = "0.11.0", features = [ "json" ], default-features = false }
-secp256k1 = { version = "0.20.1", features = [ "serde" ] }
+secp256k1 = { version = "0.20.1", features = [ "serde", "bitcoin_hashes" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 sha3 = "0.9.1"
 sled = "0.34.6"
@@ -29,7 +30,3 @@ thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = "0.2.15"
-
-[dev-dependencies]
-itertools = "0.10.0"
-serde_json = "1.0.61"

@@ -1,5 +1,4 @@
 use bitcoin::Network;
-use bitcoincore_rpc_async::{Auth, Client};
 use config::{Feerate, WalletConfig};
 use fediwallet::Wallet;
 use tracing_subscriber::EnvFilter;

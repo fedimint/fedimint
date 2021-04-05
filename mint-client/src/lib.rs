@@ -1,4 +1,5 @@
-use bitcoin::Address;
+use bitcoin::{Address, Script, Transaction};
+use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use database::batch::{BatchItem, Element};
@@ -9,8 +10,9 @@ use database::{
 use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
 use mint_api::{
-    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInRequest, ReissuanceRequest,
-    SigResponse, SignRequest, TransactionId, TweakableDescriptor, TxId, TxOutProof,
+    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
+    PegInRequest, ReissuanceRequest, SigResponse, SignRequest, TransactionId, TweakableDescriptor,
+    TxId, TxOutProof,
 };
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
@@ -79,7 +81,7 @@ pub struct CoinKeyPrefix;
 
 #[derive(Debug, Clone)]
 pub struct PegInKey {
-    tweak_contract_key: secp256k1::SecretKey,
+    peg_in_script: Script,
 }
 
 impl<D> MintClient<D>
@@ -97,15 +99,47 @@ where
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
         &self,
-        peg_in_proof: Amount,
+        txout_proof: TxOutProof,
+        transaction: Transaction,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
-        // TODO: use real peg-in proof
-        let amount = peg_in_proof;
+        let secret_tweak_key = transaction
+            .output
+            .iter()
+            .find_map(|out| {
+                self.db
+                    .get_value::<_, BincodeSerialized<secp256k1::SecretKey>>(&PegInKey {
+                        peg_in_script: out.script_pubkey.clone(),
+                    })
+                    .expect("DB error")
+                    .map(|tweak_secret| tweak_secret.into_owned())
+            })
+            .ok_or(ClientError::NoMatchingPegInFound)?;
+        let public_tweak_key = secp256k1::PublicKey::from_secret_key(&self.secp, &secret_tweak_key);
+
+        let peg_in_proof = PegInProof::new(txout_proof, transaction, public_tweak_key)
+            .map_err(|e| ClientError::PegInProofError(e))?;
+
+        let utxos = peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
+        let sats = utxos.iter().map(|(_, amt)| amt.as_sat()).sum::<u64>()
+            - (self.cfg.per_utxo_fee.as_sat() * utxos.len() as u64);
+        let amount = Amount::from_sat(sats);
+
         let (issuance_request, sig_req) = IssuanceRequest::new(amount, &self.cfg.mint_pk, &mut rng);
+
+        let peg_in_req_sig = {
+            let mut hasher = Sha256::engine();
+            bincode::serialize_into(&mut hasher, &sig_req).expect("encoding error");
+            bincode::serialize_into(&mut hasher, &peg_in_proof).expect("encoding error");
+            let hash = Sha256::from_engine(hasher);
+
+            self.secp.sign(&hash.into(), &secret_tweak_key)
+        };
+
         let req = PegInRequest {
             blind_tokens: sig_req,
-            proof: (),
+            proof: peg_in_proof,
+            sig: peg_in_req_sig,
         };
 
         let req_id = req.id();
@@ -323,19 +357,20 @@ where
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
-        let address = self
+        let script = self
             .cfg
             .peg_in_descriptor
             .tweak(peg_in_pub_key, &self.secp)
-            .address(self.cfg.network)
-            .expect("Bare descriptors aren't allowed");
+            .script_pubkey();
+        let address = Address::from_script(&script, self.cfg.network)
+            .expect("Script from descriptor should have an address");
 
         self.db
             .insert_entry(
                 &PegInKey {
-                    tweak_contract_key: peg_in_sec_key,
+                    peg_in_script: script,
                 },
-                &(),
+                &BincodeSerialized::borrowed(&peg_in_sec_key),
             )
             .expect("DB error");
 
@@ -447,6 +482,10 @@ pub enum ClientError {
     MintError,
     #[error("Could not finalize issuance request: {0}")]
     FinalizationError(CoinFinalizationError),
+    #[error("Could not find an ongoing matching peg-in")]
+    NoMatchingPegInFound,
+    #[error("Inconsistent peg-in proof: {0}")]
+    PegInProofError(PegInProofError),
 }
 
 impl From<InvalidAmountTierError> for CoinFinalizationError {
@@ -529,23 +568,21 @@ impl DatabaseKeyPrefix for CoinKeyPrefix {
 
 impl DatabaseKeyPrefix for PegInKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(33);
-        bytes.push(DB_PREFIX_PEG_IN);
-        bytes.extend_from_slice(&self.tweak_contract_key[..]);
+        let mut bytes = vec![DB_PREFIX_PEG_IN];
+        bytes.extend_from_slice(&self.peg_in_script[..]);
         bytes
     }
 }
 
 impl DatabaseKey for PegInKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 33 {
-            Err(DecodingError("PegInKey: expected 33 bytes".into()))
+        if data.len() < 1 {
+            Err(DecodingError("PegInKey: expected at least 1 byte".into()))
         } else if data[0] != DB_PREFIX_PEG_IN {
             Err(DecodingError("PegInKey: wrong prefix".into()))
         } else {
             Ok(PegInKey {
-                tweak_contract_key: secp256k1::SecretKey::from_slice(&data[1..])
-                    .map_err(|e| DecodingError(e.into()))?,
+                peg_in_script: Script::from(data[1..].to_vec()),
             })
         }
     }
