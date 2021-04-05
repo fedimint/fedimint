@@ -102,7 +102,7 @@ pub async fn run_minimint(
                 let batch_processor_ready = batch_process.is_terminated();
 
                 if hbbft_ready && batch_processor_ready {
-                    let proposal = mint_consensus.get_consensus_proposal();
+                    let proposal = mint_consensus.get_consensus_proposal().await;
                     debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
                     trace!("Proposal: {:?}", proposal);
                     hb.propose(&proposal, &mut rng)
@@ -158,7 +158,7 @@ pub async fn run_minimint(
             batch_process = Some(
                 spawn(async move {
                     for batch in output {
-                        batch_mint_consensus.process_consensus_outcome(batch);
+                        batch_mint_consensus.process_consensus_outcome(batch).await;
                     }
                 })
                 .fuse(),

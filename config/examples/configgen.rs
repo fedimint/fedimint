@@ -48,7 +48,7 @@ fn main() {
     let btc_pegin_keys = ids
         .map(|_id| secp.generate_keypair(&mut rng))
         .collect::<Vec<_>>();
-    let peg_in_desriptor = PegInDescriptor::Wsh(
+    let peg_in_descriptor = PegInDescriptor::Wsh(
         Wsh::new_sortedmulti(
             tbs_threshold,
             btc_pegin_keys
@@ -98,7 +98,7 @@ fn main() {
             db_path: format!("cfg/mint-{}.db", id).into(),
             wallet: WalletConfig {
                 network: Network::Regtest,
-                peg_in_descriptor: peg_in_desriptor.clone(),
+                peg_in_descriptor: peg_in_descriptor.clone(),
                 finalty_delay: 10,
                 default_fee: Feerate { sats_per_kb: 2000 },
                 start_consensus_height: 0,
@@ -126,10 +126,7 @@ fn main() {
             .iter()
             .map(|&amount| (amount, tbs_keys[&amount].0))
             .collect(),
-        peg_in_descriptor:
-            "pkh(020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae8d)"
-                .parse()
-                .unwrap(), // Dummy
+        peg_in_descriptor,
         network: Network::Regtest,
         per_utxo_fee,
     };

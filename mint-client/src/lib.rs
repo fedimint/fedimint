@@ -107,6 +107,7 @@ where
             .output
             .iter()
             .find_map(|out| {
+                debug!("Output script: {}", out.script_pubkey);
                 self.db
                     .get_value::<_, BincodeSerialized<secp256k1::SecretKey>>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
@@ -362,6 +363,7 @@ where
             .peg_in_descriptor
             .tweak(peg_in_pub_key, &self.secp)
             .script_pubkey();
+        debug!("Peg-in script: {}", script);
         let address = Address::from_script(&script, self.cfg.network)
             .expect("Script from descriptor should have an address");
 

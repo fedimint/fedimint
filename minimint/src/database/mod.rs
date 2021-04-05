@@ -53,6 +53,8 @@ impl DatabaseKeyPrefix for ConsensusItem {
                 unimplemented!()
             }
             ConsensusItem::PartiallySignedRequest(id, _) => *id,
+            // Wallet CIs are never written, we might try to remove them though
+            ConsensusItem::Wallet(_) => TransactionId::default(),
         };
 
         bytes.extend_from_slice(&issuance_id[..]);

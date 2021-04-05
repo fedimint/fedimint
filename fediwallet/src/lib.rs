@@ -12,11 +12,12 @@ use database::{BatchDb, BincodeSerialized, Database};
 use mint_api::PegInProof;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
 pub const CONFIRMATION_TARGET: u16 = 24;
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WalletConsensusItem {
     block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
     fee_rate: Feerate,
@@ -24,8 +25,10 @@ pub struct WalletConsensusItem {
 
 pub struct Wallet<D> {
     cfg: WalletConfig,
-    last_consensus_height_proposal: u32,
-    consensus_feerate: Feerate,
+    // TODO: find a better way to deal with this
+    // the mutex should never block, this is simply to calm down rust, parallel access is a logic error
+    last_consensus_height_proposal: Mutex<u32>,
+    consensus_feerate: Mutex<Feerate>,
     secp: Secp256k1<All>,
     btc_rpc: bitcoincore_rpc_async::Client,
     db: D,
@@ -77,8 +80,8 @@ where
 
         let wallet = Wallet {
             cfg,
-            last_consensus_height_proposal: 0,
-            consensus_feerate: Feerate { sats_per_kb: 1000 },
+            last_consensus_height_proposal: Mutex::new(0),
+            consensus_feerate: Mutex::new(Feerate { sats_per_kb: 1000 }),
             secp: Default::default(),
             btc_rpc,
             db,
@@ -98,17 +101,19 @@ where
     pub async fn consensus_proposal(&self) -> Result<WalletConsensusItem, WalletError> {
         let network_height = self.btc_rpc.get_block_count().await? as u32;
         let target_height = network_height.saturating_sub(self.cfg.finalty_delay);
+        let mut last_proposal = self.last_consensus_height_proposal.lock().await;
 
-        let proposed_height = if target_height >= self.last_consensus_height_proposal {
+        let proposed_height = if target_height >= *last_proposal {
             target_height
         } else {
             warn!(
                 "The block height shrunk, new proposal would be {}, but we are sticking to our last block height proposal {}.",
                 target_height,
-                self.last_consensus_height_proposal
+                *last_proposal
             );
-            self.last_consensus_height_proposal
+            *last_proposal
         };
+        *last_proposal = proposed_height;
 
         let fee_rate = self
             .btc_rpc
@@ -127,7 +132,7 @@ where
     }
 
     pub async fn process_consensus_proposals(
-        &mut self,
+        &self,
         proposals: Vec<WalletConsensusItem>,
     ) -> Result<(), WalletError> {
         trace!("Received consensus proposals {:?}", &proposals);
@@ -143,13 +148,13 @@ where
             .map(|wc| (wc.block_height, wc.fee_rate))
             .unzip();
 
-        self.process_fee_proposals(fee_proposals);
+        self.process_fee_proposals(fee_proposals).await;
         self.process_block_height_proposals(height_proposals).await
     }
 
     /// # Panics
     /// * If proposals is empty
-    fn process_fee_proposals(&mut self, mut proposals: Vec<Feerate>) {
+    async fn process_fee_proposals(&self, mut proposals: Vec<Feerate>) {
         assert!(!proposals.is_empty());
 
         proposals.sort();
@@ -158,13 +163,14 @@ where
             .get(proposals.len() / 2)
             .expect("We checked before that proposals aren't empty");
 
-        self.consensus_feerate = median_proposal;
+        let mut fee_rate = self.consensus_feerate.lock().await;
+        *fee_rate = median_proposal;
     }
 
     /// # Panics
     /// * If proposals is empty
     async fn process_block_height_proposals(
-        &mut self,
+        &self,
         mut proposals: Vec<u32>,
     ) -> Result<(), WalletError> {
         assert!(!proposals.is_empty());
@@ -200,6 +206,7 @@ where
                 "Nothing to sync, new height ({}) is lower than old height ({}), doing nothing.",
                 new_height, old_height
             );
+            return Ok(());
         }
 
         if new_height == old_height {

@@ -15,7 +15,7 @@ pub struct ServerOpts {
     pub cfg_path: PathBuf,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
 pub struct Feerate {
     pub sats_per_kb: u64,
 }

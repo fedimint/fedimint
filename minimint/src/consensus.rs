@@ -9,7 +9,7 @@ use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
 use database::{BatchDb, BincodeSerialized, Database, DatabaseError, PrefixSearchable};
 use fedimint::{FediMint, MintError};
-use fediwallet::Wallet;
+use fediwallet::{Wallet, WalletConsensusItem};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
@@ -27,6 +27,7 @@ use tracing::{debug, error, info, trace, warn};
 pub enum ConsensusItem {
     ClientRequest(ClientRequest),
     PartiallySignedRequest(TransactionId, mint_api::PartialSigResponse),
+    Wallet(WalletConsensusItem),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
@@ -115,8 +116,23 @@ where
         Ok(())
     }
 
-    pub fn process_consensus_outcome(&self, batch: Batch<Vec<ConsensusItem>, u16>) {
+    pub async fn process_consensus_outcome(&self, batch: Batch<Vec<ConsensusItem>, u16>) {
         info!("Processing output of epoch {}", batch.epoch);
+
+        let wallet_consensus = batch
+            .contributions
+            .values()
+            .flatten()
+            .filter_map(|ci| match ci {
+                ConsensusItem::ClientRequest(_) => None,
+                ConsensusItem::PartiallySignedRequest(_, _) => None,
+                ConsensusItem::Wallet(wci) => Some(wci.clone()),
+            })
+            .collect::<Vec<_>>();
+        self.wallet
+            .process_consensus_proposals(wallet_consensus)
+            .await
+            .expect("wallet error");
 
         // Since the changes to the database will happen all at once we won't be able to handle
         // conflicts between consensus items in one batch there. Thus we need to make sure that
@@ -182,6 +198,7 @@ where
                     ConsensusItem::PartiallySignedRequest(id, psig) => {
                         self.process_partial_signature(peer, id, psig)
                     }
+                    ConsensusItem::Wallet(_) => vec![],
                 };
 
                 (batch, remove_ci)
@@ -205,10 +222,18 @@ where
             .expect("DB error");
     }
 
-    pub fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
+    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
+        let wallet_consensus = self
+            .wallet
+            .consensus_proposal()
+            .await
+            .expect("wallet error");
+        debug!("Wallet proposal: {:?}", wallet_consensus);
+
         self.db
             .find_by_prefix(&AllConsensusItemsKeyPrefix)
             .map(|res| res.map(|(ci, ())| ci))
+            .chain(std::iter::once(Ok(ConsensusItem::Wallet(wallet_consensus))))
             .collect::<Result<_, DatabaseError>>()
             .expect("DB error")
     }
