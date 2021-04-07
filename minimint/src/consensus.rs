@@ -160,6 +160,19 @@ where
             .flatten()
             .collect::<Counter<_>>();
 
+        let used_peg_in_proofs = batch
+            .contributions
+            .iter()
+            .flat_map(|(_, cis)| cis.iter())
+            .unique()
+            .filter_map(|ci| match ci {
+                ConsensusItem::ClientRequest(ClientRequest::PegIn(req)) => {
+                    Some(req.proof.identity())
+                }
+                _ => None,
+            })
+            .collect::<Counter<_>>();
+
         // Filter batch for consistency
         let batch = batch
             .contributions
@@ -175,8 +188,12 @@ where
                             .coins
                             .iter()
                             .all(|(_, coin)| *spent_coins.get(&coin).unwrap() == 1),
-                        ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
-                            unimplemented!()
+                        ConsensusItem::ClientRequest(ClientRequest::PegOut(req)) => req
+                            .coins
+                            .iter()
+                            .all(|(_, coin)| *spent_coins.get(&coin).unwrap() == 1),
+                        ConsensusItem::ClientRequest(ClientRequest::PegIn(req)) => {
+                            *used_peg_in_proofs.get(&req.proof.identity()).unwrap() == 1
                         }
                         _ => true,
                     })

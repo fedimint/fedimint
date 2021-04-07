@@ -145,6 +145,10 @@ impl PegInProof {
     pub fn tweak_contract_key(&self) -> &secp256k1::PublicKey {
         &self.tweak_contract_key
     }
+
+    pub fn identity(&self) -> (PublicKey, bitcoin::Txid) {
+        (self.tweak_contract_key.clone(), self.transaction.txid())
+    }
 }
 
 /// Hashes the `tweak` key together with the `key` and uses the result to tweak the `key`
