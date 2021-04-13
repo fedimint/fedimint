@@ -96,9 +96,9 @@ pub struct ReissuanceRequest {
 /// Redeem [`Coin`]s for bitcoin on-chain
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PegOutRequest {
-    pub address: (), // TODO: implement pegout
+    pub address: bitcoin::Address,
     pub coins: Coins<Coin>,
-    pub sig: (), // TODO: impl signing
+    pub sig: musig::Sig,
 }
 
 /// This object belongs to an issuance operation and thus has an [`IssuanceId`]

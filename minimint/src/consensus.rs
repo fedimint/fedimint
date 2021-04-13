@@ -13,7 +13,7 @@ use fediwallet::{Wallet, WalletConsensusItem};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
-    Amount, BitcoinHash, InvalidAmountTierError, PartialSigResponse, PegInRequest,
+    Amount, BitcoinHash, InvalidAmountTierError, PartialSigResponse, PegInRequest, PegOutRequest,
     ReissuanceRequest, TransactionId, TxId,
 };
 use musig;
@@ -83,11 +83,11 @@ where
 
                 self.mint.validate(&self.db, &reissuance_req.coins)?;
             }
-            // FIXME: validate peg in/out proofs
             ClientRequest::PegIn(ref peg_in) => {
                 self.wallet
                     .verify_pigin(&peg_in.proof)
                     .ok_or(ClientRequestError::InvalidPegIn)?;
+                // TODO: pre-check amounts, preferably without redundancy
 
                 secp256k1::global::SECP256K1
                     .verify(
@@ -100,6 +100,16 @@ where
                 peg_in.blind_tokens.0.check_tiers(&self.cfg.tbs_sks)?;
             }
             ClientRequest::PegOut(ref peg_out) => {
+                // TODO: remove redundancy with reissuance
+                let pub_keys = peg_out
+                    .coins
+                    .iter()
+                    .map(|(_, coin)| coin.spend_key())
+                    .collect::<Vec<_>>();
+                if !musig::verify(peg_out.id().into_inner(), peg_out.sig.clone(), &pub_keys) {
+                    return Err(ClientRequestError::InvalidTransactionSignature);
+                }
+
                 peg_out.coins.check_tiers(&self.cfg.tbs_sks)?;
             }
         }
@@ -261,9 +271,7 @@ where
             ClientRequest::Reissuance(reissuance) => {
                 self.process_reissuance_request(peer, reissuance)
             }
-            ClientRequest::PegOut(_req) => {
-                unimplemented!()
-            }
+            ClientRequest::PegOut(req) => self.process_peg_out_request(peer, req),
         }
     }
 
@@ -360,6 +368,31 @@ where
         )));
 
         batch
+    }
+
+    fn process_peg_out_request(&self, peer: u16, peg_out: PegOutRequest) -> DbBatch {
+        let pub_keys = peg_out
+            .coins
+            .iter()
+            .map(|(_, coin)| coin.spend_key())
+            .collect::<Vec<_>>();
+        if !musig::verify(peg_out.id().into_inner(), peg_out.sig.clone(), &pub_keys) {
+            warn!("Peer {} proposed an invalid peg-out request: sig.", peer);
+            return vec![];
+        }
+
+        if peg_out.coins.check_tiers(&self.cfg.tbs_sks).is_err() {
+            warn!("Peer {} proposed an invalid peg-out request: tiers.", peer);
+            return vec![];
+        }
+
+        let sats =
+            (peg_out.coins.amount().milli_sat / 1000) - self.cfg.wallet.per_utxo_fee.as_sat();
+        let amount = bitcoin::Amount::from_sat(sats);
+
+        vec![self
+            .wallet
+            .queue_pegout(peg_out.id(), peg_out.address, amount)]
     }
 
     fn process_partial_signature(

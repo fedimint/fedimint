@@ -1,10 +1,10 @@
 mod db;
 
-use crate::db::{BlockHashKey, LastBlock, LastBlockKey, UTXOKey};
+use crate::db::{BlockHashKey, LastBlock, LastBlockKey, PendingPegOutKey, UTXOKey};
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::{Amount, BlockHash, Network, OutPoint};
+use bitcoin::{Address, Amount, BlockHash, Network, OutPoint};
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
 use database::batch::{Batch, BatchItem, Element};
@@ -37,6 +37,13 @@ pub struct Wallet<D> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SpendableUTXO {
     PegIn { tweak: secp256k1::PublicKey },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PendingPegOut {
+    destination: Address,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    amount: bitcoin::Amount,
 }
 
 impl<D> Wallet<D>
@@ -295,6 +302,21 @@ where
             .collect::<Vec<_>>();
 
         Some((batch, issuance_amount))
+    }
+
+    pub fn queue_pegout(
+        &self,
+        transaction_id: mint_api::TransactionId,
+        address: Address,
+        amount: bitcoin::Amount,
+    ) -> BatchItem {
+        BatchItem::InsertNewElement(Element {
+            key: Box::new(PendingPegOutKey(transaction_id)),
+            value: Box::new(BincodeSerialized::owned(PendingPegOut {
+                destination: address,
+                amount,
+            })),
+        })
     }
 }
 

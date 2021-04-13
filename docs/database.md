@@ -29,6 +29,7 @@ The following "tables" exist:
 | Blocks               | 0x30   | block hash (32 bytes)                                                                           | block height (4 bytes)          |
 | Our UTXOs            | 0x31   | OutPoint (32 bytes txid + 4 bytes output)                                                       | data necessary for spending     |
 | Last Block           | 0x32   | none                                                                                            | block height (4bytes)           |
+| Queued PegOut        | 0x33   | mint tx id (32 bytes)                                                                           | address, amount                 |
 
 ## Client DB Layout
 

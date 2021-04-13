@@ -9,6 +9,7 @@ use std::io::Cursor;
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
 const DB_PREFIX_LAST_BLOCK: u8 = 0x32;
+const DB_PREFIX_PEDNING_PEGOUT: u8 = 0x33;
 
 #[derive(Clone, Debug)]
 pub struct BlockHashKey(pub BlockHash);
@@ -21,6 +22,9 @@ pub struct LastBlock(pub u32);
 
 #[derive(Clone, Debug)]
 pub struct UTXOKey(pub OutPoint);
+
+#[derive(Clone, Debug)]
+pub struct PendingPegOutKey(pub mint_api::TransactionId);
 
 impl DatabaseKeyPrefix for BlockHashKey {
     fn to_bytes(&self) -> Vec<u8> {
@@ -103,5 +107,29 @@ impl DatabaseKey for UTXOKey {
             OutPoint::consensus_decode(Cursor::new(&data[1..]))
                 .map_err(|e| DecodingError(e.into()))?,
         ))
+    }
+}
+
+impl DatabaseKeyPrefix for PendingPegOutKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(33);
+        bytes.push(DB_PREFIX_PEDNING_PEGOUT);
+        bytes.extend_from_slice(&self.0[..]);
+        bytes
+    }
+}
+
+impl DatabaseKey for PendingPegOutKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        if data.len() != 33 {
+            Err(DecodingError("PendingPegOutKey: expected 33 bytes".into()))
+        } else if data[0] != DB_PREFIX_PEDNING_PEGOUT {
+            Err(DecodingError("PendingPegOutKey: wrong prefix".into()))
+        } else {
+            Ok(PendingPegOutKey(
+                mint_api::TransactionId::from_slice(&data[1..])
+                    .map_err(|e| DecodingError(e.into()))?,
+            ))
+        }
     }
 }
