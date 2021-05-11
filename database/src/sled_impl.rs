@@ -106,7 +106,7 @@ impl BatchDb for sled::Tree {
 
             Ok(())
         })
-        .map_err(|e: TransactionError| DatabaseError::DbError(e.into()))
+        .map_err(|e: TransactionError| DatabaseError::DbError(Box::new(e)))
     }
 }
 
@@ -118,7 +118,7 @@ impl From<DecodingError> for sled::transaction::ConflictableTransactionError<Dec
 
 impl From<sled::Error> for DatabaseError {
     fn from(e: sled::Error) -> Self {
-        DatabaseError::DbError(e.into())
+        DatabaseError::DbError(Box::new(e))
     }
 }
 

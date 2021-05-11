@@ -121,24 +121,51 @@ impl DatabaseValue for () {
         if data.is_empty() {
             Ok(())
         } else {
-            Err(DecodingError("Expected zero bytes for empty tuple".into()))
+            Err(DecodingError::wrong_length(0, data.len()))
         }
     }
 }
 
-#[derive(Debug, Error)]
-pub struct DecodingError(pub Box<dyn Error>);
+/// Checks a key of fixed length for the right `prefix` and data length. On success it returns a slice
+/// of length `len` with the prefix cut off.
+pub fn check_format(data: &[u8], prefix: u8, len: usize) -> Result<&[u8], DecodingError> {
+    if len + 1 != data.len() {
+        Err(DecodingError::wrong_length(len, data.len()))
+    } else if data[0] != prefix {
+        Err(DecodingError::wrong_prefix(prefix, data[0]))
+    } else {
+        Ok(&data[1..])
+    }
+}
 
-impl Display for DecodingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.0, f)
+#[derive(Debug, Error)]
+pub enum DecodingError {
+    #[error("Key had a wrong prefix, expected {expected} but got {found}")]
+    WrongPrefix { expected: u8, found: u8 },
+    #[error("Key had a wrong length, expected {expected} but got {found}")]
+    WrongLength { expected: usize, found: usize },
+    #[error("Other decoding error: {0}")]
+    Other(Box<dyn Error + Send + 'static>),
+}
+
+impl DecodingError {
+    pub fn other<E: Error + Send + 'static>(error: E) -> DecodingError {
+        DecodingError::Other(Box::new(error))
+    }
+
+    pub fn wrong_prefix(expected: u8, found: u8) -> DecodingError {
+        DecodingError::WrongPrefix { expected, found }
+    }
+
+    pub fn wrong_length(expected: usize, found: usize) -> DecodingError {
+        DecodingError::WrongLength { expected, found }
     }
 }
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
     #[error("Underlying Database Error: {0}")]
-    DbError(Box<dyn Error>),
+    DbError(Box<dyn Error + Send>),
     #[error("Decoding error: {0}")]
     DecodingError(DecodingError),
 }
@@ -176,7 +203,7 @@ impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
 {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         Ok(BincodeSerialized(
-            bincode::deserialize(&data).map_err(|e| DecodingError(e.into()))?,
+            bincode::deserialize(&data).map_err(|e| DecodingError::other(e))?,
         ))
     }
 }
@@ -206,7 +233,7 @@ mod tests {
             bytes.copy_from_slice(data);
             let num = u64::from_be_bytes(bytes);
             if num == 0 {
-                Err(DecodingError("Test error".into()))
+                Err(DecodingError::wrong_prefix(0, 0))
             } else {
                 Ok(TestKey(num))
             }
@@ -225,7 +252,7 @@ mod tests {
             bytes.copy_from_slice(data);
             let num = u64::from_be_bytes(bytes);
             if num == 0 {
-                Err(DecodingError("Test error".into()))
+                Err(DecodingError::wrong_prefix(0, 0))
             } else {
                 Ok(TestVal(num))
             }

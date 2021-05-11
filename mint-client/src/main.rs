@@ -1,5 +1,5 @@
 use bitcoin::consensus::Decodable;
-use bitcoin::Transaction;
+use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use config::{load_from_file, ClientConfig};
 use mint_api::{Amount, Coins, TxOutProof};
@@ -36,7 +36,13 @@ enum Command {
         coins: Coins<SpendableCoin>,
     },
     #[structopt(about = "Prepare coins to send to a third party as a payment")]
-    Spend { amount: Amount },
+    Spend {
+        amount: Amount,
+    },
+    PegOut {
+        address: Address,
+        amount: Amount,
+    },
     #[structopt(about = "Fetch (re-)issued coins and finalize issuance process")]
     Fetch,
     #[structopt(about = "Display wallet info (holdings, tiers)")]
@@ -115,6 +121,9 @@ async fn main() {
             for (amount, coins) in coins.coins {
                 info!("We own {} coins of denomination {}", coins.len(), amount);
             }
+        }
+        Command::PegOut { address, amount } => {
+            client.peg_out(amount, address, &mut rng).await.unwrap();
         }
     }
 }

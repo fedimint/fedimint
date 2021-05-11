@@ -1,6 +1,8 @@
 use bitcoin::Network;
 use config::{Feerate, WalletConfig};
 use fediwallet::Wallet;
+use secp256k1::SecretKey;
+use std::str::FromStr;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -17,6 +19,10 @@ async fn main() {
             "pkh(020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae8d)"
                 .parse()
                 .unwrap(),
+        peg_in_key: SecretKey::from_str(
+            "020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae",
+        )
+        .expect("parse fake key failed"),
         finalty_delay: 100,
         default_fee: Feerate { sats_per_kb: 2000 },
         start_consensus_height: 501,

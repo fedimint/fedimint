@@ -4,16 +4,17 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use database::batch::{BatchItem, Element};
 use database::{
-    BatchDb, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError,
-    PrefixSearchable,
+    check_format, BatchDb, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix,
+    DecodingError, PrefixSearchable,
 };
 use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
-    PegInRequest, ReissuanceRequest, SigResponse, SignRequest, TransactionId, TweakableDescriptor,
-    TxId, TxOutProof,
+    PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse, SignRequest, TransactionId,
+    TweakableDescriptor, TxId, TxOutProof,
 };
+use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::StatusCode;
@@ -122,7 +123,7 @@ where
             .map_err(|e| ClientError::PegInProofError(e))?;
 
         let utxos = peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
-        let sats = utxos.iter().map(|(_, amt)| amt.as_sat()).sum::<u64>()
+        let sats = utxos.iter().map(|(_, amt, _)| amt.as_sat()).sum::<u64>()
             - (self.cfg.per_utxo_fee.as_sat() * utxos.len() as u64);
         let amount = Amount::from_sat(sats);
 
@@ -353,6 +354,69 @@ where
         }
     }
 
+    pub async fn peg_out<R: RngCore + CryptoRng>(
+        &self,
+        amt: Amount,
+        address: bitcoin::Address,
+        mut rng: R,
+    ) -> Result<(), ClientError> {
+        let coins = self
+            .coins()
+            .select_coins(amt)
+            .ok_or(ClientError::NotEnoughCoins)?;
+
+        self.spend_coins(&coins);
+
+        let (coins, keys): (Coins<Coin>, Vec<musig::SecKey>) = coins
+            .into_iter()
+            .map(|(amt, coin)| ((amt, coin.coin), coin.spend_key))
+            .unzip();
+
+        let mut hasher = Sha256::engine();
+        bincode::serialize_into(&mut hasher, &coins).expect("encoding error");
+        bincode::serialize_into(&mut hasher, &address).expect("encoding error");
+        let hash = Sha256::from_engine(hasher);
+
+        let sig = musig::sign(hash.into_inner(), keys.iter(), RngAdaptor(&mut rng));
+
+        let pegout_req = PegOutRequest {
+            address,
+            coins,
+            sig,
+        };
+
+        // Try all mints in random order, break early if enough could be reached
+        let mut successes: usize = 0;
+        for url in self
+            .cfg
+            .mints
+            .choose_multiple(&mut rng, self.cfg.mints.len())
+        {
+            let res = self
+                .http_client
+                .put(&format!("{}/pegout", url))
+                .json(&pegout_req)
+                .send()
+                .await
+                .expect("API error");
+
+            if res.status() == StatusCode::OK {
+                successes += 1;
+            }
+
+            if successes >= 2 {
+                // TODO: make this max-faulty +1
+                break;
+            }
+        }
+
+        if successes == 0 {
+            Err(ClientError::MintError)
+        } else {
+            Ok(())
+        }
+    }
+
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
         let (peg_in_sec_key, peg_in_pub_key) = self.secp.generate_keypair(&mut rng);
 
@@ -488,6 +552,8 @@ pub enum ClientError {
     NoMatchingPegInFound,
     #[error("Inconsistent peg-in proof: {0}")]
     PegInProofError(PegInProofError),
+    #[error("The client's wallet has not enough coins or they are not in the right denomination")]
+    NotEnoughCoins,
 }
 
 impl From<InvalidAmountTierError> for CoinFinalizationError {
@@ -513,15 +579,10 @@ impl DatabaseKeyPrefix for IssuanceKey {
 
 impl DatabaseKey for IssuanceKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 33 {
-            Err(DecodingError("IssuanceKey: expected 33 bytes".into()))
-        } else if data[0] != DB_PREFIX_ISSUANCE {
-            Err(DecodingError("IssuanceKey: wrong prefix".into()))
-        } else {
-            Ok(IssuanceKey {
-                issuance_id: TransactionId::from_slice(&data[1..]).unwrap(),
-            })
-        }
+        Ok(IssuanceKey {
+            issuance_id: TransactionId::from_slice(check_format(data, DB_PREFIX_ISSUANCE, 32)?)
+                .unwrap(),
+        })
     }
 }
 
@@ -545,9 +606,9 @@ impl DatabaseKeyPrefix for CoinKey {
 impl DatabaseKey for CoinKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() < 9 {
-            Err(DecodingError("CoinKey: expected at least 9 bytes".into()))
+            Err(DecodingError::wrong_length(9, data.len()))
         } else if data[0] != DB_PREFIX_COIN {
-            Err(DecodingError("CoinKey: wrong prefix".into()))
+            Err(DecodingError::wrong_prefix(DB_PREFIX_COIN, data[0]))
         } else {
             let mut amount_bytes = [0u8; 8];
             amount_bytes.copy_from_slice(&data[1..9]);
@@ -579,9 +640,9 @@ impl DatabaseKeyPrefix for PegInKey {
 impl DatabaseKey for PegInKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() < 1 {
-            Err(DecodingError("PegInKey: expected at least 1 byte".into()))
+            Err(DecodingError::wrong_length(1, data.len()))
         } else if data[0] != DB_PREFIX_PEG_IN {
-            Err(DecodingError("PegInKey: wrong prefix".into()))
+            Err(DecodingError::wrong_prefix(DB_PREFIX_PEG_IN, data[0]))
         } else {
             Ok(PegInKey {
                 peg_in_script: Script::from(data[1..].to_vec()),

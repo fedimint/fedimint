@@ -1,7 +1,8 @@
 use crate::consensus::ConsensusItem;
 use crate::net::api::ClientRequest;
 use database::{
-    DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
+    check_format, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
+    SerializableDatabaseValue,
 };
 use mint_api::BitcoinHash;
 use mint_api::{TransactionId, TxId};
@@ -49,9 +50,7 @@ impl DatabaseKeyPrefix for ConsensusItem {
         let issuance_id = match self {
             ConsensusItem::ClientRequest(ClientRequest::PegIn(pi)) => pi.id(),
             ConsensusItem::ClientRequest(ClientRequest::Reissuance(re)) => re.id(),
-            ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
-                unimplemented!()
-            }
+            ConsensusItem::ClientRequest(ClientRequest::PegOut(po)) => po.id(),
             ConsensusItem::PartiallySignedRequest(id, _) => *id,
             // Wallet CIs are never written, we might try to remove them though
             ConsensusItem::Wallet(_) => TransactionId::default(),
@@ -66,16 +65,19 @@ impl DatabaseKeyPrefix for ConsensusItem {
 impl DatabaseKey for ConsensusItem {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() < 33 {
-            return Err(DecodingError("Too short".into()));
+            return Err(DecodingError::wrong_length(33, data.len()));
         }
 
         if data[0] != DB_PREFIX_CONSENSUS_ITEM {
-            return Err(DecodingError("Wrong type".into()));
+            return Err(DecodingError::wrong_prefix(
+                DB_PREFIX_CONSENSUS_ITEM,
+                data[0],
+            ));
         }
 
         // skip 8 bytes that are the id
 
-        bincode::deserialize(&data[33..]).map_err(|e| DecodingError(e.into()))
+        bincode::deserialize(&data[33..]).map_err(|e| DecodingError::other(e))
     }
 }
 
@@ -91,22 +93,12 @@ impl DatabaseKeyPrefix for PartialSignatureKey {
 
 impl DatabaseKey for PartialSignatureKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 35 {
-            return Err(DecodingError(
-                format!("Expected 35 bytes, got {}", data.len()).into(),
-            ));
-        }
+        let data = check_format(data, DB_PREFIX_PARTIAL_SIG, 34)?;
 
-        if data[0] != DB_PREFIX_PARTIAL_SIG {
-            return Err(DecodingError(
-                "Expected partial sig, got something else".into(),
-            ));
-        }
-
-        let request_id = TransactionId::from_slice(&data[1..33]).unwrap();
+        let request_id = TransactionId::from_slice(&data[0..32]).unwrap();
 
         let mut peer_id_bytes = [0u8; 2];
-        peer_id_bytes.copy_from_slice(&data[33..]);
+        peer_id_bytes.copy_from_slice(&data[32..]);
         let peer_id = u16::from_be_bytes(peer_id_bytes);
 
         Ok(PartialSignatureKey {
@@ -140,18 +132,13 @@ impl DatabaseKeyPrefix for FinalizedSignatureKey {
 
 impl DatabaseKey for FinalizedSignatureKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 33 {
-            return Err(DecodingError("Too short".into()));
-        }
-
-        if data[0] != DB_PREFIX_FINALIZED_SIG {
-            return Err(DecodingError(
-                "Expected finalized sig, got something else".into(),
-            ));
-        }
-
         Ok(FinalizedSignatureKey {
-            issuance_id: TransactionId::from_slice(&data[1..]).unwrap(),
+            issuance_id: TransactionId::from_slice(check_format(
+                data,
+                DB_PREFIX_FINALIZED_SIG,
+                32,
+            )?)
+            .unwrap(),
         })
     }
 }

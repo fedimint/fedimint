@@ -30,6 +30,8 @@ The following "tables" exist:
 | Our UTXOs            | 0x31   | OutPoint (32 bytes txid + 4 bytes output)                                                       | data necessary for spending     |
 | Last Block           | 0x32   | none                                                                                            | block height (4bytes)           |
 | Queued PegOut        | 0x33   | mint tx id (32 bytes)                                                                           | address, amount                 |
+| Unsigned transaction | 0x34   | none                                                                                            | PSBT                            |
+| Pending transaction  | 0x35   | txid                                                                                            | consensus encoded tx            |
 
 ## Client DB Layout
 

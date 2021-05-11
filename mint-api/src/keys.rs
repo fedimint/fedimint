@@ -8,6 +8,12 @@ pub struct CompressedPublicKey {
     pub key: secp256k1::PublicKey,
 }
 
+impl CompressedPublicKey {
+    pub fn new(key: secp256k1::PublicKey) -> Self {
+        CompressedPublicKey { key }
+    }
+}
+
 impl MiniscriptKey for CompressedPublicKey {
     type Hash = CompressedPublicKey;
 

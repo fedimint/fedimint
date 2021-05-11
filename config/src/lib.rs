@@ -25,6 +25,7 @@ pub struct Feerate {
 pub struct WalletConfig {
     pub network: Network,
     pub peg_in_descriptor: PegInDescriptor,
+    pub peg_in_key: secp256k1::SecretKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,
     pub start_consensus_height: u32,

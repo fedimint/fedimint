@@ -39,6 +39,7 @@ pub async fn run_server(cfg: ServerConfig, db: sled::Tree, request_sender: Sende
     let mut server = tide::with_state(state);
     server.at("/issuance/pegin").put(request_issuance);
     server.at("/issuance/reissue").put(request_reissuance);
+    server.at("/pegout").put(request_peg_out);
     server.at("/issuance/:req_id").get(fetch_sig);
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
@@ -66,6 +67,19 @@ async fn request_reissuance(mut req: Request<State>) -> tide::Result {
     req.state()
         .req_sender
         .send(ClientRequest::Reissuance(reissue_req))
+        .await
+        .expect("Could not submit reissuance request to consensus");
+
+    Ok(Response::new(200))
+}
+
+async fn request_peg_out(mut req: Request<State>) -> tide::Result {
+    trace!("Received API request {:?}", req);
+    let peg_out_req: PegOutRequest = req.body_json().await?;
+    debug!("Sending reissuance request to consensus");
+    req.state()
+        .req_sender
+        .send(ClientRequest::PegOut(peg_out_req))
         .await
         .expect("Could not submit reissuance request to consensus");
 

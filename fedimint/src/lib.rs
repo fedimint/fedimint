@@ -290,7 +290,7 @@ impl DatabaseKeyPrefix for NonceKey {
 impl DatabaseKey for NonceKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() == 0 || data[0] != DB_PREFIX_COIN_NONCE {
-            return Err(DecodingError("Wrong prefix".into()));
+            return Err(DecodingError::wrong_prefix(DB_PREFIX_COIN_NONCE, data[0]));
         }
 
         Ok(NonceKey(CoinNonce::from_bytes(data)))

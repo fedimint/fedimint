@@ -2,7 +2,7 @@ use crate::keys::CompressedPublicKey;
 use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Script, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{PublicKey, Secp256k1, Verification};
 use serde::de::Error;
@@ -115,7 +115,7 @@ impl PegInProof {
         &self,
         secp: &Secp256k1<C>,
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
-    ) -> Vec<(OutPoint, Amount)> {
+    ) -> Vec<(OutPoint, Amount, Script)> {
         let script = untweaked_pegin_descriptor
             .tweak(self.tweak_contract_key, secp)
             .script_pubkey();
@@ -130,7 +130,11 @@ impl PegInProof {
                         txid: self.transaction.txid(),
                         vout: idx as u32,
                     };
-                    Some((out_point, Amount::from_sat(txo.value)))
+                    Some((
+                        out_point,
+                        Amount::from_sat(txo.value),
+                        txo.script_pubkey.clone(),
+                    ))
                 } else {
                     None
                 }

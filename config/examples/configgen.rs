@@ -99,6 +99,7 @@ fn main() {
             wallet: WalletConfig {
                 network: Network::Regtest,
                 peg_in_descriptor: peg_in_descriptor.clone(),
+                peg_in_key: btc_pegin_keys[id as usize].0,
                 finalty_delay: 10,
                 default_fee: Feerate { sats_per_kb: 2000 },
                 start_consensus_height: 0,

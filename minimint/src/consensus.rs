@@ -13,8 +13,8 @@ use fediwallet::{Wallet, WalletConsensusItem};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::{
-    Amount, BitcoinHash, InvalidAmountTierError, PartialSigResponse, PegInRequest, PegOutRequest,
-    ReissuanceRequest, TransactionId, TxId,
+    Amount, BitcoinHash, Coin, InvalidAmountTierError, PartialSigResponse, PegInRequest,
+    PegOutRequest, ReissuanceRequest, TransactionId, TxId,
 };
 use musig;
 use rand::{CryptoRng, RngCore};
@@ -131,15 +131,16 @@ where
 
         let wallet_consensus = batch
             .contributions
-            .values()
-            .flatten()
-            .filter_map(|ci| match ci {
+            .iter()
+            .flat_map(|(&peer, cis)| cis.iter().map(move |ci| (peer, ci)))
+            .filter_map(|(peer, ci)| match ci {
                 ConsensusItem::ClientRequest(_) => None,
                 ConsensusItem::PartiallySignedRequest(_, _) => None,
-                ConsensusItem::Wallet(wci) => Some(wci.clone()),
+                ConsensusItem::Wallet(wci) => Some((peer, wci.clone())),
             })
             .collect::<Vec<_>>();
-        self.wallet
+        let db_batch_wallet = self
+            .wallet
             .process_consensus_proposals(wallet_consensus)
             .await
             .expect("wallet error");
@@ -158,14 +159,15 @@ where
             .iter()
             .flat_map(|(_, cis)| cis.iter())
             .unique()
-            .filter_map(|ci| match ci {
-                ConsensusItem::ClientRequest(ClientRequest::Reissuance(req)) => {
-                    Some(req.coins.iter().map(|(_, coin)| coin.clone())) // TODO: get rid of clone once MuSig2 lands
+            .filter_map(|ci| {
+                match ci {
+                    ConsensusItem::ClientRequest(ClientRequest::Reissuance(req)) => {
+                        Some(&req.coins) // TODO: get rid of clone once MuSig2 lands
+                    }
+                    ConsensusItem::ClientRequest(ClientRequest::PegOut(req)) => Some(&req.coins),
+                    _ => None,
                 }
-                ConsensusItem::ClientRequest(ClientRequest::PegOut(_)) => {
-                    unimplemented!()
-                }
-                _ => None,
+                .map(|coins| coins.iter().map(|(_, coin): (Amount, &Coin)| coin.clone()))
             })
             .flatten()
             .collect::<Counter<_>>();
@@ -238,7 +240,8 @@ where
                 process_items_batches
                     .iter()
                     .flatten()
-                    .chain(remove_ci_batch.iter()),
+                    .chain(remove_ci_batch.iter())
+                    .chain(db_batch_wallet.iter()),
             )
             .expect("DB error");
 
@@ -250,13 +253,17 @@ where
     }
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
-        let wallet_consensus = self
+        let (wallet_batch, wallet_consensus) = self
             .wallet
             .consensus_proposal()
             .await
             .expect("wallet error");
         debug!("Wallet proposal: {:?}", wallet_consensus);
 
+        // Apply any wallet DB operations in relation to CI generation (e.g. prepared tx)
+        self.db.apply_batch(wallet_batch.iter()).expect("DB error");
+
+        // Fetch long lived CIs and concatenate with transient wallet CI
         self.db
             .find_by_prefix(&AllConsensusItemsKeyPrefix)
             .map(|res| res.map(|(ci, ())| ci))

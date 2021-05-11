@@ -1,8 +1,9 @@
 use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::hashes::Hash as BitcoinHash;
-use bitcoin::{BlockHash, OutPoint};
+use bitcoin::{BlockHash, OutPoint, Transaction, Txid};
 use database::{
-    DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, SerializableDatabaseValue,
+    check_format, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
+    SerializableDatabaseValue,
 };
 use std::io::Cursor;
 
@@ -10,6 +11,8 @@ const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
 const DB_PREFIX_LAST_BLOCK: u8 = 0x32;
 const DB_PREFIX_PEDNING_PEGOUT: u8 = 0x33;
+const DB_PREFIX_UNSIGNED_TRANSACTION: u8 = 0x34;
+const DB_PREFIX_PENDING_TRANSACTION: u8 = 0x35;
 
 #[derive(Clone, Debug)]
 pub struct BlockHashKey(pub BlockHash);
@@ -24,7 +27,22 @@ pub struct LastBlock(pub u32);
 pub struct UTXOKey(pub OutPoint);
 
 #[derive(Clone, Debug)]
+pub struct UTXOPrefixKey;
+
+#[derive(Clone, Debug)]
 pub struct PendingPegOutKey(pub mint_api::TransactionId);
+
+#[derive(Clone, Debug)]
+pub struct PendingPegOutPrefixKey;
+
+#[derive(Clone, Debug)]
+pub struct UnsignedTransactionKey;
+
+#[derive(Clone, Debug)]
+pub struct PendingTransactionKey(pub Txid);
+
+#[derive(Clone, Debug)]
+pub struct PendingTransaction(pub Transaction);
 
 impl DatabaseKeyPrefix for BlockHashKey {
     fn to_bytes(&self) -> Vec<u8> {
@@ -37,15 +55,9 @@ impl DatabaseKeyPrefix for BlockHashKey {
 
 impl DatabaseKey for BlockHashKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 33 {
-            Err(DecodingError("BlockHashKey: expected 33 bytes".into()))
-        } else if data[0] != DB_PREFIX_BLOCK_HASH {
-            Err(DecodingError("BlockHashKey: wrong prefix".into()))
-        } else {
-            Ok(BlockHashKey(
-                BlockHash::from_slice(&data[1..]).map_err(|e| DecodingError(e.into()))?,
-            ))
-        }
+        Ok(BlockHashKey(
+            BlockHash::from_slice(check_format(data, DB_PREFIX_BLOCK_HASH, 32)?).unwrap(),
+        ))
     }
 }
 
@@ -57,13 +69,8 @@ impl DatabaseKeyPrefix for LastBlockKey {
 
 impl DatabaseKey for LastBlockKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 1 {
-            Err(DecodingError("LastBlockKey: expected 1 byte".into()))
-        } else if data[0] != DB_PREFIX_LAST_BLOCK {
-            Err(DecodingError("LastBlockKey: wrong prefix".into()))
-        } else {
-            Ok(LastBlockKey)
-        }
+        check_format(data, DB_PREFIX_LAST_BLOCK, 0)?;
+        Ok(LastBlockKey)
     }
 }
 
@@ -80,7 +87,7 @@ impl DatabaseValue for LastBlock {
             bytes.copy_from_slice(data);
             Ok(LastBlock(u32::from_be_bytes(bytes)))
         } else {
-            Err(DecodingError("LastBlock: expected 4 bytes".into()))
+            Err(DecodingError::wrong_length(4, data.len()))
         }
     }
 }
@@ -96,16 +103,16 @@ impl DatabaseKeyPrefix for UTXOKey {
 impl DatabaseKey for UTXOKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.len() < 1 {
-            return Err(DecodingError("UTXOKey: expected at least 1 byte".into()));
+            return Err(DecodingError::wrong_length(1, data.len()));
         }
 
         if data[0] != DB_PREFIX_UTXO {
-            return Err(DecodingError("UTXOKey: wrong prefix".into()));
+            return Err(DecodingError::wrong_prefix(DB_PREFIX_UTXO, data[0]));
         }
 
         Ok(UTXOKey(
             OutPoint::consensus_decode(Cursor::new(&data[1..]))
-                .map_err(|e| DecodingError(e.into()))?,
+                .map_err(|e| DecodingError::other(e))?,
         ))
     }
 }
@@ -121,15 +128,67 @@ impl DatabaseKeyPrefix for PendingPegOutKey {
 
 impl DatabaseKey for PendingPegOutKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() != 33 {
-            Err(DecodingError("PendingPegOutKey: expected 33 bytes".into()))
-        } else if data[0] != DB_PREFIX_PEDNING_PEGOUT {
-            Err(DecodingError("PendingPegOutKey: wrong prefix".into()))
-        } else {
-            Ok(PendingPegOutKey(
-                mint_api::TransactionId::from_slice(&data[1..])
-                    .map_err(|e| DecodingError(e.into()))?,
-            ))
-        }
+        Ok(PendingPegOutKey(
+            mint_api::TransactionId::from_slice(check_format(data, DB_PREFIX_PEDNING_PEGOUT, 32)?)
+                .unwrap(),
+        ))
+    }
+}
+
+impl DatabaseKeyPrefix for PendingPegOutPrefixKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_PEDNING_PEGOUT]
+    }
+}
+
+impl DatabaseKeyPrefix for UnsignedTransactionKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_UNSIGNED_TRANSACTION]
+    }
+}
+
+impl DatabaseKey for UnsignedTransactionKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        check_format(data, DB_PREFIX_UNSIGNED_TRANSACTION, 0)?;
+        Ok(UnsignedTransactionKey)
+    }
+}
+
+impl DatabaseKeyPrefix for UTXOPrefixKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_UTXO]
+    }
+}
+
+impl DatabaseKeyPrefix for PendingTransactionKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut key = Vec::with_capacity(33);
+        key.push(DB_PREFIX_PENDING_TRANSACTION);
+        key.extend_from_slice(&self.0[..]);
+        key
+    }
+}
+
+impl DatabaseKey for PendingTransactionKey {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        Ok(PendingTransactionKey(
+            Txid::from_slice(check_format(data, DB_PREFIX_PENDING_TRANSACTION, 32)?).unwrap(),
+        ))
+    }
+}
+
+impl SerializableDatabaseValue for PendingTransaction {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut data = Vec::new();
+        self.0.consensus_encode(&mut data).expect("can't fail");
+        data
+    }
+}
+
+impl DatabaseValue for PendingTransaction {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        let tx = Transaction::consensus_decode(Cursor::new(data))
+            .map_err(|e| DecodingError::other(e))?;
+        Ok(PendingTransaction(tx))
     }
 }
