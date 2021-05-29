@@ -1,0 +1,22 @@
+[package]
+name = "ln-gateway"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
+clightningrpc = { git = "https://github.com/elsirion/rust-clightning-rpc", commit = "28b0b062dfb7d758a3a0753c274febe4a7faa584" }
+config = { path = "../config" }
+lightning-invoice = "0.5.0"
+mint-api = { path = "../mint-api" }
+mint-client = { path = "../mint-client" }
+rand = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+sled = "0.34.6"
+structopt = "0.3.21"
+tide = "0.16.0"
+tracing = "0.1.26"
+tracing-subscriber = "0.2.18"
+tokio = {version = "1.0", features = ["full"]}

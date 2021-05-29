@@ -4,7 +4,7 @@ SIZE="$1"
 
 cargo build --release --all-targets
 
-bitcoind -regtest -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin &
+bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin &
 
 for ((ID=$2; ID<SIZE; ID++)); do
   echo "starting mint $ID"

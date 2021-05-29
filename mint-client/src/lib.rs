@@ -17,8 +17,9 @@ use mint_api::{
 use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
-use reqwest::StatusCode;
+use reqwest::{RequestBuilder, StatusCode};
 use secp256k1::{All, Secp256k1};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -87,7 +88,7 @@ pub struct PegInKey {
 
 impl<D> MintClient<D>
 where
-    D: Database + PrefixSearchable + BatchDb + Sync,
+    D: Database + PrefixSearchable + BatchDb + Sync + Unpin,
 {
     pub fn new(cfg: ClientConfig, db: D, secp: Secp256k1<All>) -> Self {
         MintClient {
@@ -182,6 +183,86 @@ where
             Err(ClientError::MintError)
         } else {
             Ok(req_id)
+        }
+    }
+
+    pub async fn fetch(&self, txid: TransactionId) -> Result<(), ClientError> {
+        let issuance = self
+            .db
+            .get_value::<_, BincodeSerialized<IssuanceRequest>>(&IssuanceKey { issuance_id: txid })
+            .expect("DB error")
+            .ok_or(ClientError::FinalizationError(
+                CoinFinalizationError::UnknowinIssuance,
+            ))?
+            .into_owned();
+
+        let bsig = self
+            .query_any_mint::<SigResponse, _>(|client, mint| {
+                let url = format!("{}/issuance/{}", mint, txid);
+                client.get(&url)
+            })
+            .await?;
+        // TODO: check another mint if the answer was malicious
+
+        let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
+
+        let batch = coins
+            .into_iter()
+            .map(|(amount, coin): (Amount, SpendableCoin)| {
+                let key = CoinKey {
+                    amount,
+                    nonce: coin.coin.0.clone(),
+                };
+                let value = BincodeSerialized::owned(coin);
+                BatchItem::InsertNewElement(Element {
+                    key: Box::new(key),
+                    value: Box::new(value),
+                })
+            })
+            .chain(std::iter::once(BatchItem::DeleteElement(Box::new(
+                IssuanceKey { issuance_id: txid },
+            ))))
+            .collect::<Vec<_>>();
+        self.db.apply_batch(batch.iter()).expect("DB error");
+
+        Ok(())
+    }
+
+    async fn query_any_mint<O, F>(&self, query_builder: F) -> Result<O, ClientError>
+    where
+        F: Fn(&reqwest::Client, &str) -> RequestBuilder,
+        O: DeserializeOwned,
+    {
+        assert!(!self.cfg.mints.is_empty());
+
+        // TODO: add per mint timeout
+        let mut requests = self
+            .cfg
+            .mints
+            .iter()
+            .map(|mint| query_builder(&self.http_client, mint.as_str()).send())
+            .collect::<Vec<_>>();
+
+        loop {
+            let select = futures::future::select_all(requests);
+            let (res, _, remaining_requests) = select.await;
+            requests = remaining_requests;
+
+            match res {
+                Ok(resp) => match resp.json().await {
+                    Ok(val) => return Ok(val),
+                    Err(_) => {
+                        if requests.is_empty() {
+                            return Err(ClientError::MintError);
+                        }
+                    }
+                },
+                Err(_) => {
+                    if requests.is_empty() {
+                        return Err(ClientError::MintError);
+                    }
+                }
+            }
         }
     }
 
@@ -540,6 +621,8 @@ pub enum CoinFinalizationError {
     InvalidIssuanceId(TransactionId, TransactionId),
     #[error("Invalid amount tier {0:?}")]
     InvalidAmountTier(Amount),
+    #[error("The client does not know this issuance")]
+    UnknowinIssuance,
 }
 
 #[derive(Error, Debug)]

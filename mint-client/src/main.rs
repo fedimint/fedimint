@@ -4,6 +4,8 @@ use bitcoin_hashes::hex::ToHex;
 use config::{load_from_file, ClientConfig};
 use mint_api::{Amount, Coins, TxOutProof};
 use mint_client::{MintClient, SpendableCoin};
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -36,17 +38,24 @@ enum Command {
         coins: Coins<SpendableCoin>,
     },
     #[structopt(about = "Prepare coins to send to a third party as a payment")]
-    Spend {
-        amount: Amount,
-    },
-    PegOut {
-        address: Address,
-        amount: Amount,
+    Spend { amount: Amount },
+    #[structopt(about = "Withdraw funds from the federation")]
+    PegOut { address: Address, amount: Amount },
+    #[structopt(about = "Pay a lightning invoice via a gateway")]
+    LnPay {
+        gateway: String,
+        bolt11: lightning_invoice::Invoice,
     },
     #[structopt(about = "Fetch (re-)issued coins and finalize issuance process")]
     Fetch,
     #[structopt(about = "Display wallet info (holdings, tiers)")]
     Info,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PayRequest {
+    coins: Coins<SpendableCoin>,
+    invoice: String,
 }
 
 #[tokio::main]
@@ -124,6 +133,27 @@ async fn main() {
         }
         Command::PegOut { address, amount } => {
             client.peg_out(amount, address, &mut rng).await.unwrap();
+        }
+        Command::LnPay { gateway, bolt11 } => {
+            let amt = Amount::from_msat(bolt11.amount_pico_btc().unwrap() / 10);
+            let http = reqwest::Client::new();
+
+            let coins = client.coins().select_coins(amt).expect("Not enough funds");
+            client.spend_coins(&coins);
+            let success = http
+                .post(&gateway)
+                .json(&PayRequest {
+                    coins,
+                    invoice: bolt11.to_string(),
+                })
+                .send()
+                .await
+                .map(|response| response.status() == StatusCode::OK)
+                .unwrap_or(false);
+
+            if !success {
+                error!("Payment failed")
+            }
         }
     }
 }
