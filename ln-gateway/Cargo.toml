@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
-clightningrpc = { git = "https://github.com/elsirion/rust-clightning-rpc", commit = "28b0b062dfb7d758a3a0753c274febe4a7faa584" }
+clightningrpc = { git = "https://github.com/elsirion/rust-clightning-rpc", rev = "28b0b062dfb7d758a3a0753c274febe4a7faa584" }
 config = { path = "../config" }
 lightning-invoice = "0.5.0"
 mint-api = { path = "../mint-api" }

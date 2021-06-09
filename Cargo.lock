@@ -644,7 +644,7 @@ dependencies = [
 [[package]]
 name = "clightningrpc"
 version = "0.2.0"
-source = "git+https://github.com/elsirion/rust-clightning-rpc#8b765ca44b5c7e468020d9bc9cb2dc37f6f69140"
+source = "git+https://github.com/elsirion/rust-clightning-rpc?rev=28b0b062dfb7d758a3a0753c274febe4a7faa584#28b0b062dfb7d758a3a0753c274febe4a7faa584"
 dependencies = [
  "serde",
  "serde_derive",
