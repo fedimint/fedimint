@@ -24,7 +24,7 @@ async fn main() {
         )
         .expect("parse fake key failed"),
         finalty_delay: 100,
-        default_fee: Feerate { sats_per_kb: 2000 },
+        default_fee: Feerate { sats_per_kvb: 2000 },
         start_consensus_height: 501,
         per_utxo_fee: Default::default(),
         btc_rpc_address: "127.0.0.1".to_string(),

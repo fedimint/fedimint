@@ -17,7 +17,7 @@ pub struct ServerOpts {
 
 #[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
 pub struct Feerate {
-    pub sats_per_kb: u64,
+    pub sats_per_kvb: u64,
 }
 
 // TODO: put config back into functional crates, make cfg-gen dependent on all
@@ -107,6 +107,13 @@ pub struct ClientConfig {
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
     let file = std::fs::File::open(path).expect("Can't read cfg file.");
     serde_json::from_reader(file).expect("Could not parse cfg file.")
+}
+
+impl Feerate {
+    pub fn calculate_fee(&self, weight: usize) -> bitcoin::Amount {
+        let sats = self.sats_per_kvb * (weight as u64) / 1000;
+        bitcoin::Amount::from_sat(sats)
+    }
 }
 
 #[cfg(any(feature = "client", feature = "server"))]

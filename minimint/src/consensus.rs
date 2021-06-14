@@ -378,6 +378,8 @@ where
     }
 
     fn process_peg_out_request(&self, peer: u16, peg_out: PegOutRequest) -> DbBatch {
+        let id = peg_out.id();
+
         let pub_keys = peg_out
             .coins
             .iter()
@@ -388,18 +390,25 @@ where
             return vec![];
         }
 
-        if peg_out.coins.check_tiers(&self.cfg.tbs_sks).is_err() {
-            warn!("Peer {} proposed an invalid peg-out request: tiers.", peer);
-            return vec![];
+        let amount = bitcoin::Amount::from_sat(
+            (peg_out.coins.amount().milli_sat / 1000) - self.cfg.wallet.per_utxo_fee.as_sat(),
+        );
+
+        let mut batch = match self.mint.spend(&self.db, peg_out.coins) {
+            Ok(batch) => batch,
+            Err(e) => {
+                warn!("Peer {} proposed an invalid peg-out: {}", peer, e);
+                return vec![];
+            }
+        };
+
+        if let Ok(peg_out_batch_item) = self.wallet.queue_pegout(id, peg_out.address, amount) {
+            batch.push(peg_out_batch_item);
+            batch
+        } else {
+            // TODO: let user know they can keep their coins because peg-out failed (also above)
+            vec![]
         }
-
-        let sats =
-            (peg_out.coins.amount().milli_sat / 1000) - self.cfg.wallet.per_utxo_fee.as_sat();
-        let amount = bitcoin::Amount::from_sat(sats);
-
-        vec![self
-            .wallet
-            .queue_pegout(peg_out.id(), peg_out.address, amount)]
     }
 
     fn process_partial_signature(
