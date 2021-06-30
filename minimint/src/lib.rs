@@ -33,6 +33,9 @@ pub mod net;
 /// Some abstractions to handle randomness
 mod rng;
 
+/// Other random utilities
+mod util;
+
 /// Start all the components of the mintan d plug them together
 pub async fn run_minimint(
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
