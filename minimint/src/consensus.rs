@@ -126,7 +126,10 @@ where
         Ok(())
     }
 
-    pub async fn process_consensus_outcome(&self, batch: Batch<Vec<ConsensusItem>, u16>) {
+    pub async fn process_consensus_outcome(
+        &self,
+        batch: Batch<Vec<ConsensusItem>, u16>,
+    ) -> WalletConsensusItem {
         info!("Processing output of epoch {}", batch.epoch);
 
         let wallet_consensus = batch
@@ -139,7 +142,7 @@ where
                 ConsensusItem::Wallet(wci) => Some((peer, wci.clone())),
             })
             .collect::<Vec<_>>();
-        let db_batch_wallet = self
+        let (wallet_ci, db_batch_wallet) = self
             .wallet
             .process_consensus_proposals(wallet_consensus)
             .await
@@ -148,7 +151,7 @@ where
         // Since the changes to the database will happen all at once we won't be able to handle
         // conflicts between consensus items in one batch there. Thus we need to make sure that
         // all items in a batch are consistent/deterministically filter out inconsistent ones.
-        // There are two item tyoes that need checking:
+        // There are two item types that need checking:
         //  * peg-ins that each peg-in tx is only used to issue coins once
         //  * coin spends to avoid double spends in one batch
 
@@ -250,18 +253,15 @@ where
         self.db
             .apply_batch(combine_sigs_batches.iter().flatten())
             .expect("DB error");
+
+        wallet_ci
     }
 
-    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
-        let (wallet_batch, wallet_consensus) = self
-            .wallet
-            .consensus_proposal()
-            .await
-            .expect("wallet error");
+    pub async fn get_consensus_proposal(
+        &self,
+        wallet_consensus: WalletConsensusItem,
+    ) -> Vec<ConsensusItem> {
         debug!("Wallet proposal: {:?}", wallet_consensus);
-
-        // Apply any wallet DB operations in relation to CI generation (e.g. prepared tx)
-        self.db.apply_batch(wallet_batch.iter()).expect("DB error");
 
         // Fetch long lived CIs and concatenate with transient wallet CI
         self.db

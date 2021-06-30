@@ -4,7 +4,9 @@ use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
+use ::database::BatchDb;
 use config::ServerConfig;
+use fediwallet::WalletConsensusItem;
 use futures::future::FusedFuture;
 use futures::future::OptionFuture;
 use futures::FutureExt;
@@ -65,9 +67,12 @@ pub async fn run_minimint(
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
-    let wallet = fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone())
-        .await
-        .expect("Couldn't create wallet");
+    let (wallet, wallet_ci, wallet_batch) =
+        fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone())
+            .await
+            .expect("Couldn't create wallet");
+    let mut wallet_ci = Some(wallet_ci);
+    BatchDb::apply_batch(&sled_db, wallet_batch.iter()).expect("DB error");
 
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
@@ -102,7 +107,9 @@ pub async fn run_minimint(
                 let batch_processor_ready = batch_process.is_terminated();
 
                 if hbbft_ready && batch_processor_ready {
-                    let proposal = mint_consensus.get_consensus_proposal().await;
+                    let proposal = mint_consensus.get_consensus_proposal(
+                        wallet_ci.take().expect("always present")
+                    ).await;
                     debug!("Proposing a contribution with {} consensus items for epoch {}", proposal.len(), hb.epoch());
                     trace!("Proposal: {:?}", proposal);
                     hb.propose(&proposal, &mut rng)
@@ -121,7 +128,13 @@ pub async fn run_minimint(
                 continue;
             },
             res = &mut batch_process, if !batch_process.is_terminated() => {
-                res.map(|r: Result<(), JoinError>| r.expect("Last batch process failed"));
+                if let Some(wci) =
+                    res.map(|join_res: Result<WalletConsensusItem, JoinError>| {
+                        join_res.expect("Last batch process failed")
+                    })
+                {
+                    wallet_ci = Some(wci);
+                }
                 batch_process = None.into();
                 continue;
             },
@@ -150,16 +163,24 @@ pub async fn run_minimint(
             };
             wake_up.tick().await; // consume first tick immediately
 
-            batch_process.await.map(|join_res: Result<(), JoinError>| {
-                join_res.expect("Last batch process failed")
-            });
+            if let Some(wci) =
+                batch_process
+                    .await
+                    .map(|join_res: Result<WalletConsensusItem, JoinError>| {
+                        join_res.expect("Last batch process failed")
+                    })
+            {
+                wallet_ci = Some(wci);
+            }
 
             let batch_mint_consensus = mint_consensus.clone();
             batch_process = Some(
                 spawn(async move {
-                    for batch in output {
-                        batch_mint_consensus.process_consensus_outcome(batch).await;
-                    }
+                    // FIXME: allow multiple epochs to end at once when refactoring the parallelism
+                    assert_eq!(output.len(), 1);
+                    batch_mint_consensus
+                        .process_consensus_outcome(output.into_iter().next().unwrap())
+                        .await
                 })
                 .fuse(),
             )

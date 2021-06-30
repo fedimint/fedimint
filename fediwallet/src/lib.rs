@@ -25,9 +25,7 @@ use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use mint_api::{CompressedPublicKey, PegInProof, TransactionId, TweakableDescriptor};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use std::fmt::LowerHex;
 use thiserror::Error;
-use tokio::sync::Mutex;
 use tracing::{debug, error, info, trace, warn};
 
 pub const CONFIRMATION_TARGET: u16 = 24;
@@ -48,15 +46,16 @@ pub type PartialSig = Vec<u8>;
 pub struct WalletConsensusItem {
     block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
     fee_rate: Feerate,
-    peg_out_sig: Option<Vec<(PublicKey, PartialSig)>>,
+    peg_out_sig: Option<Vec<(PublicKey, PartialSig)>>, //TODO: remove pubkey, can be derived
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct WalletConsensus {
+    fee_rate: Feerate,
 }
 
 pub struct Wallet<D> {
     cfg: WalletConfig,
-    // TODO: find a better way to deal with this
-    // the mutex should never block, this is simply to calm down rust, parallel access is a logic error
-    last_consensus_height_proposal: Mutex<u32>,
-    consensus_feerate: Mutex<Feerate>,
     secp: Secp256k1<All>,
     btc_rpc: bitcoincore_rpc_async::Client,
     db: D,
@@ -71,6 +70,7 @@ pub struct SpendableUTXO {
     pub script_pubkey: Script,
 }
 
+// TODO: move pegout logic out of wallet into minimint consensus
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PendingPegOut {
     destination: Script,
@@ -89,7 +89,10 @@ impl<D> Wallet<D>
 where
     D: Database + BatchDb + PrefixSearchable + Clone + Send + 'static,
 {
-    pub async fn new(cfg: WalletConfig, db: D) -> Result<Self, WalletError> {
+    pub async fn new(
+        cfg: WalletConfig,
+        db: D,
+    ) -> Result<(Self, WalletConsensusItem, Batch), WalletError> {
         let btc_rpc = bitcoincore_rpc_async::Client::new(
             cfg.btc_rpc_address.clone(),
             Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
@@ -126,8 +129,6 @@ where
 
         let wallet = Wallet {
             cfg,
-            last_consensus_height_proposal: Mutex::new(0),
-            consensus_feerate: Mutex::new(Feerate { sats_per_kvb: 1000 }),
             secp: Default::default(),
             btc_rpc,
             db,
@@ -141,25 +142,36 @@ where
             .sync_up_to_consensus_heigh(wallet.cfg.start_consensus_height)
             .await?;
 
-        Ok(wallet)
+        // TODO: what to do for rejoining?
+        let initial_consensus = WalletConsensus {
+            fee_rate: wallet.cfg.default_fee,
+        };
+
+        // Generate consensus item for first round after fresh startup
+        let (consensus_proposal, batch) = wallet.consensus_proposal(initial_consensus).await?;
+
+        Ok((wallet, consensus_proposal, batch))
     }
 
-    pub async fn consensus_proposal(&self) -> Result<(Batch, WalletConsensusItem), WalletError> {
+    async fn consensus_proposal(
+        &self,
+        consensus: WalletConsensus,
+    ) -> Result<(WalletConsensusItem, Batch), WalletError> {
         let network_height = self.btc_rpc.get_block_count().await? as u32;
         let target_height = network_height.saturating_sub(self.cfg.finalty_delay);
-        let mut last_proposal = self.last_consensus_height_proposal.lock().await;
+        let consensus_height = self.consensus_height();
 
-        let proposed_height = if target_height >= *last_proposal {
+        // TODO: verify that using the last consensus height instead of our last proposal opens new attack vectors
+        let proposed_height = if target_height >= consensus_height {
             target_height
         } else {
             warn!(
-                "The block height shrunk, new proposal would be {}, but we are sticking to our last block height proposal {}.",
+                "The block height shrunk, new proposal would be {}, but we are sticking to the last consensus height {}.",
                 target_height,
-                *last_proposal
+                consensus_height
             );
-            *last_proposal
+            consensus_height
         };
-        *last_proposal = proposed_height;
 
         let fee_rate = self
             .btc_rpc
@@ -174,10 +186,9 @@ where
         // Check if we should create a peg-out transaction
         let (peg_out_ids, pending_peg_outs): (Vec<TransactionId>, Vec<PendingPegOut>) =
             self.pending_peg_outs().into_iter().unzip();
-        let current_consensus_block = self.consensus_height();
         let urgency = pending_peg_outs
             .iter()
-            .map(|peg_out| current_consensus_block - peg_out.pending_since_block)
+            .map(|peg_out| consensus_height - peg_out.pending_since_block)
             .sum::<u32>();
 
         trace!(
@@ -188,7 +199,7 @@ where
         );
 
         let (peg_out_sig, batch) = if urgency > MIN_PEG_OUT_URGENCY {
-            let psbt = self.create_peg_out_tx(pending_peg_outs).await;
+            let psbt = self.create_peg_out_tx(pending_peg_outs, consensus).await;
 
             info!(
                 "Signing peg out tx {} containing {} peg outs",
@@ -236,29 +247,37 @@ where
             peg_out_sig,
         };
 
-        Ok((batch, wallet_ci))
+        Ok((wallet_ci, batch))
     }
 
     pub async fn process_consensus_proposals(
         &self,
         proposals: Vec<(u16, WalletConsensusItem)>,
-    ) -> Result<Batch, WalletError> {
+    ) -> Result<(WalletConsensusItem, Batch), WalletError> {
         trace!("Received consensus proposals {:?}", &proposals);
 
         // TODO: also warn on less than 1/3, that should never happen
         if proposals.is_empty() {
-            error!("No proposals were submitted this round");
-            return Ok(Vec::new());
+            panic!("No proposals were submitted this round");
         }
 
-        let height_proposals = proposals.iter().map(|(_, wc)| wc.block_height).collect();
-        let fee_proposals = proposals.iter().map(|(_, wc)| wc.fee_rate).collect();
+        let consensus = {
+            let height_proposals = proposals.iter().map(|(_, wc)| wc.block_height).collect();
+            let fee_proposals = proposals.iter().map(|(_, wc)| wc.fee_rate).collect();
 
-        self.process_fee_proposals(fee_proposals).await;
-        self.process_block_height_proposals(height_proposals)
-            .await?;
+            // The height is saved to know how far we are synced up already. That's why no output
+            // is generated and the consensus height is not part of the epoch's wallet consensus
+            // struct constructed below.
+            self.process_block_height_proposals(height_proposals)
+                .await?;
 
-        let batch = if let Some(unsigned_tx) = self
+            let consensus_fee_rate = self.process_fee_proposals(fee_proposals).await;
+            WalletConsensus {
+                fee_rate: consensus_fee_rate,
+            }
+        };
+
+        let mut batch = if let Some(unsigned_tx) = self
             .db
             .get_value::<_, BincodeSerialized<PartiallySignedTransaction>>(&UnsignedTransactionKey)
             .expect("DB error")
@@ -364,22 +383,23 @@ where
         } else {
             Vec::new()
         };
-        Ok(batch)
+
+        let (next_epoch_ci, next_epoch_ci_batch) = self.consensus_proposal(consensus).await?;
+        batch.extend(next_epoch_ci_batch);
+
+        Ok((next_epoch_ci, batch))
     }
 
     /// # Panics
     /// * If proposals is empty
-    async fn process_fee_proposals(&self, mut proposals: Vec<Feerate>) {
+    async fn process_fee_proposals(&self, mut proposals: Vec<Feerate>) -> Feerate {
         assert!(!proposals.is_empty());
 
         proposals.sort();
 
-        let median_proposal = *proposals
+        *proposals
             .get(proposals.len() / 2)
-            .expect("We checked before that proposals aren't empty");
-
-        let mut fee_rate = self.consensus_feerate.lock().await;
-        *fee_rate = median_proposal;
+            .expect("We checked before that proposals aren't empty")
     }
 
     /// # Panics
@@ -397,8 +417,8 @@ where
             debug!("Setting consensus block height to {}", median_proposal);
             self.sync_up_to_consensus_heigh(median_proposal).await?;
         } else {
-            warn!(
-                   "Median proposed consensus block height shrunk from {} to {}, sticking with old value",
+            panic!(
+                   "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
                    self.consensus_height(), median_proposal
                );
         }
@@ -559,12 +579,13 @@ where
     async fn create_peg_out_tx(
         &self,
         pending_peg_outs: Vec<PendingPegOut>,
+        consensus: WalletConsensus,
     ) -> PartiallySignedTransaction {
         let wallet = self.offline_wallet();
         let mut psbt = wallet.create_tx(
             pending_peg_outs,
             self.available_utxos(),
-            *self.consensus_feerate.lock().await,
+            consensus.fee_rate,
             &DEFAULT_CHANGE_TWEAK,
         );
         // TODO: extract sigs and do stuff?!
