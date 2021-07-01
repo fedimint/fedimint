@@ -31,6 +31,7 @@ pub enum ConsensusItem {
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
+pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, u16>;
 
 pub struct FediMintConsensus<R, D, M>
 where
@@ -126,10 +127,7 @@ where
         Ok(())
     }
 
-    pub async fn process_consensus_outcome(
-        &self,
-        batch: Batch<Vec<ConsensusItem>, u16>,
-    ) -> WalletConsensusItem {
+    pub async fn process_consensus_outcome(&self, batch: ConsensusOutcome) -> WalletConsensusItem {
         info!("Processing output of epoch {}", batch.epoch);
 
         let wallet_consensus = batch
@@ -351,8 +349,8 @@ where
             Ok((sr, batch)) => (sr, batch),
             Err(e) => {
                 warn!(
-                    "Rejected reissuance request proposed by peer {}, reason: {}",
-                    peer, e
+                    "Rejected reissuance request proposed by peer {}, reason: {} (id: {})",
+                    peer, e, reissuance_id
                 );
                 return vec![];
             }
