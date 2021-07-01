@@ -63,7 +63,7 @@ pub async fn run_minimint(
     );
 
     let (wallet, wallet_ci, wallet_batch) =
-        fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone())
+        fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone(), rng.clone())
             .await
             .expect("Couldn't create wallet");
     BatchDb::apply_batch(&sled_db, wallet_batch.iter()).expect("DB error");
@@ -94,6 +94,7 @@ pub async fn run_minimint(
     info!("Spawning client request handler");
     spawn_client_request_handler(mint_consensus.clone(), client_req_receiver).await;
 
+    // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
     debug!("Generating second proposal");
     let mut proposal = Some(mint_consensus.get_consensus_proposal(wallet_ci).await);
     loop {

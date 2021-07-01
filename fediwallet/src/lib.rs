@@ -23,6 +23,7 @@ use database::{BatchDb, BincodeSerialized, Database, PrefixSearchable};
 use itertools::Itertools;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use mint_api::{CompressedPublicKey, PegInProof, TransactionId, TweakableDescriptor};
+use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -35,11 +36,6 @@ pub const CONFIRMATION_TARGET: u16 = 24;
 /// waiting for 10 blocks, would cross a minimum urgency threshold of 100.  
 pub const MIN_PEG_OUT_URGENCY: u32 = 100;
 
-// FIXME: introduce randomness beacon in WalletConsensus
-/// For now we use a constant tweak for change. This should be replaced by a randomness beacon later
-/// on.
-const DEFAULT_CHANGE_TWEAK: [u8; 32] = [0u8; 32];
-
 pub type PartialSig = Vec<u8>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -47,11 +43,13 @@ pub struct WalletConsensusItem {
     block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
     fee_rate: Feerate,
     peg_out_sig: Option<Vec<(PublicKey, PartialSig)>>, //TODO: remove pubkey, can be derived
+    randomness: [u8; 32],
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct WalletConsensus {
     fee_rate: Feerate,
+    randomness_beacon: Option<[u8; 32]>,
 }
 
 pub struct Wallet<D> {
@@ -89,10 +87,14 @@ impl<D> Wallet<D>
 where
     D: Database + BatchDb + PrefixSearchable + Clone + Send + 'static,
 {
-    pub async fn new(
+    pub async fn new<R>(
         cfg: WalletConfig,
         db: D,
-    ) -> Result<(Self, WalletConsensusItem, Batch), WalletError> {
+        rng: R,
+    ) -> Result<(Self, WalletConsensusItem, Batch), WalletError>
+    where
+        R: RngCore + CryptoRng,
+    {
         let btc_rpc = bitcoincore_rpc_async::Client::new(
             cfg.btc_rpc_address.clone(),
             Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
@@ -145,18 +147,23 @@ where
         // TODO: what to do for rejoining?
         let initial_consensus = WalletConsensus {
             fee_rate: wallet.cfg.default_fee,
+            randomness_beacon: None,
         };
 
         // Generate consensus item for first round after fresh startup
-        let (consensus_proposal, batch) = wallet.consensus_proposal(initial_consensus).await?;
+        let (consensus_proposal, batch) = wallet.consensus_proposal(initial_consensus, rng).await?;
 
         Ok((wallet, consensus_proposal, batch))
     }
 
-    async fn consensus_proposal(
+    async fn consensus_proposal<R>(
         &self,
         consensus: WalletConsensus,
-    ) -> Result<(WalletConsensusItem, Batch), WalletError> {
+        mut rng: R,
+    ) -> Result<(WalletConsensusItem, Batch), WalletError>
+    where
+        R: RngCore + CryptoRng,
+    {
         let network_height = self.btc_rpc.get_block_count().await? as u32;
         let target_height = network_height.saturating_sub(self.cfg.finalty_delay);
         let consensus_height = self.consensus_height();
@@ -198,7 +205,9 @@ where
             MIN_PEG_OUT_URGENCY
         );
 
-        let (peg_out_sig, batch) = if urgency > MIN_PEG_OUT_URGENCY {
+        // We only want to peg out if we have a real randomness beacon after the first consensus round
+        let peg_out_ready = consensus.randomness_beacon.is_some(); // TODO: maybe destructure instead?
+        let (peg_out_sig, batch) = if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
             let psbt = self.create_peg_out_tx(pending_peg_outs, consensus).await;
 
             info!(
@@ -245,15 +254,20 @@ where
             block_height: proposed_height,
             fee_rate,
             peg_out_sig,
+            randomness: rng.gen(),
         };
 
         Ok((wallet_ci, batch))
     }
 
-    pub async fn process_consensus_proposals(
+    pub async fn process_consensus_proposals<R>(
         &self,
         proposals: Vec<(u16, WalletConsensusItem)>,
-    ) -> Result<(WalletConsensusItem, Batch), WalletError> {
+        rng: R,
+    ) -> Result<(WalletConsensusItem, Batch), WalletError>
+    where
+        R: RngCore + CryptoRng,
+    {
         trace!("Received consensus proposals {:?}", &proposals);
 
         // TODO: also warn on less than 1/3, that should never happen
@@ -272,8 +286,20 @@ where
                 .await?;
 
             let consensus_fee_rate = self.process_fee_proposals(fee_proposals).await;
+
+            fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
+                lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
+                lhs
+            }
+
+            let randomness_beacon = proposals
+                .iter()
+                .map(|(_, wc)| wc.randomness)
+                .fold([0; 32], xor);
+
             WalletConsensus {
                 fee_rate: consensus_fee_rate,
+                randomness_beacon: Some(randomness_beacon),
             }
         };
 
@@ -384,7 +410,7 @@ where
             Vec::new()
         };
 
-        let (next_epoch_ci, next_epoch_ci_batch) = self.consensus_proposal(consensus).await?;
+        let (next_epoch_ci, next_epoch_ci_batch) = self.consensus_proposal(consensus, rng).await?;
         batch.extend(next_epoch_ci_batch);
 
         Ok((next_epoch_ci, batch))
@@ -586,7 +612,9 @@ where
             pending_peg_outs,
             self.available_utxos(),
             consensus.fee_rate,
-            &DEFAULT_CHANGE_TWEAK,
+            &consensus
+                .randomness_beacon
+                .expect("presence checked before creating tx"),
         );
         // TODO: extract sigs and do stuff?!
         wallet.sign_psbt(&mut psbt);
@@ -894,7 +922,7 @@ impl From<bitcoincore_rpc_async::Error> for WalletError {
 #[cfg(test)]
 mod tests {
     use crate::db::UTXOKey;
-    use crate::{PendingPegOut, SpendableUTXO, StatelessWallet, DEFAULT_CHANGE_TWEAK};
+    use crate::{PendingPegOut, SpendableUTXO, StatelessWallet};
     use bitcoin::hashes::Hash as BitcoinHash;
     use bitcoin::{Address, Amount, OutPoint, TxOut};
     use config::Feerate;
@@ -906,6 +934,8 @@ mod tests {
 
     #[test]
     fn sign_tx() {
+        const CHANGE_TWEAK: [u8; 32] = [42u8; 32];
+
         let ctx = secp256k1::Secp256k1::new();
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let (sec_key, pub_key) = ctx.generate_keypair(&mut rng);
@@ -951,7 +981,7 @@ mod tests {
             peg_outs,
             utxos,
             Feerate { sats_per_kvb: 4000 },
-            &DEFAULT_CHANGE_TWEAK,
+            &CHANGE_TWEAK,
         );
         wallet.sign_psbt(&mut psbt);
         miniscript::psbt::finalize(&mut psbt, &ctx).unwrap();

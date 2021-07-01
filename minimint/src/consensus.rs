@@ -142,7 +142,7 @@ where
             .collect::<Vec<_>>();
         let (wallet_ci, db_batch_wallet) = self
             .wallet
-            .process_consensus_proposals(wallet_consensus)
+            .process_consensus_proposals(wallet_consensus, self.rng_gen.get_rng())
             .await
             .expect("wallet error");
 

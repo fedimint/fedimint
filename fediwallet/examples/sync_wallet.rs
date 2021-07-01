@@ -37,7 +37,9 @@ async fn main() {
         .open_tree("mint")
         .unwrap();
 
-    let (wallet, _, _) = Wallet::new(cfg, sled_db).await.unwrap();
+    let (wallet, _, _) = Wallet::new(cfg, sled_db, rand::rngs::OsRng::new().unwrap())
+        .await
+        .unwrap();
 
     println!("Synced up to block {}", wallet.consensus_height());
 }
