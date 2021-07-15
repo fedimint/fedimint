@@ -1,6 +1,6 @@
 use crate::keys::CompressedPublicKey;
+use crate::{Contract, Tweakable};
 use bitcoin::consensus::{Decodable, Encodable};
-use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Script, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
@@ -11,10 +11,6 @@ use std::hash::Hash;
 use std::io::Cursor;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
-
-pub trait TweakableDescriptor {
-    fn tweak<C: Verification>(&self, tweak: PublicKey, secp: &Secp256k1<C>) -> Self;
-}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate)]
 #[validate(schema(function = "validate_peg_in_proof"))]
@@ -117,7 +113,7 @@ impl PegInProof {
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
     ) -> Vec<(OutPoint, Amount, Script)> {
         let script = untweaked_pegin_descriptor
-            .tweak(self.tweak_contract_key, secp)
+            .tweak(&self.tweak_contract_key, secp)
             .script_pubkey();
 
         self.transaction
@@ -155,25 +151,10 @@ impl PegInProof {
     }
 }
 
-/// Hashes the `tweak` key together with the `key` and uses the result to tweak the `key`
-fn tweak_key<C: Verification>(
-    secp: &Secp256k1<C>,
-    mut key: secp256k1::PublicKey,
-    tweak: secp256k1::PublicKey,
-) -> secp256k1::PublicKey {
-    let mut hasher = HmacEngine::<sha256::Hash>::new(&key.serialize()[..]);
-    hasher.input(&tweak.serialize()[..]);
-    let tweak = Hmac::from_engine(hasher).into_inner();
-
-    key.add_exp_assign(secp, &tweak[..])
-        .expect("tweak is always 32 bytes, other failure modes are negligible");
-    key
-}
-
-impl TweakableDescriptor for Descriptor<CompressedPublicKey> {
-    fn tweak<C: Verification>(&self, tweak: PublicKey, secp: &Secp256k1<C>) -> Self {
+impl Tweakable for Descriptor<CompressedPublicKey> {
+    fn tweak<Ctx: Verification, Ctr: Contract>(&self, tweak: &Ctr, secp: &Secp256k1<Ctx>) -> Self {
         self.translate_pk2_infallible(|pk| CompressedPublicKey {
-            key: tweak_key(secp, pk.key, tweak),
+            key: pk.key.tweak(tweak, secp),
         })
     }
 }

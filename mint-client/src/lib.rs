@@ -12,7 +12,7 @@ use miniscript::DescriptorTrait;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
     PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse, SignRequest, TransactionId,
-    TweakableDescriptor, TxId, TxOutProof,
+    Tweakable, TxId, TxOutProof,
 };
 use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
@@ -506,7 +506,7 @@ where
         let script = self
             .cfg
             .peg_in_descriptor
-            .tweak(peg_in_pub_key, &self.secp)
+            .tweak(&peg_in_pub_key, &self.secp)
             .script_pubkey();
         debug!("Peg-in script: {}", script);
         let address = Address::from_script(&script, self.cfg.network)

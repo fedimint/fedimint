@@ -11,12 +11,14 @@ use std::str::FromStr;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
 mod keys;
+mod tweakable;
 mod txoproof;
 pub mod util;
 
 pub use keys::CompressedPublicKey;
 use miniscript::Descriptor;
-pub use txoproof::{PegInProof, PegInProofError, TweakableDescriptor, TxOutProof};
+pub use tweakable::{Contract, Tweakable};
+pub use txoproof::{PegInProof, PegInProofError, TxOutProof};
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 

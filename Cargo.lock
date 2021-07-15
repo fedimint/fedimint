@@ -433,9 +433,8 @@ dependencies = [
 
 [[package]]
 name = "bitcoin_hashes"
-version = "0.9.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6d72ba9671cb0929b5620e1bc30cdf5e206ccb3dbaa8964d67f6efc1e16129"
+version = "0.9.7"
+source = "git+https://github.com/elsirion/bitcoin_hashes?branch=minimint#1c8cf480123c8b49de717abffcc0162262efd904"
 dependencies = [
  "serde",
 ]

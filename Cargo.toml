@@ -12,3 +12,6 @@ members = [
     "mint-api",
     "mint-client",
 ]
+
+[patch.crates-io]
+bitcoin_hashes = { git = 'https://github.com/elsirion/bitcoin_hashes', branch = 'minimint' }

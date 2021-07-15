@@ -22,7 +22,7 @@ use database::batch::{Batch, BatchItem, Element};
 use database::{BatchDb, BincodeSerialized, Database, PrefixSearchable};
 use itertools::Itertools;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use mint_api::{CompressedPublicKey, PegInProof, TransactionId, TweakableDescriptor};
+use mint_api::{CompressedPublicKey, PegInProof, TransactionId, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
@@ -769,7 +769,7 @@ impl<'a> StatelessWallet<'a> {
                     sighash_type: None,
                     redeem_script: None,
                     witness_script: Some(
-                        self.descriptor.tweak(utxo.tweak, &self.secp).script_code(),
+                        self.descriptor.tweak(&utxo.tweak, &self.secp).script_code(),
                     ),
                     bip32_derivation: Default::default(),
                     final_script_sig: None,
@@ -929,7 +929,7 @@ mod tests {
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;
     use miniscript::{Descriptor, DescriptorTrait, Segwitv0};
-    use mint_api::{CompressedPublicKey, TweakableDescriptor};
+    use mint_api::{CompressedPublicKey, Tweakable};
     use std::str::FromStr;
 
     #[test]
@@ -964,7 +964,7 @@ mod tests {
         }];
 
         let tweak = secp256k1::PublicKey::from_slice(&[02u8; 33]).unwrap();
-        let tweaked = descriptor.tweak(tweak, &ctx);
+        let tweaked = descriptor.tweak(&tweak, &ctx);
         let utxos = vec![(
             UTXOKey(OutPoint::new(
                 BitcoinHash::from_slice(&[1u8; 32]).unwrap(),
