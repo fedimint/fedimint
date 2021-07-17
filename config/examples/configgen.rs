@@ -99,6 +99,11 @@ fn main() {
             wallet: WalletConfig {
                 network: Network::Regtest,
                 peg_in_descriptor: peg_in_descriptor.clone(),
+                peer_peg_in_keys: btc_pegin_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(peer_id, (_, pk))| (peer_id as u16, CompressedPublicKey { key: *pk }))
+                    .collect(),
                 peg_in_key: btc_pegin_keys[id as usize].0,
                 finalty_delay: 10,
                 default_fee: Feerate { sats_per_kvb: 2000 },

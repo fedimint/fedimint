@@ -19,6 +19,7 @@ async fn main() {
             "pkh(020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae8d)"
                 .parse()
                 .unwrap(),
+        peer_peg_in_keys: Default::default(),
         peg_in_key: SecretKey::from_str(
             "020ce4ee685363eac4ed72c323d1a3ebc994a0df9705f182bb2a2ee54a70a5ae",
         )
@@ -37,7 +38,7 @@ async fn main() {
         .open_tree("mint")
         .unwrap();
 
-    let (wallet, _, _) = Wallet::new(cfg, sled_db, rand::rngs::OsRng::new().unwrap())
+    let (wallet, _, _, _) = Wallet::new(cfg, sled_db, rand::rngs::OsRng::new().unwrap())
         .await
         .unwrap();
 

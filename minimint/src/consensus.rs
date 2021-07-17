@@ -4,6 +4,7 @@ use crate::database::{
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
+use crate::wallet_sig_to_ci;
 use config::ServerConfig;
 use counter::Counter;
 use database::batch::{Batch as DbBatch, BatchItem, Element};
@@ -140,7 +141,7 @@ where
                 ConsensusItem::Wallet(wci) => Some((peer, wci.clone())),
             })
             .collect::<Vec<_>>();
-        let (wallet_ci, db_batch_wallet) = self
+        let (wallet_ci, wallet_sig_ci, db_batch_wallet) = self
             .wallet
             .process_consensus_proposals(wallet_consensus, self.rng_gen.get_rng())
             .await
@@ -235,6 +236,8 @@ where
             })
             .unzip::<_, _, Vec<DbBatch>, DbBatch>();
 
+        let wallet_sig_ci = wallet_sig_ci.map(wallet_sig_to_ci);
+
         // Apply all consensus-critical changes atomically to the DB
         self.db
             .apply_batch(
@@ -242,7 +245,8 @@ where
                     .iter()
                     .flatten()
                     .chain(remove_ci_batch.iter())
-                    .chain(db_batch_wallet.iter()),
+                    .chain(db_batch_wallet.iter())
+                    .chain(wallet_sig_ci.as_ref()),
             )
             .expect("DB error");
 

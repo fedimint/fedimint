@@ -2,7 +2,8 @@ mod db;
 
 use crate::db::{
     BlockHashKey, LastBlock, LastBlockKey, PendingPegOutKey, PendingPegOutPrefixKey,
-    PendingTransaction, PendingTransactionKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    PendingTransaction, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey,
+    UnsignedTransactionKey,
 };
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::consensus::Encodable;
@@ -13,8 +14,8 @@ use bitcoin::util::bip143::SigHashCache;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
 use bitcoin::{
-    Address, AddressType, Amount, BlockHash, Network, OutPoint, PublicKey, Script, SigHashType,
-    Transaction, TxIn, TxOut,
+    Address, AddressType, Amount, BlockHash, Network, OutPoint, Script, SigHashType, Transaction,
+    TxIn, TxOut, Txid,
 };
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
@@ -26,7 +27,9 @@ use mint_api::{CompressedPublicKey, PegInProof, TransactionId, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
+use std::hash::Hasher;
 use thiserror::Error;
+use tokio::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
 pub const CONFIRMATION_TARGET: u16 = 24;
@@ -39,11 +42,22 @@ pub const MIN_PEG_OUT_URGENCY: u32 = 100;
 pub type PartialSig = Vec<u8>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct WalletConsensusItem {
+pub enum WalletConsensusItem {
+    RoundConsensus(RoundConsensusItem),
+    PegOutSignature(PegOutSignatureItem),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct RoundConsensusItem {
     block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
     fee_rate: Feerate,
-    peg_out_sig: Option<Vec<(PublicKey, PartialSig)>>, //TODO: remove pubkey, can be derived
     randomness: [u8; 32],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PegOutSignatureItem {
+    txid: Txid,
+    signature: Vec<secp256k1::Signature>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -91,10 +105,35 @@ where
         cfg: WalletConfig,
         db: D,
         rng: R,
-    ) -> Result<(Self, WalletConsensusItem, Batch), WalletError>
+    ) -> Result<
+        (
+            Self,
+            WalletConsensusItem,
+            Option<WalletConsensusItem>, // TODO: find a unified CI abstraction that allows both persistent and transient consensus items
+            Batch,
+        ),
+        WalletError,
+    >
     where
         R: RngCore + CryptoRng,
     {
+        let broadcaster_cfg = cfg.clone();
+        let broadcaster_db = db.clone();
+        tokio::spawn(async move {
+            // FIXME: become resilient against bitcoind outages
+            let btc_rpc = bitcoincore_rpc_async::Client::new(
+                broadcaster_cfg.btc_rpc_address.clone(),
+                Auth::UserPass(
+                    broadcaster_cfg.btc_rpc_user.clone(),
+                    broadcaster_cfg.btc_rpc_pass.clone(),
+                ),
+            )
+            .await
+            .expect("Failed to connect to bitcoind");
+
+            broadcast_pending_tx(broadcaster_db, btc_rpc).await;
+        });
+
         let btc_rpc = bitcoincore_rpc_async::Client::new(
             cfg.btc_rpc_address.clone(),
             Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
@@ -151,16 +190,17 @@ where
         };
 
         // Generate consensus item for first round after fresh startup
-        let (consensus_proposal, batch) = wallet.consensus_proposal(initial_consensus, rng).await?;
+        let (consensus_proposal, sig_ci, batch) =
+            wallet.consensus_proposal(initial_consensus, rng).await?;
 
-        Ok((wallet, consensus_proposal, batch))
+        Ok((wallet, consensus_proposal, sig_ci, batch))
     }
 
     async fn consensus_proposal<R>(
         &self,
         consensus: WalletConsensus,
         mut rng: R,
-    ) -> Result<(WalletConsensusItem, Batch), WalletError>
+    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>, Batch), WalletError>
     where
         R: RngCore + CryptoRng,
     {
@@ -207,32 +247,37 @@ where
 
         // We only want to peg out if we have a real randomness beacon after the first consensus round
         let peg_out_ready = consensus.randomness_beacon.is_some(); // TODO: maybe destructure instead?
-        let (peg_out_sig, batch) = if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
-            let psbt = self.create_peg_out_tx(pending_peg_outs, consensus).await;
+        let (batch, sig_ci) = if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
+            let mut psbt = self.create_peg_out_tx(pending_peg_outs, consensus).await;
+            let txid = psbt.global.unsigned_tx.txid();
 
             info!(
                 "Signing peg out tx {} containing {} peg outs",
-                psbt.global.unsigned_tx.txid(),
+                txid,
                 peg_out_ids.len()
             );
             let sigs = psbt
                 .inputs
-                .iter()
+                .iter_mut()
                 .map(|input| {
                     assert_eq!(
                         input.partial_sigs.len(),
                         1,
                         "There was already more than one (our) or no signatures in input"
                     );
-                    let (pk, sig) = input
-                        .partial_sigs
-                        .iter()
+
+                    // TODO: don't put sig into PSBT in the first place
+                    // We actually take out our own signature so everyone finalizes the tx in the
+                    // same epoch.
+                    let sig = std::mem::take(&mut input.partial_sigs)
+                        .into_values()
                         .next()
                         .expect("asserted previously");
 
                     // We drop SIGHASH_ALL, because we always use that and it is only present in the
                     // PSBT for compatibility with other tools.
-                    (*pk, sig[..sig.len() - 1].to_vec())
+                    secp256k1::Signature::from_der(&sig[..sig.len() - 1])
+                        .expect("we serialized it ourselves that way")
                 })
                 .collect::<Vec<_>>();
 
@@ -240,31 +285,35 @@ where
                 .into_iter()
                 .map(|peg_out| BatchItem::DeleteElement(Box::new(PendingPegOutKey(peg_out))))
                 .chain(std::iter::once(BatchItem::InsertNewElement(Element {
-                    key: Box::new(UnsignedTransactionKey),
+                    key: Box::new(UnsignedTransactionKey(psbt.global.unsigned_tx.txid())),
                     value: Box::new(BincodeSerialized::owned(psbt)),
                 })))
                 .collect();
 
-            (Some(sigs), batch)
+            let sig_ci = WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
+                txid,
+                signature: sigs,
+            });
+
+            (batch, Some(sig_ci))
         } else {
-            (None, vec![])
+            (vec![], None)
         };
 
-        let wallet_ci = WalletConsensusItem {
+        let wallet_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
             fee_rate,
-            peg_out_sig,
             randomness: rng.gen(),
-        };
+        });
 
-        Ok((wallet_ci, batch))
+        Ok((wallet_ci, sig_ci, batch))
     }
 
     pub async fn process_consensus_proposals<R>(
         &self,
         proposals: Vec<(u16, WalletConsensusItem)>,
         rng: R,
-    ) -> Result<(WalletConsensusItem, Batch), WalletError>
+    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>, Batch), WalletError>
     where
         R: RngCore + CryptoRng,
     {
@@ -275,17 +324,47 @@ where
             panic!("No proposals were submitted this round");
         }
 
-        let consensus = {
-            let height_proposals = proposals.iter().map(|(_, wc)| wc.block_height).collect();
-            let fee_proposals = proposals.iter().map(|(_, wc)| wc.fee_rate).collect();
+        // Apply signatures to peg-out tx
+        let mut batch = proposals
+            .iter()
+            .filter_map(|(peer, ci)| match ci {
+                WalletConsensusItem::PegOutSignature(sig) => {
+                    match self.process_peg_out_signature(*peer, sig) {
+                        Ok(batch) => Some(batch),
+                        Err(e) => {
+                            warn!("Error processing peer {}'s peg-out signature: {}", peer, e);
+                            None
+                        }
+                    }
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
 
+        // Generate this round's wallet consensus
+        let consensus = {
+            let fee_proposals = proposals
+                .iter()
+                .filter_map(|(_, wc)| match wc {
+                    WalletConsensusItem::RoundConsensus(rc) => Some(rc.fee_rate),
+                    _ => None,
+                })
+                .collect();
+            let consensus_fee_rate = self.process_fee_proposals(fee_proposals).await;
+
+            let height_proposals = proposals
+                .iter()
+                .filter_map(|(_, wc)| match wc {
+                    WalletConsensusItem::RoundConsensus(rc) => Some(rc.block_height),
+                    _ => None,
+                })
+                .collect();
             // The height is saved to know how far we are synced up already. That's why no output
             // is generated and the consensus height is not part of the epoch's wallet consensus
             // struct constructed below.
             self.process_block_height_proposals(height_proposals)
                 .await?;
-
-            let consensus_fee_rate = self.process_fee_proposals(fee_proposals).await;
 
             fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
                 lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
@@ -294,7 +373,10 @@ where
 
             let randomness_beacon = proposals
                 .iter()
-                .map(|(_, wc)| wc.randomness)
+                .filter_map(|(_, wc)| match wc {
+                    WalletConsensusItem::RoundConsensus(rc) => Some(rc.randomness),
+                    _ => None,
+                })
                 .fold([0; 32], xor);
 
             WalletConsensus {
@@ -303,117 +385,141 @@ where
             }
         };
 
-        let mut batch = if let Some(unsigned_tx) = self
-            .db
-            .get_value::<_, BincodeSerialized<PartiallySignedTransaction>>(&UnsignedTransactionKey)
-            .expect("DB error")
-        {
-            let mut unsigned_tx = unsigned_tx.into_owned();
-
-            let sigs = proposals
-                .into_iter()
-                .flat_map(|(peer, wc)| {
-                    if let Some(ref sigs) = wc.peg_out_sig {
-                        if sigs.len() != unsigned_tx.inputs.len() {
-                            warn!(
-                                "Peer {} did contribute a wrong amount of signatures to the current peg-out {}",
-                                peer,
-                                unsigned_tx.global.unsigned_tx.txid()
-                            );
-                            None
-                        } else {
-                            wc.peg_out_sig
-                        }
-                    } else {
-                        warn!(
-                            "Peer {} did not contribute a signature to the current peg-out {}",
-                            peer,
-                            unsigned_tx.global.unsigned_tx.txid()
-                        );
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            // FIXME: enforce pub-key/peer relation, DoS bug otherwise
-
-            let mut tx_hasher = SigHashCache::new(&unsigned_tx.global.unsigned_tx);
-            for (idx, psbt_input) in unsigned_tx.inputs.iter_mut().enumerate() {
-                let tx_hash = tx_hasher.signature_hash(
-                    idx,
-                    psbt_input
-                        .witness_script
-                        .as_ref()
-                        .expect("Missing witness script"),
-                    psbt_input
-                        .witness_utxo
-                        .as_ref()
-                        .expect("Missing UTXO")
-                        .value,
-                    SigHashType::All,
-                );
-                // TODO: investigate ThritytwoBytesHash problem
-                let message = Message::from_slice(&tx_hash[..]).unwrap();
-
-                // Add all valid signatures received from peers to PSBT
-                for peer_contrib in sigs.iter() {
-                    let (ref pk, ref sig) = peer_contrib[idx];
-                    // TODO: use Signature type in WCI
-                    // FIXME: fix DoS vector
-                    let secp_sig = secp256k1::Signature::from_der(sig.as_ref())
-                        .expect("Peer sent malformed signature");
-
-                    if self.secp.verify(&message, &secp_sig, &pk.key).is_ok() {
-                        let psbt_sig = sig
-                            .into_iter()
-                            .copied()
-                            .chain(std::iter::once(SigHashType::All.as_u32() as u8))
-                            .collect();
-                        psbt_input.partial_sigs.insert(*pk, psbt_sig);
-                    } else {
-                        warn!(
-                            "Some peer contributed an invalid signature for pegout {}",
-                            unsigned_tx.global.unsigned_tx.txid()
-                        );
-                    }
-                }
-            }
-
-            // FIXME: DoS if <2/3 sigs were supplied
-            miniscript::psbt::finalize(&mut unsigned_tx, &self.secp)
-                .expect("Fix the damn DoS vector! (or something else)");
-            let tx = miniscript::psbt::extract(&unsigned_tx, &self.secp)
-                .expect("Fix the damn DoS vector! (or something else)");
-
-            let mut raw_tx = Vec::new();
-            tx.consensus_encode(&mut raw_tx)
-                .expect("Nothing can go wrong with a vec");
-
-            info!(
-                "Broadcasting peg-out tx {} (weight {})",
-                tx.txid(),
-                tx.get_weight()
-            );
-            trace!("Transaction: {}", raw_tx.to_hex());
-            if let Err(e) = self.btc_rpc.send_raw_transaction(&raw_tx).await {
-                // FIXME: resubmit periodically, also in case it drops out of the mempool
-                error!("Could not submit peg out transaction: {}", e);
-            }
-
-            vec![
-                BatchItem::InsertNewElement(Element {
-                    key: Box::new(PendingTransactionKey(tx.txid())),
-                    value: Box::new(PendingTransaction(tx)),
-                }),
-                BatchItem::DeleteElement(Box::new(UnsignedTransactionKey)),
-            ]
-        } else {
-            Vec::new()
-        };
-
-        let (next_epoch_ci, next_epoch_ci_batch) = self.consensus_proposal(consensus, rng).await?;
+        let (next_epoch_ci, sig_ci, next_epoch_ci_batch) =
+            self.consensus_proposal(consensus, rng).await?;
         batch.extend(next_epoch_ci_batch);
 
-        Ok((next_epoch_ci, batch))
+        Ok((next_epoch_ci, sig_ci, batch))
+    }
+
+    /// Try to attach a contributed signature to a pending peg-out tx and try to finalize it.
+    fn process_peg_out_signature(
+        &self,
+        peer: u16,
+        signature: &PegOutSignatureItem,
+    ) -> Result<Batch, ProcessPegOutSigError> {
+        let mut psbt = self
+            .db
+            .get_value::<_, BincodeSerialized<PartiallySignedTransaction>>(&UnsignedTransactionKey(
+                signature.txid,
+            ))
+            .expect("DB error")
+            .ok_or(ProcessPegOutSigError::UnknownTransaction(signature.txid))?
+            .into_owned();
+
+        let peer_key = self
+            .cfg
+            .peer_peg_in_keys
+            .get(&peer)
+            .expect("always called with valid peer id");
+
+        if psbt.inputs.len() != signature.signature.len() {
+            return Err(ProcessPegOutSigError::WrongSignatureCount(
+                psbt.inputs.len(),
+                signature.signature.len(),
+            ));
+        }
+
+        let mut tx_hasher = SigHashCache::new(&psbt.global.unsigned_tx);
+        for (idx, (input, signature)) in psbt
+            .inputs
+            .iter_mut()
+            .zip(signature.signature.iter())
+            .enumerate()
+        {
+            let tx_hash = tx_hasher.signature_hash(
+                idx,
+                input
+                    .witness_script
+                    .as_ref()
+                    .expect("Missing witness script"),
+                input.witness_utxo.as_ref().expect("Missing UTXO").value,
+                SigHashType::All,
+            );
+
+            let tweak = input
+                .proprietary
+                .get(&proprietary_tweak_key())
+                .expect("we saved it with a tweak");
+
+            let tweaked_peer_key = peer_key.tweak(tweak, &self.secp);
+            self.secp
+                .verify(
+                    &Message::from_slice(&tx_hash[..]).unwrap(),
+                    &signature,
+                    &tweaked_peer_key.key,
+                )
+                .map_err(|_| ProcessPegOutSigError::InvalidSignature)?;
+
+            let psbt_sig = signature
+                .serialize_der()
+                .iter()
+                .copied()
+                .chain(std::iter::once(SigHashType::All.as_u32() as u8))
+                .collect();
+
+            if input
+                .partial_sigs
+                .insert(tweaked_peer_key.into(), psbt_sig)
+                .is_some()
+            {
+                return Err(ProcessPegOutSigError::DuplicateSignature);
+            }
+        }
+
+        // FIXME: actually recognize change UTXOs on maturity
+        // We need to save the change output's tweak key to be able to access the funds later on.
+        // The tweak is extracted here because the psbt is moved next and not available anymore
+        // when the tweak is actually needed in the end to be put into the batch on success.
+        let change_tweak = psbt
+            .outputs
+            .iter()
+            .flat_map(|output| output.proprietary.get(&proprietary_tweak_key()).cloned())
+            .next();
+
+        match miniscript::psbt::finalize(&mut psbt, &self.secp) {
+            Ok(()) => {}
+            Err(e) => {
+                trace!("can't finalize peg-out tx {} yet: {}", signature.txid, e);
+
+                // We want to save the new signature, so we need to overwrite the PSBT
+                return Ok(vec![BatchItem::InsertElement(Element {
+                    key: Box::new(UnsignedTransactionKey(signature.txid)),
+                    value: Box::new(BincodeSerialized::owned(psbt)),
+                })]);
+            }
+        }
+
+        let tx = match miniscript::psbt::extract(&psbt, &self.secp) {
+            Ok(tx) => tx,
+            Err(e) => {
+                // FIXME: this should never happen AFAIK, but I'd like to avoid DOS bugs for now
+                error!(
+                    "This shouldn't happen: could not extract tx from finalized PSBT ({})",
+                    e
+                );
+
+                // Who knows what went wrong, we still want to save the received signature
+                return Ok(vec![BatchItem::InsertElement(Element {
+                    key: Box::new(UnsignedTransactionKey(signature.txid)),
+                    value: Box::new(BincodeSerialized::owned(psbt)),
+                })]);
+            }
+        };
+
+        // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
+        // extracted tx for periodic transmission and to accept the change into our wallet
+        // eventually once it confirms.
+        Ok(vec![
+            BatchItem::DeleteElement(Box::new(UnsignedTransactionKey(signature.txid))),
+            BatchItem::InsertNewElement(Element {
+                key: Box::new(PendingTransactionKey(signature.txid)),
+                value: Box::new(PendingTransaction {
+                    tx,
+                    tweak: change_tweak,
+                }),
+            }),
+        ])
     }
 
     /// # Panics
@@ -641,7 +747,7 @@ where
 impl<'a> StatelessWallet<'a> {
     fn create_tx(
         &self,
-        mut outputs: Vec<PendingPegOut>,
+        outputs: Vec<PendingPegOut>,
         mut utxos: Vec<(UTXOKey, SpendableUTXO)>,
         feerate: Feerate,
         change_tweak: &[u8],
@@ -708,13 +814,15 @@ impl<'a> StatelessWallet<'a> {
         // back to ourselves.
         let fees = feerate.calculate_fee(total_weight);
         let change = total_selected_value - fees - peg_out_amount;
-        if change >= Amount::from_sat(change_script.dust_value()) {
-            outputs.push(PendingPegOut {
+        let change_output = if change >= Amount::from_sat(change_script.dust_value()) {
+            Some(PendingPegOut {
                 destination: change_script,
                 amount: change,
                 pending_since_block: 0,
-            });
-        }
+            })
+        } else {
+            None
+        };
 
         info!(
             "Creating peg-out tx with {} inputs of value {} BTC, {} peg-outs of value {} paying {} BTC in fees (fee rate {}) and a change amount of {} BTC",
@@ -741,14 +849,16 @@ impl<'a> StatelessWallet<'a> {
                 .collect(),
             output: outputs
                 .iter()
+                .chain(change_output.as_ref())
                 .map(|peg_out| TxOut {
                     value: peg_out.amount.as_sat(),
                     script_pubkey: peg_out.destination.clone(),
                 })
                 .collect(),
-        }; // FIXME: handle change
+        };
         info!("Creating peg-out tx {}", transaction.txid());
 
+        // FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
         let psbt = PartiallySignedTransaction {
             global: Global {
                 unsigned_tx: transaction,
@@ -778,16 +888,22 @@ impl<'a> StatelessWallet<'a> {
                     sha256_preimages: Default::default(),
                     hash160_preimages: Default::default(),
                     hash256_preimages: Default::default(),
-                    proprietary: vec![(
-                        proprietary_input_tweak_key(),
-                        utxo.tweak.serialize().to_vec(),
-                    )]
-                    .into_iter()
-                    .collect(),
+                    proprietary: vec![(proprietary_tweak_key(), utxo.tweak.serialize().to_vec())]
+                        .into_iter()
+                        .collect(),
                     unknown: Default::default(),
                 })
                 .collect(),
-            outputs: vec![],
+            outputs: outputs
+                .iter()
+                .map(|_| Default::default())
+                .chain(change_output.map(|_| {
+                    let mut cout = bitcoin::util::psbt::Output::default();
+                    cout.proprietary
+                        .insert(proprietary_tweak_key(), change_tweak.to_vec());
+                    cout
+                }))
+                .collect(),
         };
 
         psbt
@@ -807,7 +923,7 @@ impl<'a> StatelessWallet<'a> {
 
                 let tweak_pk_bytes = psbt_input
                     .proprietary
-                    .get(&proprietary_input_tweak_key())
+                    .get(&proprietary_tweak_key())
                     .expect("Malformed PSBT: expected tweak");
                 let pub_key = secp256k1::PublicKey::from_secret_key(&self.secp, &secret_key);
 
@@ -884,7 +1000,7 @@ async fn get_network(rpc_client: &bitcoincore_rpc_async::Client) -> Result<Netwo
     }
 }
 
-fn proprietary_input_tweak_key() -> ProprietaryKey {
+fn proprietary_tweak_key() -> ProprietaryKey {
     ProprietaryKey {
         prefix: b"minimint".to_vec(),
         subtype: 0x00,
@@ -903,6 +1019,47 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
     }
 }
 
+async fn broadcast_pending_tx<D>(db: D, rpc: bitcoincore_rpc_async::Client)
+where
+    D: Database + PrefixSearchable,
+{
+    loop {
+        let pending_tx = db
+            .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(
+                &PendingTransactionPrefixKey,
+            )
+            .collect::<Result<Vec<_>, _>>()
+            .expect("DB error");
+
+        for (_, PendingTransaction { tx, .. }) in pending_tx {
+            let mut raw_tx = Vec::new();
+            tx.consensus_encode(&mut raw_tx)
+                .expect("Nothing can go wrong with a vec");
+
+            trace!(
+                "Broadcasting peg-out tx {} (weight {})",
+                tx.txid(),
+                tx.get_weight()
+            );
+            trace!("Transaction: {}", raw_tx.to_hex());
+            if let Err(e) = rpc.send_raw_transaction(&raw_tx).await {
+                // FIXME: resubmit periodically, also in case it drops out of the mempool
+                trace!("Could not submit peg out transaction: {}", e);
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
+}
+
+impl std::hash::Hash for PegOutSignatureItem {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.txid.hash(state);
+        for sig in self.signature.iter() {
+            sig.serialize_der().hash(state);
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum WalletError {
     #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
@@ -911,6 +1068,20 @@ pub enum WalletError {
     RpcErrot(bitcoincore_rpc_async::Error),
     #[error("Unknown bitcoin network: {0}")]
     UnknownNetwork(String),
+}
+
+#[derive(Debug, Error)]
+pub enum ProcessPegOutSigError {
+    #[error("No unsigned transaction with id {0} exists")]
+    UnknownTransaction(Txid),
+    #[error("Expected {0} signatures, got {1}")]
+    WrongSignatureCount(usize, usize),
+    #[error("Malformed signature: {0}")]
+    MalformedSignature(secp256k1::Error),
+    #[error("Invalid signature")]
+    InvalidSignature,
+    #[error("Duplicate signature")]
+    DuplicateSignature,
 }
 
 impl From<bitcoincore_rpc_async::Error> for WalletError {

@@ -1,5 +1,5 @@
 use bitcoin::{Amount, Network};
-use mint_api::{Keys, PegInDescriptor};
+use mint_api::{CompressedPublicKey, Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -25,6 +25,7 @@ pub struct Feerate {
 pub struct WalletConfig {
     pub network: Network,
     pub peg_in_descriptor: PegInDescriptor,
+    pub peer_peg_in_keys: BTreeMap<u16, CompressedPublicKey>,
     pub peg_in_key: secp256k1::SecretKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,

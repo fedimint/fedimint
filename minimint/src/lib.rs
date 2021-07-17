@@ -5,10 +5,12 @@ use crate::net::api::ClientRequest;
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
+use ::database::batch::{BatchItem, Element};
 use ::database::{BatchDb, Database, PrefixSearchable};
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use fedimint::FediMint;
+use fediwallet::WalletConsensusItem;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
@@ -62,11 +64,20 @@ pub async fn run_minimint(
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
-    let (wallet, wallet_ci, wallet_batch) =
+    let (wallet, wallet_ci, sig_ci, wallet_batch) =
         fediwallet::Wallet::new(cfg.wallet.clone(), sled_db.clone(), rng.clone())
             .await
             .expect("Couldn't create wallet");
-    BatchDb::apply_batch(&sled_db, wallet_batch.iter()).expect("DB error");
+
+    // Until there is a common way to handle consensus items, signature CIs from the wallet have
+    // to be persisted while round CIs may not be persisted.
+    let wallet_sig_ci_bi = sig_ci.map(wallet_sig_to_ci);
+
+    BatchDb::apply_batch(
+        &sled_db,
+        wallet_batch.iter().chain(wallet_sig_ci_bi.as_ref()),
+    )
+    .expect("DB error");
 
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
@@ -255,6 +266,13 @@ where
                 debug!("Successfully submitted client request to queue");
             }
         }
+    })
+}
+
+fn wallet_sig_to_ci(sci: WalletConsensusItem) -> BatchItem {
+    BatchItem::InsertNewElement(Element {
+        key: Box::new(ConsensusItem::Wallet(sci)),
+        value: Box::new(()),
     })
 }
 

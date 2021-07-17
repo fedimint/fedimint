@@ -5,7 +5,7 @@ use database::{
     check_format, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
     SerializableDatabaseValue,
 };
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
@@ -36,13 +36,19 @@ pub struct PendingPegOutKey(pub mint_api::TransactionId);
 pub struct PendingPegOutPrefixKey;
 
 #[derive(Clone, Debug)]
-pub struct UnsignedTransactionKey;
+pub struct UnsignedTransactionKey(pub Txid);
 
 #[derive(Clone, Debug)]
 pub struct PendingTransactionKey(pub Txid);
 
 #[derive(Clone, Debug)]
-pub struct PendingTransaction(pub Transaction);
+pub struct PendingTransactionPrefixKey;
+
+#[derive(Clone, Debug)]
+pub struct PendingTransaction {
+    pub tx: Transaction,
+    pub tweak: Option<Vec<u8>>,
+}
 
 impl DatabaseKeyPrefix for BlockHashKey {
     fn to_bytes(&self) -> Vec<u8> {
@@ -143,14 +149,18 @@ impl DatabaseKeyPrefix for PendingPegOutPrefixKey {
 
 impl DatabaseKeyPrefix for UnsignedTransactionKey {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_UNSIGNED_TRANSACTION]
+        let mut key = Vec::with_capacity(33);
+        key.push(DB_PREFIX_UNSIGNED_TRANSACTION);
+        key.extend_from_slice(&self.0[..]);
+        key
     }
 }
 
 impl DatabaseKey for UnsignedTransactionKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        check_format(data, DB_PREFIX_UNSIGNED_TRANSACTION, 0)?;
-        Ok(UnsignedTransactionKey)
+        Ok(UnsignedTransactionKey(
+            Txid::from_slice(check_format(data, DB_PREFIX_UNSIGNED_TRANSACTION, 32)?).unwrap(),
+        ))
     }
 }
 
@@ -169,6 +179,12 @@ impl DatabaseKeyPrefix for PendingTransactionKey {
     }
 }
 
+impl DatabaseKeyPrefix for PendingTransactionPrefixKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_PENDING_TRANSACTION]
+    }
+}
+
 impl DatabaseKey for PendingTransactionKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         Ok(PendingTransactionKey(
@@ -180,15 +196,26 @@ impl DatabaseKey for PendingTransactionKey {
 impl SerializableDatabaseValue for PendingTransaction {
     fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        self.0.consensus_encode(&mut data).expect("can't fail");
+        self.tx.consensus_encode(&mut data).expect("can't fail");
+        self.tweak
+            .as_ref()
+            .map(|tweak| data.extend_from_slice(tweak));
         data
     }
 }
 
 impl DatabaseValue for PendingTransaction {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        let tx = Transaction::consensus_decode(Cursor::new(data))
-            .map_err(|e| DecodingError::other(e))?;
-        Ok(PendingTransaction(tx))
+        let mut cursor = Cursor::new(data);
+        let tx = Transaction::consensus_decode(&mut cursor).map_err(|e| DecodingError::other(e))?;
+        let mut tweak = Vec::new();
+        cursor
+            .read_to_end(&mut tweak)
+            .expect("can't fail, may read 0 bytes");
+
+        Ok(PendingTransaction {
+            tx,
+            tweak: if tweak.is_empty() { None } else { Some(tweak) },
+        })
     }
 }

@@ -47,6 +47,7 @@ impl DatabaseKeyPrefix for ConsensusItem {
         let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
 
         // TODO: maybe generalize id concept to all CIs
+        // FIXME: why the fuck is it all in the key?! The id seems also useless otherwise.
         let issuance_id = match self {
             ConsensusItem::ClientRequest(ClientRequest::PegIn(pi)) => pi.id(),
             ConsensusItem::ClientRequest(ClientRequest::Reissuance(re)) => re.id(),
