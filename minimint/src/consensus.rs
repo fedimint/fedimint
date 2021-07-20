@@ -4,10 +4,9 @@ use crate::database::{
 };
 use crate::net::api::ClientRequest;
 use crate::rng::RngGenerator;
-use crate::wallet_sig_to_ci;
 use config::ServerConfig;
 use counter::Counter;
-use database::batch::{Batch as DbBatch, BatchItem, Element};
+use database::batch::{BatchItem, BatchTx, DbBatch};
 use database::{BatchDb, BincodeSerialized, Database, DatabaseError, PrefixSearchable};
 use fedimint::{FediMint, MintError};
 use fediwallet::{Wallet, WalletConsensusItem};
@@ -128,10 +127,15 @@ where
         Ok(())
     }
 
-    pub async fn process_consensus_outcome(&self, batch: ConsensusOutcome) -> WalletConsensusItem {
-        info!("Processing output of epoch {}", batch.epoch);
+    pub async fn process_consensus_outcome(
+        &self,
+        consensus_outcome: ConsensusOutcome,
+    ) -> WalletConsensusItem {
+        info!("Processing output of epoch {}", consensus_outcome.epoch);
 
-        let wallet_consensus = batch
+        let mut db_batch = DbBatch::new();
+
+        let wallet_consensus = consensus_outcome
             .contributions
             .iter()
             .flat_map(|(&peer, cis)| cis.iter().map(move |ci| (peer, ci)))
@@ -141,11 +145,19 @@ where
                 ConsensusItem::Wallet(wci) => Some((peer, wci.clone())),
             })
             .collect::<Vec<_>>();
-        let (wallet_ci, wallet_sig_ci, db_batch_wallet) = self
+        let (wallet_ci, wallet_sig_ci) = self
             .wallet
-            .process_consensus_proposals(wallet_consensus, self.rng_gen.get_rng())
+            .process_consensus_proposals(
+                db_batch.transaction(),
+                wallet_consensus,
+                self.rng_gen.get_rng(),
+            )
             .await
             .expect("wallet error");
+
+        if let Some(wci) = wallet_sig_ci {
+            db_batch.autocommit(|tx| tx.append_insert_new(ConsensusItem::Wallet(wci), ()));
+        }
 
         // Since the changes to the database will happen all at once we won't be able to handle
         // conflicts between consensus items in one batch there. Thus we need to make sure that
@@ -156,7 +168,7 @@ where
 
         // TODO: check if spent coins are the only thing needing a sanity cross tx check
         // Make sure every coin appears only in one request
-        let spent_coins = batch
+        let spent_coins = consensus_outcome
             .contributions
             .iter()
             .flat_map(|(_, cis)| cis.iter())
@@ -174,7 +186,7 @@ where
             .flatten()
             .collect::<Counter<_>>();
 
-        let used_peg_in_proofs = batch
+        let used_peg_in_proofs = consensus_outcome
             .contributions
             .iter()
             .flat_map(|(_, cis)| cis.iter())
@@ -188,7 +200,7 @@ where
             .collect::<Counter<_>>();
 
         // Filter batch for consistency
-        let batch = batch
+        let filtered_consensus_outcome = consensus_outcome
             .contributions
             .into_iter()
             .flat_map(|(peer, cis)| {
@@ -216,45 +228,35 @@ where
             .unique_by(|(_, contribution)| contribution.clone())
             .collect::<Vec<_>>();
 
-        let (process_items_batches, remove_ci_batch) = batch
+        // TODO: implement own parallel execution to avoid allocations and get rid of rayon
+        let par_db_batches = filtered_consensus_outcome
             .into_par_iter()
             .map(|(peer, ci)| {
                 trace!("Processing consensus item {:?} from peer {}", ci, peer);
-                let remove_ci = BatchItem::MaybeDeleteElement(Box::new(ci.clone()));
+                let mut db_batch = DbBatch::new();
+                db_batch.autocommit(|batch_tx| batch_tx.append_maybe_delete(ci.clone()));
 
-                let batch = match ci {
+                match ci {
                     ConsensusItem::ClientRequest(client_request) => {
-                        self.process_client_request(peer, client_request)
+                        self.process_client_request(db_batch.transaction(), peer, client_request);
                     }
                     ConsensusItem::PartiallySignedRequest(id, psig) => {
-                        self.process_partial_signature(peer, id, psig)
+                        self.process_partial_signature(db_batch.transaction(), peer, id, psig);
                     }
-                    ConsensusItem::Wallet(_) => vec![],
-                };
-
-                (batch, remove_ci)
+                    ConsensusItem::Wallet(_) => {}
+                }
+                db_batch
             })
-            .unzip::<_, _, Vec<DbBatch>, DbBatch>();
-
-        let wallet_sig_ci = wallet_sig_ci.map(wallet_sig_to_ci);
+            .collect::<Vec<_>>();
+        db_batch.autocommit(|tx| tx.append_from_accumulators(par_db_batches.into_iter()));
 
         // Apply all consensus-critical changes atomically to the DB
-        self.db
-            .apply_batch(
-                process_items_batches
-                    .iter()
-                    .flatten()
-                    .chain(remove_ci_batch.iter())
-                    .chain(db_batch_wallet.iter())
-                    .chain(wallet_sig_ci.as_ref()),
-            )
-            .expect("DB error");
+        self.db.apply_batch(db_batch).expect("DB error");
 
         // Now that we have updated the DB with the epoch results also try to combine signatures
-        let combine_sigs_batches = self.finalize_signatures();
-        self.db
-            .apply_batch(combine_sigs_batches.iter().flatten())
-            .expect("DB error");
+        let mut db_batch = DbBatch::new();
+        self.finalize_signatures(db_batch.transaction());
+        self.db.apply_batch(db_batch).expect("DB error");
 
         wallet_ci
     }
@@ -274,23 +276,26 @@ where
             .expect("DB error")
     }
 
-    fn process_client_request(&self, peer: u16, cr: ClientRequest) -> DbBatch {
+    fn process_client_request(&self, batch: BatchTx, peer: u16, cr: ClientRequest) {
         match cr {
-            ClientRequest::PegIn(peg_in) => self.process_peg_in_request(peg_in),
+            ClientRequest::PegIn(peg_in) => self.process_peg_in_request(batch, peg_in),
             ClientRequest::Reissuance(reissuance) => {
-                self.process_reissuance_request(peer, reissuance)
+                self.process_reissuance_request(batch, peer, reissuance)
             }
-            ClientRequest::PegOut(req) => self.process_peg_out_request(peer, req),
+            ClientRequest::PegOut(req) => self.process_peg_out_request(batch, peer, req),
         }
     }
 
-    fn process_peg_in_request(&self, peg_in: PegInRequest) -> DbBatch {
+    fn process_peg_in_request(&self, mut batch: BatchTx, peg_in: PegInRequest) {
         // TODO: maybe deduplicate verification logic
-        let (mut batch, peg_in_amount) = match self.wallet.claim_pegin(&peg_in.proof) {
+        let peg_in_amount = match self
+            .wallet
+            .claim_pegin(batch.subtransaction(), &peg_in.proof)
+        {
             Some(res) => res,
             None => {
                 warn!("Received invalid peg-in request from consensus: invalid proof");
-                return vec![];
+                return;
             }
         };
 
@@ -303,13 +308,13 @@ where
             .is_err()
         {
             warn!("Received invalid peg-in request from consensus: invalid signature");
-            return vec![];
+            return;
         }
 
         if peg_in_amount != peg_in.blind_tokens.0.amount() {
             // TODO: improve abort communication
             warn!("Received invalid peg-in request from consensus: mismatching amount");
-            return vec![];
+            return;
         }
 
         let peg_in_id = peg_in.id();
@@ -321,65 +326,64 @@ where
                     "Error signing a proposed peg-in, proposing peer might be faulty: {}",
                     e
                 );
-                return vec![];
+                return;
             }
         };
 
-        let db_sig_request = BatchItem::InsertNewElement(Element::new(
+        batch.append_insert_new(
             ConsensusItem::PartiallySignedRequest(peg_in_id, signed_req.clone()),
             (),
-        ));
-        let db_own_sig_element = BatchItem::InsertNewElement(Element::new(
+        );
+        batch.append_insert_new(
             PartialSignatureKey {
                 request_id: peg_in_id,
                 peer_id: self.cfg.identity,
             },
             BincodeSerialized::owned(signed_req),
-        ));
-        batch.push(db_sig_request);
-        batch.push(db_own_sig_element);
-
-        batch
+        );
+        batch.commit()
     }
 
-    fn process_reissuance_request(&self, peer: u16, reissuance: ReissuanceRequest) -> DbBatch {
+    fn process_reissuance_request(
+        &self,
+        mut batch: BatchTx,
+        peer: u16,
+        reissuance: ReissuanceRequest,
+    ) {
         let reissuance_id = reissuance.id();
 
-        let (signed_request, mut batch) = match self.mint.reissue(
+        let signed_request = match self.mint.reissue(
             &self.db,
+            batch.subtransaction(),
             reissuance.coins.clone(),
             reissuance.blind_tokens.clone(),
         ) {
-            Ok((sr, batch)) => (sr, batch),
+            Ok(psr) => psr,
             Err(e) => {
                 warn!(
                     "Rejected reissuance request proposed by peer {}, reason: {} (id: {})",
                     peer, e, reissuance_id
                 );
-                return vec![];
+                return;
             }
         };
         debug!("Signed reissuance request {}", reissuance_id);
 
-        batch.push(BatchItem::InsertNewElement(Element::new(
+        batch.append_insert_new(
             ConsensusItem::PartiallySignedRequest(reissuance_id, signed_request.clone()),
             (),
-        )));
+        );
 
         let our_sig_key = PartialSignatureKey {
             request_id: reissuance_id,
             peer_id: self.cfg.identity,
         };
         let our_sig = BincodeSerialized::owned(signed_request);
-        batch.push(BatchItem::InsertNewElement(Element::new(
-            our_sig_key,
-            our_sig,
-        )));
-
-        batch
+        batch.append_insert_new(our_sig_key, our_sig);
+        batch.commit()
     }
 
-    fn process_peg_out_request(&self, peer: u16, peg_out: PegOutRequest) -> DbBatch {
+    fn process_peg_out_request(&self, mut batch: BatchTx, peer: u16, peg_out: PegOutRequest) {
         let id = peg_out.id();
 
         let pub_keys = peg_out
@@ -389,36 +393,39 @@ where
             .collect::<Vec<_>>();
         if !musig::verify(peg_out.id().into_inner(), peg_out.sig.clone(), &pub_keys) {
             warn!("Peer {} proposed an invalid peg-out request: sig.", peer);
-            return vec![];
+            return;
         }
 
         let amount = bitcoin::Amount::from_sat(
             (peg_out.coins.amount().milli_sat / 1000) - self.cfg.wallet.per_utxo_fee.as_sat(),
         );
 
-        let mut batch = match self.mint.spend(&self.db, peg_out.coins) {
-            Ok(batch) => batch,
-            Err(e) => {
-                warn!("Peer {} proposed an invalid peg-out: {}", peer, e);
-                return vec![];
-            }
-        };
-
-        if let Ok(peg_out_batch_item) = self.wallet.queue_pegout(id, peg_out.address, amount) {
-            batch.push(peg_out_batch_item);
-            batch
-        } else {
-            // TODO: let user know they can keep their coins because peg-out failed (also above)
-            vec![]
+        if let Err(e) = self
+            .mint
+            .spend(&self.db, batch.subtransaction(), peg_out.coins)
+        {
+            warn!("Peer {} proposed an invalid peg-out: {}", peer, e);
+            return;
         }
+
+        if let Err(e) =
+            self.wallet
+                .queue_pegout(batch.subtransaction(), id, peg_out.address, amount)
+        {
+            warn!("Queuing of peg-out failed: {}", e);
+            return;
+        }
+
+        batch.commit()
     }
 
     fn process_partial_signature(
         &self,
+        mut batch: BatchTx,
         peer: u16,
         req_id: TransactionId,
         partial_sig: PartialSigResponse,
-    ) -> DbBatch {
+    ) {
         let is_finalized = self
             .db
             .get_value::<_, DummyValue>(&FinalizedSignatureKey {
@@ -429,31 +436,28 @@ where
 
         if peer == self.cfg.identity {
             trace!("Received own sig share for issuance {}, ignoring", req_id);
-            vec![]
         } else if is_finalized {
             trace!(
                 "Received sig share for finalized issuance {}, ignoring",
                 req_id
             );
-            vec![]
         } else {
             debug!(
                 "Received sig share from peer {} for issuance {}",
                 peer, req_id
             );
-            let psig = BatchItem::InsertNewElement(Element::new(
+            batch.append_insert_new(
                 PartialSignatureKey {
                     request_id: req_id,
                     peer_id: peer,
                 },
                 BincodeSerialized::owned(partial_sig),
-            ));
-
-            vec![psig]
+            );
+            batch.commit();
         }
     }
 
-    fn finalize_signatures(&self) -> Vec<DbBatch> {
+    fn finalize_signatures(&self, mut batch: BatchTx) {
         let req_psigs = self
             .db
             .find_by_prefix::<_, PartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
@@ -465,15 +469,20 @@ where
             })
             .into_group_map();
 
-        req_psigs
+        // TODO: use own par iter impl that allows efficient use of accumulators
+        let par_batches = req_psigs
             .into_par_iter()
             .filter_map(|(issuance_id, shares)| {
+                let mut batch = DbBatch::new();
+                let mut batch_tx = batch.transaction();
+
                 if shares.len() > self.tbs_threshold() {
                     debug!(
                         "Trying to combine sig shares for issuance request {}",
                         issuance_id
                     );
                     let (bsig, errors) = self.mint.combine(shares.clone());
+                    // FIXME: validate shares before writing to DB to make combine infallible
                     if !errors.0.is_empty() {
                         warn!("Peer sent faulty share: {:?}", errors);
                     }
@@ -485,35 +494,28 @@ where
                                 issuance_id
                             );
 
-                            let outdated_consensus_items = self
-                                .db
-                                .find_by_prefix::<_, ConsensusItem, ()>(&ConsensusItemKeyPrefix(
-                                    issuance_id,
-                                ))
-                                .map(|res| {
-                                    let key = res.expect("DB error").0;
-                                    BatchItem::DeleteElement(Box::new(key))
-                                });
+                            batch_tx.append_from_iter(
+                                self.db
+                                    .find_by_prefix::<_, ConsensusItem, ()>(
+                                        &ConsensusItemKeyPrefix(issuance_id),
+                                    )
+                                    .map(|res| {
+                                        let key = res.expect("DB error").0;
+                                        BatchItem::delete(key)
+                                    }),
+                            );
 
-                            let outdated_sig_shares = shares.into_iter().map(|(peer, _)| {
-                                BatchItem::DeleteElement(Box::new(PartialSignatureKey {
+                            batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
+                                BatchItem::delete(PartialSignatureKey {
                                     request_id: issuance_id,
                                     peer_id: peer as u16,
-                                }))
-                            });
+                                })
+                            }));
 
                             let sig_key = FinalizedSignatureKey { issuance_id };
                             let sig_value = BincodeSerialized::owned(bsig);
-                            let sig_insert = BatchItem::InsertNewElement(Element {
-                                key: Box::new(sig_key),
-                                value: Box::new(sig_value),
-                            });
-
-                            let batch = outdated_consensus_items
-                                .chain(outdated_sig_shares)
-                                .chain(std::iter::once(sig_insert))
-                                .collect::<Vec<_>>();
-
+                            batch_tx.append_insert_new(sig_key, sig_value);
+                            batch_tx.commit();
                             Some(batch)
                         }
                         Err(e) => {
@@ -525,7 +527,9 @@ where
                     None
                 }
             })
-            .collect()
+            .collect::<Vec<_>>();
+        batch.append_from_accumulators(par_batches.into_iter());
+        batch.commit();
     }
 
     fn tbs_threshold(&self) -> usize {

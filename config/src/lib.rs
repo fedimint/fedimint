@@ -29,7 +29,6 @@ pub struct WalletConfig {
     pub peg_in_key: secp256k1::SecretKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,
-    pub start_consensus_height: u32,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub per_utxo_fee: Amount,
     pub btc_rpc_address: String,

@@ -1,4 +1,4 @@
-use crate::batch::BatchItem;
+use crate::batch::DbBatch;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -61,10 +61,7 @@ pub trait PrefixSearchable: Database {
 
 pub trait BatchDb: Database {
     /// Apply a batch atomically
-    fn apply_batch<'b, B>(&self, batch: B) -> Result<(), DatabaseError>
-    where
-        B: IntoIterator<Item = &'b BatchItem> + 'b,
-        B::IntoIter: Clone;
+    fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
 }
 
 pub struct DbIter<Iter, Bytes, IterErr, K, V>

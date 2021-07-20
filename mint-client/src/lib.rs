@@ -2,7 +2,7 @@ use bitcoin::{Address, Script, Transaction};
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
-use database::batch::{BatchItem, Element};
+use database::batch::{BatchItem, DbBatch};
 use database::{
     check_format, BatchDb, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix,
     DecodingError, PrefixSearchable,
@@ -206,24 +206,21 @@ where
 
         let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
 
-        let batch = coins
-            .into_iter()
-            .map(|(amount, coin): (Amount, SpendableCoin)| {
-                let key = CoinKey {
-                    amount,
-                    nonce: coin.coin.0.clone(),
-                };
-                let value = BincodeSerialized::owned(coin);
-                BatchItem::InsertNewElement(Element {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                })
-            })
-            .chain(std::iter::once(BatchItem::DeleteElement(Box::new(
-                IssuanceKey { issuance_id: txid },
-            ))))
-            .collect::<Vec<_>>();
-        self.db.apply_batch(batch.iter()).expect("DB error");
+        let mut batch = DbBatch::new();
+        batch.autocommit(|tx| {
+            tx.append_from_iter(coins.into_iter().map(
+                |(amount, coin): (Amount, SpendableCoin)| {
+                    let key = CoinKey {
+                        amount,
+                        nonce: coin.coin.0.clone(),
+                    };
+                    let value = BincodeSerialized::owned(coin);
+                    BatchItem::insert_new(key, value)
+                },
+            ));
+            tx.append_delete(IssuanceKey { issuance_id: txid });
+        });
+        self.db.apply_batch(batch).expect("DB error");
 
         Ok(())
     }
@@ -312,28 +309,23 @@ where
 
         let ids = fetched.iter().map(|(id, _)| *id).collect::<Vec<_>>();
 
-        let batch = fetched
-            .into_iter()
-            .flat_map(|(id, coins)| {
-                coins
-                    .into_iter()
-                    .map(|(amount, coin): (Amount, SpendableCoin)| {
-                        let key = CoinKey {
-                            amount,
-                            nonce: coin.coin.0.clone(),
-                        };
-                        let value = BincodeSerialized::owned(coin);
-                        BatchItem::InsertNewElement(Element {
-                            key: Box::new(key),
-                            value: Box::new(value),
-                        })
-                    })
-                    .chain(std::iter::once(BatchItem::DeleteElement(Box::new(
-                        IssuanceKey { issuance_id: id },
-                    ))))
-            })
-            .collect::<Vec<_>>();
-        self.db.apply_batch(&batch).expect("DB error");
+        let mut batch = DbBatch::new();
+        let mut batch_tx = batch.transaction();
+        for (id, coins) in fetched {
+            batch_tx.append_from_iter(coins.into_iter().map(
+                |(amount, coin): (Amount, SpendableCoin)| {
+                    let key = CoinKey {
+                        amount,
+                        nonce: coin.coin.0.clone(),
+                    };
+                    let value = BincodeSerialized::owned(coin);
+                    BatchItem::insert_new(key, value)
+                },
+            ));
+            batch_tx.append_delete(IssuanceKey { issuance_id: id });
+        }
+        batch_tx.commit();
+        self.db.apply_batch(batch).expect("DB error");
 
         Ok(ids)
     }
@@ -349,17 +341,17 @@ where
     }
 
     pub fn spend_coins(&self, coins: &Coins<SpendableCoin>) {
-        let batch = coins
-            .iter()
-            .map(|(amount, coin)| {
-                BatchItem::DeleteElement(Box::new(CoinKey {
+        let mut batch = DbBatch::new();
+        batch.autocommit(|tx| {
+            tx.append_from_iter(coins.iter().map(|(amount, coin)| {
+                BatchItem::delete(CoinKey {
                     amount,
                     nonce: coin.coin.0.clone(),
-                }))
-            })
-            .collect::<Vec<_>>();
+                })
+            }))
+        });
 
-        self.db.apply_batch(&batch).expect("DB error");
+        self.db.apply_batch(batch).expect("DB error");
     }
 
     pub async fn reissue<R: RngCore + CryptoRng>(

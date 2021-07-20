@@ -19,7 +19,7 @@ use bitcoin::{
 };
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
-use database::batch::{Batch, BatchItem, Element};
+use database::batch::{BatchItem, BatchTx};
 use database::{BatchDb, BincodeSerialized, Database, PrefixSearchable};
 use itertools::Itertools;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
@@ -101,16 +101,16 @@ impl<D> Wallet<D>
 where
     D: Database + BatchDb + PrefixSearchable + Clone + Send + 'static,
 {
-    pub async fn new<R>(
+    pub async fn new<'a, R>(
         cfg: WalletConfig,
         db: D,
+        mut batch: BatchTx<'a>,
         rng: R,
     ) -> Result<
         (
             Self,
             WalletConsensusItem,
             Option<WalletConsensusItem>, // TODO: find a unified CI abstraction that allows both persistent and transient consensus items
-            Batch,
         ),
         WalletError,
     >
@@ -152,20 +152,8 @@ where
         {
             info!("Initializing new wallet DB.");
             let genesis = genesis_block(cfg.network);
-            db.apply_batch(
-                vec![
-                    BatchItem::InsertNewElement(Element {
-                        key: Box::new(LastBlockKey),
-                        value: Box::new(LastBlock(0)),
-                    }),
-                    BatchItem::InsertNewElement(Element {
-                        key: Box::new(BlockHashKey(genesis.block_hash())),
-                        value: Box::new(()),
-                    }),
-                ]
-                .iter(),
-            )
-            .expect("DB error");
+            batch.append_insert_new(LastBlockKey, LastBlock(0));
+            batch.append_insert_new(BlockHashKey(genesis.block_hash()), ());
         }
 
         let wallet = Wallet {
@@ -175,14 +163,6 @@ where
             db,
         };
 
-        info!(
-            "Starting initial wallet sync up to block {}",
-            wallet.cfg.start_consensus_height
-        );
-        wallet
-            .sync_up_to_consensus_heigh(wallet.cfg.start_consensus_height)
-            .await?;
-
         // TODO: what to do for rejoining?
         let initial_consensus = WalletConsensus {
             fee_rate: wallet.cfg.default_fee,
@@ -190,23 +170,29 @@ where
         };
 
         // Generate consensus item for first round after fresh startup
-        let (consensus_proposal, sig_ci, batch) =
-            wallet.consensus_proposal(initial_consensus, rng).await?;
+        let (consensus_proposal, sig_ci) = wallet
+            .consensus_proposal(batch.subtransaction(), initial_consensus, rng)
+            .await?;
 
-        Ok((wallet, consensus_proposal, sig_ci, batch))
+        batch.commit();
+        Ok((wallet, consensus_proposal, sig_ci))
     }
 
-    async fn consensus_proposal<R>(
+    async fn consensus_proposal<'a, R>(
         &self,
+        mut batch: BatchTx<'a>,
         consensus: WalletConsensus,
         mut rng: R,
-    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>, Batch), WalletError>
+    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>), WalletError>
     where
         R: RngCore + CryptoRng,
     {
         let network_height = self.btc_rpc.get_block_count().await? as u32;
         let target_height = network_height.saturating_sub(self.cfg.finalty_delay);
-        let consensus_height = self.consensus_height();
+
+        // In case the wallet just got created the height is not committed to the DB yet but will
+        // be set to 0 first, so we can assume that here.
+        let consensus_height = self.consensus_height().unwrap_or(0);
 
         // TODO: verify that using the last consensus height instead of our last proposal opens new attack vectors
         let proposed_height = if target_height >= consensus_height {
@@ -247,7 +233,7 @@ where
 
         // We only want to peg out if we have a real randomness beacon after the first consensus round
         let peg_out_ready = consensus.randomness_beacon.is_some(); // TODO: maybe destructure instead?
-        let (batch, sig_ci) = if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
+        let sig_ci = if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
             let mut psbt = self.create_peg_out_tx(pending_peg_outs, consensus).await;
             let txid = psbt.global.unsigned_tx.txid();
 
@@ -281,23 +267,24 @@ where
                 })
                 .collect::<Vec<_>>();
 
-            let batch = peg_out_ids
-                .into_iter()
-                .map(|peg_out| BatchItem::DeleteElement(Box::new(PendingPegOutKey(peg_out))))
-                .chain(std::iter::once(BatchItem::InsertNewElement(Element {
-                    key: Box::new(UnsignedTransactionKey(psbt.global.unsigned_tx.txid())),
-                    value: Box::new(BincodeSerialized::owned(psbt)),
-                })))
-                .collect();
+            batch.append_from_iter(
+                peg_out_ids
+                    .into_iter()
+                    .map(|peg_out| BatchItem::delete(PendingPegOutKey(peg_out))),
+            );
+            batch.append_insert_new(
+                UnsignedTransactionKey(psbt.global.unsigned_tx.txid()),
+                BincodeSerialized::owned(psbt),
+            );
 
             let sig_ci = WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
                 txid,
                 signature: sigs,
             });
 
-            (batch, Some(sig_ci))
+            Some(sig_ci)
         } else {
-            (vec![], None)
+            None
         };
 
         let wallet_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
@@ -306,14 +293,16 @@ where
             randomness: rng.gen(),
         });
 
-        Ok((wallet_ci, sig_ci, batch))
+        batch.commit();
+        Ok((wallet_ci, sig_ci))
     }
 
-    pub async fn process_consensus_proposals<R>(
+    pub async fn process_consensus_proposals<'a, R>(
         &self,
+        mut batch: BatchTx<'a>,
         proposals: Vec<(u16, WalletConsensusItem)>,
         rng: R,
-    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>, Batch), WalletError>
+    ) -> Result<(WalletConsensusItem, Option<WalletConsensusItem>), WalletError>
     where
         R: RngCore + CryptoRng,
     {
@@ -325,22 +314,18 @@ where
         }
 
         // Apply signatures to peg-out tx
-        let mut batch = proposals
-            .iter()
-            .filter_map(|(peer, ci)| match ci {
+        for (peer, ci) in proposals.iter() {
+            match ci {
                 WalletConsensusItem::PegOutSignature(sig) => {
-                    match self.process_peg_out_signature(*peer, sig) {
-                        Ok(batch) => Some(batch),
-                        Err(e) => {
-                            warn!("Error processing peer {}'s peg-out signature: {}", peer, e);
-                            None
-                        }
-                    }
+                    if let Err(e) =
+                        self.process_peg_out_signature(batch.subtransaction(), *peer, sig)
+                    {
+                        warn!("Error processing peer {}'s peg-out signature: {}", peer, e)
+                    };
                 }
-                _ => None,
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+                _ => {}
+            }
+        }
 
         // Generate this round's wallet consensus
         let consensus = {
@@ -360,11 +345,11 @@ where
                     _ => None,
                 })
                 .collect();
-            // The height is saved to know how far we are synced up already. That's why no output
+            // The height is saved to know how far we are synced up already on restart. That's why no output
             // is generated and the consensus height is not part of the epoch's wallet consensus
             // struct constructed below.
-            self.process_block_height_proposals(height_proposals)
-                .await?;
+            self.process_block_height_proposals(batch.subtransaction(), height_proposals)
+                .await;
 
             fn xor(mut lhs: [u8; 32], rhs: [u8; 32]) -> [u8; 32] {
                 lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| *lhs ^= rhs);
@@ -379,25 +364,28 @@ where
                 })
                 .fold([0; 32], xor);
 
+            // TODO: just write it to the DB like everything else, this passing around is weird
             WalletConsensus {
                 fee_rate: consensus_fee_rate,
                 randomness_beacon: Some(randomness_beacon),
             }
         };
 
-        let (next_epoch_ci, sig_ci, next_epoch_ci_batch) =
-            self.consensus_proposal(consensus, rng).await?;
-        batch.extend(next_epoch_ci_batch);
+        let (next_epoch_ci, sig_ci) = self
+            .consensus_proposal(batch.subtransaction(), consensus, rng)
+            .await?;
 
-        Ok((next_epoch_ci, sig_ci, batch))
+        batch.commit();
+        Ok((next_epoch_ci, sig_ci))
     }
 
     /// Try to attach a contributed signature to a pending peg-out tx and try to finalize it.
     fn process_peg_out_signature(
         &self,
+        mut batch: BatchTx,
         peer: u16,
         signature: &PegOutSignatureItem,
-    ) -> Result<Batch, ProcessPegOutSigError> {
+    ) -> Result<(), ProcessPegOutSigError> {
         let mut psbt = self
             .db
             .get_value::<_, BincodeSerialized<PartiallySignedTransaction>>(&UnsignedTransactionKey(
@@ -483,10 +471,12 @@ where
                 trace!("can't finalize peg-out tx {} yet: {}", signature.txid, e);
 
                 // We want to save the new signature, so we need to overwrite the PSBT
-                return Ok(vec![BatchItem::InsertElement(Element {
-                    key: Box::new(UnsignedTransactionKey(signature.txid)),
-                    value: Box::new(BincodeSerialized::owned(psbt)),
-                })]);
+                batch.append_insert(
+                    UnsignedTransactionKey(signature.txid),
+                    BincodeSerialized::owned(psbt),
+                );
+                batch.commit();
+                return Ok(());
             }
         }
 
@@ -500,26 +490,28 @@ where
                 );
 
                 // Who knows what went wrong, we still want to save the received signature
-                return Ok(vec![BatchItem::InsertElement(Element {
-                    key: Box::new(UnsignedTransactionKey(signature.txid)),
-                    value: Box::new(BincodeSerialized::owned(psbt)),
-                })]);
+                batch.append_insert(
+                    UnsignedTransactionKey(signature.txid),
+                    BincodeSerialized::owned(psbt),
+                );
+                batch.commit();
+                return Ok(());
             }
         };
 
         // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
         // extracted tx for periodic transmission and to accept the change into our wallet
         // eventually once it confirms.
-        Ok(vec![
-            BatchItem::DeleteElement(Box::new(UnsignedTransactionKey(signature.txid))),
-            BatchItem::InsertNewElement(Element {
-                key: Box::new(PendingTransactionKey(signature.txid)),
-                value: Box::new(PendingTransaction {
-                    tx,
-                    tweak: change_tweak,
-                }),
-            }),
-        ])
+        batch.append_delete(UnsignedTransactionKey(signature.txid));
+        batch.append_insert_new(
+            PendingTransactionKey(signature.txid),
+            PendingTransaction {
+                tx,
+                tweak: change_tweak,
+            },
+        );
+        batch.commit();
+        Ok(())
     }
 
     /// # Panics
@@ -536,49 +528,54 @@ where
 
     /// # Panics
     /// * If proposals is empty
-    async fn process_block_height_proposals(
+    async fn process_block_height_proposals<'a>(
         &self,
+        batch: BatchTx<'a>,
         mut proposals: Vec<u32>,
-    ) -> Result<(), WalletError> {
+    ) {
         assert!(!proposals.is_empty());
 
         proposals.sort();
         let median_proposal = proposals[proposals.len() / 2];
 
-        if median_proposal >= self.consensus_height() {
+        let consensus_height = self
+            .consensus_height()
+            .expect("Wallet is initialized at this point");
+
+        if median_proposal >= consensus_height {
             debug!("Setting consensus block height to {}", median_proposal);
-            self.sync_up_to_consensus_heigh(median_proposal).await?;
+            self.sync_up_to_consensus_heigh(batch, median_proposal)
+                .await;
         } else {
             panic!(
                    "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
-                   self.consensus_height(), median_proposal
+                   consensus_height, median_proposal
                );
         }
-
-        Ok(())
     }
 
-    pub fn consensus_height(&self) -> u32 {
+    pub fn consensus_height(&self) -> Option<u32> {
         self.db
             .get_value::<_, LastBlock>(&LastBlockKey)
             .expect("DB error")
-            .expect("ensured by constructor")
-            .0
+            .map(|height| height.0)
     }
 
-    async fn sync_up_to_consensus_heigh(&self, new_height: u32) -> Result<(), WalletError> {
-        let old_height = self.consensus_height();
+    async fn sync_up_to_consensus_heigh<'a>(&self, mut batch: BatchTx<'a>, new_height: u32) {
+        let old_height = self
+            .consensus_height()
+            .expect("Wallet should be initialized at this point");
         if new_height < old_height {
             info!(
                 "Nothing to sync, new height ({}) is lower than old height ({}), doing nothing.",
                 new_height, old_height
             );
-            return Ok(());
+            return;
         }
 
         if new_height == old_height {
             debug!("Height didn't change, still at {}", old_height);
-            return Ok(());
+            return;
         }
 
         info!(
@@ -587,7 +584,7 @@ where
             new_height - old_height
         );
 
-        let mut batch = Vec::<BatchItem>::with_capacity((new_height - old_height) as usize + 1);
+        batch.reserve((new_height - old_height) as usize + 1);
         for height in (old_height + 1)..=(new_height) {
             if height % 100 == 0 {
                 debug!("Caught up to block {}", height);
@@ -595,20 +592,20 @@ where
 
             // TODO: use batching for mainnet syncing
             trace!("Fetching block hash for block {}", height);
-            let block_hash = self.btc_rpc.get_block_hash(height as u64).await?;
-            batch.push(BatchItem::InsertNewElement(Element {
-                key: Box::new(BlockHashKey(BlockHash::from_inner(block_hash.into_inner()))),
-                value: Box::new(()),
-            }))
+            // TODO: implement retying failed RPC commands till they succeed while loudly complaining to alert the operator
+            let block_hash = self
+                .btc_rpc
+                .get_block_hash(height as u64)
+                .await
+                .expect("Ignoring failure here would throw us out of consensus");
+            batch.append_insert_new(
+                BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
+                (),
+            );
         }
-        batch.push(BatchItem::InsertElement(Element {
-            key: Box::new(LastBlockKey),
-            value: Box::new(LastBlock(new_height)),
-        }));
+        batch.append_insert(LastBlockKey, LastBlock(new_height));
 
-        self.db.apply_batch(batch.iter()).expect("DB error");
-
-        Ok(())
+        batch.commit();
     }
 
     fn block_is_known(&self, block_hash: BlockHash) -> bool {
@@ -645,7 +642,11 @@ where
         Some(our_outputs)
     }
 
-    pub fn claim_pegin(&self, peg_in_proof: &PegInProof) -> Option<(Batch, mint_api::Amount)> {
+    pub fn claim_pegin(
+        &self,
+        mut batch: BatchTx,
+        peg_in_proof: &PegInProof,
+    ) -> Option<mint_api::Amount> {
         let our_outputs = self.verify_pigin(peg_in_proof)?;
         debug!(
             "Claiming peg-in {:?}",
@@ -659,39 +660,44 @@ where
         let fee = self.cfg.per_utxo_fee.as_sat() * our_outputs.len() as u64;
         let issuance_amount = mint_api::Amount::from_sat(amount.saturating_sub(fee));
 
-        let batch = our_outputs
-            .into_iter()
-            .map(|(out_point, amount, script_pubkey)| {
-                BatchItem::InsertNewElement(Element {
-                    key: Box::new(UTXOKey(out_point)),
-                    value: Box::new(BincodeSerialized::owned(SpendableUTXO {
+        batch.append_from_iter(our_outputs.into_iter().map(
+            |(out_point, amount, script_pubkey)| {
+                BatchItem::insert_new(
+                    UTXOKey(out_point),
+                    BincodeSerialized::owned(SpendableUTXO {
                         tweak: *peg_in_proof.tweak_contract_key(),
                         amount,
                         script_pubkey,
-                    })),
-                })
-            })
-            .collect::<Vec<_>>();
+                    }),
+                )
+            },
+        ));
 
-        Some((batch, issuance_amount))
+        batch.commit();
+        Some(issuance_amount)
     }
 
     pub fn queue_pegout(
         &self,
+        mut batch: BatchTx,
         transaction_id: mint_api::TransactionId,
         address: Address,
         amount: bitcoin::Amount,
-    ) -> Result<BatchItem, WalletError> {
+    ) -> Result<(), WalletError> {
         debug!("Queuing peg-out of {} BTC to {}", amount.as_btc(), address);
         if is_address_valid_for_network(&address, self.cfg.network) {
-            Ok(BatchItem::InsertNewElement(Element {
-                key: Box::new(PendingPegOutKey(transaction_id)),
-                value: Box::new(BincodeSerialized::owned(PendingPegOut {
+            batch.append_insert_new(
+                PendingPegOutKey(transaction_id),
+                BincodeSerialized::owned(PendingPegOut {
                     destination: address.script_pubkey(),
                     amount,
-                    pending_since_block: self.consensus_height(),
-                })),
-            }))
+                    pending_since_block: self
+                        .consensus_height()
+                        .expect("Wallet should be initialized at this point"),
+                }),
+            );
+            batch.commit();
+            Ok(())
         } else {
             warn!("Trying to peg-out to wrong network");
             Err(WalletError::WrongNetwork(self.cfg.network, address.network))

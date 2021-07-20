@@ -1,7 +1,5 @@
 use crate::{DatabaseKeyPrefix, SerializableDatabaseValue};
 
-pub type Batch = Vec<BatchItem>;
-
 pub type DbBatch = Accumulator<BatchItem>;
 pub type BatchTx<'a> = AccumulatorTx<'a, BatchItem>;
 
@@ -75,6 +73,16 @@ impl<T> Accumulator<T> {
             checkpoint: last_commit,
         }
     }
+
+    /// Shortcut to just append some items to the batch without the option to abort
+    pub fn autocommit<F>(&mut self, f: F)
+    where
+        F: FnOnce(&mut AccumulatorTx<T>),
+    {
+        let mut tx = self.transaction();
+        f(&mut tx);
+        tx.commit();
+    }
 }
 
 impl<'a, T> AccumulatorTx<'a, T> {
@@ -99,12 +107,28 @@ impl<'a, T> AccumulatorTx<'a, T> {
     ///  * Committing a sub-transaction makes its changes part of the parent transaction. Note that
     ///    the parent transaction may still be aborted leading to the removal of sub-transaction
     ///    items.
-    pub fn subtransaction(&'a mut self) -> AccumulatorTx<'a, T> {
+    pub fn subtransaction<'b, 'c>(&'b mut self) -> AccumulatorTx<'c, T>
+    where
+        'a: 'b,
+        'b: 'c,
+    {
         let checkpoint = self.batch.buffer.len();
-        AccumulatorTx::<'a, T> {
+        AccumulatorTx::<'c, T> {
             batch: self.batch,
             checkpoint,
         }
+    }
+
+    /// Currently the accumulator and transactions are not thread safe. Therefore one has to create
+    /// at least one accumulator per thread when parallelizing. This function can be used to merge
+    /// these with a minimal amount of allocations.
+    pub fn append_from_accumulators(&mut self, iter: impl Iterator<Item = Accumulator<T>>) {
+        self.append_from_iter(iter.flat_map(|acc| acc.buffer))
+    }
+
+    /// Allocate space for items to avoid frequent reallocation
+    pub fn reserve(&mut self, items: usize) {
+        self.batch.buffer.reserve(items);
     }
 }
 

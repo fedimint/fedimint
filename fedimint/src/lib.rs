@@ -1,4 +1,4 @@
-use database::batch::{Batch, BatchItem, Element};
+use database::batch::{BatchItem, BatchTx};
 use database::{Database, DatabaseKey, DatabaseKeyPrefix, DecodingError};
 use mint_api::util::TieredMultiZip;
 use mint_api::{
@@ -30,7 +30,12 @@ pub trait FediMint {
 
     /// Adds coins to the spendbook. Returns `true` if all coins were previously unspent and valid,
     /// false otherwise.
-    fn spend<T: Database>(&self, db: &T, coins: Coins<Coin>) -> Result<Batch, MintError>;
+    fn spend<'a, 'b, T: Database>(
+        &'a self,
+        db: &T,
+        batch: BatchTx<'b>,
+        coins: Coins<Coin>,
+    ) -> Result<(), MintError>;
 
     /// Checks if coins are unspent and signed
     fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError>;
@@ -42,14 +47,17 @@ pub trait FediMint {
     fn reissue<T: Database>(
         &self,
         db: &T,
+        mut batch: BatchTx,
         coins: Coins<Coin>,
         new_tokens: SignRequest,
-    ) -> Result<(PartialSigResponse, Batch), MintError> {
+    ) -> Result<PartialSigResponse, MintError> {
         let spent_coins = coins.amount();
-        let spend_batch = self.spend(db, coins)?;
+        self.spend(db, batch.subtransaction(), coins)?;
 
         if spent_coins >= new_tokens.0.amount() {
-            Ok((self.sign(new_tokens)?, spend_batch))
+            let psigs = self.sign(new_tokens)?;
+            batch.commit();
+            Ok(psigs)
         } else {
             Err(MintError::TooFewCoins(new_tokens.0.amount(), spent_coins))
         }
@@ -233,18 +241,21 @@ impl FediMint for Mint {
         (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    fn spend<T: Database>(&self, db: &T, coins: Coins<Coin>) -> Result<Batch, MintError> {
+    fn spend<T: Database>(
+        &self,
+        db: &T,
+        mut batch: BatchTx,
+        coins: Coins<Coin>,
+    ) -> Result<(), MintError> {
         self.validate(db, &coins)?;
 
-        coins
-            .into_iter()
-            .map(|(_, coin)| {
-                Ok(BatchItem::InsertNewElement(Element {
-                    key: Box::new(NonceKey(coin.0)),
-                    value: Box::new(()),
-                }))
-            })
-            .collect()
+        batch.append_from_iter(
+            coins
+                .into_iter()
+                .map(|(_, coin)| BatchItem::insert_new(NonceKey(coin.0), ())),
+        );
+        batch.commit();
+        Ok(())
     }
 
     fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError> {
@@ -344,7 +355,7 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use crate::{CombineError, FediMint, Mint, MintError, MintShareErrors, PeerErrorType};
-    use database::batch::Batch;
+    use database::batch::{BatchTx, DbBatch};
     use database::Database;
     use mint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
@@ -547,8 +558,13 @@ mod test {
                 unimplemented!()
             }
 
-            fn spend<T: Database>(&self, _db: &T, _coins: Coins<Coin>) -> Result<Batch, MintError> {
-                Ok(vec![])
+            fn spend<T: Database>(
+                &self,
+                _db: &T,
+                _batch: BatchTx,
+                _coins: Coins<Coin>,
+            ) -> Result<(), MintError> {
+                Ok(())
             }
 
             fn validate<T: Database>(
@@ -562,10 +578,16 @@ mod test {
 
         let mint = MockMint;
         let db = database::mem_impl::MemDatabase::new();
+        let mut batch = DbBatch::new();
 
         // TODO: add testing for amounts once there are more complex checks implemented for reissuance
-        let (_psigs, _batch) = mint
-            .reissue(&db, Coins::default(), SignRequest(Coins::default()))
+        let _psigs = mint
+            .reissue(
+                &db,
+                batch.transaction(),
+                Coins::default(),
+                SignRequest(Coins::default()),
+            )
             .unwrap();
     }
 }

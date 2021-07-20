@@ -1,4 +1,4 @@
-use crate::batch::BatchItem;
+use crate::batch::{BatchItem, DbBatch};
 use crate::{
     BatchDb, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter,
     DecodingError, PrefixSearchable,
@@ -71,15 +71,11 @@ impl PrefixSearchable for sled::Tree {
 }
 
 impl BatchDb for sled::Tree {
-    fn apply_batch<'b, B>(&self, batch: B) -> Result<(), DatabaseError>
-    where
-        B: IntoIterator<Item = &'b BatchItem> + 'b,
-        B::IntoIter: Clone,
-    {
-        let batch_iter = batch.into_iter();
+    fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+        let batch: Vec<_> = batch.into();
 
         self.transaction(|t| {
-            for change in batch_iter.clone() {
+            for change in batch.iter() {
                 match change {
                     BatchItem::InsertNewElement(element) => {
                         if t.insert(element.key.to_bytes(), element.value.to_bytes())?

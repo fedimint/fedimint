@@ -107,7 +107,6 @@ fn main() {
                 peg_in_key: btc_pegin_keys[id as usize].0,
                 finalty_delay: 10,
                 default_fee: Feerate { sats_per_kvb: 2000 },
-                start_consensus_height: 0,
                 per_utxo_fee,
                 btc_rpc_address: "127.0.0.1:18443".to_string(),
                 btc_rpc_user: "bitcoin".to_string(),
