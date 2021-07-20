@@ -103,9 +103,9 @@ pub struct PegOutRequest {
     pub sig: musig::Sig,
 }
 
-/// This object belongs to an issuance operation and thus has an [`IssuanceId`]
+/// This object belongs to a transaction operation and thus has a [TransactionId]
 pub trait TxId {
-    /// Calculate [`IssuanceId`]
+    /// Calculate [TransactionId]
     fn id(&self) -> TransactionId;
 }
 
