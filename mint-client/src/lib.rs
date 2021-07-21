@@ -111,14 +111,14 @@ where
             .find_map(|out| {
                 debug!("Output script: {}", out.script_pubkey);
                 self.db
-                    .get_value::<_, BincodeSerialized<secp256k1::SecretKey>>(&PegInKey {
+                    .get_value::<_, BincodeSerialized<musig::SecKey>>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .expect("DB error")
                     .map(|tweak_secret| tweak_secret.into_owned())
             })
             .ok_or(ClientError::NoMatchingPegInFound)?;
-        let public_tweak_key = secp256k1::PublicKey::from_secret_key(&self.secp, &secret_tweak_key);
+        let public_tweak_key = secret_tweak_key.to_public();
 
         let peg_in_proof = PegInProof::new(txout_proof, transaction, public_tweak_key)
             .map_err(|e| ClientError::PegInProofError(e))?;
@@ -136,7 +136,11 @@ where
             bincode::serialize_into(&mut hasher, &peg_in_proof).expect("encoding error");
             let hash = Sha256::from_engine(hasher);
 
-            self.secp.sign(&hash.into(), &secret_tweak_key)
+            musig::sign(
+                hash.into_inner(),
+                [secret_tweak_key].iter(),
+                musig::rng_adapt::RngAdaptor(&mut rng),
+            )
         };
 
         let req = PegInRequest {

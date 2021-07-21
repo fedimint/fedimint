@@ -1,3 +1,8 @@
+//! # THIS IS NOT MuSig
+//!
+//! This module is a ad-hoc signature aggregation scheme to be replaced with MuSig2 once an
+//! implementation is available.
+
 use secp256kfun::marker::{ChangeMark, NonZero, Normal, Public, Secret};
 use secp256kfun::op::{point_add, scalar_add, scalar_mul};
 use secp256kfun::rand_core::{CryptoRng, RngCore};

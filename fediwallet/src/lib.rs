@@ -75,7 +75,7 @@ pub struct Wallet<D> {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpendableUTXO {
-    pub tweak: secp256k1::PublicKey,
+    pub tweak: musig::PubKey,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     // FIXME: why do we save the script pub key? We can derive it from the tweak and the descriptor
@@ -665,7 +665,7 @@ where
                 BatchItem::insert_new(
                     UTXOKey(out_point),
                     BincodeSerialized::owned(SpendableUTXO {
-                        tweak: *peg_in_proof.tweak_contract_key(),
+                        tweak: peg_in_proof.tweak_contract_key().clone(),
                         amount,
                         script_pubkey,
                     }),
@@ -894,9 +894,12 @@ impl<'a> StatelessWallet<'a> {
                     sha256_preimages: Default::default(),
                     hash160_preimages: Default::default(),
                     hash256_preimages: Default::default(),
-                    proprietary: vec![(proprietary_tweak_key(), utxo.tweak.serialize().to_vec())]
-                        .into_iter()
-                        .collect(),
+                    proprietary: vec![(
+                        proprietary_tweak_key(),
+                        bincode::serialize(&utxo.tweak).unwrap(),
+                    )]
+                    .into_iter()
+                    .collect(),
                     unknown: Default::default(),
                 })
                 .collect(),
@@ -1140,7 +1143,7 @@ mod tests {
             pending_since_block: 0,
         }];
 
-        let tweak = secp256k1::PublicKey::from_slice(&[02u8; 33]).unwrap();
+        let tweak = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng)).to_public();
         let tweaked = descriptor.tweak(&tweak, &ctx);
         let utxos = vec![(
             UTXOKey(OutPoint::new(
@@ -1148,7 +1151,7 @@ mod tests {
                 1,
             )),
             SpendableUTXO {
-                tweak: secp256k1::PublicKey::from_slice(&[02u8; 33]).unwrap(),
+                tweak: tweak.clone(),
                 amount: Amount::from_sat(42000),
                 script_pubkey: tweaked.script_pubkey(),
             },

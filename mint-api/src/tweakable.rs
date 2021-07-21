@@ -38,3 +38,12 @@ impl Contract for Vec<u8> {
         writer.write_all(&self)
     }
 }
+
+impl Contract for musig::PubKey {
+    fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        // FIXME: DoS: writer may fail if called in new context
+        bincode::serialize_into(writer, self)
+            .expect("bincode won't fail and neither should the writer");
+        Ok(())
+    }
+}

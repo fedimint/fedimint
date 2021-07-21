@@ -4,7 +4,7 @@ use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Script, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use secp256k1::{PublicKey, Secp256k1, Verification};
+use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::hash::Hash;
@@ -18,7 +18,7 @@ pub struct PegInProof {
     txout_proof: TxOutProof,
     // check that outputs are not more than u32::max (probably enforced if inclusion proof is checked first)
     transaction: Transaction,
-    tweak_contract_key: secp256k1::PublicKey,
+    tweak_contract_key: musig::PubKey,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -89,7 +89,7 @@ impl PegInProof {
     pub fn new(
         txout_proof: TxOutProof,
         transaction: Transaction,
-        tweak_contract_key: secp256k1::PublicKey,
+        tweak_contract_key: musig::PubKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
@@ -142,11 +142,11 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &secp256k1::PublicKey {
+    pub fn tweak_contract_key(&self) -> &musig::PubKey {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (PublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (musig::PubKey, bitcoin::Txid) {
         (self.tweak_contract_key.clone(), self.transaction.txid())
     }
 }

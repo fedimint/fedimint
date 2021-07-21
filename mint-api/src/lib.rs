@@ -84,7 +84,7 @@ pub struct CoinNonce(pub musig::PubKey);
 pub struct PegInRequest {
     pub blind_tokens: SignRequest,
     pub proof: PegInProof,
-    pub sig: secp256k1::Signature,
+    pub sig: musig::Sig,
 }
 
 /// Exchange already signed [`Coin`]s for new coins, breaking the link due to blind signing
@@ -417,6 +417,6 @@ impl std::hash::Hash for PegInRequest {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.proof.hash(state);
         self.blind_tokens.hash(state);
-        self.sig.serialize_compact().hash(state);
+        self.sig.hash(state);
     }
 }

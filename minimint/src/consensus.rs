@@ -90,13 +90,13 @@ where
                     .ok_or(ClientRequestError::InvalidPegIn)?;
                 // TODO: pre-check amounts, preferably without redundancy
 
-                secp256k1::global::SECP256K1
-                    .verify(
-                        &peg_in.id().as_hash().into(),
-                        &peg_in.sig,
-                        peg_in.proof.tweak_contract_key(),
-                    )
-                    .map_err(|_| ClientRequestError::InvalidPegIn)?;
+                if !musig::verify(
+                    peg_in.id().as_hash().into_inner(),
+                    peg_in.sig.clone(),
+                    &[peg_in.proof.tweak_contract_key()],
+                ) {
+                    return Err(ClientRequestError::InvalidPegIn);
+                }
 
                 peg_in.blind_tokens.0.check_tiers(&self.cfg.tbs_sks)?;
             }
@@ -299,14 +299,11 @@ where
             }
         };
 
-        if secp256k1::global::SECP256K1
-            .verify(
-                &peg_in.id().as_hash().into(),
-                &peg_in.sig,
-                peg_in.proof.tweak_contract_key(),
-            )
-            .is_err()
-        {
+        if !musig::verify(
+            peg_in.id().as_hash().into_inner(),
+            peg_in.sig.clone(),
+            &[peg_in.proof.tweak_contract_key()],
+        ) {
             warn!("Received invalid peg-in request from consensus: invalid signature");
             return;
         }
