@@ -86,6 +86,9 @@ pub struct PegInKey {
     peg_in_script: Script,
 }
 
+#[derive(Debug, Clone)]
+pub struct PegInPrefixKey;
+
 impl<D> MintClient<D>
 where
     D: Database + PrefixSearchable + BatchDb + Sync + Unpin,
@@ -105,28 +108,36 @@ where
         transaction: Transaction,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
-        let secret_tweak_key = transaction
+        let (output_idx, secret_tweak_key) = transaction
             .output
             .iter()
-            .find_map(|out| {
+            .enumerate()
+            .find_map(|(idx, out)| {
                 debug!("Output script: {}", out.script_pubkey);
                 self.db
                     .get_value::<_, BincodeSerialized<musig::SecKey>>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .expect("DB error")
-                    .map(|tweak_secret| tweak_secret.into_owned())
+                    .map(|tweak_secret| (idx, tweak_secret.into_owned()))
             })
             .ok_or(ClientError::NoMatchingPegInFound)?;
         let public_tweak_key = secret_tweak_key.to_public();
 
-        let peg_in_proof = PegInProof::new(txout_proof, transaction, public_tweak_key)
-            .map_err(|e| ClientError::PegInProofError(e))?;
+        let peg_in_proof = PegInProof::new(
+            txout_proof,
+            transaction,
+            output_idx as u32,
+            public_tweak_key,
+        )
+        .map_err(|e| ClientError::PegInProofError(e))?;
 
-        let utxos = peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
-        let sats = utxos.iter().map(|(_, amt, _)| amt.as_sat()).sum::<u64>()
-            - (self.cfg.per_utxo_fee.as_sat() * utxos.len() as u64);
-        let amount = Amount::from_sat(sats);
+        peg_in_proof
+            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .expect("Invalid proof");
+        let sats = peg_in_proof.tx_output().value;
+        // FIXME: check against underflow
+        let amount = Amount::from_sat(sats) - Amount::from(self.cfg.per_utxo_fee);
 
         let (issuance_request, sig_req) = IssuanceRequest::new(amount, &self.cfg.mint_pk, &mut rng);
 
@@ -495,7 +506,8 @@ where
     }
 
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
-        let (peg_in_sec_key, peg_in_pub_key) = self.secp.generate_keypair(&mut rng);
+        let peg_in_sec_key = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng));
+        let peg_in_pub_key = peg_in_sec_key.to_public();
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -727,5 +739,11 @@ impl DatabaseKey for PegInKey {
                 peg_in_script: Script::from(data[1..].to_vec()),
             })
         }
+    }
+}
+
+impl DatabaseKeyPrefix for PegInPrefixKey {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_PEG_IN]
     }
 }

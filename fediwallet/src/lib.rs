@@ -619,27 +619,30 @@ where
         &self,
         peg_in_proof: &PegInProof,
     ) -> Option<Vec<(OutPoint, Amount, Script)>> {
+        // TODO: remove return value
         if !self.block_is_known(peg_in_proof.proof_block()) {
             return None;
         }
 
-        let our_outputs =
-            peg_in_proof.get_our_tweaked_txos(&self.secp, &self.cfg.peg_in_descriptor);
+        // TODO: probably propagate the error
+        peg_in_proof
+            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .ok()?;
 
-        if our_outputs.len() == 0 {
+        if self
+            .db
+            .get_value::<_, BincodeSerialized<SpendableUTXO>>(&UTXOKey(peg_in_proof.outpoint()))
+            .expect("DB error")
+            .is_some()
+        {
             return None;
         }
 
-        if our_outputs.iter().any(|(out_point, _, _)| {
-            self.db
-                .get_value::<_, BincodeSerialized<SpendableUTXO>>(&UTXOKey(*out_point))
-                .expect("DB error")
-                .is_some()
-        }) {
-            return None;
-        }
-
-        Some(our_outputs)
+        Some(vec![(
+            peg_in_proof.outpoint(),
+            Amount::from_sat(peg_in_proof.tx_output().value),
+            peg_in_proof.tx_output().script_pubkey.clone(),
+        )])
     }
 
     pub fn claim_pegin(

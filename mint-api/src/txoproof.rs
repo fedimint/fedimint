@@ -2,7 +2,7 @@ use crate::keys::CompressedPublicKey;
 use crate::{Contract, Tweakable};
 use bitcoin::consensus::{Decodable, Encodable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{Amount, BlockHash, BlockHeader, OutPoint, Script, Transaction, Txid};
+use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
@@ -12,12 +12,17 @@ use std::io::Cursor;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
 
+/// A proof about a script owning a certain output. Verifyable using headers only.
 #[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate)]
 #[validate(schema(function = "validate_peg_in_proof"))]
 pub struct PegInProof {
     txout_proof: TxOutProof,
-    // check that outputs are not more than u32::max (probably enforced if inclusion proof is checked first)
+    // check that outputs are not more than u32::max (probably enforced if inclusion proof is
+    // checked first) and that the referenced output has a value that won't overflow when converted
+    // to msat
     transaction: Transaction,
+    // Check that the idx is in range
+    output_idx: u32,
     tweak_contract_key: musig::PubKey,
 }
 
@@ -89,6 +94,7 @@ impl PegInProof {
     pub fn new(
         txout_proof: TxOutProof,
         transaction: Transaction,
+        output_idx: u32,
         tweak_contract_key: musig::PubKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
@@ -100,42 +106,41 @@ impl PegInProof {
             return Err(PegInProofError::TooManyTransactionOutputs);
         }
 
+        if transaction.output.get(output_idx as usize).is_none() {
+            return Err(PegInProofError::OutputIndexOutOfRange(
+                output_idx as usize,
+                transaction.output.len(),
+            ));
+        }
+
         Ok(PegInProof {
             txout_proof,
             transaction,
             tweak_contract_key,
+            output_idx,
         })
     }
 
-    pub fn get_our_tweaked_txos<C: Verification>(
+    pub fn verify<C: Verification>(
         &self,
         secp: &Secp256k1<C>,
         untweaked_pegin_descriptor: &Descriptor<CompressedPublicKey>,
-    ) -> Vec<(OutPoint, Amount, Script)> {
+    ) -> Result<(), PegInProofError> {
         let script = untweaked_pegin_descriptor
             .tweak(&self.tweak_contract_key, secp)
             .script_pubkey();
 
-        self.transaction
+        let txo = self
+            .transaction
             .output
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, txo)| {
-                if txo.script_pubkey == script {
-                    let out_point = OutPoint {
-                        txid: self.transaction.txid(),
-                        vout: idx as u32,
-                    };
-                    Some((
-                        out_point,
-                        Amount::from_sat(txo.value),
-                        txo.script_pubkey.clone(),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect()
+            .get(self.output_idx as usize)
+            .expect("output_idx in-rangeness is an invariant guaranteed by constructors");
+
+        if txo.script_pubkey != script {
+            return Err(PegInProofError::ScriptDoesNotMatch);
+        }
+
+        Ok(())
     }
 
     pub fn proof_block(&self) -> BlockHash {
@@ -148,6 +153,20 @@ impl PegInProof {
 
     pub fn identity(&self) -> (musig::PubKey, bitcoin::Txid) {
         (self.tweak_contract_key.clone(), self.transaction.txid())
+    }
+
+    pub fn tx_output(&self) -> &bitcoin::TxOut {
+        self.transaction
+            .output
+            .get(self.output_idx as usize)
+            .expect("output_idx in-rangeness is an invariant guaranteed by constructors")
+    }
+
+    pub fn outpoint(&self) -> bitcoin::OutPoint {
+        OutPoint {
+            txid: self.transaction.txid(),
+            vout: self.output_idx,
+        }
     }
 }
 
@@ -207,6 +226,17 @@ fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), ValidationError> {
         ));
     }
 
+    match proof.transaction.output.get(proof.output_idx as usize) {
+        Some(txo) => {
+            if txo.value > 2_100_000_000_000_000 {
+                return Err(ValidationError::new("Txout amount out of range"));
+            }
+        }
+        None => {
+            return Err(ValidationError::new("Output index out of range"));
+        }
+    }
+
     Ok(())
 }
 
@@ -225,6 +255,10 @@ pub enum PegInProofError {
     TransactionNotInProof,
     #[error("Supplied transaction has too many outputs")]
     TooManyTransactionOutputs,
+    #[error("The output with index {0} referred to does not exist (tx has {1} outputs)")]
+    OutputIndexOutOfRange(usize, usize),
+    #[error("The expected script given the tweak did not match the actual script")]
+    ScriptDoesNotMatch,
 }
 
 #[cfg(test)]

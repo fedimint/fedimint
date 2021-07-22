@@ -354,6 +354,44 @@ impl std::ops::SubAssign for Amount {
     }
 }
 
+impl std::ops::Mul<u64> for Amount {
+    type Output = Amount;
+
+    fn mul(self, rhs: u64) -> Self::Output {
+        Amount {
+            milli_sat: self.milli_sat * rhs,
+        }
+    }
+}
+
+impl std::ops::Add for Amount {
+    type Output = Amount;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Amount {
+            milli_sat: self.milli_sat + rhs.milli_sat,
+        }
+    }
+}
+
+impl std::iter::Sum for Amount {
+    fn sum<I: Iterator<Item = Amount>>(iter: I) -> Self {
+        Amount {
+            milli_sat: iter.map(|amt| amt.milli_sat).sum::<u64>(),
+        }
+    }
+}
+
+impl std::ops::Sub for Amount {
+    type Output = Amount;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Amount {
+            milli_sat: self.milli_sat - rhs.milli_sat,
+        }
+    }
+}
+
 impl FromStr for Amount {
     type Err = ParseIntError;
 
@@ -418,5 +456,14 @@ impl std::hash::Hash for PegInRequest {
         self.proof.hash(state);
         self.blind_tokens.hash(state);
         self.sig.hash(state);
+    }
+}
+
+impl From<bitcoin::Amount> for Amount {
+    fn from(amt: bitcoin::Amount) -> Self {
+        assert!(amt.as_sat() <= 2_100_000_000_000_000);
+        Amount {
+            milli_sat: amt.as_sat() * 1000,
+        }
     }
 }

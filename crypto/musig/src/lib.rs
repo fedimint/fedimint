@@ -108,6 +108,12 @@ pub fn verify(msg: [u8; 32], sig: Sig, pks: &[&PubKey]) -> bool {
     sg == pk_msg_sum
 }
 
+impl PubKey {
+    pub fn to_bytes(&self) -> [u8; 33] {
+        self.0.to_bytes()
+    }
+}
+
 pub mod rng_adapt {
     use secp256kfun::rand_core::Error;
 
