@@ -24,7 +24,8 @@ The following "tables" exist:
 |----------------------|--------|-------------------------------------------------------------------------------------------------|---------------------------------|
 | Consensus Items      | 0x01   | issuance_request_id (8 bytes, 0 if no issuance involved), serialized `ConsensusItem` (variable) | none                            |
 | Partial Signature    | 0x02   | issuance_request_id (8 byte), peer_id (8 byte)                                                  | serialized `PartialSigResponse` |
-| Finalized Signatures | 0x03   | issuance_request_id (8 bytes)                                                                   | serialized `SigResponse`        |
+| Transaction Statuses | 0x03   | TransactionId (32 bytes)                                                                        | serialized `TransactionStatus`  |
+| Tx Output Outcomes   | 0x04   | TransactionId (32 bytes) + output idx (8 bytes)                                                 | serialized `OutputOutcome`      |
 | Used Coins           | 0x10   | coin nonce (unknown bytes, bincode magic currently)                                             | none                            |
 | Blocks               | 0x30   | block hash (32 bytes)                                                                           | block height (4 bytes)          |
 | Our UTXOs            | 0x31   | OutPoint (32 bytes txid + 4 bytes output)                                                       | data necessary for spending     |
@@ -32,6 +33,10 @@ The following "tables" exist:
 | Queued PegOut        | 0x33   | mint tx id (32 bytes)                                                                           | address, amount                 |
 | Unsigned transaction | 0x34   | none                                                                                            | PSBT                            |
 | Pending transaction  | 0x35   | txid                                                                                            | consensus encoded tx            |
+
+### TODO:
+* consensus items per module
+* transaction status = CIs of minimint module (add tx data to status)
 
 ## Client DB Layout
 

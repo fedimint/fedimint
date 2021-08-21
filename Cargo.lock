@@ -1751,7 +1751,6 @@ dependencies = [
  "bincode",
  "bitcoin",
  "config",
- "counter",
  "database",
  "fedimint",
  "fediwallet",

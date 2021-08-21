@@ -61,7 +61,7 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
         .expect("error while starting reissuance");
     debug!("Fetching coins");
     mint_client
-        .fetch(tx_id)
+        .fetch_coins(tx_id, 0) // TODO: remove assumption about tx structure
         .await
         .map_err(|_| tide::Error::from_str(500, "fetching reissuance failed"))?;
 

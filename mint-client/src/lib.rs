@@ -1,5 +1,4 @@
 use bitcoin::{Address, Script, Transaction};
-use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use database::batch::{BatchItem, DbBatch};
@@ -9,10 +8,11 @@ use database::{
 };
 use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
+use mint_api::outcome::{OutputOutcome, TransactionOutcome, TransactionStatus};
+use mint_api::transaction as mint_tx;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
-    PegInRequest, PegOutRequest, ReissuanceRequest, SigResponse, SignRequest, TransactionId,
-    Tweakable, TxId, TxOutProof,
+    SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
 };
 use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
@@ -21,12 +21,14 @@ use reqwest::{RequestBuilder, StatusCode};
 use secp256k1::{All, Secp256k1};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
+use tokio::time::Duration;
 use tracing::debug;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
-pub const DB_PREFIX_ISSUANCE: u8 = 0x21;
+pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;
 pub const DB_PREFIX_PEG_IN: u8 = 0x22;
 
 pub struct MintClient<D> {
@@ -48,11 +50,11 @@ pub struct CoinRequest {
     blinding_key: BlindingKey,
 }
 
-/// Client side representation of an issuance request that keeps all necessary information to
+/// Client side representation of a coin reissuance that keeps all necessary information to
 /// generate spendable coins once the blind signatures arrive.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct IssuanceRequest {
-    /// All coins in this request
+pub struct CoinFinalizationData {
+    /// Finalization data for all coin outputs in this request
     coins: Coins<CoinRequest>,
 }
 
@@ -65,12 +67,13 @@ pub struct SpendableCoin {
 }
 
 #[derive(Debug, Clone)]
-pub struct IssuanceKey {
-    issuance_id: TransactionId,
+pub struct OutputFinalizationKey {
+    transaction_id: TransactionId,
+    output_idx: usize,
 }
 
 #[derive(Debug, Clone)]
-pub struct IssuanceKeyPrefix;
+pub struct OutputFinalizationKeyPrefix;
 
 #[derive(Debug, Clone)]
 pub struct CoinKey {
@@ -102,73 +105,11 @@ where
         }
     }
 
-    pub async fn peg_in<R: RngCore + CryptoRng>(
+    pub async fn send_tx<R: RngCore>(
         &self,
-        txout_proof: TxOutProof,
-        transaction: Transaction,
+        tx: mint_tx::Transaction,
         mut rng: R,
-    ) -> Result<TransactionId, ClientError> {
-        let (output_idx, secret_tweak_key) = transaction
-            .output
-            .iter()
-            .enumerate()
-            .find_map(|(idx, out)| {
-                debug!("Output script: {}", out.script_pubkey);
-                self.db
-                    .get_value::<_, BincodeSerialized<musig::SecKey>>(&PegInKey {
-                        peg_in_script: out.script_pubkey.clone(),
-                    })
-                    .expect("DB error")
-                    .map(|tweak_secret| (idx, tweak_secret.into_owned()))
-            })
-            .ok_or(ClientError::NoMatchingPegInFound)?;
-        let public_tweak_key = secret_tweak_key.to_public();
-
-        let peg_in_proof = PegInProof::new(
-            txout_proof,
-            transaction,
-            output_idx as u32,
-            public_tweak_key,
-        )
-        .map_err(|e| ClientError::PegInProofError(e))?;
-
-        peg_in_proof
-            .verify(&self.secp, &self.cfg.peg_in_descriptor)
-            .expect("Invalid proof");
-        let sats = peg_in_proof.tx_output().value;
-        // FIXME: check against underflow
-        let amount = Amount::from_sat(sats) - Amount::from(self.cfg.per_utxo_fee);
-
-        let (issuance_request, sig_req) = IssuanceRequest::new(amount, &self.cfg.mint_pk, &mut rng);
-
-        let peg_in_req_sig = {
-            let mut hasher = Sha256::engine();
-            bincode::serialize_into(&mut hasher, &sig_req).expect("encoding error");
-            bincode::serialize_into(&mut hasher, &peg_in_proof).expect("encoding error");
-            let hash = Sha256::from_engine(hasher);
-
-            musig::sign(
-                hash.into_inner(),
-                [secret_tweak_key].iter(),
-                musig::rng_adapt::RngAdaptor(&mut rng),
-            )
-        };
-
-        let req = PegInRequest {
-            blind_tokens: sig_req,
-            proof: peg_in_proof,
-            sig: peg_in_req_sig,
-        };
-
-        let req_id = req.id();
-        let issuance_key = IssuanceKey {
-            issuance_id: req_id,
-        };
-        let issuance_value = BincodeSerialized::borrowed(&issuance_request);
-        self.db
-            .insert_entry(&issuance_key, &issuance_value)
-            .expect("DB error");
-
+    ) -> Result<(), ClientError> {
         // Try all mints in random order, break early if enough could be reached
         let mut successes: usize = 0;
         for url in self
@@ -178,8 +119,8 @@ where
         {
             let res = self
                 .http_client
-                .put(&format!("{}/issuance/pegin", url))
-                .json(&req)
+                .put(&format!("{}/transaction", url))
+                .json(&tx)
                 .send()
                 .await
                 .expect("API error");
@@ -197,27 +138,131 @@ where
         if successes == 0 {
             Err(ClientError::MintError)
         } else {
-            Ok(req_id)
+            Ok(())
         }
     }
 
-    pub async fn fetch(&self, txid: TransactionId) -> Result<(), ClientError> {
+    pub async fn peg_in<R: RngCore + CryptoRng>(
+        &self,
+        txout_proof: TxOutProof,
+        btc_transaction: Transaction,
+        mut rng: R,
+    ) -> Result<TransactionId, ClientError> {
+        let (output_idx, secret_tweak_key) = btc_transaction
+            .output
+            .iter()
+            .enumerate()
+            .find_map(|(idx, out)| {
+                debug!("Output script: {}", out.script_pubkey);
+                self.db
+                    .get_value::<_, BincodeSerialized<musig::SecKey>>(&PegInKey {
+                        peg_in_script: out.script_pubkey.clone(),
+                    })
+                    .expect("DB error")
+                    .map(|tweak_secret| (idx, tweak_secret.into_owned()))
+            })
+            .ok_or(ClientError::NoMatchingPegInFound)?;
+        let public_tweak_key = secret_tweak_key.to_public();
+
+        let peg_in_proof = PegInProof::new(
+            txout_proof,
+            btc_transaction,
+            output_idx as u32,
+            public_tweak_key,
+        )
+        .map_err(|e| ClientError::PegInProofError(e))?;
+
+        peg_in_proof
+            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .expect("Invalid proof");
+        let sats = peg_in_proof.tx_output().value;
+        // FIXME: check against underflow
+        let amount = Amount::from_sat(sats) - self.cfg.fee_consensus.fee_peg_in_abs;
+
+        let (coin_finalization_data, sig_req) =
+            CoinFinalizationData::new(amount, &self.cfg.mint_pk, &mut rng);
+
+        let inputs = vec![mint_tx::Input::PegIn(peg_in_proof)];
+        let outputs = vec![mint_tx::Output::Coins(
+            sig_req
+                .0
+                .into_iter()
+                .map(|(amt, token)| (amt, mint_tx::BlindToken(token)))
+                .collect(),
+        )];
+
+        let peg_in_req_sig = {
+            let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
+            musig::sign(
+                hash.into_inner(),
+                [secret_tweak_key].iter(),
+                musig::rng_adapt::RngAdaptor(&mut rng),
+            )
+        };
+
+        let mint_transaction = mint_tx::Transaction {
+            inputs,
+            outputs,
+            signature: peg_in_req_sig,
+        };
+
+        let tx_id = mint_transaction.tx_hash();
+        let issuance_key = OutputFinalizationKey {
+            transaction_id: tx_id,
+            output_idx: 0,
+        };
+        let issuance_value = BincodeSerialized::owned(coin_finalization_data);
+        self.db
+            .insert_entry(&issuance_key, &issuance_value)
+            .expect("DB error");
+
+        self.send_tx(mint_transaction, &mut rng).await?;
+        Ok(tx_id)
+    }
+
+    pub async fn fetch_coins(
+        &self,
+        txid: TransactionId,
+        output_idx: usize,
+    ) -> Result<(), ClientError> {
         let issuance = self
             .db
-            .get_value::<_, BincodeSerialized<IssuanceRequest>>(&IssuanceKey { issuance_id: txid })
+            .get_value::<_, BincodeSerialized<CoinFinalizationData>>(&OutputFinalizationKey {
+                transaction_id: txid,
+                output_idx,
+            })
             .expect("DB error")
             .ok_or(ClientError::FinalizationError(
                 CoinFinalizationError::UnknowinIssuance,
             ))?
             .into_owned();
 
-        let bsig = self
-            .query_any_mint::<SigResponse, _>(|client, mint| {
-                let url = format!("{}/issuance/{}", mint, txid);
+        let tx_outcome = self
+            .query_any_mint::<TransactionOutcome, _>(|client, mint| {
+                let url = format!("{}/transaction/{}", mint, txid);
                 client.get(&url)
             })
             .await?;
+
+        if tx_outcome.status == TransactionStatus::AwaitingConsensus {
+            return Err(ClientError::OutputNotReadyYet(txid, output_idx));
+        }
         // TODO: check another mint if the answer was malicious
+
+        // TODO: remove clone
+        let output_outcome = tx_outcome
+            .outputs
+            .get(&output_idx)
+            .ok_or(ClientError::InvalidOutcomeWrongStructure(txid, output_idx))?
+            .clone()
+            .ok_or(ClientError::OutputNotReadyYet(txid, output_idx))?;
+
+        let bsig = match output_outcome {
+            OutputOutcome::Coins { blind_signature } => blind_signature,
+            OutputOutcome::PegOut => {
+                return Err(ClientError::InvalidOutcomeType(txid, output_idx));
+            }
+        };
 
         let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
 
@@ -233,7 +278,10 @@ where
                     BatchItem::insert_new(key, value)
                 },
             ));
-            tx.append_delete(IssuanceKey { issuance_id: txid });
+            tx.append_delete(OutputFinalizationKey {
+                transaction_id: txid,
+                output_idx,
+            });
         });
         self.db.apply_batch(batch).expect("DB error");
 
@@ -278,71 +326,30 @@ where
         }
     }
 
-    pub async fn fetch_all<R: RngCore + CryptoRng>(
-        &self,
-        mut rng: R,
-    ) -> Result<Vec<TransactionId>, ClientError> {
-        let chosen_mint = self
-            .cfg
-            .mints
-            .choose(&mut rng)
-            .expect("We need at least one mint");
-
-        let fetched = self
-            .db
-            .find_by_prefix::<_, IssuanceKey, BincodeSerialized<IssuanceRequest>>(
-                &IssuanceKeyPrefix,
+    pub async fn fetch_all_coins(&self) -> Result<Vec<TransactionId>, ClientError> {
+        self.db
+            .find_by_prefix::<_, OutputFinalizationKey, BincodeSerialized<CoinFinalizationData>>(
+                &OutputFinalizationKeyPrefix,
             )
             .map(|res| {
-                let (id, issuance) = res.expect("DB error");
-                let id = id.issuance_id;
-                let issuance = issuance.into_owned();
-
+                let (id, _) = res.expect("DB error");
                 async move {
-                    let url = format!("{}/issuance/{}", chosen_mint, id);
-                    let response = self
-                        .http_client
-                        .get(&url)
-                        .send()
-                        .await
-                        .map_err(|_| ClientError::MintError);
-
-                    let signature: SigResponse = match response {
-                        Ok(response) if response.status() == StatusCode::OK => {
-                            response.json().await.map_err(|_| ClientError::MintError)
+                    loop {
+                        match self.fetch_coins(id.transaction_id, id.output_idx).await {
+                            Ok(()) => return Ok(id.transaction_id),
+                            // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                            Err(ClientError::MintError | ClientError::OutputNotReadyYet(_, _)) => {
+                                tokio::time::sleep(Duration::from_secs(1)).await
+                            }
+                            Err(e) => return Err(e),
                         }
-                        _ => Err(ClientError::MintError),
-                    }?;
-
-                    Ok::<_, ClientError>((id, issuance.finalize(signature, &self.cfg.mint_pk)?))
+                    }
                 }
             })
             .collect::<JoinAll<_>>()
             .await
             .into_iter()
-            .collect::<Result<Vec<(TransactionId, Coins<SpendableCoin>)>, ClientError>>()?;
-
-        let ids = fetched.iter().map(|(id, _)| *id).collect::<Vec<_>>();
-
-        let mut batch = DbBatch::new();
-        let mut batch_tx = batch.transaction();
-        for (id, coins) in fetched {
-            batch_tx.append_from_iter(coins.into_iter().map(
-                |(amount, coin): (Amount, SpendableCoin)| {
-                    let key = CoinKey {
-                        amount,
-                        nonce: coin.coin.0.clone(),
-                    };
-                    let value = BincodeSerialized::owned(coin);
-                    BatchItem::insert_new(key, value)
-                },
-            ));
-            batch_tx.append_delete(IssuanceKey { issuance_id: id });
-        }
-        batch_tx.commit();
-        self.db.apply_batch(batch).expect("DB error");
-
-        Ok(ids)
+            .collect::<Result<Vec<TransactionId>, ClientError>>()
     }
 
     pub fn coins(&self) -> Coins<SpendableCoin> {
@@ -374,7 +381,7 @@ where
         coins: Coins<SpendableCoin>,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
-        let (issuance_request, sig_req) = IssuanceRequest::new(
+        let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
             coins.amount(),
             &self.cfg.mint_pk, // TODO: cache somewhere
             &mut rng,
@@ -382,64 +389,37 @@ where
 
         let (spend_keys, coins): (Vec<_>, Coins<_>) = coins
             .into_iter()
-            .map(|(amt, sc)| (sc.spend_key, (amt, sc.coin)))
+            .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let mut digest = bitcoin_hashes::sha256::Hash::engine();
-        bincode::serialize_into(&mut digest, &coins).unwrap();
-        bincode::serialize_into(&mut digest, &sig_req).unwrap();
-        let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
-        let sig = musig::sign(
-            bitcoin_hashes::sha256::Hash::from_engine(digest).into_inner(),
-            spend_keys.iter(),
-            rng_adapt,
-        );
+        let inputs = vec![mint_tx::Input::Coins(coins)];
+        let outputs = vec![mint_tx::Output::Coins(sig_req.into())];
 
-        let req = ReissuanceRequest {
-            coins,
-            blind_tokens: sig_req,
-            sig,
+        // TODO: abstract away tx building somehow
+        let signature = {
+            let tx_hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
+            let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
+            musig::sign(tx_hash.into_inner(), spend_keys.iter(), rng_adapt)
         };
 
-        let req_id = req.id();
-        let issuance_key = IssuanceKey {
-            issuance_id: req_id,
+        let transaction = mint_tx::Transaction {
+            inputs,
+            outputs,
+            signature,
         };
-        let issuance_value = BincodeSerialized::borrowed(&issuance_request);
+
+        let tx_id = transaction.tx_hash();
+        let issuance_key = OutputFinalizationKey {
+            transaction_id: tx_id,
+            output_idx: 0,
+        };
+        let issuance_value = BincodeSerialized::owned(coin_finalization_data);
         self.db
             .insert_entry(&issuance_key, &issuance_value)
             .expect("DB error");
 
-        // Try all mints in random order, break early if enough could be reached
-        let mut successes: usize = 0;
-        for url in self
-            .cfg
-            .mints
-            .choose_multiple(&mut rng, self.cfg.mints.len())
-        {
-            let res = self
-                .http_client
-                .put(&format!("{}/issuance/reissue", url))
-                .json(&req)
-                .send()
-                .await
-                .expect("API error");
-
-            if res.status() == StatusCode::OK {
-                successes += 1;
-            }
-
-            if successes >= 2 {
-                // TODO: make this max-faulty +1
-                break;
-            }
-        }
-
-        if successes == 0 {
-            Err(ClientError::MintError)
-        } else {
-            Ok(req_id)
-        }
+        self.send_tx(transaction, &mut rng).await?;
+        Ok(tx_id)
     }
 
     pub async fn peg_out<R: RngCore + CryptoRng>(
@@ -447,62 +427,41 @@ where
         amt: Amount,
         address: bitcoin::Address,
         mut rng: R,
-    ) -> Result<(), ClientError> {
+    ) -> Result<TransactionId, ClientError> {
         let coins = self
             .coins()
-            .select_coins(amt)
+            .select_coins(amt + self.cfg.fee_consensus.fee_peg_out_abs)
             .ok_or(ClientError::NotEnoughCoins)?;
 
+        // mark spent in DB
+        // TODO: make contingent on success of payment
         self.spend_coins(&coins);
 
-        let (coins, keys): (Coins<Coin>, Vec<musig::SecKey>) = coins
+        let (spend_keys, coins): (Vec<_>, Coins<_>) = coins
             .into_iter()
-            .map(|(amt, coin)| ((amt, coin.coin), coin.spend_key))
+            .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let mut hasher = Sha256::engine();
-        bincode::serialize_into(&mut hasher, &coins).expect("encoding error");
-        bincode::serialize_into(&mut hasher, &address).expect("encoding error");
-        let hash = Sha256::from_engine(hasher);
+        let inputs = vec![mint_tx::Input::Coins(coins)];
+        let outputs = vec![mint_tx::Output::PegOut(mint_tx::PegOut {
+            recipient: address,
+            amount: amt,
+        })];
 
-        let sig = musig::sign(hash.into_inner(), keys.iter(), RngAdaptor(&mut rng));
-
-        let pegout_req = PegOutRequest {
-            address,
-            coins,
-            sig,
+        let signature = {
+            let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
+            musig::sign(hash.into_inner(), spend_keys.iter(), RngAdaptor(&mut rng))
         };
 
-        // Try all mints in random order, break early if enough could be reached
-        let mut successes: usize = 0;
-        for url in self
-            .cfg
-            .mints
-            .choose_multiple(&mut rng, self.cfg.mints.len())
-        {
-            let res = self
-                .http_client
-                .put(&format!("{}/pegout", url))
-                .json(&pegout_req)
-                .send()
-                .await
-                .expect("API error");
+        let transaction = mint_tx::Transaction {
+            inputs,
+            outputs,
+            signature,
+        };
+        let tx_id = transaction.tx_hash();
 
-            if res.status() == StatusCode::OK {
-                successes += 1;
-            }
-
-            if successes >= 2 {
-                // TODO: make this max-faulty +1
-                break;
-            }
-        }
-
-        if successes == 0 {
-            Err(ClientError::MintError)
-        } else {
-            Ok(())
-        }
+        self.send_tx(transaction, &mut rng).await?;
+        Ok(tx_id)
     }
 
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
@@ -533,13 +492,13 @@ where
     }
 }
 
-impl IssuanceRequest {
+impl CoinFinalizationData {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
     pub fn new<K>(
         amount: Amount,
         amount_tiers: &Keys<K>,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (IssuanceRequest, SignRequest) {
+    ) -> (CoinFinalizationData, SignRequest) {
         let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
             Coins::represent_amount(amount, amount_tiers)
                 .into_iter()
@@ -557,7 +516,7 @@ impl IssuanceRequest {
         );
 
         let sig_req = SignRequest(blinded_nonces);
-        let issuance_req = IssuanceRequest { coins: requests };
+        let issuance_req = CoinFinalizationData { coins: requests };
 
         (issuance_req, sig_req)
     }
@@ -645,6 +604,14 @@ pub enum ClientError {
     PegInProofError(PegInProofError),
     #[error("The client's wallet has not enough coins or they are not in the right denomination")]
     NotEnoughCoins,
+    #[error("The transaction outcome received from the mint did not contain a result for output {0:}:{1:} yet")]
+    OutputNotReadyYet(TransactionId, usize),
+    #[error(
+        "The transaction outcome returned by the mint contains too few outputs (output {0:}:{1:})"
+    )]
+    InvalidOutcomeWrongStructure(TransactionId, usize),
+    #[error("The transaction outcome returned by the mint has an invalid type (output {0:}:{1:})")]
+    InvalidOutcomeType(TransactionId, usize),
 }
 
 impl From<InvalidAmountTierError> for CoinFinalizationError {
@@ -659,27 +626,30 @@ impl From<CoinFinalizationError> for ClientError {
     }
 }
 
-impl DatabaseKeyPrefix for IssuanceKey {
+impl DatabaseKeyPrefix for OutputFinalizationKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(33);
-        bytes.push(DB_PREFIX_ISSUANCE);
-        bytes.extend_from_slice(&self.issuance_id[..]);
+        bytes.push(DB_PREFIX_OUTPUT_FINALIZATION_DATA);
+        bytes.extend_from_slice(&self.transaction_id[..]);
+        bytes.extend_from_slice(&self.output_idx.to_le_bytes());
         bytes
     }
 }
 
-impl DatabaseKey for IssuanceKey {
+impl DatabaseKey for OutputFinalizationKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        Ok(IssuanceKey {
-            issuance_id: TransactionId::from_slice(check_format(data, DB_PREFIX_ISSUANCE, 32)?)
-                .unwrap(),
+        let data = check_format(data, DB_PREFIX_OUTPUT_FINALIZATION_DATA, 40)?;
+
+        Ok(OutputFinalizationKey {
+            transaction_id: TransactionId::from_slice(&data[0..32]).unwrap(),
+            output_idx: usize::from_le_bytes(data[32..].try_into().unwrap()),
         })
     }
 }
 
-impl DatabaseKeyPrefix for IssuanceKeyPrefix {
+impl DatabaseKeyPrefix for OutputFinalizationKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_ISSUANCE]
+        vec![DB_PREFIX_OUTPUT_FINALIZATION_DATA]
     }
 }
 

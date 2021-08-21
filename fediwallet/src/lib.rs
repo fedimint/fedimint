@@ -6,7 +6,6 @@ use crate::db::{
     UnsignedTransactionKey,
 };
 use bitcoin::blockdata::constants::genesis_block;
-use bitcoin::consensus::Encodable;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1};
@@ -14,8 +13,8 @@ use bitcoin::util::bip143::SigHashCache;
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
 use bitcoin::{
-    Address, AddressType, Amount, BlockHash, Network, OutPoint, Script, SigHashType, Transaction,
-    TxIn, TxOut, Txid,
+    Address, AddressType, Amount, BlockHash, Network, Script, SigHashType, Transaction, TxIn,
+    TxOut, Txid,
 };
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
@@ -23,7 +22,9 @@ use database::batch::{BatchItem, BatchTx};
 use database::{BatchDb, BincodeSerialized, Database, PrefixSearchable};
 use itertools::Itertools;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use mint_api::{CompressedPublicKey, PegInProof, TransactionId, Tweakable};
+use mint_api::transaction::PegOut;
+use mint_api::Encodable;
+use mint_api::{CompressedPublicKey, PegInProof, PegInProofError, TransactionId, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
@@ -615,19 +616,16 @@ where
             .is_some()
     }
 
-    pub fn verify_pigin(
-        &self,
-        peg_in_proof: &PegInProof,
-    ) -> Option<Vec<(OutPoint, Amount, Script)>> {
+    pub fn validate_peg_in(&self, peg_in_proof: &PegInProof) -> Result<(), WalletError> {
         // TODO: remove return value
         if !self.block_is_known(peg_in_proof.proof_block()) {
-            return None;
+            return Err(WalletError::UnknownPegInProofBlock(
+                peg_in_proof.proof_block(),
+            ));
         }
 
         // TODO: probably propagate the error
-        peg_in_proof
-            .verify(&self.secp, &self.cfg.peg_in_descriptor)
-            .ok()?;
+        peg_in_proof.verify(&self.secp, &self.cfg.peg_in_descriptor)?;
 
         if self
             .db
@@ -635,49 +633,31 @@ where
             .expect("DB error")
             .is_some()
         {
-            return None;
+            return Err(WalletError::PegInAlreadyClaimed);
         }
 
-        Some(vec![(
-            peg_in_proof.outpoint(),
-            Amount::from_sat(peg_in_proof.tx_output().value),
-            peg_in_proof.tx_output().script_pubkey.clone(),
-        )])
+        Ok(())
     }
 
     pub fn claim_pegin(
         &self,
         mut batch: BatchTx,
         peg_in_proof: &PegInProof,
-    ) -> Option<mint_api::Amount> {
-        let our_outputs = self.verify_pigin(peg_in_proof)?;
-        debug!(
-            "Claiming peg-in {:?}",
-            our_outputs
-                .iter()
-                .map(|(out, _, _)| format!("{}:{}", out.txid, out.vout))
-                .collect::<Vec<_>>()
+    ) -> Result<(), WalletError> {
+        self.validate_peg_in(peg_in_proof)?;
+        debug!("Claiming peg-in {}", peg_in_proof.outpoint());
+
+        batch.append_insert_new(
+            UTXOKey(peg_in_proof.outpoint()),
+            BincodeSerialized::owned(SpendableUTXO {
+                tweak: peg_in_proof.tweak_contract_key().clone(),
+                amount: bitcoin::Amount::from_sat(peg_in_proof.tx_output().value),
+                script_pubkey: peg_in_proof.tx_output().script_pubkey.clone(),
+            }),
         );
 
-        let amount: u64 = our_outputs.iter().map(|(_, amt, _)| amt.as_sat()).sum();
-        let fee = self.cfg.per_utxo_fee.as_sat() * our_outputs.len() as u64;
-        let issuance_amount = mint_api::Amount::from_sat(amount.saturating_sub(fee));
-
-        batch.append_from_iter(our_outputs.into_iter().map(
-            |(out_point, amount, script_pubkey)| {
-                BatchItem::insert_new(
-                    UTXOKey(out_point),
-                    BincodeSerialized::owned(SpendableUTXO {
-                        tweak: peg_in_proof.tweak_contract_key().clone(),
-                        amount,
-                        script_pubkey,
-                    }),
-                )
-            },
-        ));
-
         batch.commit();
-        Some(issuance_amount)
+        Ok(())
     }
 
     pub fn queue_pegout(
@@ -750,6 +730,16 @@ where
             secret_key: &self.cfg.peg_in_key,
             secp: &self.secp,
         }
+    }
+
+    pub fn validate_peg_out(&self, peg_out: &PegOut) -> Result<(), WalletError> {
+        if !is_address_valid_for_network(&peg_out.recipient, self.cfg.network) {
+            return Err(WalletError::WrongNetwork(
+                self.cfg.network,
+                peg_out.recipient.network,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -1080,6 +1070,12 @@ pub enum WalletError {
     RpcErrot(bitcoincore_rpc_async::Error),
     #[error("Unknown bitcoin network: {0}")]
     UnknownNetwork(String),
+    #[error("Unknown block hash in peg-in proof: {0}")]
+    UnknownPegInProofBlock(BlockHash),
+    #[error("Invalid peg-in proof: {0}")]
+    PegInProofError(PegInProofError),
+    #[error("The peg-in was already claimed")]
+    PegInAlreadyClaimed,
 }
 
 #[derive(Debug, Error)]
@@ -1099,6 +1095,12 @@ pub enum ProcessPegOutSigError {
 impl From<bitcoincore_rpc_async::Error> for WalletError {
     fn from(e: bitcoincore_rpc_async::Error) -> Self {
         WalletError::RpcErrot(e)
+    }
+}
+
+impl From<PegInProofError> for WalletError {
+    fn from(e: PegInProofError) -> Self {
+        WalletError::PegInProofError(e)
     }
 }
 

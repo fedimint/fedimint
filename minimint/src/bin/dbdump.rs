@@ -1,8 +1,8 @@
 use database::{BincodeSerialized, DatabaseKeyPrefix, PrefixSearchable};
 use minimint::consensus::ConsensusItem;
 use minimint::database::{
-    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, FinalizedSignatureKey,
-    PartialSignatureKey, DB_PREFIX_FINALIZED_SIG,
+    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, PartialSignatureKey, TransactionStatusKey,
+    DB_PREFIX_TX_STATUS,
 };
 use mint_api::{PartialSigResponse, SigResponse};
 use serde::Serialize;
@@ -40,7 +40,7 @@ pub struct AllFinalizedSignatures;
 
 impl DatabaseKeyPrefix for AllFinalizedSignatures {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_FINALIZED_SIG]
+        vec![DB_PREFIX_TX_STATUS]
     }
 }
 
@@ -65,7 +65,7 @@ fn main() {
         }
         Tables::FinalizedSignature => {
             for item in db
-                .find_by_prefix::<_, FinalizedSignatureKey, BincodeSerialized<SigResponse>>(
+                .find_by_prefix::<_, TransactionStatusKey, BincodeSerialized<SigResponse>>(
                     &AllFinalizedSignatures,
                 )
             {

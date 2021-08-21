@@ -1,5 +1,5 @@
 use bitcoin::{Amount, Network};
-use mint_api::{CompressedPublicKey, Keys, PegInDescriptor};
+use mint_api::{CompressedPublicKey, FeeConsensus, Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -55,6 +55,8 @@ pub struct ServerConfig {
     pub db_path: PathBuf,
 
     pub wallet: WalletConfig,
+    // TODO: make consensus defined
+    pub fee_consensus: FeeConsensus,
 }
 
 #[cfg(feature = "server")]
@@ -100,8 +102,7 @@ pub struct ClientConfig {
     pub mint_pk: Keys<AggregatePublicKey>,
     pub peg_in_descriptor: PegInDescriptor,
     pub network: Network,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    pub per_utxo_fee: bitcoin::Amount,
+    pub fee_consensus: FeeConsensus,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {

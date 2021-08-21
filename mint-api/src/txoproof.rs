@@ -1,6 +1,6 @@
+use crate::encoding::{Decodable, DecodeError};
 use crate::keys::CompressedPublicKey;
-use crate::{Contract, Tweakable};
-use bitcoin::consensus::{Decodable, Encodable};
+use crate::{Contract, Encodable, Tweakable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
@@ -52,9 +52,7 @@ impl TxOutProof {
 }
 
 impl Decodable for TxOutProof {
-    fn consensus_decode<D: std::io::Read>(
-        mut d: D,
-    ) -> Result<Self, bitcoin::consensus::encode::Error> {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
         let block_header = BlockHeader::consensus_decode(&mut d)?;
         let merkle_proof = PartialMerkleTree::consensus_decode(&mut d)?;
 
@@ -62,12 +60,10 @@ impl Decodable for TxOutProof {
         let mut indices = Vec::new();
         let root = merkle_proof
             .extract_matches(&mut transactions, &mut indices)
-            .map_err(|_| {
-                bitcoin::consensus::encode::Error::ParseFailed("Invalid partial merkle tree")
-            })?;
+            .map_err(|_| DecodeError::from_str("Invalid partial merkle tree"))?;
 
         if block_header.merkle_root != root {
-            Err(bitcoin::consensus::encode::Error::ParseFailed(
+            Err(DecodeError::from_str(
                 "Partial merkle tree does not belong to block header",
             ))
         } else {
@@ -249,6 +245,20 @@ impl Hash for TxOutProof {
     }
 }
 
+impl Encodable for PegInProof {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<usize> {
+        let mut len = 0;
+        len += self.txout_proof.consensus_encode(&mut writer)?;
+        len += self.transaction.consensus_encode(&mut writer)?;
+        len += (self.output_idx as u64).consensus_encode(&mut writer)?;
+
+        len += 33;
+        writer.write_all(&self.tweak_contract_key.to_bytes())?;
+
+        Ok(len)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum PegInProofError {
     #[error("Supplied transaction is not included in proof")]
@@ -264,7 +274,7 @@ pub enum PegInProofError {
 #[cfg(test)]
 mod tests {
     use super::TxOutProof;
-    use bitcoin::consensus::Decodable;
+    use crate::encoding::Decodable;
     use std::io::Cursor;
 
     #[test]

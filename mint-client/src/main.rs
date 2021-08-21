@@ -1,8 +1,7 @@
-use bitcoin::consensus::Decodable;
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use config::{load_from_file, ClientConfig};
-use mint_api::{Amount, Coins, TxOutProof};
+use mint_api::{Amount, Coins, Decodable, TxOutProof};
 use mint_client::{MintClient, SpendableCoin};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -116,7 +115,7 @@ async fn main() {
             };
         }
         Command::Fetch => {
-            for id in client.fetch_all(&mut rng).await.unwrap() {
+            for id in client.fetch_all_coins().await.unwrap() {
                 info!("Fetched coins from issuance {}", id.to_hex());
             }
         }

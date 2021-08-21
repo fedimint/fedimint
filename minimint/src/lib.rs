@@ -1,7 +1,8 @@
 #![feature(async_closure)]
 
+extern crate mint_api;
+
 use crate::consensus::{ConsensusItem, FediMintConsensus};
-use crate::net::api::ClientRequest;
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
@@ -152,7 +153,7 @@ pub async fn run_minimint(
         if we_contributed {
             // TODO: define latency target for consensus rounds and monitor it
             // give others a chance to catch up
-            tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
         }
 
         proposal = Some(mint_consensus.get_consensus_proposal(wallet_ci).await);
@@ -248,7 +249,7 @@ async fn spawn_hbbft(
 // TODO: find a more elegant way to do this. Maybe give API server access to mint? Would allow feedback at least …
 async fn spawn_client_request_handler<R, D, M>(
     mint: Arc<FediMintConsensus<R, D, M>>,
-    mut client_req_receiver: Receiver<ClientRequest>,
+    mut client_req_receiver: Receiver<mint_api::transaction::Transaction>,
 ) -> JoinHandle<()>
 where
     R: RngCore + CryptoRng + Send + 'static,
@@ -261,7 +262,7 @@ where
                 .recv()
                 .await
                 .expect("Client request sender thread failed");
-            if let Err(e) = mint.submit_client_request(request) {
+            if let Err(e) = mint.submit_transaction(request) {
                 warn!("Error submitting client request: {}", e);
             } else {
                 debug!("Successfully submitted client request to queue");

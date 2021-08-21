@@ -3,7 +3,7 @@ use bitcoin::Network;
 use config::{ClientConfig, Feerate, Peer, ServerConfig, WalletConfig};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use miniscript::descriptor::Wsh;
-use mint_api::{Amount, CompressedPublicKey, PegInDescriptor};
+use mint_api::{Amount, CompressedPublicKey, FeeConsensus, PegInDescriptor};
 use rand::rngs::OsRng;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -77,6 +77,13 @@ fn main() {
         })
         .collect::<BTreeMap<_, _>>();
 
+    let fee_consensus = FeeConsensus {
+        fee_coin_spend_abs: Amount::from_sat(0),
+        fee_peg_in_abs: Amount::from_sat(500),
+        fee_coin_issuance_abs: Amount::from_sat(0),
+        fee_peg_out_abs: Amount::from_sat(500),
+    };
+
     for (&id, netinf) in netinfo.iter() {
         let mut path: PathBuf = opts.cfg_path.clone();
         path.push(format!("server-{}.json", id));
@@ -112,6 +119,7 @@ fn main() {
                 btc_rpc_user: "bitcoin".to_string(),
                 btc_rpc_pass: "bitcoin".to_string(),
             },
+            fee_consensus: fee_consensus.clone(),
         };
         serde_json::to_writer_pretty(file, &cfg).unwrap();
     }
@@ -133,7 +141,7 @@ fn main() {
             .collect(),
         peg_in_descriptor,
         network: Network::Regtest,
-        per_utxo_fee,
+        fee_consensus,
     };
     serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }

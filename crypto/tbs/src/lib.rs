@@ -71,7 +71,7 @@ impl Message {
     }
 }
 
-macro_rules! hash_impl {
+macro_rules! point_impl {
     ($type:ty) => {
         impl std::hash::Hash for $type {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -79,14 +79,20 @@ macro_rules! hash_impl {
                 state.write(&serialized);
             }
         }
+
+        impl $type {
+            pub fn encode_compressed(&self) -> [u8; 48] {
+                self.0.to_compressed()
+            }
+        }
     };
 }
 
-hash_impl!(BlindedMessage);
-hash_impl!(Message);
-hash_impl!(Signature);
-hash_impl!(BlindedSignature);
-hash_impl!(BlindedSignatureShare);
+point_impl!(BlindedMessage);
+point_impl!(Message);
+point_impl!(Signature);
+point_impl!(BlindedSignature);
+point_impl!(BlindedSignatureShare);
 
 impl SecretKeyShare {
     pub fn to_pub_key_share(&self) -> PublicKeyShare {

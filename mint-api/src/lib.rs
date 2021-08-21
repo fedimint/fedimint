@@ -10,13 +10,19 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
+mod encoding;
 mod keys;
+pub mod outcome;
+pub mod transaction;
 mod tweakable;
 mod txoproof;
 pub mod util;
 
+use crate::transaction::BlindToken;
+pub use encoding::{Decodable, DecodeError, Encodable};
 pub use keys::CompressedPublicKey;
 use miniscript::Descriptor;
+use std::io::Error;
 pub use tweakable::{Contract, Tweakable};
 pub use txoproof::{PegInProof, PegInProofError, TxOutProof};
 
@@ -78,62 +84,12 @@ pub struct Coin(pub CoinNonce, pub tbs::Signature);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct CoinNonce(pub musig::PubKey);
 
-/// After sending bitcoins to the federation wallet a client can request the appropriate amount
-/// of coins in return using this request.
-#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
-pub struct PegInRequest {
-    pub blind_tokens: SignRequest,
-    pub proof: PegInProof,
-    pub sig: musig::Sig,
-}
-
-/// Exchange already signed [`Coin`]s for new coins, breaking the link due to blind signing
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct ReissuanceRequest {
-    pub coins: Coins<Coin>,
-    pub blind_tokens: SignRequest,
-    pub sig: musig::Sig,
-}
-
-/// Redeem [`Coin`]s for bitcoin on-chain
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct PegOutRequest {
-    pub address: bitcoin::Address,
-    pub coins: Coins<Coin>,
-    pub sig: musig::Sig,
-}
-
-/// This object belongs to a transaction operation and thus has a [TransactionId]
-pub trait TxId {
-    /// Calculate [TransactionId]
-    fn id(&self) -> TransactionId;
-}
-
-impl TxId for PegInRequest {
-    fn id(&self) -> TransactionId {
-        let mut hasher = Sha256::engine();
-        bincode::serialize_into(&mut hasher, &self.blind_tokens).expect("encoding error");
-        bincode::serialize_into(&mut hasher, &self.proof).expect("encoding error");
-        TransactionId(Sha256::from_engine(hasher))
-    }
-}
-
-impl TxId for ReissuanceRequest {
-    fn id(&self) -> TransactionId {
-        let mut hasher = Sha256::engine();
-        bincode::serialize_into(&mut hasher, &self.coins).expect("encoding error");
-        bincode::serialize_into(&mut hasher, &self.blind_tokens).expect("encoding error");
-        TransactionId(Sha256::from_engine(hasher))
-    }
-}
-
-impl TxId for PegOutRequest {
-    fn id(&self) -> TransactionId {
-        let mut hasher = Sha256::engine();
-        bincode::serialize_into(&mut hasher, &self.coins).expect("encoding error");
-        bincode::serialize_into(&mut hasher, &self.address).expect("encoding error");
-        TransactionId(Sha256::from_engine(hasher))
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub fee_coin_spend_abs: Amount,
+    pub fee_peg_in_abs: Amount,
+    pub fee_coin_issuance_abs: Amount,
+    pub fee_peg_out_abs: Amount,
 }
 
 impl Coin {
@@ -450,20 +406,51 @@ impl std::fmt::Display for InvalidAmountTierError {
     }
 }
 
-// TODO: upstream
-impl std::hash::Hash for PegInRequest {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.proof.hash(state);
-        self.blind_tokens.hash(state);
-        self.sig.hash(state);
-    }
-}
-
 impl From<bitcoin::Amount> for Amount {
     fn from(amt: bitcoin::Amount) -> Self {
         assert!(amt.as_sat() <= 2_100_000_000_000_000);
         Amount {
             milli_sat: amt.as_sat() * 1000,
         }
+    }
+}
+
+impl<C> Encodable for Coins<C>
+where
+    C: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        let mut len = 0;
+        len += (self.coins.len() as u64).consensus_encode(&mut writer)?;
+        for (amount, coin) in self.iter() {
+            len += amount.consensus_encode(&mut writer)?;
+            len += coin.consensus_encode(&mut writer)?;
+        }
+        Ok(len)
+    }
+}
+
+impl Encodable for Amount {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.milli_sat.consensus_encode(writer)
+    }
+}
+
+impl Encodable for Coin {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        writer.write_all(&self.0 .0.to_bytes())?;
+        writer.write_all(&self.1.encode_compressed())?;
+
+        Ok(33 + 48)
+    }
+}
+
+impl From<SignRequest> for Coins<BlindToken> {
+    fn from(sig_req: SignRequest) -> Self {
+        sig_req
+            .0
+            .into_iter()
+            .map(|(amt, token)| (amt, crate::transaction::BlindToken(token)))
+            .collect()
     }
 }

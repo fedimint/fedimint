@@ -16,7 +16,11 @@ use tracing::{debug, warn};
 
 pub trait FediMint {
     /// Generate our signature share for a `SignRequest`, effectively issuing new tokens.
-    fn sign(&self, req: SignRequest) -> Result<PartialSigResponse, MintError>;
+    fn issue(&self, req: SignRequest) -> Result<PartialSigResponse, MintError>;
+
+    /// Validate the tier structure of any coin set. This is primarily used to validate issuance
+    /// requests on submission.
+    fn validate_tiers<T>(&self, coins: &Coins<T>) -> Result<(), MintError>;
 
     /// Try to combine signature shares to a complete signature, filtering out invalid contributions
     /// and reporting peer misbehaviour.
@@ -38,30 +42,7 @@ pub trait FediMint {
     ) -> Result<(), MintError>;
 
     /// Checks if coins are unspent and signed
-    fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError>;
-
-    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
-    /// was greater or equal to the ones to be issued and they were all unspent and valid.
-    /// Spend `coins` and generate a signature share for `new_tokens` if the amount of coins sent
-    /// was greater or equal to the ones to be issued and they were all unspent and valid.
-    fn reissue<T: Database>(
-        &self,
-        db: &T,
-        mut batch: BatchTx,
-        coins: Coins<Coin>,
-        new_tokens: SignRequest,
-    ) -> Result<PartialSigResponse, MintError> {
-        let spent_coins = coins.amount();
-        self.spend(db, batch.subtransaction(), coins)?;
-
-        if spent_coins >= new_tokens.0.amount() {
-            let psigs = self.sign(new_tokens)?;
-            batch.commit();
-            Ok(psigs)
-        } else {
-            Err(MintError::TooFewCoins(new_tokens.0.amount(), spent_coins))
-        }
-    }
+    fn validate<T: Database>(&self, db: &T, coins: &Coins<Coin>) -> Result<(), MintError>;
 }
 
 /// Federated mint member mint
@@ -120,7 +101,7 @@ impl Mint {
 }
 
 impl FediMint for Mint {
-    fn sign(&self, req: SignRequest) -> Result<PartialSigResponse, MintError> {
+    fn issue(&self, req: SignRequest) -> Result<PartialSigResponse, MintError> {
         let coins = req.0.map(|amt, msg| -> Result<_, InvalidAmountTierError> {
             let sec_key = self.sec_key.tier(&amt)?;
             let bsig = sign_blinded_msg(msg, *sec_key);
@@ -128,6 +109,20 @@ impl FediMint for Mint {
         })?;
 
         Ok(PartialSigResponse(coins))
+    }
+
+    fn validate_tiers<T>(&self, coins: &Coins<T>) -> Result<(), MintError> {
+        if let Some(amount) = coins.iter().find_map(|(amount, _)| {
+            if self.pub_key.get(&amount).is_none() {
+                Some(amount)
+            } else {
+                None
+            }
+        }) {
+            Err(MintError::InvalidAmountTier(amount))
+        } else {
+            Ok(())
+        }
     }
 
     fn combine(
@@ -258,7 +253,7 @@ impl FediMint for Mint {
         Ok(())
     }
 
-    fn validate<T: Database>(&self, transaction: &T, coins: &Coins<Coin>) -> Result<(), MintError> {
+    fn validate<T: Database>(&self, db: &T, coins: &Coins<Coin>) -> Result<(), MintError> {
         coins
             .iter()
             .map(|(amount, coin)| {
@@ -271,7 +266,7 @@ impl FediMint for Mint {
                     return Err(MintError::InvalidSignature);
                 }
 
-                if transaction
+                if db
                     .get_value::<_, ()>(&NonceKey(coin.0.clone()))
                     .expect("DB error")
                     .is_some()
@@ -355,7 +350,7 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use crate::{CombineError, FediMint, Mint, MintError, MintShareErrors, PeerErrorType};
-    use database::batch::{BatchTx, DbBatch};
+    use database::batch::BatchTx;
     use database::Database;
     use mint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
@@ -398,7 +393,7 @@ mod test {
 
         let psigs = mints
             .iter()
-            .map(move |m| m.sign(req.clone()).unwrap())
+            .map(move |m| m.issue(req.clone()).unwrap())
             .enumerate()
             .collect::<Vec<_>>();
 
@@ -527,7 +522,7 @@ mod test {
 
         let psigs = mints
             .iter()
-            .map(move |m| m.sign(req.clone()).unwrap())
+            .map(move |m| m.issue(req.clone()).unwrap())
             .enumerate()
             .map(
                 |(mint, sig)| {
@@ -547,8 +542,12 @@ mod test {
         struct MockMint;
 
         impl FediMint for MockMint {
-            fn sign(&self, _req: SignRequest) -> Result<PartialSigResponse, MintError> {
+            fn issue(&self, _req: SignRequest) -> Result<PartialSigResponse, MintError> {
                 Ok(PartialSigResponse(Coins::default()))
+            }
+
+            fn validate_tiers<T>(&self, _coins: &Coins<T>) -> Result<(), MintError> {
+                Ok(())
             }
 
             fn combine(
@@ -575,19 +574,5 @@ mod test {
                 Ok(())
             }
         }
-
-        let mint = MockMint;
-        let db = database::mem_impl::MemDatabase::new();
-        let mut batch = DbBatch::new();
-
-        // TODO: add testing for amounts once there are more complex checks implemented for reissuance
-        let _psigs = mint
-            .reissue(
-                &db,
-                batch.transaction(),
-                Coins::default(),
-                SignRequest(Coins::default()),
-            )
-            .unwrap();
     }
 }
