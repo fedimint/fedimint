@@ -1,7 +1,7 @@
 use crate::consensus::ConsensusItem;
 use database::{
     check_format, BincodeSerialized, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix,
-    DatabaseValue, DecodingError, PrefixSearchable, SerializableDatabaseValue,
+    DatabaseValue, DecodingError, RawDatabase, SerializableDatabaseValue,
 };
 use mint_api::outcome::TransactionStatus;
 use mint_api::{BitcoinHash, TransactionId};
@@ -175,13 +175,10 @@ impl DatabaseValue for DummyValue {
     }
 }
 
-pub fn load_tx_outcome<D>(
-    db: &D,
+pub fn load_tx_outcome(
+    db: &dyn RawDatabase,
     tx_hash: TransactionId,
-) -> Result<Option<mint_api::outcome::TransactionOutcome>, DatabaseError>
-where
-    D: Database + PrefixSearchable,
-{
+) -> Result<Option<mint_api::outcome::TransactionOutcome>, DatabaseError> {
     let status = match db
         .get_value::<_, BincodeSerialized<TransactionStatus>>(&TransactionStatusKey(tx_hash))?
     {

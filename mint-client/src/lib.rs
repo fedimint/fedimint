@@ -3,8 +3,8 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use database::batch::{BatchItem, DbBatch};
 use database::{
-    check_format, BatchDb, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix,
-    DecodingError, PrefixSearchable,
+    check_format, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError,
+    RawDatabase,
 };
 use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
@@ -22,6 +22,7 @@ use secp256k1::{All, Secp256k1};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
+use std::sync::Arc;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
 use tokio::time::Duration;
@@ -31,9 +32,9 @@ pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;
 pub const DB_PREFIX_PEG_IN: u8 = 0x22;
 
-pub struct MintClient<D> {
+pub struct MintClient {
     cfg: ClientConfig,
-    db: D,
+    db: Arc<dyn RawDatabase>,
     http_client: reqwest::Client, // TODO: use trait object
     secp: Secp256k1<All>,
 }
@@ -92,11 +93,8 @@ pub struct PegInKey {
 #[derive(Debug, Clone)]
 pub struct PegInPrefixKey;
 
-impl<D> MintClient<D>
-where
-    D: Database + PrefixSearchable + BatchDb + Sync + Unpin,
-{
-    pub fn new(cfg: ClientConfig, db: D, secp: Secp256k1<All>) -> Self {
+impl MintClient {
+    pub fn new(cfg: ClientConfig, db: Arc<dyn RawDatabase>, secp: Secp256k1<All>) -> Self {
         MintClient {
             cfg,
             db,

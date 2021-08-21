@@ -7,7 +7,7 @@ use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
 use ::database::batch::DbBatch;
-use ::database::{BatchDb, Database, PrefixSearchable};
+use ::database::{Database, RawDatabase};
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use fedimint::FediMint;
@@ -43,12 +43,13 @@ pub async fn run_minimint(
     );
     assert_eq!(cfg.peers.keys().min().copied(), Some(0));
 
-    let sled_db = sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap();
+    let database: Arc<dyn RawDatabase> =
+        Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap());
 
     let (client_req_sender, client_req_receiver) = channel(4);
     spawn(net::api::run_server(
         cfg.clone(),
-        sled_db.clone(),
+        database.clone(),
         client_req_sender,
     ));
 
@@ -67,7 +68,7 @@ pub async fn run_minimint(
     let mut startup_batch = DbBatch::new();
     let (wallet, wallet_ci, sig_ci) = fediwallet::Wallet::new(
         cfg.wallet.clone(),
-        sled_db.clone(),
+        database.clone(),
         startup_batch.transaction(),
         rng.clone(),
     )
@@ -79,14 +80,14 @@ pub async fn run_minimint(
         startup_batch.autocommit(|tx| tx.append_insert_new(ConsensusItem::Wallet(sig_ci), ()));
     }
 
-    BatchDb::apply_batch(&sled_db, startup_batch).expect("DB error");
+    Database::apply_batch(&database, startup_batch).expect("DB error");
 
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
         cfg: cfg.clone(),
         mint,
         wallet,
-        db: sled_db,
+        db: database,
     });
 
     let (output_sender, mut output_receiver) = channel::<ConsensusOutcome>(1);
@@ -247,13 +248,12 @@ async fn spawn_hbbft(
 }
 
 // TODO: find a more elegant way to do this. Maybe give API server access to mint? Would allow feedback at least …
-async fn spawn_client_request_handler<R, D, M>(
-    mint: Arc<FediMintConsensus<R, D, M>>,
+async fn spawn_client_request_handler<R, M>(
+    mint: Arc<FediMintConsensus<R, M>>,
     mut client_req_receiver: Receiver<mint_api::transaction::Transaction>,
 ) -> JoinHandle<()>
 where
     R: RngCore + CryptoRng + Send + 'static,
-    D: Database + PrefixSearchable + Sync + BatchDb + Send + Clone + 'static,
     M: FediMint + Sync + Send + 'static,
 {
     spawn(async move {

@@ -4,6 +4,7 @@ use database::batch::DbBatch;
 use fediwallet::Wallet;
 use secp256k1::SecretKey;
 use std::str::FromStr;
+use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -41,7 +42,7 @@ async fn main() {
 
     let (wallet, _, _) = Wallet::new(
         cfg,
-        sled_db,
+        Arc::new(sled_db),
         batch.transaction(),
         rand::rngs::OsRng::new().unwrap(),
     )

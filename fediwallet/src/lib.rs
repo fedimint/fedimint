@@ -19,7 +19,7 @@ use bitcoin::{
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
 use database::batch::{BatchItem, BatchTx};
-use database::{BatchDb, BincodeSerialized, Database, PrefixSearchable};
+use database::{BincodeSerialized, Database, RawDatabase};
 use itertools::Itertools;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use mint_api::transaction::PegOut;
@@ -29,6 +29,7 @@ use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use std::hash::Hasher;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, warn};
@@ -67,11 +68,11 @@ pub struct WalletConsensus {
     randomness_beacon: Option<[u8; 32]>,
 }
 
-pub struct Wallet<D> {
+pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: bitcoincore_rpc_async::Client,
-    db: D,
+    db: Arc<dyn RawDatabase>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -98,13 +99,10 @@ struct StatelessWallet<'a> {
     secp: &'a secp256k1::Secp256k1<secp256k1::All>,
 }
 
-impl<D> Wallet<D>
-where
-    D: Database + BatchDb + PrefixSearchable + Clone + Send + 'static,
-{
+impl Wallet {
     pub async fn new<'a, R>(
         cfg: WalletConfig,
-        db: D,
+        db: Arc<dyn RawDatabase>,
         mut batch: BatchTx<'a>,
         rng: R,
     ) -> Result<
@@ -1021,10 +1019,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
     }
 }
 
-async fn broadcast_pending_tx<D>(db: D, rpc: bitcoincore_rpc_async::Client)
-where
-    D: Database + PrefixSearchable,
-{
+async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: bitcoincore_rpc_async::Client) {
     loop {
         let pending_tx = db
             .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(

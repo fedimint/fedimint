@@ -1,4 +1,4 @@
-use database::{BincodeSerialized, DatabaseKeyPrefix, PrefixSearchable};
+use database::{BincodeSerialized, Database, DatabaseKeyPrefix, RawDatabase};
 use minimint::consensus::ConsensusItem;
 use minimint::database::{
     AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, PartialSignatureKey, TransactionStatusKey,
@@ -8,6 +8,7 @@ use mint_api::{PartialSigResponse, SigResponse};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -53,7 +54,8 @@ struct Element<K, V> {
 fn main() {
     let opts: Opts = StructOpt::from_args();
 
-    let db = sled::open(&opts.db).unwrap().open_tree("mint").unwrap();
+    let db: Arc<dyn RawDatabase> =
+        Arc::new(sled::open(&opts.db).unwrap().open_tree("mint").unwrap());
     let mut stdout = std::io::stdout();
 
     match opts.table {

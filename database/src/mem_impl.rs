@@ -1,7 +1,9 @@
-use crate::{Database, DatabaseError, DatabaseKey, DatabaseValue};
+use crate::batch::{BatchItem, DbBatch};
+use crate::{DatabaseError, RawDatabase};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
+use tracing::{error, trace};
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {
@@ -17,63 +19,93 @@ impl MemDatabase {
     }
 }
 
-impl Database for MemDatabase {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let old = self
-            .data
-            .lock()
-            .unwrap()
-            .insert(key.to_bytes(), value.to_bytes())
-            .map(|old_value| V::from_bytes(&old_value))
-            .transpose()?;
-
-        Ok(old)
+impl RawDatabase for MemDatabase {
+    fn raw_insert_entry(
+        &self,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self.data.lock().unwrap().insert(key, value))
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let value = self
-            .data
-            .lock()
-            .unwrap()
-            .get(&key.to_bytes())
-            .map(|value| V::from_bytes(&value))
-            .transpose()?;
-
-        Ok(value)
+    fn raw_get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self.data.lock().unwrap().get(&key).cloned())
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let old = self
+    fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self.data.lock().unwrap().remove(&key))
+    }
+
+    fn raw_find_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>> {
+        let mut data = self
             .data
             .lock()
             .unwrap()
-            .remove(&key.to_bytes())
-            .map(|old_value| V::from_bytes(&old_value))
-            .transpose()?;
+            .range::<Vec<u8>, _>((&key_prefix)..)
+            .take_while(|(key, _)| key.starts_with(&key_prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>();
+        data.reverse();
 
-        Ok(old)
+        Box::new(MemDbIter { data })
+    }
+
+    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+        let batch: Vec<_> = batch.into();
+
+        for change in batch.iter() {
+            match change {
+                BatchItem::InsertNewElement(element) => {
+                    if self
+                        .raw_insert_entry(element.key.to_bytes(), element.value.to_bytes())?
+                        .is_some()
+                    {
+                        error!("Database replaced element! This should not happen!");
+                        trace!("Problematic key: {:?}", element.key);
+                    }
+                }
+                BatchItem::InsertElement(element) => {
+                    self.raw_insert_entry(element.key.to_bytes(), element.value.to_bytes())?;
+                }
+                BatchItem::DeleteElement(key) => {
+                    if self.raw_remove_entry(key.to_bytes())?.is_none() {
+                        error!("Database deleted absent element! This should not happen!");
+                        trace!("Problematic key: {:?}", key);
+                    }
+                }
+                BatchItem::MaybeDeleteElement(key) => {
+                    self.raw_remove_entry(key.to_bytes())?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+struct MemDbIter {
+    data: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl Iterator for MemDbIter {
+    type Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.data.pop().map(Result::Ok)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::mem_impl::MemDatabase;
+    use std::sync::Arc;
 
     #[test]
     fn test_basic_rw() {
         let mem_db = MemDatabase::new();
-        crate::tests::test_db_impl(&mem_db);
+        crate::tests::test_db_impl(Arc::new(mem_db));
     }
 }

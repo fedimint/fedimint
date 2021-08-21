@@ -10,7 +10,7 @@ use crate::database::{
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use database::batch::{BatchItem, BatchTx, DbBatch};
-use database::{BatchDb, BincodeSerialized, Database, DatabaseError, PrefixSearchable};
+use database::{BincodeSerialized, Database, DatabaseError, RawDatabase};
 use fedimint::{FediMint, MintError};
 use fediwallet::{Wallet, WalletConsensusItem, WalletError};
 use hbbft::honey_badger::Batch;
@@ -21,6 +21,7 @@ use mint_api::{Amount, Coins, PartialSigResponse, SignRequest, TransactionId};
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
@@ -35,10 +36,9 @@ pub enum ConsensusItem {
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, u16>;
 
-pub struct FediMintConsensus<R, D, M>
+pub struct FediMintConsensus<R, M>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + Sync,
     M: FediMint + Sync,
 {
     /// Cryptographic random number generator used for everything
@@ -48,16 +48,15 @@ where
 
     /// Our local mint
     pub mint: M, //TODO: box dyn trait
-    pub wallet: Wallet<D>,
+    pub wallet: Wallet,
 
     /// KV Database into which all state is persisted to recover from in case of a crash
-    pub db: D,
+    pub db: Arc<dyn RawDatabase>,
 }
 
-impl<R, D, M> FediMintConsensus<R, D, M>
+impl<R, M> FediMintConsensus<R, M>
 where
     R: RngCore + CryptoRng,
-    D: Database + PrefixSearchable + BatchDb + Sync + Send + Clone + 'static,
     M: FediMint + Sync,
 {
     pub fn submit_transaction(

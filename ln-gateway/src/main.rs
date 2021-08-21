@@ -26,7 +26,7 @@ struct Config {
 
 #[derive(Clone)]
 pub struct State {
-    mint_client: Arc<MintClient<sled::Tree>>,
+    mint_client: Arc<MintClient>,
     ln_client: Arc<LightningRPC>,
 }
 
@@ -101,7 +101,7 @@ async fn main() -> tide::Result<()> {
         .open_tree("mint-client")
         .unwrap();
 
-    let client = MintClient::new(cfg.client, db, Default::default());
+    let client = MintClient::new(cfg.client, Arc::new(db), Default::default());
     let ln_client = LightningRPC::new(cfg.ln_socket);
 
     let state = State {

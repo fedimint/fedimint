@@ -1,17 +1,30 @@
 use config::ServerConfig;
+use database::RawDatabase;
 use mint_api::transaction::Transaction;
 use mint_api::TransactionId;
+use std::fmt::Formatter;
+use std::sync::Arc;
 use tide::{Body, Request, Response};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, trace};
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct State {
-    db: sled::Tree, // TODO: abstract
+    db: Arc<dyn RawDatabase>,
     req_sender: Sender<Transaction>,
 }
 
-pub async fn run_server(cfg: ServerConfig, db: sled::Tree, request_sender: Sender<Transaction>) {
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("State { ... }")
+    }
+}
+
+pub async fn run_server(
+    cfg: ServerConfig,
+    db: Arc<dyn RawDatabase>,
+    request_sender: Sender<Transaction>,
+) {
     let state = State {
         db,
         req_sender: request_sender,
@@ -47,7 +60,7 @@ async fn fetch_outcome(req: Request<State>) -> tide::Result {
 
     debug!("Got req for transaction state {}", tx_hash);
 
-    let tx_status = crate::database::load_tx_outcome(&req.state().db, tx_hash)
+    let tx_status = crate::database::load_tx_outcome(req.state().db.as_ref(), tx_hash)
         .expect("DB error")
         .ok_or(tide::Error::from_str(404, "Not found"))?;
 

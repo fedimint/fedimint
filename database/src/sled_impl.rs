@@ -1,77 +1,45 @@
 use crate::batch::{BatchItem, DbBatch};
-use crate::{
-    BatchDb, Database, DatabaseError, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DbIter,
-    DecodingError, PrefixSearchable,
-};
+use crate::{DatabaseError, DecodingError, RawDatabase};
 use sled::transaction::TransactionError;
-use sled::IVec;
 use tracing::{error, trace};
 
-impl Database for sled::Tree {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        match self.insert(key.to_bytes(), value.to_bytes())? {
-            Some(old_val_bytes) => Ok(Some(V::from_bytes(&old_val_bytes)?)),
-            None => Ok(None),
-        }
-    }
-
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = match self.get(&key_bytes)? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(V::from_bytes(&value_bytes)?))
-    }
-
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let key_bytes = key.to_bytes();
-        let value_bytes = match self.remove(&key_bytes)? {
-            Some(value) => value,
-            None => return Ok(None),
-        };
-
-        Ok(Some(V::from_bytes(&value_bytes)?))
-    }
-}
-
-impl PrefixSearchable for sled::Tree {
-    type Bytes = IVec;
-    type IterErr = sled::Error;
-    type Iter = sled::Iter;
-
-    fn find_by_prefix<KP, K, V>(
+impl RawDatabase for sled::Tree {
+    fn raw_insert_entry(
         &self,
-        key_prefix: &KP,
-    ) -> DbIter<Self::Iter, Self::Bytes, Self::IterErr, K, V>
-    where
-        KP: DatabaseKeyPrefix,
-        K: DatabaseKey,
-        V: DatabaseValue,
-    {
-        let prefix_bytes = key_prefix.to_bytes();
-        DbIter {
-            iter: self.scan_prefix(&prefix_bytes),
-            _pd: Default::default(),
-        }
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self
+            .insert(key, value)
+            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
+            .map(|bytes| bytes.to_vec()))
     }
-}
 
-impl BatchDb for sled::Tree {
-    fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+    fn raw_get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self
+            .get(key)
+            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
+            .map(|bytes| bytes.to_vec()))
+    }
+
+    fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self
+            .remove(key)
+            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
+            .map(|bytes| bytes.to_vec()))
+    }
+
+    fn raw_find_by_prefix(
+        &self,
+        key_prefix: Vec<u8>,
+    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>> {
+        Box::new(self.scan_prefix(key_prefix).map(|res| {
+            res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map_err(|e| DatabaseError::DbError(Box::new(e)))
+        }))
+    }
+
+    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
         let batch: Vec<_> = batch.into();
 
         self.transaction(|t| {
@@ -120,10 +88,12 @@ impl From<sled::Error> for DatabaseError {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     #[test]
     fn test_basic_rw() {
         let path = tempdir::TempDir::new("fcb-sled-test").unwrap();
         let db = sled::open(path).unwrap();
-        crate::tests::test_db_impl(&db.open_tree("default").unwrap());
+        crate::tests::test_db_impl(Arc::new(db.open_tree("default").unwrap()));
     }
 }
