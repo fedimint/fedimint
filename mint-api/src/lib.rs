@@ -12,6 +12,7 @@ use tbs::{PublicKeyShare, SecretKeyShare};
 
 mod encoding;
 mod keys;
+mod module;
 pub mod outcome;
 pub mod transaction;
 mod tweakable;
@@ -22,11 +23,13 @@ use crate::transaction::BlindToken;
 pub use encoding::{Decodable, DecodeError, Encodable};
 pub use keys::CompressedPublicKey;
 use miniscript::Descriptor;
+pub use module::FederationModule;
 use std::io::Error;
 pub use tweakable::{Contract, Tweakable};
 pub use txoproof::{PegInProof, PegInProofError, TxOutProof};
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
+pub type PeerId = u16; // TODO: make this its own type
 
 hash_newtype!(
     TransactionId,

@@ -1804,6 +1804,7 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "database",
  "hex 0.4.3",
  "miniscript",
  "musig",
