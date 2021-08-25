@@ -42,9 +42,9 @@ macro_rules! impl_encode_decode_bridge {
     };
 }
 
-impl_encode_decode_bridge!(bitcoin::Transaction);
-impl_encode_decode_bridge!(bitcoin::Script);
 impl_encode_decode_bridge!(bitcoin::BlockHeader);
+impl_encode_decode_bridge!(bitcoin::Script);
+impl_encode_decode_bridge!(bitcoin::Transaction);
 impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 
 macro_rules! impl_encode_num {
@@ -72,6 +72,12 @@ where
             len += item.consensus_encode(&mut writer)?;
         }
         Ok(len)
+    }
+}
+
+impl Encodable for bitcoin::Amount {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.as_sat().consensus_encode(writer)
     }
 }
 

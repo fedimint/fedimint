@@ -6,8 +6,7 @@ use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
-use ::database::batch::DbBatch;
-use ::database::{Database, RawDatabase};
+use ::database::RawDatabase;
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use fedimint::FediMint;
@@ -65,22 +64,9 @@ pub async fn run_minimint(
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
     );
 
-    let mut startup_batch = DbBatch::new();
-    let (wallet, wallet_ci, sig_ci) = fediwallet::Wallet::new(
-        cfg.wallet.clone(),
-        database.clone(),
-        startup_batch.transaction(),
-        rng.clone(),
-    )
-    .await
-    .expect("Couldn't create wallet");
-
-    // TODO: handle different CI lifecycles more intelligently
-    if let Some(sig_ci) = sig_ci {
-        startup_batch.autocommit(|tx| tx.append_insert_new(ConsensusItem::Wallet(sig_ci), ()));
-    }
-
-    Database::apply_batch(&database, startup_batch).expect("DB error");
+    let wallet = fediwallet::Wallet::new(cfg.wallet.clone(), database.clone())
+        .await
+        .expect("Couldn't create wallet");
 
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
@@ -98,9 +84,7 @@ pub async fn run_minimint(
         output_sender,
         proposal_receiver,
         cfg.clone(),
-        mint_consensus
-            .get_consensus_proposal(wallet_ci.clone())
-            .await,
+        mint_consensus.get_consensus_proposal().await,
         rng.clone(),
     )
     .await;
@@ -110,7 +94,7 @@ pub async fn run_minimint(
 
     // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
     debug!("Generating second proposal");
-    let mut proposal = Some(mint_consensus.get_consensus_proposal(wallet_ci).await);
+    let mut proposal = Some(mint_consensus.get_consensus_proposal().await);
     loop {
         debug!("Ready to exchange proposal for consensus outcome");
 
@@ -149,7 +133,7 @@ pub async fn run_minimint(
             outcome.epoch,
             outcome.contributions.values().flatten().count()
         );
-        let wallet_ci = mint_consensus.process_consensus_outcome(outcome).await;
+        mint_consensus.process_consensus_outcome(outcome).await;
 
         if we_contributed {
             // TODO: define latency target for consensus rounds and monitor it
@@ -157,7 +141,7 @@ pub async fn run_minimint(
             tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
         }
 
-        proposal = Some(mint_consensus.get_consensus_proposal(wallet_ci).await);
+        proposal = Some(mint_consensus.get_consensus_proposal().await);
     }
 }
 

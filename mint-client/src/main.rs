@@ -40,7 +40,10 @@ enum Command {
     #[structopt(about = "Prepare coins to send to a third party as a payment")]
     Spend { amount: Amount },
     #[structopt(about = "Withdraw funds from the federation")]
-    PegOut { address: Address, amount: Amount },
+    PegOut {
+        address: Address,
+        amount: bitcoin::Amount,
+    },
     #[structopt(about = "Pay a lightning invoice via a gateway")]
     LnPay {
         gateway: String,

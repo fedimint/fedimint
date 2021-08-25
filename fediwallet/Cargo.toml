@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1"
 bincode = "1"
 bitcoin = { version = "0.26.0", features = [ "rand", "serde", "bitcoinconsensus" ] }
 bitcoincore-rpc-async = "3.0.1"
@@ -24,7 +25,3 @@ serde = { version = "1.0.118", features = [ "derive" ] }
 thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
-
-[dev-dependencies]
-sled = "0.34.6"
-tracing-subscriber = "0.2.15"

@@ -422,13 +422,13 @@ impl MintClient {
 
     pub async fn peg_out<R: RngCore + CryptoRng>(
         &self,
-        amt: Amount,
+        amt: bitcoin::Amount,
         address: bitcoin::Address,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
         let coins = self
             .coins()
-            .select_coins(amt + self.cfg.fee_consensus.fee_peg_out_abs)
+            .select_coins(Amount::from(amt) + self.cfg.fee_consensus.fee_peg_out_abs)
             .ok_or(ClientError::NotEnoughCoins)?;
 
         // mark spent in DB

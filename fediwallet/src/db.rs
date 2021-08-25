@@ -5,23 +5,22 @@ use database::{
     check_format, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError,
     SerializableDatabaseValue,
 };
+use std::convert::TryInto;
 use std::io::{Cursor, Read};
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
-const DB_PREFIX_LAST_BLOCK: u8 = 0x32;
+const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
 const DB_PREFIX_PEDNING_PEGOUT: u8 = 0x33;
 const DB_PREFIX_UNSIGNED_TRANSACTION: u8 = 0x34;
 const DB_PREFIX_PENDING_TRANSACTION: u8 = 0x35;
+const DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = 0x36;
 
 #[derive(Clone, Debug)]
 pub struct BlockHashKey(pub BlockHash);
 
 #[derive(Clone, Debug)]
-pub struct LastBlockKey;
-
-#[derive(Clone, Debug)]
-pub struct LastBlock(pub u32);
+pub struct RoundConsensusKey;
 
 #[derive(Clone, Debug)]
 pub struct UTXOKey(pub OutPoint);
@@ -30,7 +29,7 @@ pub struct UTXOKey(pub OutPoint);
 pub struct UTXOPrefixKey;
 
 #[derive(Clone, Debug)]
-pub struct PendingPegOutKey(pub mint_api::TransactionId);
+pub struct PendingPegOutKey(pub mint_api::transaction::OutPoint);
 
 #[derive(Clone, Debug)]
 pub struct PendingPegOutPrefixKey;
@@ -43,6 +42,12 @@ pub struct PendingTransactionKey(pub Txid);
 
 #[derive(Clone, Debug)]
 pub struct PendingTransactionPrefixKey;
+
+#[derive(Clone, Debug)]
+pub struct PegOutTxSignatureCI(pub Txid);
+
+#[derive(Clone, Debug)]
+pub struct PegOutTxSignatureCIPrefix;
 
 #[derive(Clone, Debug)]
 pub struct PendingTransaction {
@@ -67,37 +72,18 @@ impl DatabaseKey for BlockHashKey {
     }
 }
 
-impl DatabaseKeyPrefix for LastBlockKey {
+impl DatabaseKeyPrefix for RoundConsensusKey {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_LAST_BLOCK]
+        vec![DB_PREFIX_ROUND_CONSENSUS]
     }
 }
 
-impl DatabaseKey for LastBlockKey {
+impl DatabaseKey for RoundConsensusKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        check_format(data, DB_PREFIX_LAST_BLOCK, 0)?;
-        Ok(LastBlockKey)
+        check_format(data, DB_PREFIX_ROUND_CONSENSUS, 0)?;
+        Ok(RoundConsensusKey)
     }
 }
-
-impl SerializableDatabaseValue for LastBlock {
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_be_bytes().to_vec()
-    }
-}
-
-impl DatabaseValue for LastBlock {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() == 4 {
-            let mut bytes = [0u8; 4];
-            bytes.copy_from_slice(data);
-            Ok(LastBlock(u32::from_be_bytes(bytes)))
-        } else {
-            Err(DecodingError::wrong_length(4, data.len()))
-        }
-    }
-}
-
 impl DatabaseKeyPrefix for UTXOKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![DB_PREFIX_UTXO];
@@ -127,17 +113,22 @@ impl DatabaseKeyPrefix for PendingPegOutKey {
     fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(33);
         bytes.push(DB_PREFIX_PEDNING_PEGOUT);
-        bytes.extend_from_slice(&self.0[..]);
+        bytes.extend_from_slice(&self.0.txid[..]);
+        bytes.extend_from_slice(&self.0.out_idx.to_le_bytes());
         bytes
     }
 }
 
 impl DatabaseKey for PendingPegOutKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        Ok(PendingPegOutKey(
-            mint_api::TransactionId::from_slice(check_format(data, DB_PREFIX_PEDNING_PEGOUT, 32)?)
-                .unwrap(),
-        ))
+        let data = check_format(data, DB_PREFIX_PEDNING_PEGOUT, 40)?;
+
+        let txid = mint_api::TransactionId::from_slice(&data[0..32]).unwrap();
+        let out_idx = usize::from_le_bytes(data[32..].try_into().unwrap());
+        Ok(PendingPegOutKey(mint_api::transaction::OutPoint {
+            txid,
+            out_idx,
+        }))
     }
 }
 
@@ -190,6 +181,29 @@ impl DatabaseKey for PendingTransactionKey {
         Ok(PendingTransactionKey(
             Txid::from_slice(check_format(data, DB_PREFIX_PENDING_TRANSACTION, 32)?).unwrap(),
         ))
+    }
+}
+
+impl DatabaseKeyPrefix for PegOutTxSignatureCI {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![DB_PREFIX_PEG_OUT_TX_SIG_CI];
+        bytes.extend_from_slice(&self.0[..]);
+        bytes
+    }
+}
+
+impl DatabaseKey for PegOutTxSignatureCI {
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        Ok(PegOutTxSignatureCI(
+            Txid::from_slice(check_format(data, DB_PREFIX_PEG_OUT_TX_SIG_CI, 32)?)
+                .expect("length checked before"),
+        ))
+    }
+}
+
+impl DatabaseKeyPrefix for PegOutTxSignatureCIPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
+        vec![DB_PREFIX_PEG_OUT_TX_SIG_CI]
     }
 }
 

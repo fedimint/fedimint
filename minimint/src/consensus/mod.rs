@@ -16,8 +16,8 @@ use fediwallet::{Wallet, WalletConsensusItem, WalletError};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use mint_api::outcome::{OutputOutcome, TransactionStatus};
-use mint_api::transaction::{BlindToken, Input, Output, Transaction, TransactionError};
-use mint_api::{Amount, Coins, PartialSigResponse, SignRequest, TransactionId};
+use mint_api::transaction::{BlindToken, Input, OutPoint, Output, Transaction, TransactionError};
+use mint_api::{Coins, FederationModule, PartialSigResponse, SignRequest, TransactionId};
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -78,7 +78,7 @@ where
                 }
                 Input::PegIn(peg_in) => {
                     self.wallet
-                        .validate_peg_in(peg_in)
+                        .validate_input(peg_in)
                         .map_err(TransactionSubmissionError::InputPegIn)?;
                 }
             }
@@ -93,7 +93,7 @@ where
                 }
                 Output::PegOut(peg_out) => {
                     self.wallet
-                        .validate_peg_out(peg_out)
+                        .validate_output(peg_out)
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
                 }
             }
@@ -119,10 +119,7 @@ where
         Ok(())
     }
 
-    pub async fn process_consensus_outcome(
-        &self,
-        consensus_outcome: ConsensusOutcome,
-    ) -> WalletConsensusItem {
+    pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
         info!("Processing output of epoch {}", consensus_outcome.epoch);
 
         let mut db_batch = DbBatch::new();
@@ -137,15 +134,9 @@ where
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus();
 
-        let (wallet_ci, wallet_sig_ci) = self
-            .wallet
-            .process_consensus_proposals(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
-            .await
-            .expect("wallet error"); // TODO: check why this is not to be expected
-
-        if let Some(wci) = wallet_sig_ci {
-            db_batch.autocommit(|tx| tx.append_insert_new(ConsensusItem::Wallet(wci), ()));
-        }
+        self.wallet
+            .begin_consensus_epoch(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
+            .await;
 
         // Since the changes to the database will happen all at once we won't be able to handle
         // conflicts between consensus items in one batch there. Thus we need to make sure that
@@ -172,7 +163,7 @@ where
                     batch_tx.append_maybe_delete(ConsensusItem::Transaction(transaction.clone()))
                 });
                 // TODO: use borrowed transaction
-                match self.process_transaction(db_batch.transaction(), peer, transaction.clone()) {
+                match self.process_transaction(db_batch.transaction(), transaction.clone()) {
                     Ok(()) => {
                         db_batch.autocommit(|batch_tx| {
                             batch_tx.append_insert(
@@ -194,6 +185,7 @@ where
                         });
                     }
                     Err(e) => {
+                        warn!("Transaction proposed by peer {} failed: {}", peer, e);
                         db_batch.autocommit(|batch_tx| {
                             batch_tx.append_insert(
                                 TransactionStatusKey(transaction.tx_hash()),
@@ -220,21 +212,19 @@ where
         let mut db_batch = DbBatch::new();
         self.finalize_signatures(db_batch.transaction());
         self.db.apply_batch(db_batch).expect("DB error");
-
-        wallet_ci
     }
 
-    pub async fn get_consensus_proposal(
-        &self,
-        wallet_consensus: WalletConsensusItem,
-    ) -> Vec<ConsensusItem> {
-        debug!("Wallet proposal: {:?}", wallet_consensus);
-
-        // Fetch long lived CIs and concatenate with transient wallet CI
+    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
             .find_by_prefix(&AllConsensusItemsKeyPrefix)
             .map(|res| res.map(|(ci, ())| ci))
-            .chain(std::iter::once(Ok(ConsensusItem::Wallet(wallet_consensus))))
+            .chain(
+                self.wallet
+                    .consensus_proposal(rand::rngs::OsRng::new().unwrap())
+                    .await
+                    .into_iter()
+                    .map(|wci| Ok(ConsensusItem::Wallet(wci))),
+            )
             .collect::<Result<_, DatabaseError>>()
             .expect("DB error")
     }
@@ -242,7 +232,6 @@ where
     fn process_transaction(
         &self,
         mut batch: BatchTx,
-        peer: u16,
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
         transaction.validate_funding(&self.cfg.fee_consensus)?;
@@ -259,7 +248,7 @@ where
                 }
                 Input::PegIn(peg_in) => {
                     self.wallet
-                        .claim_pegin(batch.subtransaction(), &peg_in)
+                        .apply_input(batch.subtransaction(), &peg_in, self.rng_gen.get_rng())
                         .map_err(TransactionSubmissionError::InputPegIn)?;
                 }
             }
@@ -280,11 +269,14 @@ where
                 }
                 Output::PegOut(peg_out) => {
                     self.wallet
-                        .queue_pegout(
+                        .apply_output(
                             batch.subtransaction(),
-                            tx_hash,
-                            peg_out.recipient,
-                            to_btc_amount_round_down(peg_out.amount),
+                            &peg_out,
+                            OutPoint {
+                                txid: tx_hash,
+                                out_idx: idx,
+                            },
+                            self.rng_gen.get_rng(),
                         )
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
                 }
@@ -433,10 +425,6 @@ fn to_sign_request(coins: Coins<BlindToken>) -> SignRequest {
             .map(|(amt, token)| (amt, token.0))
             .collect(),
     )
-}
-
-fn to_btc_amount_round_down(amt: Amount) -> bitcoin::Amount {
-    bitcoin::Amount::from_sat(amt.milli_sat / 1000)
 }
 
 #[derive(Debug, Error)]

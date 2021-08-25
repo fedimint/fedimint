@@ -29,11 +29,18 @@ pub enum Output {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct PegOut {
     pub recipient: bitcoin::Address,
-    pub amount: Amount,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct BlindToken(pub tbs::BlindedMessage);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct OutPoint {
+    pub txid: TransactionId,
+    pub out_idx: usize,
+}
 
 /// Common properties of transaction in- and outputs
 pub trait TransactionItem {
@@ -76,7 +83,7 @@ impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
             Output::Coins(coins) => coins.amount(),
-            Output::PegOut(peg_out) => peg_out.amount,
+            Output::PegOut(peg_out) => peg_out.amount.into(),
         }
     }
 
