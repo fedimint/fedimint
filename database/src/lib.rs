@@ -9,10 +9,10 @@ use std::ops::Deref;
 use thiserror::Error;
 
 pub mod batch;
-#[cfg(test)]
 pub mod mem_impl;
 pub mod sled_impl;
 
+// FIXME: rework API using encoding traits
 pub trait DatabaseKeyPrefix: Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }

@@ -9,7 +9,7 @@ use crate::rng::RngGenerator;
 use ::database::RawDatabase;
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
-use fedimint::FediMint;
+use fedimint::Mint;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
@@ -62,6 +62,7 @@ pub async fn run_minimint(
         cfg.tbs_sks.clone(),
         pub_key_shares,
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
+        database.clone(),
     );
 
     let wallet = fediwallet::Wallet::new(cfg.wallet.clone(), database.clone())
@@ -232,13 +233,12 @@ async fn spawn_hbbft(
 }
 
 // TODO: find a more elegant way to do this. Maybe give API server access to mint? Would allow feedback at least …
-async fn spawn_client_request_handler<R, M>(
-    mint: Arc<FediMintConsensus<R, M>>,
+async fn spawn_client_request_handler<R>(
+    mint: Arc<FediMintConsensus<R>>,
     mut client_req_receiver: Receiver<mint_api::transaction::Transaction>,
 ) -> JoinHandle<()>
 where
     R: RngCore + CryptoRng + Send + 'static,
-    M: FediMint + Sync + Send + 'static,
 {
     spawn(async move {
         loop {

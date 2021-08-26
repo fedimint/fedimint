@@ -36,7 +36,7 @@ pub struct PegOut {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct BlindToken(pub tbs::BlindedMessage);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct OutPoint {
     pub txid: TransactionId,
     pub out_idx: usize,
@@ -215,6 +215,12 @@ impl Encodable for BlindToken {
     fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
         writer.write_all(&self.0.encode_compressed())?;
         Ok(48)
+    }
+}
+
+impl std::fmt::Display for OutPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.txid, self.out_idx)
     }
 }
 

@@ -992,10 +992,14 @@ dependencies = [
 name = "fedimint"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "counter",
  "database",
+ "itertools",
  "mint-api",
  "rand 0.6.5",
+ "rayon",
+ "serde",
  "tbs",
  "thiserror",
  "tracing",

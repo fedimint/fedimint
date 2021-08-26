@@ -1,13 +1,14 @@
 use crate::consensus::ConsensusItem;
-use fediwallet::WalletConsensusItem;
+use fedimint::{Mint, PartiallySignedRequest};
+use fediwallet::{Wallet, WalletConsensusItem};
 use mint_api::transaction::Transaction;
-use mint_api::TransactionId;
+use mint_api::{FederationModule, TransactionId};
 
 pub struct ConsensusItems {
     pub transactions: Vec<(u16, Transaction)>,
-    pub wallet: Vec<(u16, WalletConsensusItem)>,
+    pub wallet: Vec<(u16, <Wallet as FederationModule>::ConsensusItem)>,
     // TODO: put txid and output idx into partial sig response
-    pub mint: Vec<(u16, TransactionId, usize, mint_api::PartialSigResponse)>,
+    pub mint: Vec<(u16, <Mint as FederationModule>::ConsensusItem)>,
 }
 
 pub trait UnzipConsensus {
@@ -28,8 +29,8 @@ where
                 ConsensusItem::Transaction(tx) => {
                     transactions.push((peer, tx));
                 }
-                ConsensusItem::PartiallySignedRequest(tx_id, out_idx, sig) => {
-                    mint.push((peer, tx_id, out_idx, sig));
+                ConsensusItem::Mint(mci) => {
+                    mint.push((peer, mci));
                 }
                 ConsensusItem::Wallet(wci) => {
                     wallet.push((peer, wci));

@@ -1,9 +1,6 @@
 use database::{BincodeSerialized, Database, DatabaseKeyPrefix, RawDatabase};
 use minimint::consensus::ConsensusItem;
-use minimint::database::{
-    AllConsensusItemsKeyPrefix, AllPartialSignaturesKey, PartialSignatureKey, TransactionStatusKey,
-    DB_PREFIX_TX_STATUS,
-};
+use minimint::database::{AllConsensusItemsKeyPrefix, TransactionStatusKey, DB_PREFIX_TX_STATUS};
 use mint_api::{PartialSigResponse, SigResponse};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -20,7 +17,6 @@ struct Opts {
 enum Tables {
     ConsensusItem,
     FinalizedSignature,
-    PartialSiganture,
 }
 
 impl FromStr for Tables {
@@ -30,7 +26,6 @@ impl FromStr for Tables {
         match s {
             "ci" => Ok(Tables::ConsensusItem),
             "sig" => Ok(Tables::FinalizedSignature),
-            "part" => Ok(Tables::PartialSiganture),
             _ => Err("Unknown table"),
         }
     }
@@ -69,23 +64,6 @@ fn main() {
             for item in db
                 .find_by_prefix::<_, TransactionStatusKey, BincodeSerialized<SigResponse>>(
                     &AllFinalizedSignatures,
-                )
-            {
-                let (key, value) = item.expect("DB error");
-                serde_json::to_writer_pretty(
-                    &mut stdout,
-                    &Element {
-                        key,
-                        value: value.into_owned(),
-                    },
-                )
-                .unwrap();
-            }
-        }
-        Tables::PartialSiganture => {
-            for item in db
-                .find_by_prefix::<_, PartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
-                    &AllPartialSignaturesKey,
                 )
             {
                 let (key, value) = item.expect("DB error");
