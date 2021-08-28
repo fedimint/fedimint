@@ -234,12 +234,12 @@ where
             match input {
                 Input::Coins(coins) => {
                     self.mint
-                        .apply_input(batch.subtransaction(), &coins, self.rng_gen.get_rng())
+                        .apply_input(batch.subtransaction(), &coins)
                         .map_err(TransactionSubmissionError::InputCoinError)?;
                 }
                 Input::PegIn(peg_in) => {
                     self.wallet
-                        .apply_input(batch.subtransaction(), &peg_in, self.rng_gen.get_rng())
+                        .apply_input(batch.subtransaction(), &peg_in)
                         .map_err(TransactionSubmissionError::InputPegIn)?;
                 }
             }
@@ -256,7 +256,6 @@ where
                                 txid: tx_hash,
                                 out_idx: idx,
                             },
-                            self.rng_gen.get_rng(),
                         )
                         .map_err(TransactionSubmissionError::OutputCoinError)?;
                 }
@@ -269,7 +268,6 @@ where
                                 txid: tx_hash,
                                 out_idx: idx,
                             },
-                            self.rng_gen.get_rng(),
                         )
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
                 }

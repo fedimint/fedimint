@@ -119,7 +119,6 @@ impl FederationModule for Mint {
         &'a self,
         mut batch: BatchTx<'a>,
         input: &'a Self::TxInput,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<Amount, Self::Error> {
         let amount = self.validate_input(input)?;
 
@@ -152,7 +151,6 @@ impl FederationModule for Mint {
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<Amount, Self::Error> {
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone

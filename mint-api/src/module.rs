@@ -46,7 +46,6 @@ pub trait FederationModule {
         &'a self,
         batch: BatchTx<'a>,
         input: &'a Self::TxInput,
-        rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<Amount, Self::Error>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
@@ -70,7 +69,6 @@ pub trait FederationModule {
         batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: crate::transaction::OutPoint,
-        rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<Amount, Self::Error>;
 
     /// This function is called once all transactions have been processed and changes were written

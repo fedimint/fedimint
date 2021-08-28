@@ -251,7 +251,6 @@ impl FederationModule for Wallet {
         &'a self,
         mut batch: BatchTx<'a>,
         input: &'a Self::TxInput,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<mint_api::Amount, Self::Error> {
         let amount = self.validate_input(input)?;
         debug!("Claiming peg-in {} worth {}", input.outpoint(), amount);
@@ -284,7 +283,6 @@ impl FederationModule for Wallet {
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: mint_api::transaction::OutPoint,
-        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Result<mint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
