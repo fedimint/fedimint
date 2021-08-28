@@ -1,21 +1,19 @@
 mod db;
 
 use crate::db::{
-    NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ReceivedPartialSignatureKey,
+    NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
+    ReceivedPartialSignatureKey, ReceivedPartialSignatureKeyOutputPrefix,
     ReceivedPartialSignaturesKeyPrefix,
 };
 use async_trait::async_trait;
 use database::batch::{BatchItem, BatchTx, DbBatch};
-use database::{
-    BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError, RawDatabase,
-};
+use database::{BincodeSerialized, Database, RawDatabase};
 use itertools::Itertools;
-use mint_api::outcome::OutputOutcome;
 use mint_api::transaction::{BlindToken, OutPoint};
 use mint_api::util::TieredMultiZip;
 use mint_api::{
-    Amount, Coin, CoinNonce, Coins, FederationModule, InvalidAmountTierError, Keys,
-    PartialSigResponse, SigResponse, SignRequest,
+    Amount, Coin, Coins, FederationModule, InvalidAmountTierError, Keys, PartialSigResponse,
+    SigResponse,
 };
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -28,7 +26,7 @@ use tbs::{
     AggregatePublicKey, PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
 /// Federated mint member mint
 pub struct Mint {
@@ -51,14 +49,25 @@ impl FederationModule for Mint {
     type Error = MintError;
     type TxInput = Coins<Coin>;
     type TxOutput = Coins<BlindToken>;
-    type TxOutputOutcome = SigResponse;
+    type TxOutputOutcome = Option<SigResponse>;
     type ConsensusItem = PartiallySignedRequest;
 
     async fn consensus_proposal<'a>(
         &'a self,
-        rng: impl RngCore + CryptoRng + 'a,
+        _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
-        todo!()
+        self.db
+            .find_by_prefix::<_, ProposedPartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
+                &ProposedPartialSignaturesKeyPrefix,
+            )
+            .map(|res| {
+                let (key, value) = res.expect("DB error");
+                PartiallySignedRequest {
+                    out_point: key.request_id,
+                    partial_signature: value.into_owned()
+                }
+            })
+            .collect()
     }
 
     async fn begin_consensus_epoch<'a>(
@@ -75,6 +84,7 @@ impl FederationModule for Mint {
                 partial_sig.partial_signature,
             )
         }
+        batch.commit();
     }
 
     fn validate_input(&self, input: &Self::TxInput) -> Result<Amount, Self::Error> {
@@ -151,23 +161,24 @@ impl FederationModule for Mint {
             .map(|amt, msg| -> Result<_, InvalidAmountTierError> {
                 let sec_key = self.sec_key.tier(&amt)?;
                 let blind_signature = sign_blinded_msg(msg.0, *sec_key);
-                Ok((msg, blind_signature))
+                Ok((msg.0, blind_signature))
             })?;
 
         batch.append_insert_new(
             ProposedPartialSignatureKey {
                 request_id: out_point,
             },
-            BincodeSerialized::owned(partial_sig),
+            BincodeSerialized::owned(PartialSigResponse(partial_sig)),
         );
 
+        batch.commit();
         Ok(output.amount())
     }
 
     async fn end_consensus_epoch<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
-        rng: impl RngCore + CryptoRng + 'a,
+        _rng: impl RngCore + CryptoRng + 'a,
     ) {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
@@ -214,9 +225,7 @@ impl FederationModule for Mint {
                             }));
 
                             let sig_key = OutputOutcomeKey(issuance_id);
-                            let sig_value = BincodeSerialized::owned(Some(OutputOutcome::Coins {
-                                blind_signature,
-                            }));
+                            let sig_value = BincodeSerialized::owned(blind_signature);
                             batch_tx.append_insert(sig_key, sig_value);
                             batch_tx.commit();
                             Some(batch)
@@ -235,8 +244,34 @@ impl FederationModule for Mint {
         batch.commit();
     }
 
-    async fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        todo!()
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+        let we_proposed = self
+            .db
+            .get_value::<_, BincodeSerialized<PartialSigResponse>>(&ProposedPartialSignatureKey {
+                request_id: out_point,
+            })
+            .expect("DB error")
+            .is_some();
+        let was_consensus_outcome = self
+            .db
+            .find_by_prefix::<_, ReceivedPartialSignatureKey, BincodeSerialized<PartialSigResponse>>(&ReceivedPartialSignatureKeyOutputPrefix {
+                request_id: out_point,
+            })
+            .any(|res| res.is_ok());
+
+        let final_sig = self
+            .db
+            .get_value(&OutputOutcomeKey(out_point))
+            .expect("DB error")
+            .map(BincodeSerialized::into_owned);
+
+        if final_sig.is_some() {
+            Some(final_sig)
+        } else if we_proposed || was_consensus_outcome {
+            Some(None)
+        } else {
+            None
+        }
     }
 }
 
@@ -408,25 +443,18 @@ impl Mint {
     ) {
         match self
             .db
-            .get_value::<_, BincodeSerialized<Option<OutputOutcome>>>(&OutputOutcomeKey(output_id))
+            .get_value::<_, BincodeSerialized<SigResponse>>(&OutputOutcomeKey(output_id))
             .expect("DB error")
             .map(|bcd| bcd.into_owned())
         {
-            Some(Some(OutputOutcome::Coins { .. })) => {
-                trace!(
+            Some(_) => {
+                debug!(
                     "Received sig share for finalized issuance {}, ignoring",
                     output_id
                 );
                 return;
             }
-            Some(None) => {}
-            None | Some(Some(_)) => {
-                warn!(
-                    "Received sig share for output that does not exist or has wrong type ({})",
-                    output_id
-                );
-                return;
-            }
+            None => {}
         };
 
         debug!(
@@ -440,6 +468,14 @@ impl Mint {
             },
             BincodeSerialized::owned(partial_sig),
         );
+
+        // FIXME: add own id to cfg
+        if peer == self.key_idx as u16 {
+            batch.append_delete(ProposedPartialSignatureKey {
+                request_id: output_id,
+            });
+        }
+
         batch.commit();
     }
 }
@@ -490,6 +526,8 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
+    // TODO: reactivate
+    /*
     use crate::{CombineError, Mint, MintError, MintShareErrors, PeerErrorType};
     use ::database::mem_impl::MemDatabase;
     use mint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
@@ -521,8 +559,6 @@ mod test {
         (pk, mints)
     }
 
-    // TODO: reactivate
-    /*
     #[test]
     fn test_issuance() {
         let (pk, mut mints) = build_mints();

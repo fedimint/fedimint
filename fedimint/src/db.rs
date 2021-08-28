@@ -15,6 +15,11 @@ pub struct ReceivedPartialSignatureKey {
 }
 
 #[derive(Debug)]
+pub struct ReceivedPartialSignatureKeyOutputPrefix {
+    pub request_id: OutPoint, // tx + output idx
+}
+
+#[derive(Debug)]
 pub struct ReceivedPartialSignaturesKeyPrefix;
 
 #[derive(Debug)]
@@ -39,7 +44,7 @@ pub struct NonceKey(pub CoinNonce);
 
 impl DatabaseKeyPrefix for ReceivedPartialSignatureKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(41);
+        let mut bytes = Vec::with_capacity(43);
         bytes.push(DB_PREFIX_RECEIVED_PARTIAL_SIG);
         bytes.extend_from_slice(&self.request_id.txid[..]);
         bytes.extend_from_slice(&self.request_id.out_idx.to_be_bytes()[..]);
@@ -72,6 +77,16 @@ impl DatabaseKey for ReceivedPartialSignatureKey {
     }
 }
 
+impl DatabaseKeyPrefix for ReceivedPartialSignatureKeyOutputPrefix {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(41);
+        bytes.push(DB_PREFIX_RECEIVED_PARTIAL_SIG);
+        bytes.extend_from_slice(&self.request_id.txid[..]);
+        bytes.extend_from_slice(&self.request_id.out_idx.to_be_bytes()[..]);
+        bytes
+    }
+}
+
 impl DatabaseKeyPrefix for ReceivedPartialSignaturesKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
         vec![DB_PREFIX_RECEIVED_PARTIAL_SIG]
@@ -90,7 +105,7 @@ impl DatabaseKeyPrefix for ProposedPartialSignatureKey {
 
 impl DatabaseKey for ProposedPartialSignatureKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        let data = check_format(data, DB_PREFIX_PROPOSED_PARTIAL_SIG, 42)?;
+        let data = check_format(data, DB_PREFIX_PROPOSED_PARTIAL_SIG, 40)?;
 
         let tx_hash = TransactionId::from_slice(&data[0..32]).unwrap();
 

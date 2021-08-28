@@ -384,9 +384,9 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
-    async fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        // TODO: impl
-        unimplemented!()
+    fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+        // TODO: return BTC tx id once included in peg-out tx
+        Some(())
     }
 }
 

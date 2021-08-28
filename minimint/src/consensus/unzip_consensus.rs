@@ -1,8 +1,8 @@
 use crate::consensus::ConsensusItem;
-use fedimint::{Mint, PartiallySignedRequest};
-use fediwallet::{Wallet, WalletConsensusItem};
+use fedimint::Mint;
+use fediwallet::Wallet;
 use mint_api::transaction::Transaction;
-use mint_api::{FederationModule, TransactionId};
+use mint_api::FederationModule;
 
 pub struct ConsensusItems {
     pub transactions: Vec<(u16, Transaction)>,

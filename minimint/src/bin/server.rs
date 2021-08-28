@@ -13,7 +13,6 @@ async fn main() {
 
     let opts: ServerOpts = StructOpt::from_args();
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-    let rng = rand::rngs::OsRng::new().expect("Could not initialize RNG");
 
-    run_minimint(rng, cfg).await;
+    run_minimint(cfg).await;
 }

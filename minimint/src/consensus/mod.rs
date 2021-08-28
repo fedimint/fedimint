@@ -3,18 +3,17 @@ mod unzip_consensus;
 
 use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::unzip_consensus::{ConsensusItems, UnzipConsensus};
-use crate::database::{AllConsensusItemsKeyPrefix, ConsensusItemKeyPrefix, TransactionStatusKey};
+use crate::database::{AcceptedTransactionKey, ConsensusItemKey, ConsensusItemsKeyPrefix};
 use crate::rng::RngGenerator;
 use config::ServerConfig;
-use database::batch::{BatchItem, BatchTx, DbBatch};
-use database::{BincodeSerialized, Database, DatabaseError, RawDatabase};
+use database::batch::{BatchTx, DbBatch};
+use database::{BincodeSerialized, Database, RawDatabase};
 use fedimint::{Mint, MintError};
 use fediwallet::{Wallet, WalletError};
 use hbbft::honey_badger::Batch;
-use itertools::Itertools;
-use mint_api::outcome::{OutputOutcome, TransactionStatus};
-use mint_api::transaction::{BlindToken, Input, OutPoint, Output, Transaction, TransactionError};
-use mint_api::{Coins, FederationModule, PartialSigResponse, SignRequest, TransactionId};
+use mint_api::outcome::OutputOutcome;
+use mint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
+use mint_api::{FederationModule, TransactionId};
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -47,6 +46,12 @@ where
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Arc<dyn RawDatabase>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+struct AcceptedTransaction {
+    epoch: u64,
+    transaction: Transaction,
 }
 
 impl<R> FediMintConsensus<R>
@@ -95,28 +100,22 @@ where
 
         let new = self
             .db
-            .insert_entry(&ConsensusItem::Transaction(transaction), &())
+            .insert_entry(
+                &ConsensusItemKey(tx_hash),
+                &BincodeSerialized::borrowed(&transaction),
+            )
             .expect("DB error");
 
         if new.is_some() {
             warn!("Added consensus item was already in consensus queue");
-        } else {
-            // TODO: unify with consensus stuff
-            self.db
-                .insert_entry(
-                    &TransactionStatusKey(tx_hash),
-                    &BincodeSerialized::owned(TransactionStatus::AwaitingConsensus),
-                )
-                .expect("DB error");
         }
 
         Ok(())
     }
 
     pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
-        info!("Processing output of epoch {}", consensus_outcome.epoch);
-
-        let mut db_batch = DbBatch::new();
+        let epoch = consensus_outcome.epoch;
+        info!("Processing output of epoch {}", epoch);
 
         let ConsensusItems {
             transactions: transaction_cis,
@@ -128,9 +127,14 @@ where
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus();
 
+        let mut db_batch = DbBatch::new();
         self.wallet
             .begin_consensus_epoch(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
             .await;
+        self.mint
+            .begin_consensus_epoch(db_batch.transaction(), mint_cis, self.rng_gen.get_rng())
+            .await;
+        self.db.apply_batch(db_batch).expect("DB error");
 
         // Since the changes to the database will happen all at once we won't be able to handle
         // conflicts between consensus items in one batch there. Thus we need to make sure that
@@ -146,7 +150,7 @@ where
         // TODO: implement own parallel execution to avoid allocations and get rid of rayon
         let par_db_batches = filtered_transactions
             .into_par_iter()
-            .map(|(peer, transaction)| {
+            .map(|(peer, transaction): (u16, Transaction)| {
                 trace!(
                     "Processing transaction {:?} from peer {}",
                     transaction,
@@ -154,51 +158,66 @@ where
                 );
                 let mut db_batch = DbBatch::new();
                 db_batch.autocommit(|batch_tx| {
-                    batch_tx.append_maybe_delete(ConsensusItem::Transaction(transaction.clone()))
+                    batch_tx.append_maybe_delete(ConsensusItemKey(transaction.tx_hash()))
                 });
                 // TODO: use borrowed transaction
                 match self.process_transaction(db_batch.transaction(), transaction.clone()) {
                     Ok(()) => {
                         db_batch.autocommit(|batch_tx| {
                             batch_tx.append_insert(
-                                TransactionStatusKey(transaction.tx_hash()),
-                                BincodeSerialized::owned(TransactionStatus::Accepted),
+                                AcceptedTransactionKey(transaction.tx_hash()),
+                                BincodeSerialized::owned(AcceptedTransaction {
+                                    epoch,
+                                    transaction,
+                                }),
                             );
                         });
                     }
                     Err(e) => {
+                        // TODO: log error for user
                         warn!("Transaction proposed by peer {} failed: {}", peer, e);
-                        db_batch.autocommit(|batch_tx| {
-                            batch_tx.append_insert(
-                                TransactionStatusKey(transaction.tx_hash()),
-                                BincodeSerialized::owned(TransactionStatus::Error(e.to_string())),
-                            )
-                        });
                     }
                 }
 
                 db_batch
             })
             .collect::<Vec<_>>();
+        let mut db_batch = DbBatch::new();
         db_batch.autocommit(|tx| tx.append_from_accumulators(par_db_batches.into_iter()));
+        self.db.apply_batch(db_batch).expect("DB error");
 
-        // Apply all consensus-critical changes atomically to the DB
+        let mut db_batch = DbBatch::new();
+        self.wallet
+            .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+            .await;
+        self.mint
+            .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+            .await;
         self.db.apply_batch(db_batch).expect("DB error");
     }
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
-            .find_by_prefix(&AllConsensusItemsKeyPrefix)
-            .map(|res| res.map(|(ci, ())| ci))
+            .find_by_prefix::<_, ConsensusItemKey, BincodeSerialized<_>>(&ConsensusItemsKeyPrefix)
+            .map(|res| {
+                let (_key, value) = res.expect("DB error");
+                ConsensusItem::Transaction(value.into_owned())
+            })
             .chain(
                 self.wallet
-                    .consensus_proposal(rand::rngs::OsRng::new().unwrap())
+                    .consensus_proposal(self.rng_gen.get_rng())
                     .await
                     .into_iter()
-                    .map(|wci| Ok(ConsensusItem::Wallet(wci))),
+                    .map(|wci| ConsensusItem::Wallet(wci)),
             )
-            .collect::<Result<_, DatabaseError>>()
-            .expect("DB error")
+            .chain(
+                self.mint
+                    .consensus_proposal(self.rng_gen.get_rng())
+                    .await
+                    .into_iter()
+                    .map(|mci| ConsensusItem::Mint(mci)),
+            )
+            .collect()
     }
 
     fn process_transaction(
@@ -228,7 +247,19 @@ where
 
         for (idx, output) in transaction.outputs.into_iter().enumerate() {
             match output {
-                Output::Coins(new_tokens) => {}
+                Output::Coins(new_tokens) => {
+                    self.mint
+                        .apply_output(
+                            batch.subtransaction(),
+                            &new_tokens,
+                            OutPoint {
+                                txid: tx_hash,
+                                out_idx: idx,
+                            },
+                            self.rng_gen.get_rng(),
+                        )
+                        .map_err(TransactionSubmissionError::OutputCoinError)?;
+                }
                 Output::PegOut(peg_out) => {
                     self.wallet
                         .apply_output(
@@ -249,18 +280,59 @@ where
         Ok(())
     }
 
-    fn tbs_threshold(&self) -> usize {
-        self.cfg.peers.len() - self.cfg.max_faulty() - 1
-    }
-}
+    pub fn transaction_status(
+        &self,
+        txid: TransactionId,
+    ) -> Option<mint_api::outcome::TransactionStatus> {
+        let is_proposal = self
+            .db
+            .get_value::<_, BincodeSerialized<Transaction>>(&ConsensusItemKey(txid))
+            .expect("DB error")
+            .is_some();
 
-fn to_sign_request(coins: Coins<BlindToken>) -> SignRequest {
-    SignRequest(
-        coins
-            .into_iter()
-            .map(|(amt, token)| (amt, token.0))
-            .collect(),
-    )
+        let accepted: Option<AcceptedTransaction> = self
+            .db
+            .get_value::<_, BincodeSerialized<AcceptedTransaction>>(&AcceptedTransactionKey(txid))
+            .expect("DB error")
+            .map(BincodeSerialized::into_owned);
+
+        if let Some(accepted_tx) = accepted {
+            let outputs = accepted_tx
+                .transaction
+                .outputs
+                .iter()
+                .enumerate()
+                .map(|(out_idx, output)| {
+                    let outpoint = OutPoint { txid, out_idx };
+                    match output {
+                        Output::Coins(_) => {
+                            let outcome = self
+                                .mint
+                                .output_status(outpoint)
+                                .expect("the transaction was processed, so should be known");
+                            OutputOutcome::Mint(outcome)
+                        }
+                        Output::PegOut(_) => {
+                            let outcome = self
+                                .wallet
+                                .output_status(outpoint)
+                                .expect("the transaction was processed, so should be known");
+                            OutputOutcome::Wallet(outcome)
+                        }
+                    }
+                })
+                .collect();
+
+            Some(mint_api::outcome::TransactionStatus::Accepted {
+                epoch: accepted_tx.epoch,
+                outputs,
+            })
+        } else if is_proposal {
+            Some(mint_api::outcome::TransactionStatus::AwaitingConsensus)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Error)]

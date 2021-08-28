@@ -9,7 +9,6 @@ use crate::rng::RngGenerator;
 use ::database::RawDatabase;
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
-use fedimint::Mint;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
@@ -32,10 +31,7 @@ pub mod net;
 mod rng;
 
 /// Start all the components of the mintan d plug them together
-pub async fn run_minimint(
-    rng: impl RngCore + CryptoRng + Clone + Send + 'static,
-    cfg: ServerConfig,
-) {
+pub async fn run_minimint(cfg: ServerConfig) {
     assert_eq!(
         cfg.peers.keys().max().copied(),
         Some((cfg.peers.len() as u16) - 1)
@@ -44,13 +40,6 @@ pub async fn run_minimint(
 
     let database: Arc<dyn RawDatabase> =
         Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap());
-
-    let (client_req_sender, client_req_receiver) = channel(4);
-    spawn(net::api::run_server(
-        cfg.clone(),
-        database.clone(),
-        client_req_sender,
-    ));
 
     let pub_key_shares = cfg
         .peers
@@ -70,12 +59,14 @@ pub async fn run_minimint(
         .expect("Couldn't create wallet");
 
     let mint_consensus = Arc::new(FediMintConsensus {
-        rng_gen: Box::new(CloneRngGen(Mutex::new(rng.clone()))), //FIXME
+        rng_gen: Box::new(CloneRngGen(Mutex::new(rand::rngs::OsRng::new().unwrap()))), //FIXME
         cfg: cfg.clone(),
         mint,
         wallet,
         db: database,
     });
+
+    spawn(net::api::run_server(cfg.clone(), mint_consensus.clone()));
 
     let (output_sender, mut output_receiver) = channel::<ConsensusOutcome>(1);
     let (proposal_sender, proposal_receiver) = channel::<Vec<ConsensusItem>>(1);
@@ -86,12 +77,9 @@ pub async fn run_minimint(
         proposal_receiver,
         cfg.clone(),
         mint_consensus.get_consensus_proposal().await,
-        rng.clone(),
+        rand::rngs::OsRng::new().unwrap(),
     )
     .await;
-
-    info!("Spawning client request handler");
-    spawn_client_request_handler(mint_consensus.clone(), client_req_receiver).await;
 
     // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
     debug!("Generating second proposal");
@@ -227,29 +215,6 @@ async fn spawn_hbbft(
                 outcome_sender.send(batch).await.expect("other thread died");
                 next_consensus_items =
                     Some(proposal_receiver.recv().await.expect("other thread died"));
-            }
-        }
-    })
-}
-
-// TODO: find a more elegant way to do this. Maybe give API server access to mint? Would allow feedback at least …
-async fn spawn_client_request_handler<R>(
-    mint: Arc<FediMintConsensus<R>>,
-    mut client_req_receiver: Receiver<mint_api::transaction::Transaction>,
-) -> JoinHandle<()>
-where
-    R: RngCore + CryptoRng + Send + 'static,
-{
-    spawn(async move {
-        loop {
-            let request = client_req_receiver
-                .recv()
-                .await
-                .expect("Client request sender thread failed");
-            if let Err(e) = mint.submit_transaction(request) {
-                warn!("Error submitting client request: {}", e);
-            } else {
-                debug!("Successfully submitted client request to queue");
             }
         }
     })

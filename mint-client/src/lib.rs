@@ -8,7 +8,7 @@ use database::{
 };
 use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
-use mint_api::outcome::{OutputOutcome, TransactionOutcome, TransactionStatus};
+use mint_api::outcome::{Final, OutputOutcome, TransactionStatus};
 use mint_api::transaction as mint_tx;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
@@ -236,31 +236,37 @@ impl MintClient {
             .into_owned();
 
         let tx_outcome = self
-            .query_any_mint::<TransactionOutcome, _>(|client, mint| {
+            .query_any_mint::<TransactionStatus, _>(|client, mint| {
                 let url = format!("{}/transaction/{}", mint, txid);
                 client.get(&url)
             })
             .await?;
 
-        if tx_outcome.status == TransactionStatus::AwaitingConsensus {
+        // TODO: check another mint if the answer was malicious
+        if !tx_outcome.is_final() {
             return Err(ClientError::OutputNotReadyYet(txid, output_idx));
         }
-        // TODO: check another mint if the answer was malicious
+
+        let outputs = match tx_outcome {
+            TransactionStatus::AwaitingConsensus => {
+                unreachable!()
+            }
+            TransactionStatus::Error(e) => {
+                panic!("Mint error: {}", e)
+            }
+            TransactionStatus::Accepted { outputs, .. } => outputs,
+        };
 
         // TODO: remove clone
-        let output_outcome = tx_outcome
-            .outputs
-            .get(&output_idx)
+        let bsig = outputs
+            .get(output_idx)
+            .and_then(|outcome| match outcome {
+                OutputOutcome::Mint(mo) => Some(mo),
+                OutputOutcome::Wallet(_) => None,
+            })
             .ok_or(ClientError::InvalidOutcomeWrongStructure(txid, output_idx))?
             .clone()
             .ok_or(ClientError::OutputNotReadyYet(txid, output_idx))?;
-
-        let bsig = match output_outcome {
-            OutputOutcome::Coins { blind_signature } => blind_signature,
-            OutputOutcome::PegOut => {
-                return Err(ClientError::InvalidOutcomeType(txid, output_idx));
-            }
-        };
 
         let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
 

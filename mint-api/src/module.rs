@@ -83,7 +83,8 @@ pub trait FederationModule {
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
-    async fn output_status(
+    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
+    fn output_status(
         &self,
         out_point: crate::transaction::OutPoint,
     ) -> Option<Self::TxOutputOutcome>;

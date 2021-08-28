@@ -1,6 +1,8 @@
 use database::{BincodeSerialized, Database, DatabaseKeyPrefix, RawDatabase};
 use minimint::consensus::ConsensusItem;
-use minimint::database::{AllConsensusItemsKeyPrefix, TransactionStatusKey, DB_PREFIX_TX_STATUS};
+use minimint::database::{
+    AcceptedTransactionKey, ConsensusItemsKeyPrefix, DB_PREFIX_ACCEPTED_TRANSACTION,
+};
 use mint_api::{PartialSigResponse, SigResponse};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -36,7 +38,7 @@ pub struct AllFinalizedSignatures;
 
 impl DatabaseKeyPrefix for AllFinalizedSignatures {
     fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_TX_STATUS]
+        vec![DB_PREFIX_ACCEPTED_TRANSACTION]
     }
 }
 
@@ -47,7 +49,8 @@ struct Element<K, V> {
 }
 
 fn main() {
-    let opts: Opts = StructOpt::from_args();
+    // TODO: build generalized inspection tool
+    /*let opts: Opts = StructOpt::from_args();
 
     let db: Arc<dyn RawDatabase> =
         Arc::new(sled::open(&opts.db).unwrap().open_tree("mint").unwrap());
@@ -55,14 +58,14 @@ fn main() {
 
     match opts.table {
         Tables::ConsensusItem => {
-            for item in db.find_by_prefix::<_, ConsensusItem, ()>(&AllConsensusItemsKeyPrefix) {
+            for item in db.find_by_prefix::<_, ConsensusItem, ()>(&ConsensusItemsKeyPrefix) {
                 let ci = item.expect("DB error").0;
                 serde_json::to_writer_pretty(&mut stdout, &ci).unwrap();
             }
         }
         Tables::FinalizedSignature => {
             for item in db
-                .find_by_prefix::<_, TransactionStatusKey, BincodeSerialized<SigResponse>>(
+                .find_by_prefix::<_, AcceptedTransactionKey, BincodeSerialized<SigResponse>>(
                     &AllFinalizedSignatures,
                 )
             {
@@ -77,5 +80,5 @@ fn main() {
                 .unwrap();
             }
         }
-    }
+    }*/
 }
