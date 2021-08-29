@@ -149,7 +149,6 @@ impl FederationModule for Wallet {
             randomness: rng.gen(),
         });
 
-        // TODO: fetch and add signatures to CI batch
         self.db
             .find_by_prefix::<_, PegOutTxSignatureCI, BincodeSerialized<Vec<Signature>>>(
                 &PegOutTxSignatureCIPrefix,
