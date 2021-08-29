@@ -22,7 +22,7 @@ use tracing::{debug, info, trace, warn};
 pub mod consensus;
 
 /// Provides interfaces for ACID-compliant data store backends
-pub mod database;
+pub mod db;
 
 /// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;

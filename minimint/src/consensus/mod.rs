@@ -1,7 +1,7 @@
 mod conflictfilter;
 
 use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::database::{AcceptedTransactionKey, ConsensusItemKey, ConsensusItemsKeyPrefix};
+use crate::db::{AcceptedTransactionKey, ConsensusItemKey, ConsensusItemsKeyPrefix};
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use database::batch::{BatchTx, DbBatch};
