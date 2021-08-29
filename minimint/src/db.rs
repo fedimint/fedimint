@@ -6,14 +6,14 @@ use mint_api::{BitcoinHash, TransactionId};
 use serde::Serialize;
 use std::fmt::Debug;
 
-pub const DB_PREFIX_CONSENSUS_ITEM: u8 = 0x01;
-pub const DB_PREFIX_ACCEPTED_TRANSACTION: u8 = 0x03;
+pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;
+pub const DB_PREFIX_ACCEPTED_TRANSACTION: u8 = 0x02;
 
 #[derive(Debug)]
-pub struct ConsensusItemsKeyPrefix;
+pub struct ProposedTransactionKeyPrefix;
 
 #[derive(Debug)]
-pub struct ConsensusItemKey(pub TransactionId);
+pub struct ProposedTransactionKey(pub TransactionId);
 
 #[derive(Debug, Serialize)]
 pub struct AcceptedTransactionKey(pub TransactionId);
@@ -21,24 +21,24 @@ pub struct AcceptedTransactionKey(pub TransactionId);
 #[derive(Debug)]
 pub struct DummyValue;
 
-impl DatabaseKeyPrefix for ConsensusItemsKeyPrefix {
+impl DatabaseKeyPrefix for ProposedTransactionKeyPrefix {
     fn to_bytes(&self) -> Vec<u8> {
-        (&[DB_PREFIX_CONSENSUS_ITEM][..]).into()
+        (&[DB_PREFIX_PROPOSED_TRANSACTION][..]).into()
     }
 }
 
-impl DatabaseKeyPrefix for ConsensusItemKey {
+impl DatabaseKeyPrefix for ProposedTransactionKey {
     fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = vec![DB_PREFIX_CONSENSUS_ITEM];
+        let mut bytes = vec![DB_PREFIX_PROPOSED_TRANSACTION];
         bytes.extend_from_slice(&self.0[..]);
         bytes
     }
 }
 
-impl DatabaseKey for ConsensusItemKey {
+impl DatabaseKey for ProposedTransactionKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        let data = check_format(data, DB_PREFIX_CONSENSUS_ITEM, 32)?;
-        Ok(ConsensusItemKey(
+        let data = check_format(data, DB_PREFIX_PROPOSED_TRANSACTION, 32)?;
+        Ok(ProposedTransactionKey(
             TransactionId::from_slice(data).expect("len checked above"),
         ))
     }

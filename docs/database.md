@@ -18,25 +18,33 @@ The Database is split into different key spaces based on prefixing that can be u
 * 0x20-0x2A: client (different db, but to be sure)
 * 0x30-0x3A: wallet
 
-The following "tables" exist:
+### Consensus
 
-| Name                 | Prefix | Key                                                                                             | Value                           |
-|----------------------|--------|-------------------------------------------------------------------------------------------------|---------------------------------|
-| Consensus Items      | 0x01   | issuance_request_id (8 bytes, 0 if no issuance involved), serialized `ConsensusItem` (variable) | none                            |
-| Partial Signature    | 0x02   | issuance_request_id (8 byte), peer_id (8 byte)                                                  | serialized `PartialSigResponse` |
-| Transaction Statuses | 0x03   | TransactionId (32 bytes)                                                                        | serialized `TransactionStatus`  |
-| Tx Output Outcomes   | 0x04   | TransactionId (32 bytes) + output idx (8 bytes)                                                 | serialized `OutputOutcome`      |
-| Used Coins           | 0x10   | coin nonce (unknown bytes, bincode magic currently)                                             | none                            |
-| Blocks               | 0x30   | block hash (32 bytes)                                                                           | block height (4 bytes)          |
-| Our UTXOs            | 0x31   | OutPoint (32 bytes txid + 4 bytes output)                                                       | data necessary for spending     |
-| Last Block           | 0x32   | none                                                                                            | block height (4bytes)           |
-| Queued PegOut        | 0x33   | mint tx id (32 bytes)                                                                           | address, amount                 |
-| Unsigned transaction | 0x34   | none                                                                                            | PSBT                            |
-| Pending transaction  | 0x35   | txid                                                                                            | consensus encoded tx            |
+| Name                  | Prefix | Key                              | Value                           |
+|-----------------------|--------|----------------------------------|---------------------------------|
+| Pending Transactions  | 0x01   | Transaction ID (sha256, 32bytes) | Transaction                     |
+| Accepted Transactions | 0x02   | Transaction ID (sha256, 32bytes) | Confirmation epoch, Transaction |
 
-### TODO:
-* consensus items per module
-* transaction status = CIs of minimint module (add tx data to status)
+### Mint
+
+| Name                              | Prefix | Key                                                 | Value                 |
+|-----------------------------------|--------|-----------------------------------------------------|-----------------------|
+| Used Coins                        | 0x10   | coin nonce (unknown bytes, bincode magic currently) | none                  |
+| Proposed signature shares         | 0x11   | mint outpoint (40 bytes)                            | blind signature share |
+| Received signature shares         | 0x12   | mint outpoint (40 bytes), peer (2 bytes)            | blind signature share |
+| Finalized (still blind) signature | 0x13   | mint outpoint (40 bytes)                            | blind signature       |
+
+### Wallet
+
+| Name                      | Prefix | Key                                       | Value                                     |
+|---------------------------|--------|-------------------------------------------|-------------------------------------------|
+| Blocks                    | 0x30   | block hash (32 bytes)                     | block height                              |
+| Our UTXOs                 | 0x31   | OutPoint (32 bytes txid + 4 bytes output) | data necessary for spending               |
+| Round Consensus           | 0x32   | none                                      | block height, fee rate, randomness beacon |
+| Queued PegOut             | 0x33   | mint outpoint (40 bytes)                  | address, amount, pending since block      |
+| Unsigned transaction      | 0x34   | bitcoin tx id (32 bytes)                  | PSBT                                      |
+| Pending transaction       | 0x35   | bitcoin tx id (32 bytes)                  | consensus encoded tx, change tweak        |
+| Pending Peg Out Signature | 0x36   | bitcoin tx id (32 bytes)                  | list of signatures (1 per input)          |
 
 ## Client DB Layout
 

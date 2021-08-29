@@ -3,10 +3,10 @@ use mint_api::transaction::OutPoint;
 use mint_api::{BitcoinHash, CoinNonce, TransactionId};
 use std::convert::TryInto;
 
-const DB_PREFIX_RECEIVED_PARTIAL_SIG: u8 = 0x02;
-const DB_PREFIX_OUTPUT_OUTCOME: u8 = 0x04;
 const DB_PREFIX_COIN_NONCE: u8 = 0x10;
-const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x42; // FIXME: reorganize db keys
+const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;
+const DB_PREFIX_RECEIVED_PARTIAL_SIG: u8 = 0x12;
+const DB_PREFIX_OUTPUT_OUTCOME: u8 = 0x13;
 
 #[derive(Debug)]
 pub struct ReceivedPartialSignatureKey {

@@ -1,7 +1,7 @@
 mod conflictfilter;
 
 use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::db::{AcceptedTransactionKey, ConsensusItemKey, ConsensusItemsKeyPrefix};
+use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use database::batch::{BatchTx, DbBatch};
@@ -100,7 +100,7 @@ where
         let new = self
             .db
             .insert_entry(
-                &ConsensusItemKey(tx_hash),
+                &ProposedTransactionKey(tx_hash),
                 &BincodeSerialized::borrowed(&transaction),
             )
             .expect("DB error");
@@ -157,7 +157,7 @@ where
                 );
                 let mut db_batch = DbBatch::new();
                 db_batch.autocommit(|batch_tx| {
-                    batch_tx.append_maybe_delete(ConsensusItemKey(transaction.tx_hash()))
+                    batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()))
                 });
                 // TODO: use borrowed transaction
                 match self.process_transaction(db_batch.transaction(), transaction.clone()) {
@@ -197,7 +197,9 @@ where
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
-            .find_by_prefix::<_, ConsensusItemKey, BincodeSerialized<_>>(&ConsensusItemsKeyPrefix)
+            .find_by_prefix::<_, ProposedTransactionKey, BincodeSerialized<_>>(
+                &ProposedTransactionKeyPrefix,
+            )
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
                 ConsensusItem::Transaction(value.into_owned())
@@ -283,7 +285,7 @@ where
     ) -> Option<mint_api::outcome::TransactionStatus> {
         let is_proposal = self
             .db
-            .get_value::<_, BincodeSerialized<Transaction>>(&ConsensusItemKey(txid))
+            .get_value::<_, BincodeSerialized<Transaction>>(&ProposedTransactionKey(txid))
             .expect("DB error")
             .is_some();
 
