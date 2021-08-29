@@ -9,6 +9,7 @@ members = [
     "fediwallet",
     "ln-gateway",
     "minimint",
+    "minimint-derive",
     "mint-api",
     "mint-client",
 ]

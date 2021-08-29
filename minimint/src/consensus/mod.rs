@@ -1,8 +1,6 @@
 mod conflictfilter;
-mod unzip_consensus;
 
 use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::consensus::unzip_consensus::{ConsensusItems, UnzipConsensus};
 use crate::database::{AcceptedTransactionKey, ConsensusItemKey, ConsensusItemsKeyPrefix};
 use crate::rng::RngGenerator;
 use config::ServerConfig;
@@ -11,6 +9,7 @@ use database::{BincodeSerialized, Database, RawDatabase};
 use fedimint::{Mint, MintError};
 use fediwallet::{Wallet, WalletError};
 use hbbft::honey_badger::Batch;
+use minimint_derive::UnzipConsensus;
 use mint_api::outcome::OutputOutcome;
 use mint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
 use mint_api::{FederationModule, TransactionId};
@@ -21,7 +20,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
 pub enum ConsensusItem {
     Transaction(Transaction),
     Mint(<Mint as FederationModule>::ConsensusItem),
@@ -117,15 +116,15 @@ where
         let epoch = consensus_outcome.epoch;
         info!("Processing output of epoch {}", epoch);
 
-        let ConsensusItems {
-            transactions: transaction_cis,
+        let UnzipConsensusItem {
+            transaction: transaction_cis,
             wallet: wallet_cis,
             mint: mint_cis,
         } = consensus_outcome
             .contributions
             .into_iter()
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
-            .unzip_consensus();
+            .unzip_consensus_item();
 
         let mut db_batch = DbBatch::new();
         self.wallet

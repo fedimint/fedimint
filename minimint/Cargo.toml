@@ -18,6 +18,7 @@ futures = "0.3.9"
 hbbft = "0.1.1"
 hex = "0.4.2"
 itertools = "0.10.0"
+minimint-derive = { path = "../minimint-derive" }
 mint-api = { path = "../mint-api" }
 musig = { path = "../crypto/musig" }
 rand = "0.6.5"

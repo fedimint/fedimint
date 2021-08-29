@@ -1018,6 +1018,7 @@ dependencies = [
  "futures",
  "hex 0.4.3",
  "itertools",
+ "minimint-derive",
  "miniscript",
  "mint-api",
  "musig",
@@ -1761,6 +1762,7 @@ dependencies = [
  "hbbft",
  "hex 0.4.3",
  "itertools",
+ "minimint-derive",
  "mint-api",
  "musig",
  "rand 0.6.5",
@@ -1778,6 +1780,16 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "minimint-derive"
+version = "0.1.0"
+dependencies = [
+ "heck",
+ "proc-macro2 1.0.27",
+ "quote 1.0.9",
+ "syn 1.0.73",
 ]
 
 [[package]]

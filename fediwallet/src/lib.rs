@@ -20,6 +20,7 @@ use config::{Feerate, WalletConfig};
 use database::batch::{BatchItem, BatchTx};
 use database::{BincodeSerialized, Database, RawDatabase};
 use itertools::Itertools;
+use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use mint_api::transaction::{OutPoint, PegOut};
 use mint_api::{CompressedPublicKey, PegInProof, PegInProofError, Tweakable};
@@ -42,7 +43,7 @@ pub const MIN_PEG_OUT_URGENCY: u32 = 100;
 
 pub type PartialSig = Vec<u8>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus)]
 pub enum WalletConsensusItem {
     RoundConsensus(RoundConsensusItem),
     PegOutSignature(PegOutSignatureItem),
@@ -172,21 +173,12 @@ impl FederationModule for Wallet {
     ) {
         trace!("Received consensus proposals {:?}", &consensus_items);
 
-        // TODO: abstract away like for main consensus (impl FromIter for some struct with n Vecs). Ideally using proc macro for enums to avoid redundancy.
         // Separate round consensus items from signatures for peg-out tx. While signatures can be
         // processed separately, all round consensus items need to be available at once.
-        let mut peg_out_signatures = Vec::new();
-        let mut round_consensus = Vec::new();
-        for ci in consensus_items {
-            match ci {
-                (peer, WalletConsensusItem::PegOutSignature(sig)) => {
-                    peg_out_signatures.push((peer, sig));
-                }
-                (peer, WalletConsensusItem::RoundConsensus(rc)) => {
-                    round_consensus.push((peer, rc));
-                }
-            }
-        }
+        let UnzipWalletConsensusItem {
+            peg_out_signature: peg_out_signatures,
+            round_consensus,
+        } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
