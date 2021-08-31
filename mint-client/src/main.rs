@@ -1,7 +1,8 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use config::{load_from_file, ClientConfig};
-use mint_api::{Amount, Coins, Decodable, TxOutProof};
+use mint_api::encoding::Decodable;
+use mint_api::{Amount, Coins, TxOutProof};
 use mint_client::{MintClient, SpendableCoin};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};

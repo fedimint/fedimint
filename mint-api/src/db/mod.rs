@@ -1,4 +1,5 @@
-use crate::batch::DbBatch;
+use crate::encoding::{Decodable, Encodable};
+use batch::DbBatch;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -11,6 +12,10 @@ use thiserror::Error;
 pub mod batch;
 pub mod mem_impl;
 pub mod sled_impl;
+
+pub trait DatabaseKeyPrefixConst {
+    const DB_PREFIX: u8;
+}
 
 // FIXME: rework API using encoding traits
 pub trait DatabaseKeyPrefix: Debug {
@@ -172,19 +177,55 @@ where
     }
 }
 
-impl SerializableDatabaseValue for () {
+impl<T> DatabaseKeyPrefix for T
+where
+    T: DatabaseKeyPrefixConst + crate::encoding::Encodable + Debug,
+{
     fn to_bytes(&self) -> Vec<u8> {
-        vec![].into()
+        let mut data = vec![Self::DB_PREFIX];
+        self.consensus_encode(&mut data)
+            .expect("Writing to vec is infallible");
+        data
     }
 }
 
-impl DatabaseValue for () {
+impl<T> DatabaseKey for T
+where
+    T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable + Sized,
+{
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.is_empty() {
-            Ok(())
-        } else {
-            Err(DecodingError::wrong_length(0, data.len()))
+            // TODO: build better coding errors, pretty useless right now
+            return Err(DecodingError::wrong_length(1, 0));
         }
+
+        if data[0] != Self::DB_PREFIX {
+            return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[0]));
+        }
+
+        <Self as crate::encoding::Decodable>::consensus_decode(std::io::Cursor::new(&data[1..]))
+            .map_err(|decode_error| DecodingError::Other(decode_error.0))
+    }
+}
+
+impl<T> SerializableDatabaseValue for T
+where
+    T: Encodable + Debug,
+{
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        self.consensus_encode(&mut bytes)
+            .expect("writing to vec can't fail");
+        bytes
+    }
+}
+
+impl<T> DatabaseValue for T
+where
+    T: SerializableDatabaseValue + Decodable,
+{
+    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
+        T::consensus_decode(std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.0))
     }
 }
 
@@ -272,55 +313,20 @@ impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        Database, DatabaseKey, DatabaseKeyPrefix, DatabaseValue, DecodingError, RawDatabase,
-        SerializableDatabaseValue,
-    };
+    use super::{Database, RawDatabase};
+    use crate::db::DatabaseKeyPrefixConst;
+    use crate::encoding::{Decodable, Encodable};
     use std::sync::Arc;
 
-    #[derive(Debug)]
+    #[derive(Debug, Encodable, Decodable)]
     struct TestKey(u64);
 
-    #[derive(Debug, Eq, PartialEq)]
+    impl DatabaseKeyPrefixConst for TestKey {
+        const DB_PREFIX: u8 = 0x42;
+    }
+
+    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
-
-    impl DatabaseKeyPrefix for TestKey {
-        fn to_bytes(&self) -> Vec<u8> {
-            self.0.to_be_bytes().to_vec()
-        }
-    }
-
-    impl DatabaseKey for TestKey {
-        fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-            let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(data);
-            let num = u64::from_be_bytes(bytes);
-            if num == 0 {
-                Err(DecodingError::wrong_prefix(0, 0))
-            } else {
-                Ok(TestKey(num))
-            }
-        }
-    }
-
-    impl SerializableDatabaseValue for TestVal {
-        fn to_bytes(&self) -> Vec<u8> {
-            self.0.to_be_bytes().to_vec()
-        }
-    }
-
-    impl DatabaseValue for TestVal {
-        fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-            let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(data);
-            let num = u64::from_be_bytes(bytes);
-            if num == 0 {
-                Err(DecodingError::wrong_prefix(0, 0))
-            } else {
-                Ok(TestVal(num))
-            }
-        }
-    }
 
     pub fn test_db_impl(db: Arc<dyn RawDatabase + 'static>) {
         assert!(db

@@ -1,13 +1,13 @@
 use bitcoin::{Address, Script, Transaction};
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
-use database::batch::{BatchItem, DbBatch};
-use database::{
+use futures::future::JoinAll;
+use miniscript::DescriptorTrait;
+use mint_api::db::batch::{BatchItem, DbBatch};
+use mint_api::db::{
     check_format, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError,
     RawDatabase,
 };
-use futures::future::JoinAll;
-use miniscript::DescriptorTrait;
 use mint_api::outcome::{Final, OutputOutcome, TransactionStatus};
 use mint_api::transaction as mint_tx;
 use mint_api::{

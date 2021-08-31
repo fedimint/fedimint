@@ -17,14 +17,14 @@ use bitcoin::{
 };
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
-use database::batch::{BatchItem, BatchTx};
-use database::{BincodeSerialized, Database, RawDatabase};
 use itertools::Itertools;
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+use mint_api::db::batch::{BatchItem, BatchTx};
+use mint_api::db::{BincodeSerialized, Database, RawDatabase};
+use mint_api::encoding::Encodable;
 use mint_api::transaction::{OutPoint, PegOut};
-use mint_api::{CompressedPublicKey, PegInProof, PegInProofError, Tweakable};
-use mint_api::{Encodable, FederationModule};
+use mint_api::{CompressedPublicKey, FederationModule, PegInProof, PegInProofError, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{Message, Signature};
 use serde::{Deserialize, Serialize};

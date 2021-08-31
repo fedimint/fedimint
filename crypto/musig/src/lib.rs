@@ -112,6 +112,10 @@ impl PubKey {
     pub fn to_bytes(&self) -> [u8; 33] {
         self.0.to_bytes()
     }
+
+    pub fn from_bytes(bytes: [u8; 33]) -> Option<PubKey> {
+        Point::from_bytes(bytes).map(PubKey)
+    }
 }
 
 pub mod rng_adapt {

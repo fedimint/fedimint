@@ -9,8 +9,8 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1"
 counter = "0.5.2"
-database = { path = "../database" }
 itertools = "0.10.0"
+minimint-derive = { path = "../minimint-derive" }
 mint-api = { path = "../mint-api" }
 rand = "0.6"
 rayon = "1.5.0"

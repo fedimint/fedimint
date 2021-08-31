@@ -865,18 +865,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
-name = "database"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "serde",
- "sled",
- "tempdir",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "derivative"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -994,8 +982,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "counter",
- "database",
  "itertools",
+ "minimint-derive",
  "mint-api",
  "rand 0.6.5",
  "rayon",
@@ -1014,7 +1002,6 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc-async",
  "config",
- "database",
  "futures",
  "hex 0.4.3",
  "itertools",
@@ -1755,7 +1742,6 @@ dependencies = [
  "bincode",
  "bitcoin",
  "config",
- "database",
  "fedimint",
  "fediwallet",
  "futures",
@@ -1820,16 +1806,19 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
- "database",
  "hex 0.4.3",
+ "minimint-derive",
  "miniscript",
  "musig",
  "rand 0.6.5",
  "secp256k1",
  "serde",
  "sha3",
+ "sled",
  "tbs",
+ "tempdir",
  "thiserror",
+ "tracing",
  "validator",
 ]
 
@@ -1842,7 +1831,6 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "config",
- "database",
  "futures",
  "hex 0.4.3",
  "lightning-invoice",

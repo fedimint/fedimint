@@ -24,31 +24,31 @@ pub mod poly;
 mod serde_impl;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] G2Affine);
+pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct SecretKeyShare(#[serde(with = "serde_impl::scalar")] Scalar);
+pub struct SecretKeyShare(#[serde(with = "serde_impl::scalar")] pub Scalar);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AggregatePublicKey(#[serde(with = "serde_impl::g2")] G2Affine);
+pub struct AggregatePublicKey(#[serde(with = "serde_impl::g2")] pub G2Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct BlindingKey(#[serde(with = "serde_impl::scalar")] Scalar);
+pub struct BlindingKey(#[serde(with = "serde_impl::scalar")] pub Scalar);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct BlindedMessage(#[serde(with = "serde_impl::g1")] G1Affine);
+pub struct BlindedMessage(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct BlindedSignatureShare(#[serde(with = "serde_impl::g1")] G1Affine);
+pub struct BlindedSignatureShare(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct BlindedSignature(#[serde(with = "serde_impl::g1")] G1Affine);
+pub struct BlindedSignature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Signature(#[serde(with = "serde_impl::g1")] G1Affine);
+pub struct Signature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub struct Message(#[serde(with = "serde_impl::g1")] G1Affine);
+pub struct Message(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 pub trait FromRandom {
     fn from_random(rng: &mut impl RngCore) -> Self;

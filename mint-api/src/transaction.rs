@@ -1,4 +1,5 @@
-use crate::{Amount, Coin, Coins, Encodable, FeeConsensus, PegInProof, TransactionId};
+use crate::encoding::{Decodable, Encodable};
+use crate::{Amount, Coin, Coins, FeeConsensus, PegInProof, TransactionId};
 use bitcoin_hashes::Hash as BitcoinHash;
 use musig::{PubKey, Sig};
 use serde::{Deserialize, Serialize};
@@ -36,10 +37,10 @@ pub struct PegOut {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct BlindToken(pub tbs::BlindedMessage);
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutPoint {
     pub txid: TransactionId,
-    pub out_idx: usize,
+    pub out_idx: u64,
 }
 
 /// Common properties of transaction in- and outputs

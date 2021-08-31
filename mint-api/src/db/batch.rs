@@ -1,4 +1,4 @@
-use crate::{DatabaseKeyPrefix, SerializableDatabaseValue};
+use super::{DatabaseKeyPrefix, SerializableDatabaseValue};
 
 pub type DbBatch = Accumulator<BatchItem>;
 pub type BatchTx<'a> = AccumulatorTx<'a, BatchItem>;
@@ -218,7 +218,7 @@ impl<'a> AccumulatorTx<'a, BatchItem> {
 
 #[cfg(test)]
 mod test {
-    use crate::batch::Accumulator;
+    use super::Accumulator;
 
     #[test]
     fn test_transaction() {

@@ -1,8 +1,9 @@
-use crate::batch::{BatchItem, DbBatch};
-use crate::{DatabaseError, DecodingError, RawDatabase};
+use super::batch::{BatchItem, DbBatch};
+use super::{DatabaseError, DecodingError, RawDatabase};
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
+// TODO: maybe make the concrete impl its own crate
 impl RawDatabase for sled::Tree {
     fn raw_insert_entry(
         &self,
@@ -94,6 +95,6 @@ mod tests {
     fn test_basic_rw() {
         let path = tempdir::TempDir::new("fcb-sled-test").unwrap();
         let db = sled::open(path).unwrap();
-        crate::tests::test_db_impl(Arc::new(db.open_tree("default").unwrap()));
+        crate::db::tests::test_db_impl(Arc::new(db.open_tree("default").unwrap()));
     }
 }

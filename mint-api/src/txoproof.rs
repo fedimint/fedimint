@@ -1,6 +1,6 @@
-use crate::encoding::{Decodable, DecodeError};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::keys::CompressedPublicKey;
-use crate::{Contract, Encodable, Tweakable};
+use crate::{Contract, Tweakable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};

@@ -4,12 +4,12 @@ use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
 use crate::rng::RngGenerator;
 use config::ServerConfig;
-use database::batch::{BatchTx, DbBatch};
-use database::{BincodeSerialized, Database, RawDatabase};
 use fedimint::{Mint, MintError};
 use fediwallet::{Wallet, WalletError};
 use hbbft::honey_badger::Batch;
 use minimint_derive::UnzipConsensus;
+use mint_api::db::batch::{BatchTx, DbBatch};
+use mint_api::db::{BincodeSerialized, Database, RawDatabase};
 use mint_api::outcome::OutputOutcome;
 use mint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
 use mint_api::{FederationModule, TransactionId};
@@ -255,7 +255,7 @@ where
                             &new_tokens,
                             OutPoint {
                                 txid: tx_hash,
-                                out_idx: idx,
+                                out_idx: idx as u64,
                             },
                         )
                         .map_err(TransactionSubmissionError::OutputCoinError)?;
@@ -267,7 +267,7 @@ where
                             &peg_out,
                             OutPoint {
                                 txid: tx_hash,
-                                out_idx: idx,
+                                out_idx: idx as u64,
                             },
                         )
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
@@ -302,7 +302,10 @@ where
                 .iter()
                 .enumerate()
                 .map(|(out_idx, output)| {
-                    let outpoint = OutPoint { txid, out_idx };
+                    let outpoint = OutPoint {
+                        txid,
+                        out_idx: out_idx as u64,
+                    };
                     match output {
                         Output::Coins(_) => {
                             let outcome = self

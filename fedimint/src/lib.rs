@@ -6,9 +6,9 @@ use crate::db::{
     ReceivedPartialSignaturesKeyPrefix,
 };
 use async_trait::async_trait;
-use database::batch::{BatchItem, BatchTx, DbBatch};
-use database::{BincodeSerialized, Database, RawDatabase};
 use itertools::Itertools;
+use mint_api::db::batch::{BatchItem, BatchTx, DbBatch};
+use mint_api::db::{BincodeSerialized, Database, RawDatabase};
 use mint_api::transaction::{BlindToken, OutPoint};
 use mint_api::util::TieredMultiZip;
 use mint_api::{

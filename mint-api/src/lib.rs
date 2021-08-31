@@ -1,5 +1,7 @@
 #![feature(min_type_alias_impl_trait)]
 
+extern crate self as mint_api;
+
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
@@ -10,7 +12,8 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
-mod encoding;
+pub mod db;
+pub mod encoding;
 mod keys;
 mod module;
 pub mod outcome;
@@ -19,8 +22,8 @@ mod tweakable;
 mod txoproof;
 pub mod util;
 
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::transaction::BlindToken;
-pub use encoding::{Decodable, DecodeError, Encodable};
 pub use keys::CompressedPublicKey;
 use miniscript::Descriptor;
 pub use module::FederationModule;
@@ -445,6 +448,41 @@ impl Encodable for Coin {
         writer.write_all(&self.1.encode_compressed())?;
 
         Ok(33 + 48)
+    }
+}
+
+impl Encodable for TransactionId {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        let bytes = &self[..];
+        writer.write_all(bytes)?;
+        Ok(bytes.len())
+    }
+}
+
+impl Decodable for TransactionId {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut bytes = [0u8; 32];
+        d.read_exact(&mut bytes)
+            .map_err(|e| DecodeError::from_err(e))?;
+        Ok(TransactionId::from_inner(bytes))
+    }
+}
+
+impl Encodable for CoinNonce {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        let bytes = self.0.to_bytes();
+        writer.write_all(&bytes)?;
+        Ok(bytes.len())
+    }
+}
+
+impl Decodable for CoinNonce {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut bytes = [0u8; 33];
+        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        Ok(CoinNonce(musig::PubKey::from_bytes(bytes).ok_or_else(
+            || DecodeError::from_str("Error decoding schnorr key"),
+        )?))
     }
 }
 

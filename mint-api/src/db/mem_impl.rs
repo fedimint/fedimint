@@ -1,5 +1,5 @@
-use crate::batch::{BatchItem, DbBatch};
-use crate::{DatabaseError, RawDatabase};
+use super::batch::{BatchItem, DbBatch};
+use super::{DatabaseError, RawDatabase};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -100,12 +100,12 @@ impl Iterator for MemDbIter {
 
 #[cfg(test)]
 mod tests {
-    use crate::mem_impl::MemDatabase;
+    use super::MemDatabase;
     use std::sync::Arc;
 
     #[test]
     fn test_basic_rw() {
         let mem_db = MemDatabase::new();
-        crate::tests::test_db_impl(Arc::new(mem_db));
+        crate::db::tests::test_db_impl(Arc::new(mem_db));
     }
 }
