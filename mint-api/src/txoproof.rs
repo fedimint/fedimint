@@ -13,7 +13,7 @@ use thiserror::Error;
 use validator::{Validate, ValidationError};
 
 /// A proof about a script owning a certain output. Verifyable using headers only.
-#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate)]
+#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
 #[validate(schema(function = "validate_peg_in_proof"))]
 pub struct PegInProof {
     txout_proof: TxOutProof,
@@ -245,17 +245,17 @@ impl Hash for TxOutProof {
     }
 }
 
-impl Encodable for PegInProof {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> std::io::Result<usize> {
-        let mut len = 0;
-        len += self.txout_proof.consensus_encode(&mut writer)?;
-        len += self.transaction.consensus_encode(&mut writer)?;
-        len += (self.output_idx as u64).consensus_encode(&mut writer)?;
+impl Decodable for PegInProof {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let slf = PegInProof {
+            txout_proof: TxOutProof::consensus_decode(&mut d)?,
+            transaction: Transaction::consensus_decode(&mut d)?,
+            output_idx: u32::consensus_decode(&mut d)?,
+            tweak_contract_key: musig::PubKey::consensus_decode(&mut d)?,
+        };
 
-        len += 33;
-        writer.write_all(&self.tweak_contract_key.to_bytes())?;
-
-        Ok(len)
+        validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
+        Ok(slf)
     }
 }
 

@@ -1,6 +1,7 @@
 use clightningrpc::lightningrpc::PayOptions;
 use clightningrpc::LightningRPC;
 use config::{load_from_file, ClientConfig};
+use mint_api::transaction::OutPoint;
 use mint_api::Coins;
 use mint_client::{MintClient, SpendableCoin};
 use serde::{Deserialize, Serialize};
@@ -61,7 +62,10 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
         .expect("error while starting reissuance");
     debug!("Fetching coins");
     mint_client
-        .fetch_coins(tx_id, 0) // TODO: remove assumption about tx structure
+        .fetch_coins(OutPoint {
+            txid: tx_id,
+            out_idx: 0,
+        }) // TODO: remove assumption about tx structure
         .await
         .map_err(|_| tide::Error::from_str(500, "fetching reissuance failed"))?;
 

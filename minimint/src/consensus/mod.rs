@@ -9,7 +9,8 @@ use fediwallet::{Wallet, WalletError};
 use hbbft::honey_badger::Batch;
 use minimint_derive::UnzipConsensus;
 use mint_api::db::batch::{BatchTx, DbBatch};
-use mint_api::db::{BincodeSerialized, Database, RawDatabase};
+use mint_api::db::{Database, RawDatabase};
+use mint_api::encoding::{Decodable, Encodable};
 use mint_api::outcome::OutputOutcome;
 use mint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
 use mint_api::{FederationModule, TransactionId};
@@ -47,7 +48,7 @@ where
     pub db: Arc<dyn RawDatabase>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 struct AcceptedTransaction {
     epoch: u64,
     transaction: Transaction,
@@ -99,10 +100,7 @@ where
 
         let new = self
             .db
-            .insert_entry(
-                &ProposedTransactionKey(tx_hash),
-                &BincodeSerialized::borrowed(&transaction),
-            )
+            .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
             .expect("DB error");
 
         if new.is_some() {
@@ -165,10 +163,7 @@ where
                         db_batch.autocommit(|batch_tx| {
                             batch_tx.append_insert(
                                 AcceptedTransactionKey(transaction.tx_hash()),
-                                BincodeSerialized::owned(AcceptedTransaction {
-                                    epoch,
-                                    transaction,
-                                }),
+                                AcceptedTransaction { epoch, transaction },
                             );
                         });
                     }
@@ -197,12 +192,10 @@ where
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
-            .find_by_prefix::<_, ProposedTransactionKey, BincodeSerialized<_>>(
-                &ProposedTransactionKeyPrefix,
-            )
+            .find_by_prefix::<_, ProposedTransactionKey, _>(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
-                ConsensusItem::Transaction(value.into_owned())
+                ConsensusItem::Transaction(value)
             })
             .chain(
                 self.wallet
@@ -285,15 +278,14 @@ where
     ) -> Option<mint_api::outcome::TransactionStatus> {
         let is_proposal = self
             .db
-            .get_value::<_, BincodeSerialized<Transaction>>(&ProposedTransactionKey(txid))
+            .get_value::<_, Transaction>(&ProposedTransactionKey(txid))
             .expect("DB error")
             .is_some();
 
         let accepted: Option<AcceptedTransaction> = self
             .db
-            .get_value::<_, BincodeSerialized<AcceptedTransaction>>(&AcceptedTransactionKey(txid))
-            .expect("DB error")
-            .map(BincodeSerialized::into_owned);
+            .get_value::<_, AcceptedTransaction>(&AcceptedTransactionKey(txid))
+            .expect("DB error");
 
         if let Some(accepted_tx) = accepted {
             let outputs = accepted_tx

@@ -2,8 +2,13 @@
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
 
+mod btc;
+mod musig;
+mod secp256k1;
+mod tbs;
+
 pub use minimint_derive::{Decodable, Encodable};
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 use std::io::Error;
 use thiserror::Error;
 
@@ -24,32 +29,6 @@ pub trait Decodable: Sized {
 
 #[derive(Debug, Error)]
 pub struct DecodeError(pub(crate) Box<dyn std::error::Error + Send>);
-
-macro_rules! impl_encode_decode_bridge {
-    ($btc_type:ty) => {
-        impl crate::encoding::Encodable for $btc_type {
-            fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
-                bitcoin::consensus::Encodable::consensus_encode(self, writer)
-            }
-        }
-
-        impl crate::encoding::Decodable for $btc_type {
-            fn consensus_decode<D: std::io::Read>(
-                d: D,
-            ) -> Result<Self, crate::encoding::DecodeError> {
-                bitcoin::consensus::Decodable::consensus_decode(d).map_err(DecodeError::from_err)
-            }
-        }
-    };
-}
-
-impl_encode_decode_bridge!(bitcoin::BlockHeader);
-impl_encode_decode_bridge!(bitcoin::BlockHash);
-impl_encode_decode_bridge!(bitcoin::OutPoint);
-impl_encode_decode_bridge!(bitcoin::Script);
-impl_encode_decode_bridge!(bitcoin::Transaction);
-impl_encode_decode_bridge!(bitcoin::Txid);
-impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 
 macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {
@@ -78,6 +57,31 @@ impl_encode_decode_num!(u64);
 impl_encode_decode_num!(u32);
 impl_encode_decode_num!(u16);
 impl_encode_decode_num!(u8);
+
+macro_rules! impl_encode_decode_tuple {
+    ($($x:ident),*) => (
+        #[allow(non_snake_case)]
+        impl <$($x: Encodable),*> Encodable for ($($x),*) {
+            fn consensus_encode<W: std::io::Write>(&self, mut s: W) -> Result<usize, std::io::Error> {
+                let &($(ref $x),*) = self;
+                let mut len = 0;
+                $(len += $x.consensus_encode(&mut s)?;)*
+                Ok(len)
+            }
+        }
+
+        #[allow(non_snake_case)]
+        impl<$($x: Decodable),*> Decodable for ($($x),*) {
+            fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+                Ok(($({let $x = Decodable::consensus_decode(&mut d)?; $x }),*))
+            }
+        }
+    );
+}
+
+impl_encode_decode_tuple!(T1, T2);
+impl_encode_decode_tuple!(T1, T2, T3);
+impl_encode_decode_tuple!(T1, T2, T3, T4);
 
 impl<T> Encodable for &[T]
 where
@@ -109,6 +113,33 @@ where
     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
         let len = u64::consensus_decode(&mut d)?;
         (0..len).map(|_| T::consensus_decode(&mut d)).collect()
+    }
+}
+
+impl<T, const SIZE: usize> Encodable for [T; SIZE]
+where
+    T: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+        let mut len = 0;
+        for item in self.iter() {
+            len += item.consensus_encode(&mut writer)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T, const SIZE: usize> Decodable for [T; SIZE]
+where
+    T: Decodable + Debug + Default + Copy,
+{
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        // todo: impl without copy
+        let mut data = [T::default(); SIZE];
+        for item in data.iter_mut() {
+            *item = T::consensus_decode(&mut d)?;
+        }
+        Ok(data)
     }
 }
 
@@ -156,12 +187,6 @@ impl Decodable for () {
     }
 }
 
-impl Encodable for bitcoin::Amount {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
-        self.as_sat().consensus_encode(writer)
-    }
-}
-
 impl DecodeError {
     pub fn from_str(s: &'static str) -> Self {
         #[derive(Debug)]
@@ -186,5 +211,94 @@ impl DecodeError {
 impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(&self.0, f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::encoding::{Decodable, Encodable};
+    use std::fmt::Debug;
+    use std::io::Cursor;
+
+    pub(crate) fn test_roundtrip<T>(value: T)
+    where
+        T: Encodable + Decodable + Eq + Debug,
+    {
+        let mut bytes = Vec::new();
+        let len = value.consensus_encode(&mut bytes).unwrap();
+        assert_eq!(len, bytes.len());
+
+        let mut cursor = Cursor::new(bytes);
+        let decoded = T::consensus_decode(&mut cursor).unwrap();
+        assert_eq!(value, decoded);
+        assert_eq!(cursor.position(), len as u64);
+    }
+
+    pub(crate) fn test_roundtrip_expected<T>(value: T, expected: &[u8])
+    where
+        T: Encodable + Decodable + Eq + Debug,
+    {
+        let mut bytes = Vec::new();
+        let len = value.consensus_encode(&mut bytes).unwrap();
+        assert_eq!(len, bytes.len());
+        assert_eq!(&expected, &bytes);
+
+        let mut cursor = Cursor::new(bytes);
+        let decoded = T::consensus_decode(&mut cursor).unwrap();
+        assert_eq!(value, decoded);
+        assert_eq!(cursor.position(), len as u64);
+    }
+
+    #[test]
+    fn test_derive_struct() {
+        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        struct TestStruct {
+            vec: Vec<u8>,
+            num: u32,
+        }
+
+        let reference = TestStruct {
+            vec: vec![1, 2, 3],
+            num: 42,
+        };
+        let bytes = [3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 42, 0, 0, 0];
+
+        test_roundtrip_expected(reference, &bytes);
+    }
+
+    #[test]
+    fn test_derive_tuple_struct() {
+        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        struct TestStruct(Vec<u8>, u32);
+
+        let reference = TestStruct(vec![1, 2, 3], 42);
+        let bytes = [3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 42, 0, 0, 0];
+
+        test_roundtrip_expected(reference, &bytes);
+    }
+
+    #[test]
+    fn test_derive_enum() {
+        #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        enum TestEnum {
+            Foo(Option<u64>),
+            Bar { baz: Vec<u8> },
+        }
+
+        let test_cases = [
+            (
+                TestEnum::Foo(Some(42)),
+                vec![0, 0, 0, 0, 0, 0, 0, 0, 1, 42, 0, 0, 0, 0, 0, 0, 0],
+            ),
+            (TestEnum::Foo(None), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            (
+                TestEnum::Bar { baz: vec![1, 2, 3] },
+                vec![1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3],
+            ),
+        ];
+
+        for (reference, bytes) in test_cases {
+            test_roundtrip_expected(reference, &bytes);
+        }
     }
 }

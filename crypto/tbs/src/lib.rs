@@ -10,7 +10,7 @@ extern crate test;
 
 use crate::hash::{hash_bytes_to_curve, hash_to_curve};
 use crate::poly::Poly;
-use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
+use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective};
 use ff::Field;
 use group::Curve;
 use rand::rngs::OsRng;
@@ -18,6 +18,10 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::typenum::U32;
 use sha3::Digest;
+
+pub use bls12_381::G1Affine as MessagePoint;
+pub use bls12_381::G2Affine as PubKeyPoint;
+pub use bls12_381::Scalar;
 
 pub mod hash;
 pub mod poly;
@@ -97,6 +101,13 @@ point_impl!(BlindedSignatureShare);
 impl SecretKeyShare {
     pub fn to_pub_key_share(&self) -> PublicKeyShare {
         PublicKeyShare((G2Projective::generator() * self.0).to_affine())
+    }
+}
+
+impl BlindingKey {
+    pub fn random() -> BlindingKey {
+        // TODO: fix rand incompatibities
+        BlindingKey(Scalar::random(OsRng))
     }
 }
 

@@ -1,13 +1,11 @@
 use crate::encoding::{Decodable, Encodable};
 use batch::DbBatch;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use thiserror::Error;
+use tracing::trace;
 
 pub mod batch;
 pub mod mem_impl;
@@ -88,9 +86,6 @@ where
     _pd: PhantomData<(K, V)>,
 }
 
-#[derive(Debug)]
-pub struct BincodeSerialized<'a, T: Clone>(Cow<'a, T>);
-
 impl<'a, D> Database for D
 where
     D: Deref<Target = dyn RawDatabase + 'a> + ?Sized,
@@ -101,7 +96,14 @@ where
         V: DatabaseValue,
     {
         match self.raw_insert_entry(key.to_bytes(), value.to_bytes())? {
-            Some(old_val_bytes) => Ok(Some(V::from_bytes(&old_val_bytes)?)),
+            Some(old_val_bytes) => {
+                trace!(
+                    "insert_entry: Decoding {} from bytes {:?}",
+                    std::any::type_name::<V>(),
+                    old_val_bytes
+                );
+                Ok(Some(V::from_bytes(&old_val_bytes)?))
+            }
             None => Ok(None),
         }
     }
@@ -117,6 +119,11 @@ where
             None => return Ok(None),
         };
 
+        trace!(
+            "get_value: Decoding {} from bytes {:?}",
+            std::any::type_name::<V>(),
+            value_bytes
+        );
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
@@ -131,6 +138,11 @@ where
             None => return Ok(None),
         };
 
+        trace!(
+            "remove_entry: Decoding {} from bytes {:?}",
+            std::any::type_name::<V>(),
+            value_bytes
+        );
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
@@ -166,6 +178,12 @@ where
                     Ok(key) => key,
                     Err(e) => return Some(Err(e.into())),
                 };
+
+                trace!(
+                    "db iter: Decoding {} from bytes {:?}",
+                    std::any::type_name::<V>(),
+                    value_bytes
+                );
                 let value = match V::from_bytes(value_bytes.as_ref()) {
                     Ok(value) => value,
                     Err(e) => return Some(Err(e.into())),
@@ -229,18 +247,6 @@ where
     }
 }
 
-/// Checks a key of fixed length for the right `prefix` and data length. On success it returns a slice
-/// of length `len` with the prefix cut off.
-pub fn check_format(data: &[u8], prefix: u8, len: usize) -> Result<&[u8], DecodingError> {
-    if len + 1 != data.len() {
-        Err(DecodingError::wrong_length(len, data.len()))
-    } else if data[0] != prefix {
-        Err(DecodingError::wrong_prefix(prefix, data[0]))
-    } else {
-        Ok(&data[1..])
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum DecodingError {
     #[error("Key had a wrong prefix, expected {expected} but got {found}")]
@@ -276,38 +282,6 @@ pub enum DatabaseError {
 impl From<DecodingError> for DatabaseError {
     fn from(e: DecodingError) -> Self {
         DatabaseError::DecodingError(e)
-    }
-}
-
-impl<'a, T: Clone> BincodeSerialized<'a, T> {
-    pub fn borrowed(obj: &'a T) -> BincodeSerialized<'a, T> {
-        BincodeSerialized(Cow::Borrowed(obj))
-    }
-
-    pub fn owned(obj: T) -> BincodeSerialized<'static, T> {
-        BincodeSerialized(Cow::Owned(obj))
-    }
-
-    pub fn into_owned(self) -> T {
-        self.0.into_owned()
-    }
-}
-
-impl<'a, T: Serialize + Debug + Clone> SerializableDatabaseValue for BincodeSerialized<'a, T> {
-    fn to_bytes(&self) -> Vec<u8> {
-        bincode::serialize(&self.0)
-            .expect("Serialization error")
-            .into()
-    }
-}
-
-impl<'a, T: Serialize + Debug + DeserializeOwned + Clone> DatabaseValue
-    for BincodeSerialized<'a, T>
-{
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        Ok(BincodeSerialized(
-            bincode::deserialize(&data).map_err(|e| DecodingError::other(e))?,
-        ))
     }
 }
 
@@ -353,6 +327,6 @@ mod tests {
             .insert_entry(&TestKey(42), &TestVal(0))
             .unwrap()
             .is_none());
-        assert!(db.get_value::<_, TestVal>(&TestKey(42)).is_err());
+        assert!(db.get_value::<_, TestVal>(&TestKey(42)).is_ok());
     }
 }

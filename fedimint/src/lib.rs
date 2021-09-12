@@ -8,7 +8,7 @@ use crate::db::{
 use async_trait::async_trait;
 use itertools::Itertools;
 use mint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-use mint_api::db::{BincodeSerialized, Database, RawDatabase};
+use mint_api::db::{Database, RawDatabase};
 use mint_api::transaction::{BlindToken, OutPoint};
 use mint_api::util::TieredMultiZip;
 use mint_api::{
@@ -57,14 +57,14 @@ impl FederationModule for Mint {
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
         self.db
-            .find_by_prefix::<_, ProposedPartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
+            .find_by_prefix::<_, ProposedPartialSignatureKey, PartialSigResponse>(
                 &ProposedPartialSignaturesKeyPrefix,
             )
             .map(|res| {
-                let (key, value) = res.expect("DB error");
+                let (key, partial_signature) = res.expect("DB error");
                 PartiallySignedRequest {
                     out_point: key.request_id,
-                    partial_signature: value.into_owned()
+                    partial_signature,
                 }
             })
             .collect()
@@ -166,7 +166,7 @@ impl FederationModule for Mint {
             ProposedPartialSignatureKey {
                 request_id: out_point,
             },
-            BincodeSerialized::owned(PartialSigResponse(partial_sig)),
+            PartialSigResponse(partial_sig),
         );
 
         batch.commit();
@@ -181,12 +181,12 @@ impl FederationModule for Mint {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
             .db
-            .find_by_prefix::<_, ReceivedPartialSignatureKey, BincodeSerialized<PartialSigResponse>>(
+            .find_by_prefix::<_, ReceivedPartialSignatureKey, PartialSigResponse>(
                 &ReceivedPartialSignaturesKeyPrefix,
             )
             .map(|entry_res| {
-                let (key, value) = entry_res.expect("DB error");
-                (key.request_id, (key.peer_id as usize, value.into_owned()))
+                let (key, partial_sig) = entry_res.expect("DB error");
+                (key.request_id, (key.peer_id as usize, partial_sig))
             })
             .into_group_map();
 
@@ -222,9 +222,7 @@ impl FederationModule for Mint {
                                 })
                             }));
 
-                            let sig_key = OutputOutcomeKey(issuance_id);
-                            let sig_value = BincodeSerialized::owned(blind_signature);
-                            batch_tx.append_insert(sig_key, sig_value);
+                            batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
                             batch_tx.commit();
                             Some(batch)
                         }
@@ -245,23 +243,24 @@ impl FederationModule for Mint {
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         let we_proposed = self
             .db
-            .get_value::<_, BincodeSerialized<PartialSigResponse>>(&ProposedPartialSignatureKey {
+            .get_value::<_, PartialSigResponse>(&ProposedPartialSignatureKey {
                 request_id: out_point,
             })
             .expect("DB error")
             .is_some();
         let was_consensus_outcome = self
             .db
-            .find_by_prefix::<_, ReceivedPartialSignatureKey, BincodeSerialized<PartialSigResponse>>(&ReceivedPartialSignatureKeyOutputPrefix {
-                request_id: out_point,
-            })
+            .find_by_prefix::<_, ReceivedPartialSignatureKey, PartialSigResponse>(
+                &ReceivedPartialSignatureKeyOutputPrefix {
+                    request_id: out_point,
+                },
+            )
             .any(|res| res.is_ok());
 
         let final_sig = self
             .db
             .get_value(&OutputOutcomeKey(out_point))
-            .expect("DB error")
-            .map(BincodeSerialized::into_owned);
+            .expect("DB error");
 
         if final_sig.is_some() {
             Some(final_sig)
@@ -441,9 +440,8 @@ impl Mint {
     ) {
         match self
             .db
-            .get_value::<_, BincodeSerialized<SigResponse>>(&OutputOutcomeKey(output_id))
+            .get_value::<_, SigResponse>(&OutputOutcomeKey(output_id))
             .expect("DB error")
-            .map(|bcd| bcd.into_owned())
         {
             Some(_) => {
                 debug!(
@@ -464,7 +462,7 @@ impl Mint {
                 request_id: output_id,
                 peer_id: peer,
             },
-            BincodeSerialized::owned(partial_sig),
+            partial_sig,
         );
 
         // FIXME: add own id to cfg

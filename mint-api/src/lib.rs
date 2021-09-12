@@ -43,7 +43,20 @@ hash_newtype!(
 
 /// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
 /// this is also why the amount type from rust-bitcoin isn't used instead.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Deserialize,
+    Serialize,
+    Encodable,
+    Decodable,
+)]
 #[serde(transparent)]
 pub struct Amount {
     pub milli_sat: u64,
@@ -67,27 +80,27 @@ pub struct Keys<K> {
 }
 
 /// Request to blind sign a certain amount of coins
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SignRequest(pub Coins<tbs::BlindedMessage>);
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share for a [`SignRequest`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
 
 /// Blind signature for a [`SignRequest`]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
 /// is required.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Coin(pub CoinNonce, pub tbs::Signature);
 
 /// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
 /// spent coin's spending keys to avoid mint frontrunning.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinNonce(pub musig::PubKey);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -427,7 +440,7 @@ where
 {
     fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
         let mut len = 0;
-        len += (self.coins.len() as u64).consensus_encode(&mut writer)?;
+        len += (self.iter().count() as u64).consensus_encode(&mut writer)?;
         for (amount, coin) in self.iter() {
             len += amount.consensus_encode(&mut writer)?;
             len += coin.consensus_encode(&mut writer)?;
@@ -436,18 +449,19 @@ where
     }
 }
 
-impl Encodable for Amount {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
-        self.milli_sat.consensus_encode(writer)
-    }
-}
-
-impl Encodable for Coin {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
-        writer.write_all(&self.0 .0.to_bytes())?;
-        writer.write_all(&self.1.encode_compressed())?;
-
-        Ok(33 + 48)
+impl<C> Decodable for Coins<C>
+where
+    C: Decodable,
+{
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut coins = BTreeMap::new();
+        let len = u64::consensus_decode(&mut d)?;
+        for _ in 0..len {
+            let amt = Amount::consensus_decode(&mut d)?;
+            let coin = C::consensus_decode(&mut d)?;
+            coins.entry(amt).or_insert(Vec::new()).push(coin);
+        }
+        Ok(Coins { coins })
     }
 }
 
@@ -465,24 +479,6 @@ impl Decodable for TransactionId {
         d.read_exact(&mut bytes)
             .map_err(|e| DecodeError::from_err(e))?;
         Ok(TransactionId::from_inner(bytes))
-    }
-}
-
-impl Encodable for CoinNonce {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
-        let bytes = self.0.to_bytes();
-        writer.write_all(&bytes)?;
-        Ok(bytes.len())
-    }
-}
-
-impl Decodable for CoinNonce {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-        let mut bytes = [0u8; 33];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(CoinNonce(musig::PubKey::from_bytes(bytes).ok_or_else(
-            || DecodeError::from_str("Error decoding schnorr key"),
-        )?))
     }
 }
 

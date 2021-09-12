@@ -9,6 +9,7 @@ use secp256kfun::rand_core::{CryptoRng, RngCore};
 use secp256kfun::{g, Point, Scalar, G};
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256 as Sha256;
+use std::convert::TryInto;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PubKey(Point);
@@ -32,6 +33,35 @@ impl SecKey {
     pub fn to_public(&self) -> PubKey {
         let p = Normal::change_mark(g!({ &self.0 } * G));
         PubKey(p)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_bytes()
+    }
+
+    pub fn from_bytes(bytes: [u8; 32]) -> Option<SecKey> {
+        Some(SecKey(NonZero::change_mark(Scalar::from_bytes(bytes)?)?))
+    }
+}
+
+impl Sig {
+    pub fn to_bytes(&self) -> [u8; 65] {
+        let mut bytes = [0u8; 65];
+        bytes[0..33].copy_from_slice(&self.r.to_bytes());
+        bytes[33..65].copy_from_slice(&self.s.to_bytes());
+        bytes
+    }
+
+    pub fn from_bytes(bytes: [u8; 65]) -> Option<Self> {
+        let r = Point::from_bytes(bytes[0..33].try_into().unwrap())?;
+        let s = Public::change_mark(
+            NonZero::change_mark(
+                Scalar::from_bytes(bytes[33..65].try_into().unwrap()).expect("from bytes error"),
+            )
+            .expect("zero error"),
+        );
+
+        Some(Sig { r, s })
     }
 }
 

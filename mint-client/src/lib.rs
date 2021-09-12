@@ -5,11 +5,12 @@ use futures::future::JoinAll;
 use miniscript::DescriptorTrait;
 use mint_api::db::batch::{BatchItem, DbBatch};
 use mint_api::db::{
-    check_format, BincodeSerialized, Database, DatabaseKey, DatabaseKeyPrefix, DecodingError,
-    RawDatabase,
+    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseKeyPrefixConst, DecodingError, RawDatabase,
 };
+use mint_api::encoding::{Decodable, Encodable};
 use mint_api::outcome::{Final, OutputOutcome, TransactionStatus};
 use mint_api::transaction as mint_tx;
+use mint_api::transaction::OutPoint;
 use mint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
     SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
@@ -21,7 +22,6 @@ use reqwest::{RequestBuilder, StatusCode};
 use secp256k1::{All, Secp256k1};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
 use std::sync::Arc;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -41,7 +41,7 @@ pub struct MintClient {
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
 /// information to generate one spendable coin once the blind signature arrives.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: musig::SecKey,
@@ -53,7 +53,7 @@ pub struct CoinRequest {
 
 /// Client side representation of a coin reissuance that keeps all necessary information to
 /// generate spendable coins once the blind signatures arrive.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinFinalizationData {
     /// Finalization data for all coin outputs in this request
     coins: Coins<CoinRequest>,
@@ -61,20 +61,25 @@ pub struct CoinFinalizationData {
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
 /// belonging to the nonce.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableCoin {
     pub coin: Coin,
     pub spend_key: musig::SecKey,
 }
 
-#[derive(Debug, Clone)]
-pub struct OutputFinalizationKey {
-    transaction_id: TransactionId,
-    output_idx: usize,
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct OutputFinalizationKey(OutPoint);
+
+impl DatabaseKeyPrefixConst for OutputFinalizationKey {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct OutputFinalizationKeyPrefix;
+
+impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
+}
 
 #[derive(Debug, Clone)]
 pub struct CoinKey {
@@ -153,11 +158,11 @@ impl MintClient {
             .find_map(|(idx, out)| {
                 debug!("Output script: {}", out.script_pubkey);
                 self.db
-                    .get_value::<_, BincodeSerialized<musig::SecKey>>(&PegInKey {
+                    .get_value::<_, musig::SecKey>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .expect("DB error")
-                    .map(|tweak_secret| (idx, tweak_secret.into_owned()))
+                    .map(|tweak_secret| (idx, tweak_secret))
             })
             .ok_or(ClientError::NoMatchingPegInFound)?;
         let public_tweak_key = secret_tweak_key.to_public();
@@ -205,46 +210,38 @@ impl MintClient {
         };
 
         let tx_id = mint_transaction.tx_hash();
-        let issuance_key = OutputFinalizationKey {
-            transaction_id: tx_id,
-            output_idx: 0,
-        };
-        let issuance_value = BincodeSerialized::owned(coin_finalization_data);
+        let issuance_key = OutputFinalizationKey(OutPoint {
+            txid: tx_id,
+            out_idx: 0,
+        });
+
         self.db
-            .insert_entry(&issuance_key, &issuance_value)
+            .insert_entry(&issuance_key, &coin_finalization_data)
             .expect("DB error");
 
         self.send_tx(mint_transaction, &mut rng).await?;
         Ok(tx_id)
     }
 
-    pub async fn fetch_coins(
-        &self,
-        txid: TransactionId,
-        output_idx: usize,
-    ) -> Result<(), ClientError> {
+    pub async fn fetch_coins(&self, outpoint: OutPoint) -> Result<(), ClientError> {
         let issuance = self
             .db
-            .get_value::<_, BincodeSerialized<CoinFinalizationData>>(&OutputFinalizationKey {
-                transaction_id: txid,
-                output_idx,
-            })
+            .get_value::<_, CoinFinalizationData>(&OutputFinalizationKey(outpoint))
             .expect("DB error")
             .ok_or(ClientError::FinalizationError(
                 CoinFinalizationError::UnknowinIssuance,
-            ))?
-            .into_owned();
+            ))?;
 
         let tx_outcome = self
             .query_any_mint::<TransactionStatus, _>(|client, mint| {
-                let url = format!("{}/transaction/{}", mint, txid);
+                let url = format!("{}/transaction/{}", mint, outpoint.txid);
                 client.get(&url)
             })
             .await?;
 
         // TODO: check another mint if the answer was malicious
         if !tx_outcome.is_final() {
-            return Err(ClientError::OutputNotReadyYet(txid, output_idx));
+            return Err(ClientError::OutputNotReadyYet(outpoint));
         }
 
         let outputs = match tx_outcome {
@@ -259,14 +256,14 @@ impl MintClient {
 
         // TODO: remove clone
         let bsig = outputs
-            .get(output_idx)
+            .get(outpoint.out_idx as usize)
             .and_then(|outcome| match outcome {
                 OutputOutcome::Mint(mo) => Some(mo),
                 OutputOutcome::Wallet(_) => None,
             })
-            .ok_or(ClientError::InvalidOutcomeWrongStructure(txid, output_idx))?
+            .ok_or(ClientError::InvalidOutcomeWrongStructure(outpoint))?
             .clone()
-            .ok_or(ClientError::OutputNotReadyYet(txid, output_idx))?;
+            .ok_or(ClientError::OutputNotReadyYet(outpoint))?;
 
         let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
 
@@ -278,14 +275,11 @@ impl MintClient {
                         amount,
                         nonce: coin.coin.0.clone(),
                     };
-                    let value = BincodeSerialized::owned(coin);
+                    let value = coin;
                     BatchItem::insert_new(key, value)
                 },
             ));
-            tx.append_delete(OutputFinalizationKey {
-                transaction_id: txid,
-                output_idx,
-            });
+            tx.append_delete(OutputFinalizationKey(outpoint));
         });
         self.db.apply_batch(batch).expect("DB error");
 
@@ -332,17 +326,17 @@ impl MintClient {
 
     pub async fn fetch_all_coins(&self) -> Result<Vec<TransactionId>, ClientError> {
         self.db
-            .find_by_prefix::<_, OutputFinalizationKey, BincodeSerialized<CoinFinalizationData>>(
+            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
                 &OutputFinalizationKeyPrefix,
             )
             .map(|res| {
                 let (id, _) = res.expect("DB error");
                 async move {
                     loop {
-                        match self.fetch_coins(id.transaction_id, id.output_idx).await {
-                            Ok(()) => return Ok(id.transaction_id),
+                        match self.fetch_coins(id.0).await {
+                            Ok(()) => return Ok(id.0.txid),
                             // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                            Err(ClientError::MintError | ClientError::OutputNotReadyYet(_, _)) => {
+                            Err(ClientError::MintError | ClientError::OutputNotReadyYet(_)) => {
                                 tokio::time::sleep(Duration::from_secs(1)).await
                             }
                             Err(e) => return Err(e),
@@ -358,10 +352,10 @@ impl MintClient {
 
     pub fn coins(&self) -> Coins<SpendableCoin> {
         self.db
-            .find_by_prefix::<_, CoinKey, BincodeSerialized<SpendableCoin>>(&CoinKeyPrefix)
+            .find_by_prefix::<_, CoinKey, SpendableCoin>(&CoinKeyPrefix)
             .map(|res| {
-                let (key, value) = res.expect("DB error");
-                (key.amount, value.into_owned())
+                let (key, spendable_coin) = res.expect("DB error");
+                (key.amount, spendable_coin)
             })
             .collect()
     }
@@ -413,13 +407,12 @@ impl MintClient {
         };
 
         let tx_id = transaction.tx_hash();
-        let issuance_key = OutputFinalizationKey {
-            transaction_id: tx_id,
-            output_idx: 0,
-        };
-        let issuance_value = BincodeSerialized::owned(coin_finalization_data);
+        let issuance_key = OutputFinalizationKey(OutPoint {
+            txid: tx_id,
+            out_idx: 0,
+        });
         self.db
-            .insert_entry(&issuance_key, &issuance_value)
+            .insert_entry(&issuance_key, &coin_finalization_data)
             .expect("DB error");
 
         self.send_tx(transaction, &mut rng).await?;
@@ -488,7 +481,7 @@ impl MintClient {
                 &PegInKey {
                     peg_in_script: script,
                 },
-                &BincodeSerialized::borrowed(&peg_in_sec_key),
+                &peg_in_sec_key,
             )
             .expect("DB error");
 
@@ -608,14 +601,12 @@ pub enum ClientError {
     PegInProofError(PegInProofError),
     #[error("The client's wallet has not enough coins or they are not in the right denomination")]
     NotEnoughCoins,
-    #[error("The transaction outcome received from the mint did not contain a result for output {0:}:{1:} yet")]
-    OutputNotReadyYet(TransactionId, usize),
-    #[error(
-        "The transaction outcome returned by the mint contains too few outputs (output {0:}:{1:})"
-    )]
-    InvalidOutcomeWrongStructure(TransactionId, usize),
-    #[error("The transaction outcome returned by the mint has an invalid type (output {0:}:{1:})")]
-    InvalidOutcomeType(TransactionId, usize),
+    #[error("The transaction outcome received from the mint did not contain a result for output {0} yet")]
+    OutputNotReadyYet(OutPoint),
+    #[error("The transaction outcome returned by the mint contains too few outputs (output {0})")]
+    InvalidOutcomeWrongStructure(OutPoint),
+    #[error("The transaction outcome returned by the mint has an invalid type (output {0})")]
+    InvalidOutcomeType(OutPoint),
 }
 
 impl From<InvalidAmountTierError> for CoinFinalizationError {
@@ -627,33 +618,6 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 impl From<CoinFinalizationError> for ClientError {
     fn from(e: CoinFinalizationError) -> Self {
         ClientError::FinalizationError(e)
-    }
-}
-
-impl DatabaseKeyPrefix for OutputFinalizationKey {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(33);
-        bytes.push(DB_PREFIX_OUTPUT_FINALIZATION_DATA);
-        bytes.extend_from_slice(&self.transaction_id[..]);
-        bytes.extend_from_slice(&self.output_idx.to_le_bytes());
-        bytes
-    }
-}
-
-impl DatabaseKey for OutputFinalizationKey {
-    fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        let data = check_format(data, DB_PREFIX_OUTPUT_FINALIZATION_DATA, 40)?;
-
-        Ok(OutputFinalizationKey {
-            transaction_id: TransactionId::from_slice(&data[0..32]).unwrap(),
-            output_idx: usize::from_le_bytes(data[32..].try_into().unwrap()),
-        })
-    }
-}
-
-impl DatabaseKeyPrefix for OutputFinalizationKeyPrefix {
-    fn to_bytes(&self) -> Vec<u8> {
-        vec![DB_PREFIX_OUTPUT_FINALIZATION_DATA]
     }
 }
 

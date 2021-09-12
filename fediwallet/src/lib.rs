@@ -21,8 +21,8 @@ use itertools::Itertools;
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use mint_api::db::batch::{BatchItem, BatchTx};
-use mint_api::db::{BincodeSerialized, Database, RawDatabase};
-use mint_api::encoding::Encodable;
+use mint_api::db::{Database, RawDatabase};
+use mint_api::encoding::{Decodable, Encodable};
 use mint_api::transaction::{OutPoint, PegOut};
 use mint_api::{CompressedPublicKey, FederationModule, PegInProof, PegInProofError, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
@@ -62,7 +62,7 @@ pub struct PegOutSignatureItem {
     signature: Vec<secp256k1::Signature>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensus {
     block_height: u32,
     fee_rate: Feerate,
@@ -76,7 +76,7 @@ pub struct Wallet {
     db: Arc<dyn RawDatabase>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendableUTXO {
     pub tweak: musig::PubKey,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -86,7 +86,7 @@ pub struct SpendableUTXO {
 }
 
 // TODO: move pegout logic out of wallet into minimint consensus
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PendingPegOut {
     destination: Script,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -150,14 +150,12 @@ impl FederationModule for Wallet {
         });
 
         self.db
-            .find_by_prefix::<_, PegOutTxSignatureCI, BincodeSerialized<Vec<Signature>>>(
-                &PegOutTxSignatureCIPrefix,
-            )
+            .find_by_prefix::<_, PegOutTxSignatureCI, Vec<Signature>>(&PegOutTxSignatureCIPrefix)
             .map(|res| {
                 let (key, val) = res.expect("FB error");
                 WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
                     txid: key.0,
-                    signature: val.into_owned(),
+                    signature: val,
                 })
             })
             .chain(std::iter::once(round_ci))
@@ -215,7 +213,7 @@ impl FederationModule for Wallet {
             randomness_beacon,
         };
 
-        batch.append_insert(RoundConsensusKey, BincodeSerialized::owned(round_consensus));
+        batch.append_insert(RoundConsensusKey, round_consensus);
         batch.commit();
     }
 
@@ -228,7 +226,7 @@ impl FederationModule for Wallet {
 
         if self
             .db
-            .get_value::<_, BincodeSerialized<SpendableUTXO>>(&UTXOKey(input.outpoint()))
+            .get_value::<_, SpendableUTXO>(&UTXOKey(input.outpoint()))
             .expect("DB error")
             .is_some()
         {
@@ -248,11 +246,11 @@ impl FederationModule for Wallet {
 
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
-            BincodeSerialized::owned(SpendableUTXO {
+            SpendableUTXO {
                 tweak: input.tweak_contract_key().clone(),
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
                 script_pubkey: input.tx_output().script_pubkey.clone(),
-            }),
+            },
         );
 
         batch.commit();
@@ -282,13 +280,13 @@ impl FederationModule for Wallet {
         );
         batch.append_insert_new(
             PendingPegOutKey(out_point),
-            BincodeSerialized::owned(PendingPegOut {
+            PendingPegOut {
                 destination: output.recipient.script_pubkey(),
                 amount: output.amount,
                 pending_since_block: self
                     .consensus_height()
                     .expect("Wallet should be initialized at this point"),
-            }),
+            },
         );
         batch.commit();
         Ok(amount)
@@ -364,11 +362,8 @@ impl FederationModule for Wallet {
                     .into_iter()
                     .map(|peg_out| BatchItem::delete(PendingPegOutKey(peg_out))),
             );
-            batch.append_insert_new(
-                UnsignedTransactionKey(psbt.global.unsigned_tx.txid()),
-                BincodeSerialized::owned(psbt),
-            );
-            batch.append_insert_new(PegOutTxSignatureCI(txid), BincodeSerialized::owned(sigs))
+            batch.append_insert_new(UnsignedTransactionKey(psbt.global.unsigned_tx.txid()), psbt);
+            batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
         }
         batch.commit();
     }
@@ -437,12 +432,9 @@ impl Wallet {
     ) -> Result<(), ProcessPegOutSigError> {
         let mut psbt = self
             .db
-            .get_value::<_, BincodeSerialized<PartiallySignedTransaction>>(&UnsignedTransactionKey(
-                signature.txid,
-            ))
+            .get_value::<_, PartiallySignedTransaction>(&UnsignedTransactionKey(signature.txid))
             .expect("DB error")
-            .ok_or(ProcessPegOutSigError::UnknownTransaction(signature.txid))?
-            .into_owned();
+            .ok_or(ProcessPegOutSigError::UnknownTransaction(signature.txid))?;
 
         let peer_key = self
             .cfg
@@ -520,10 +512,7 @@ impl Wallet {
                 trace!("can't finalize peg-out tx {} yet: {}", signature.txid, e);
 
                 // We want to save the new signature, so we need to overwrite the PSBT
-                batch.append_insert(
-                    UnsignedTransactionKey(signature.txid),
-                    BincodeSerialized::owned(psbt),
-                );
+                batch.append_insert(UnsignedTransactionKey(signature.txid), psbt);
                 batch.commit();
                 return Ok(());
             }
@@ -539,10 +528,7 @@ impl Wallet {
                 );
 
                 // Who knows what went wrong, we still want to save the received signature
-                batch.append_insert(
-                    UnsignedTransactionKey(signature.txid),
-                    BincodeSerialized::owned(psbt),
-                );
+                batch.append_insert(UnsignedTransactionKey(signature.txid), psbt);
                 batch.commit();
                 return Ok(());
             }
@@ -605,9 +591,8 @@ impl Wallet {
 
     pub fn current_round_consensus(&self) -> Option<RoundConsensus> {
         self.db
-            .get_value::<_, BincodeSerialized<RoundConsensus>>(&RoundConsensusKey)
+            .get_value::<_, RoundConsensus>(&RoundConsensusKey)
             .expect("DB error")
-            .map(BincodeSerialized::into_owned)
     }
 
     pub fn consensus_height(&self) -> Option<u32> {
@@ -666,10 +651,8 @@ impl Wallet {
 
     pub fn pending_peg_outs(&self) -> Vec<(OutPoint, PendingPegOut)> {
         self.db
-            .find_by_prefix::<_, PendingPegOutKey, BincodeSerialized<PendingPegOut>>(
-                &PendingPegOutPrefixKey,
-            )
-            .map_ok(|(key, peg_out)| (key.0, peg_out.into_owned()))
+            .find_by_prefix::<_, PendingPegOutKey, PendingPegOut>(&PendingPegOutPrefixKey)
+            .map_ok(|(key, peg_out)| (key.0, peg_out))
             .collect::<Result<_, _>>()
             .expect("DB error")
     }
@@ -693,8 +676,7 @@ impl Wallet {
 
     fn available_utxos(&self) -> Vec<(UTXOKey, SpendableUTXO)> {
         self.db
-            .find_by_prefix::<_, UTXOKey, BincodeSerialized<SpendableUTXO>>(&UTXOPrefixKey)
-            .map_ok(|(utxo_key, utxo)| (utxo_key, utxo.into_owned()))
+            .find_by_prefix::<_, UTXOKey, SpendableUTXO>(&UTXOPrefixKey)
             .collect::<Result<_, _>>()
             .expect("DB error")
     }

@@ -257,9 +257,12 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
             quote! {
                 impl Decodable for #ident {
                     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, ::mint_api::encoding::DecodeError> {
-                        let variant = <u64 as Decodable>::consensus_decode(&mut d)?;
+                        let variant = <u64 as Decodable>::consensus_decode(&mut d)? as usize;
                         let decoded = match variant {
                             #(#match_arms)*
+                            _ => {
+                                return Err(::mint_api::encoding::DecodeError::from_str("invalid enum variant"));
+                            }
                         };
                         Ok(decoded)
                     }

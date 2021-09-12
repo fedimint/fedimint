@@ -16,7 +16,7 @@ minimint-derive = { path = "../minimint-derive" }
 miniscript = { version = "5.1.0", features = [ "use-serde" ] }
 musig = { path = "../crypto/musig"}
 rand = "0.6.0"
-secp256k1 = { version = "0.20.1", features = [ "serde" ] }
+secp256k1 = { version = "0.20.1", features = [ "serde", "bitcoin_hashes" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 sha3 = "0.9.1"
 sled = "0.34"

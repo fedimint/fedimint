@@ -1,4 +1,5 @@
 use bitcoin::{Amount, Network};
+use mint_api::encoding::{Decodable, Encodable};
 use mint_api::{CompressedPublicKey, FeeConsensus, Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -15,7 +16,20 @@ pub struct ServerOpts {
     pub cfg_path: PathBuf,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Ord, PartialOrd, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
 pub struct Feerate {
     pub sats_per_kvb: u64,
 }
