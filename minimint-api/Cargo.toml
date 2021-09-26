@@ -1,5 +1,5 @@
 [package]
-name = "mint-api"
+name = "minimint-api"
 version = "0.1.0"
 authors = ["elsirion <elsirion@protonmail.com>"]
 edition = "2018"

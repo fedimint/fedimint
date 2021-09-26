@@ -1,7 +1,7 @@
-use mint_api::db::DatabaseKeyPrefixConst;
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::transaction::OutPoint;
-use mint_api::CoinNonce;
+use minimint_api::db::DatabaseKeyPrefixConst;
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::transaction::OutPoint;
+use minimint_api::CoinNonce;
 
 const DB_PREFIX_COIN_NONCE: u8 = 0x10;
 const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;

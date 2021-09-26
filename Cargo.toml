@@ -7,7 +7,7 @@ members = [
     "ln-gateway",
     "minimint",
     "minimint-derive",
-    "mint-api",
+    "minimint-api",
     "mint-client",
     "modules/minimint-mint",
     "modules/minimint-wallet",

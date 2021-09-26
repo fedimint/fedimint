@@ -1,6 +1,6 @@
 use bitcoin::{BlockHash, OutPoint, Transaction, Txid};
-use mint_api::db::DatabaseKeyPrefixConst;
-use mint_api::encoding::{Decodable, Encodable};
+use minimint_api::db::DatabaseKeyPrefixConst;
+use minimint_api::encoding::{Decodable, Encodable};
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
@@ -39,7 +39,7 @@ impl DatabaseKeyPrefixConst for RoundConsensusKey {
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingPegOutKey(pub mint_api::transaction::OutPoint);
+pub struct PendingPegOutKey(pub minimint_api::transaction::OutPoint);
 
 impl DatabaseKeyPrefixConst for PendingPegOutKey {
     const DB_PREFIX: u8 = DB_PREFIX_PEDNING_PEGOUT;

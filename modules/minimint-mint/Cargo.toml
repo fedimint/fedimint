@@ -10,8 +10,8 @@ edition = "2018"
 async-trait = "0.1"
 counter = "0.5.2"
 itertools = "0.10.0"
+minimint-api = { path = "../../minimint-api" }
 minimint-derive = { path = "../../minimint-derive" }
-mint-api = { path = "../../mint-api" }
 rand = "0.6"
 rayon = "1.5.0"
 serde = { version = "1.0.118", features = [ "derive" ] }

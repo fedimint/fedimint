@@ -1,7 +1,7 @@
 use crate::consensus::FediMintConsensus;
 use config::ServerConfig;
-use mint_api::transaction::Transaction;
-use mint_api::TransactionId;
+use minimint_api::transaction::Transaction;
+use minimint_api::TransactionId;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use tide::{Body, Request, Response};

@@ -2,19 +2,19 @@ use bitcoin::{Address, Script, Transaction};
 use bitcoin_hashes::Hash as BitcoinHash;
 use config::ClientConfig;
 use futures::future::JoinAll;
-use miniscript::DescriptorTrait;
-use mint_api::db::batch::{BatchItem, DbBatch};
-use mint_api::db::{
+use minimint_api::db::batch::{BatchItem, DbBatch};
+use minimint_api::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseKeyPrefixConst, DecodingError, RawDatabase,
 };
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::outcome::{Final, OutputOutcome, TransactionStatus};
-use mint_api::transaction as mint_tx;
-use mint_api::transaction::OutPoint;
-use mint_api::{
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::outcome::{Final, OutputOutcome, TransactionStatus};
+use minimint_api::transaction as mint_tx;
+use minimint_api::transaction::OutPoint;
+use minimint_api::{
     Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
     SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
 };
+use miniscript::DescriptorTrait;
 use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};

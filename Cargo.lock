@@ -677,8 +677,8 @@ dependencies = [
  "bitcoin",
  "hbbft",
  "hex 0.4.3",
+ "minimint-api",
  "miniscript",
- "mint-api",
  "rand 0.6.5",
  "secp256k1",
  "serde",
@@ -1602,7 +1602,7 @@ dependencies = [
  "clightningrpc",
  "config",
  "lightning-invoice",
- "mint-api",
+ "minimint-api",
  "mint-client",
  "rand 0.6.5",
  "serde",
@@ -1705,10 +1705,10 @@ dependencies = [
  "hbbft",
  "hex 0.4.3",
  "itertools",
+ "minimint-api",
  "minimint-derive",
  "minimint-mint",
  "minimint-wallet",
- "mint-api",
  "musig",
  "rand 0.6.5",
  "rayon",
@@ -1728,6 +1728,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimint-api"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "bitcoin_hashes",
+ "hex 0.4.3",
+ "minimint-derive",
+ "miniscript",
+ "musig",
+ "rand 0.6.5",
+ "secp256k1",
+ "serde",
+ "sha3",
+ "sled",
+ "tbs",
+ "tempdir",
+ "thiserror",
+ "tracing",
+ "validator",
+]
+
+[[package]]
 name = "minimint-derive"
 version = "0.1.0"
 dependencies = [
@@ -1744,8 +1768,8 @@ dependencies = [
  "async-trait",
  "counter",
  "itertools",
+ "minimint-api",
  "minimint-derive",
- "mint-api",
  "rand 0.6.5",
  "rayon",
  "serde",
@@ -1766,9 +1790,9 @@ dependencies = [
  "futures",
  "hex 0.4.3",
  "itertools",
+ "minimint-api",
  "minimint-derive",
  "miniscript",
- "mint-api",
  "musig",
  "rand 0.6.5",
  "secp256k1",
@@ -1799,30 +1823,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mint-api"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "bitcoin",
- "bitcoin_hashes",
- "hex 0.4.3",
- "minimint-derive",
- "miniscript",
- "musig",
- "rand 0.6.5",
- "secp256k1",
- "serde",
- "sha3",
- "sled",
- "tbs",
- "tempdir",
- "thiserror",
- "tracing",
- "validator",
-]
-
-[[package]]
 name = "mint-client"
 version = "0.1.0"
 dependencies = [
@@ -1834,8 +1834,8 @@ dependencies = [
  "futures",
  "hex 0.4.3",
  "lightning-invoice",
+ "minimint-api",
  "miniscript",
- "mint-api",
  "musig",
  "rand 0.6.5",
  "reqwest",

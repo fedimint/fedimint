@@ -1,6 +1,6 @@
 #![feature(async_closure)]
 
-extern crate mint_api;
+extern crate minimint_api;
 
 use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
@@ -10,7 +10,7 @@ use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
-use mint_api::db::RawDatabase;
+use minimint_api::db::RawDatabase;
 use rand::{CryptoRng, RngCore};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};

@@ -7,11 +7,11 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use itertools::Itertools;
-use mint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-use mint_api::db::{Database, RawDatabase};
-use mint_api::transaction::{BlindToken, OutPoint};
-use mint_api::util::TieredMultiZip;
-use mint_api::{
+use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
+use minimint_api::db::{Database, RawDatabase};
+use minimint_api::transaction::{BlindToken, OutPoint};
+use minimint_api::util::TieredMultiZip;
+use minimint_api::{
     Amount, Coin, Coins, FederationModule, InvalidAmountTierError, Keys, PartialSigResponse,
     SigResponse,
 };
@@ -41,7 +41,7 @@ pub struct Mint {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PartiallySignedRequest {
     out_point: OutPoint,
-    partial_signature: mint_api::PartialSigResponse,
+    partial_signature: minimint_api::PartialSigResponse,
 }
 
 #[async_trait(?Send)]
@@ -526,7 +526,7 @@ mod test {
     /*
     use crate::{CombineError, Mint, MintError, MintShareErrors, PeerErrorType};
     use ::database::mem_impl::MemDatabase;
-    use mint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
+    use minimint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
     use std::sync::Arc;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 

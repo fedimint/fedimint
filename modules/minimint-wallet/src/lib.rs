@@ -18,13 +18,13 @@ use bitcoin::{
 use bitcoincore_rpc_async::{Auth, RpcApi};
 use config::{Feerate, WalletConfig};
 use itertools::Itertools;
+use minimint_api::db::batch::{BatchItem, BatchTx};
+use minimint_api::db::{Database, RawDatabase};
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::transaction::{OutPoint, PegOut};
+use minimint_api::{CompressedPublicKey, FederationModule, PegInProof, PegInProofError, Tweakable};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use mint_api::db::batch::{BatchItem, BatchTx};
-use mint_api::db::{Database, RawDatabase};
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::transaction::{OutPoint, PegOut};
-use mint_api::{CompressedPublicKey, FederationModule, PegInProof, PegInProofError, Tweakable};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{Message, Signature};
 use serde::{Deserialize, Serialize};
@@ -217,7 +217,7 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
-    fn validate_input(&self, input: &Self::TxInput) -> Result<mint_api::Amount, Self::Error> {
+    fn validate_input(&self, input: &Self::TxInput) -> Result<minimint_api::Amount, Self::Error> {
         if !self.block_is_known(input.proof_block()) {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()));
         }
@@ -233,14 +233,14 @@ impl FederationModule for Wallet {
             return Err(WalletError::PegInAlreadyClaimed);
         }
 
-        Ok(mint_api::Amount::from_sat(input.tx_output().value))
+        Ok(minimint_api::Amount::from_sat(input.tx_output().value))
     }
 
     fn apply_input<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
         input: &'a Self::TxInput,
-    ) -> Result<mint_api::Amount, Self::Error> {
+    ) -> Result<minimint_api::Amount, Self::Error> {
         let amount = self.validate_input(input)?;
         debug!("Claiming peg-in {} worth {}", input.outpoint(), amount);
 
@@ -257,7 +257,10 @@ impl FederationModule for Wallet {
         Ok(amount)
     }
 
-    fn validate_output(&self, output: &Self::TxOutput) -> Result<mint_api::Amount, Self::Error> {
+    fn validate_output(
+        &self,
+        output: &Self::TxOutput,
+    ) -> Result<minimint_api::Amount, Self::Error> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
             return Err(WalletError::WrongNetwork(
                 self.cfg.network,
@@ -271,8 +274,8 @@ impl FederationModule for Wallet {
         &'a self,
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
-        out_point: mint_api::transaction::OutPoint,
-    ) -> Result<mint_api::Amount, Self::Error> {
+        out_point: minimint_api::transaction::OutPoint,
+    ) -> Result<minimint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
             "Queuing peg-out of {} BTC to {}",
@@ -304,7 +307,7 @@ impl FederationModule for Wallet {
 
         // Check if we should create a peg-out transaction
         let (peg_out_ids, pending_peg_outs): (
-            Vec<mint_api::transaction::OutPoint>,
+            Vec<minimint_api::transaction::OutPoint>,
             Vec<PendingPegOut>,
         ) = self.pending_peg_outs().into_iter().unzip();
         let urgency = pending_peg_outs
@@ -1055,10 +1058,10 @@ mod tests {
     use bitcoin::hashes::Hash as BitcoinHash;
     use bitcoin::{Address, Amount, OutPoint, TxOut};
     use config::Feerate;
+    use minimint_api::{CompressedPublicKey, Tweakable};
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;
     use miniscript::{Descriptor, DescriptorTrait, Segwitv0};
-    use mint_api::{CompressedPublicKey, Tweakable};
     use std::str::FromStr;
 
     #[test]

@@ -1,5 +1,5 @@
-use mint_api::transaction::{Input, Transaction};
-use mint_api::{Coin, Coins, PegInProof};
+use minimint_api::transaction::{Input, Transaction};
+use minimint_api::{Coin, Coins, PegInProof};
 use std::collections::HashSet;
 
 pub trait ConflictFilterable<T>

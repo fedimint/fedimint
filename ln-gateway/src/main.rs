@@ -1,8 +1,8 @@
 use clightningrpc::lightningrpc::PayOptions;
 use clightningrpc::LightningRPC;
 use config::{load_from_file, ClientConfig};
-use mint_api::transaction::OutPoint;
-use mint_api::Coins;
+use minimint_api::transaction::OutPoint;
+use minimint_api::Coins;
 use mint_client::{MintClient, SpendableCoin};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

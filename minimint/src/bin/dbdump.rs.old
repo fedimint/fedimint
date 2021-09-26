@@ -3,7 +3,7 @@ use minimint::consensus::ConsensusItem;
 use minimint::database::{
     AcceptedTransactionKey, ConsensusItemsKeyPrefix, DB_PREFIX_ACCEPTED_TRANSACTION,
 };
-use mint_api::{PartialSigResponse, SigResponse};
+use minimint_api::{PartialSigResponse, SigResponse};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::str::FromStr;

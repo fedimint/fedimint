@@ -1,6 +1,6 @@
 use bitcoin::{Amount, Network};
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::{CompressedPublicKey, FeeConsensus, Keys, PegInDescriptor};
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::{CompressedPublicKey, FeeConsensus, Keys, PegInDescriptor};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

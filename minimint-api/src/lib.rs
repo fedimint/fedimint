@@ -1,6 +1,6 @@
 #![feature(min_type_alias_impl_trait)]
 
-extern crate self as mint_api;
+extern crate self as minimint_api;
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;

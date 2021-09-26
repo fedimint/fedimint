@@ -5,15 +5,15 @@ use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransact
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use hbbft::honey_badger::Batch;
+use minimint_api::db::batch::{BatchTx, DbBatch};
+use minimint_api::db::{Database, RawDatabase};
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::outcome::OutputOutcome;
+use minimint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
+use minimint_api::{FederationModule, TransactionId};
 use minimint_derive::UnzipConsensus;
 use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
-use mint_api::db::batch::{BatchTx, DbBatch};
-use mint_api::db::{Database, RawDatabase};
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::outcome::OutputOutcome;
-use mint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
-use mint_api::{FederationModule, TransactionId};
 use rand::{CryptoRng, RngCore};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -275,7 +275,7 @@ where
     pub fn transaction_status(
         &self,
         txid: TransactionId,
-    ) -> Option<mint_api::outcome::TransactionStatus> {
+    ) -> Option<minimint_api::outcome::TransactionStatus> {
         let is_proposal = self
             .db
             .get_value::<_, Transaction>(&ProposedTransactionKey(txid))
@@ -317,12 +317,12 @@ where
                 })
                 .collect();
 
-            Some(mint_api::outcome::TransactionStatus::Accepted {
+            Some(minimint_api::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,
                 outputs,
             })
         } else if is_proposal {
-            Some(mint_api::outcome::TransactionStatus::AwaitingConsensus)
+            Some(minimint_api::outcome::TransactionStatus::AwaitingConsensus)
         } else {
             None
         }

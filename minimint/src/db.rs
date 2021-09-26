@@ -1,6 +1,6 @@
-use mint_api::db::DatabaseKeyPrefixConst;
-use mint_api::encoding::{Decodable, Encodable};
-use mint_api::TransactionId;
+use minimint_api::db::DatabaseKeyPrefixConst;
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::TransactionId;
 use std::fmt::Debug;
 
 pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;
