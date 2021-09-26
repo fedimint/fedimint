@@ -5,9 +5,9 @@ use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransact
 use crate::rng::RngGenerator;
 use config::ServerConfig;
 use fedimint::{Mint, MintError};
-use fediwallet::{Wallet, WalletError};
 use hbbft::honey_badger::Batch;
 use minimint_derive::UnzipConsensus;
+use minimint_wallet::{Wallet, WalletError};
 use mint_api::db::batch::{BatchTx, DbBatch};
 use mint_api::db::{Database, RawDatabase};
 use mint_api::encoding::{Decodable, Encodable};

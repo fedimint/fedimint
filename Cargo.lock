@@ -994,30 +994,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fediwallet"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "bitcoin",
- "bitcoincore-rpc-async",
- "config",
- "futures",
- "hex 0.4.3",
- "itertools",
- "minimint-derive",
- "miniscript",
- "mint-api",
- "musig",
- "rand 0.6.5",
- "secp256k1",
- "serde",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "femme"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1743,12 +1719,12 @@ dependencies = [
  "bitcoin",
  "config",
  "fedimint",
- "fediwallet",
  "futures",
  "hbbft",
  "hex 0.4.3",
  "itertools",
  "minimint-derive",
+ "minimint-wallet",
  "mint-api",
  "musig",
  "rand 0.6.5",
@@ -1776,6 +1752,30 @@ dependencies = [
  "proc-macro2 1.0.27",
  "quote 1.0.9",
  "syn 1.0.73",
+]
+
+[[package]]
+name = "minimint-wallet"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "bitcoincore-rpc-async",
+ "config",
+ "futures",
+ "hex 0.4.3",
+ "itertools",
+ "minimint-derive",
+ "miniscript",
+ "mint-api",
+ "musig",
+ "rand 0.6.5",
+ "secp256k1",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

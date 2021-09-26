@@ -54,7 +54,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
         database.clone(),
     );
 
-    let wallet = fediwallet::Wallet::new(cfg.wallet.clone(), database.clone())
+    let wallet = minimint_wallet::Wallet::new(cfg.wallet.clone(), database.clone())
         .await
         .expect("Couldn't create wallet");
 
