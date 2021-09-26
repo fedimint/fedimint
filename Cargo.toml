@@ -4,13 +4,13 @@ members = [
     "config",
     "crypto/musig",
     "crypto/tbs",
-    "fedimint",
-    "modules/minimint-wallet",
     "ln-gateway",
     "minimint",
     "minimint-derive",
     "mint-api",
     "mint-client",
+    "modules/minimint-mint",
+    "modules/minimint-wallet",
 ]
 
 [patch.crates-io]

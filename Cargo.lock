@@ -977,23 +977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "counter",
- "itertools",
- "minimint-derive",
- "mint-api",
- "rand 0.6.5",
- "rayon",
- "serde",
- "tbs",
- "thiserror",
- "tracing",
-]
-
-[[package]]
 name = "femme"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1718,12 +1701,12 @@ dependencies = [
  "bincode",
  "bitcoin",
  "config",
- "fedimint",
  "futures",
  "hbbft",
  "hex 0.4.3",
  "itertools",
  "minimint-derive",
+ "minimint-mint",
  "minimint-wallet",
  "mint-api",
  "musig",
@@ -1752,6 +1735,23 @@ dependencies = [
  "proc-macro2 1.0.27",
  "quote 1.0.9",
  "syn 1.0.73",
+]
+
+[[package]]
+name = "minimint-mint"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "counter",
+ "itertools",
+ "minimint-derive",
+ "mint-api",
+ "rand 0.6.5",
+ "rayon",
+ "serde",
+ "tbs",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]

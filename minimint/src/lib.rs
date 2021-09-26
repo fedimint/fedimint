@@ -47,7 +47,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
         .map(|peer| peer.tbs_pks.clone())
         .collect();
 
-    let mint = fedimint::Mint::new(
+    let mint = minimint_mint::Mint::new(
         cfg.tbs_sks.clone(),
         pub_key_shares,
         cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
