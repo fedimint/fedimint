@@ -1,7 +1,6 @@
 [workspace]
 
 members = [
-    "config",
     "crypto/musig",
     "crypto/tbs",
     "ln-gateway",

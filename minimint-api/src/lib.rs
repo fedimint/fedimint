@@ -12,6 +12,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
+pub mod config;
 pub mod db;
 pub mod encoding;
 mod keys;

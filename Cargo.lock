@@ -670,24 +670,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "config"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "bitcoin",
- "hbbft",
- "hex 0.4.3",
- "minimint-api",
- "miniscript",
- "rand 0.6.5",
- "secp256k1",
- "serde",
- "serde_json",
- "structopt",
- "tbs",
-]
-
-[[package]]
 name = "const_fn"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1600,8 +1582,8 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "clightningrpc",
- "config",
  "lightning-invoice",
+ "minimint",
  "minimint-api",
  "mint-client",
  "rand 0.6.5",
@@ -1700,7 +1682,6 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin",
- "config",
  "futures",
  "hbbft",
  "hex 0.4.3",
@@ -1786,7 +1767,6 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoincore-rpc-async",
- "config",
  "futures",
  "hex 0.4.3",
  "itertools",
@@ -1830,10 +1810,10 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
- "config",
  "futures",
  "hex 0.4.3",
  "lightning-invoice",
+ "minimint",
  "minimint-api",
  "miniscript",
  "musig",

@@ -1,4 +1,4 @@
-use config::{load_from_file, ServerConfig, ServerOpts};
+use minimint::config::{load_from_file, ServerConfig, ServerOpts};
 use minimint::run_minimint;
 use structopt::StructOpt;
 use tracing_subscriber::EnvFilter;

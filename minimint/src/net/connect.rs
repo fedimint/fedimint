@@ -1,7 +1,7 @@
+use crate::config::ServerConfig;
 use crate::net::framed::Framed;
 use crate::net::PeerConnections;
 use async_trait::async_trait;
-use config::ServerConfig;
 use futures::future::select_all;
 use futures::future::try_join_all;
 use futures::StreamExt;

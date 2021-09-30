@@ -111,16 +111,14 @@ impl BlindingKey {
     }
 }
 
-/// * `threshold`: how many malicious actors may exist for the scheme to still produce signatures
-/// * `keys`: total number of keypairs to generate
-///
-/// `keys - threshold` is the amount of shares needed to generate a valid signature
+/// * `threshold`: how many signature shares are needed to produce a signature
+/// * `keys`: how many keys to generate
 pub fn dealer_keygen(
     threshold: usize,
     keys: usize,
 ) -> (AggregatePublicKey, Vec<PublicKeyShare>, Vec<SecretKeyShare>) {
     let mut rng = OsRng; // FIXME: pass rng
-    let poly = Poly::<Scalar, Scalar>::random(min_shares(keys, threshold) - 1, &mut rng);
+    let poly = Poly::<Scalar, Scalar>::random(threshold - 1, &mut rng);
     let (pub_shares, sec_shares) = (1..=keys)
         .map(|idx| {
             let sk = poly.evaluate(idx as u64);
@@ -158,37 +156,22 @@ pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSign
 /// responsibility of verifying the supplied shares lies with the caller.
 ///
 /// * `sig_shares`: an iterator yielding pairs of key indices and signature shares from said key
-/// * `num_keys`: total amount of keys in the signing group
-/// * `threshold`: maximum amount of missing shares
+/// * `threshold`: number of shares needed to combine a signature
 ///
 /// # Panics
 /// If the amount of shares supplied is less than the necessary amount
-pub fn combine_valid_shares<I>(sig_shares: I, num_keys: usize, threshold: usize) -> BlindedSignature
+pub fn combine_valid_shares<I>(sig_shares: I, threshold: usize) -> BlindedSignature
 where
     I: IntoIterator<Item = (usize, BlindedSignatureShare)>,
     I::IntoIter: Clone,
 {
-    let points = sig_shares
-        .into_iter()
-        .take(min_shares(num_keys, threshold))
-        .map(|(idx, share)| {
-            let x = Scalar::from((idx as u64) + 1);
-            let y = share.0.into();
-            (x, y)
-        });
+    let points = sig_shares.into_iter().take(threshold).map(|(idx, share)| {
+        let x = Scalar::from((idx as u64) + 1);
+        let y = share.0.into();
+        (x, y)
+    });
     let bsig: G1Projective = poly::interpolate_zero(points);
     BlindedSignature(bsig.to_affine())
-}
-
-/// The minimum required signature shares to construct a signature
-///
-/// * `num_keys`: total amount of keys in the signing group
-/// * `threshold`: maximum amount of missing shares
-///
-/// # Panics
-/// If `threshold` > `num_keys`.
-pub fn min_shares(num_keys: usize, threshold: usize) -> usize {
-    num_keys - threshold
 }
 
 pub fn unblind_signature(blinding_key: BlindingKey, blinded_sig: BlindedSignature) -> Signature {
@@ -222,7 +205,7 @@ impl Aggregatable for Vec<PublicKeyShare> {
             .iter()
             .enumerate()
             .map(|(idx, PublicKeyShare(pk))| (Scalar::from((idx + 1) as u64), pk.into()))
-            .skip(threshold);
+            .take(threshold);
         let pk: G2Projective = poly::interpolate_zero(elements);
         AggregatePublicKey(pk.to_affine())
     }
@@ -253,7 +236,7 @@ mod tests {
 
         let (bkey, bmsg) = blind_message(msg);
 
-        let (pk, pks, sks) = dealer_keygen(threshold, 15);
+        let (pk, _pks, sks) = dealer_keygen(threshold, 15);
 
         let mut sigs = sks
             .iter()
@@ -262,7 +245,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // All sig shards available
-        let bsig = combine_valid_shares(sigs.clone().into_iter(), pks.len(), threshold);
+        let bsig = combine_valid_shares(sigs.clone().into_iter(), threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
 
@@ -270,7 +253,7 @@ mod tests {
         for _ in 0..5 {
             sigs.pop();
         }
-        let bsig = combine_valid_shares(sigs.clone().into_iter(), pks.len(), threshold);
+        let bsig = combine_valid_shares(sigs.clone().into_iter(), threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
 
@@ -279,7 +262,7 @@ mod tests {
             .iter()
             .map(|idx| sigs[*idx].clone())
             .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shuffle_sigs.into_iter(), pks.len(), threshold);
+        let bsig = combine_valid_shares(shuffle_sigs.into_iter(), threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
     }
@@ -296,7 +279,7 @@ mod tests {
     fn bench_signing(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (_bk, bmsg) = blind_message(msg);
-        let (_pk, _pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(4, 5);
 
         bencher.iter(|| sign_blinded_msg(bmsg, sks[0]));
     }
@@ -305,27 +288,27 @@ mod tests {
     fn bench_combine(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (_bk, bmsg) = blind_message(msg);
-        let (_pk, _pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(4, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
             .enumerate()
             .collect::<Vec<_>>();
 
-        bencher.iter(move || combine_valid_shares(shares.clone(), 5, 1));
+        bencher.iter(move || combine_valid_shares(shares.clone(), 4));
     }
 
     #[bench]
     fn bench_unblind(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (bk, bmsg) = blind_message(msg);
-        let (_pk, _pks, sks) = dealer_keygen(1, 5);
+        let (_pk, _pks, sks) = dealer_keygen(4, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
             .enumerate()
             .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shares, 5, 1);
+        let bsig = combine_valid_shares(shares, 4);
 
         bencher.iter(|| unblind_signature(bk, bsig));
     }
@@ -334,13 +317,13 @@ mod tests {
     fn bench_verify(bencher: &mut Bencher) {
         let msg = Message::from_bytes(b"Hello World!");
         let (bk, bmsg) = blind_message(msg);
-        let (pk, _pks, sks) = dealer_keygen(1, 5);
+        let (pk, _pks, sks) = dealer_keygen(4, 5);
         let shares = sks
             .iter()
             .map(|sk| sign_blinded_msg(bmsg, *sk))
             .enumerate()
             .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shares, 5, 1);
+        let bsig = combine_valid_shares(shares, 4);
         let sig = unblind_signature(bk, bsig);
 
         bencher.iter(|| verify(msg, sig, pk));

@@ -1,5 +1,5 @@
+use crate::config::ServerConfig;
 use crate::consensus::FediMintConsensus;
-use config::ServerConfig;
 use minimint_api::transaction::Transaction;
 use minimint_api::TransactionId;
 use std::fmt::Formatter;

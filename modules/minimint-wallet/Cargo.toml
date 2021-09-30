@@ -11,7 +11,6 @@ async-trait = "0.1"
 bincode = "1"
 bitcoin = { version = "0.26.0", features = [ "rand", "serde", "bitcoinconsensus" ] }
 bitcoincore-rpc-async = "3.0.1"
-config = { path = "../../config" }
 futures = "0.3"
 hex = "0.4.3"
 itertools = "0.10.0"

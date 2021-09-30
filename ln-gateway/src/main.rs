@@ -1,15 +1,16 @@
 use clightningrpc::lightningrpc::PayOptions;
 use clightningrpc::LightningRPC;
-use config::{load_from_file, ClientConfig};
+use minimint::config::{load_from_file, ClientConfig};
 use minimint_api::transaction::OutPoint;
 use minimint_api::Coins;
-use mint_client::{MintClient, SpendableCoin};
+use mint_client::{ClientError, MintClient, SpendableCoin};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tide::Response;
+use tokio::time::Duration;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
@@ -56,18 +57,21 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
     } = req.state();
 
     debug!("Trying to reissue");
-    let tx_id = mint_client
+    let txid = mint_client
         .reissue(pay_req.coins, &mut rng)
         .await
         .expect("error while starting reissuance");
     debug!("Fetching coins");
-    mint_client
-        .fetch_coins(OutPoint {
-            txid: tx_id,
-            out_idx: 0,
-        }) // TODO: remove assumption about tx structure
-        .await
-        .map_err(|_| tide::Error::from_str(500, "fetching reissuance failed"))?;
+    loop {
+        match mint_client.fetch_coins(OutPoint { txid, out_idx: 0 }).await {
+            Ok(()) => break,
+            // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+            Err(ClientError::MintError | ClientError::OutputNotReadyYet(_)) => {
+                tokio::time::sleep(Duration::from_secs(1)).await
+            }
+            Err(_) => return Err(tide::Error::from_str(500, "fetching reissuance failed")),
+        }
+    }
 
     let invoice = pay_req.invoice;
     let ln_client = ln_client.clone();

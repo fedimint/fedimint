@@ -27,6 +27,9 @@ pub mod db;
 /// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;
 
+/// MiniMint toplevel config
+pub mod config;
+
 /// Some abstractions to handle randomness
 mod rng;
 
@@ -38,21 +41,12 @@ pub async fn run_minimint(cfg: ServerConfig) {
     );
     assert_eq!(cfg.peers.keys().min().copied(), Some(0));
 
+    let threshold = cfg.peers.len() - cfg.max_faulty();
+
     let database: Arc<dyn RawDatabase> =
         Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap());
 
-    let pub_key_shares = cfg
-        .peers
-        .values()
-        .map(|peer| peer.tbs_pks.clone())
-        .collect();
-
-    let mint = minimint_mint::Mint::new(
-        cfg.tbs_sks.clone(),
-        pub_key_shares,
-        cfg.peers.len() - cfg.max_faulty() - 1, //FIXME
-        database.clone(),
-    );
+    let mint = minimint_mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
 
     let wallet = minimint_wallet::Wallet::new(cfg.wallet.clone(), database.clone())
         .await

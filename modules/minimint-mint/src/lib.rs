@@ -1,5 +1,7 @@
+pub mod config;
 mod db;
 
+use crate::config::MintConfig;
 use crate::db::{
     NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
     ReceivedPartialSignatureKey, ReceivedPartialSignatureKeyOutputPrefix,
@@ -13,26 +15,26 @@ use minimint_api::transaction::{BlindToken, OutPoint};
 use minimint_api::util::TieredMultiZip;
 use minimint_api::{
     Amount, Coin, Coins, FederationModule, InvalidAmountTierError, Keys, PartialSigResponse,
-    SigResponse,
+    PeerId, SigResponse,
 };
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::sync::Arc;
 use tbs::{
-    combine_valid_shares, min_shares, sign_blinded_msg, verify_blind_share, Aggregatable,
-    AggregatePublicKey, PublicKeyShare, SecretKeyShare,
+    combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
+    PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
 use tracing::{debug, error, warn};
 
 /// Federated mint member mint
 pub struct Mint {
-    key_idx: usize,
+    key_id: PeerId,
     sec_key: Keys<SecretKeyShare>,
-    pub_key_shares: Vec<Keys<PublicKeyShare>>,
+    pub_key_shares: BTreeMap<PeerId, Keys<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
     threshold: usize, // TODO: move to cfg
     db: Arc<dyn RawDatabase>,
@@ -186,7 +188,7 @@ impl FederationModule for Mint {
             )
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
-                (key.request_id, (key.peer_id as usize, partial_sig))
+                (key.request_id, (key.peer_id, partial_sig))
             })
             .into_group_map();
 
@@ -218,7 +220,7 @@ impl FederationModule for Mint {
                             batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
                                 BatchItem::delete(ReceivedPartialSignatureKey {
                                     request_id: issuance_id,
-                                    peer_id: peer as u16,
+                                    peer_id: peer,
                                 })
                             }));
 
@@ -279,39 +281,50 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(
-        sec_key: Keys<SecretKeyShare>,
-        pub_keys: Vec<Keys<PublicKeyShare>>,
-        threshold: usize,
-        db: Arc<dyn RawDatabase>,
-    ) -> Mint {
-        assert!(sec_key.tiers().count() > 0);
+    pub fn new(cfg: MintConfig, threshold: usize, db: Arc<dyn RawDatabase>) -> Mint {
+        assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
         // consistent.
-        assert!(pub_keys.iter().all(|pk| pk.structural_eq(&sec_key)));
+        assert!(cfg
+            .peer_tbs_pks
+            .values()
+            .all(|pk| pk.structural_eq(&cfg.tbs_sks)));
 
-        let ref_pub_key = sec_key.to_public();
+        let ref_pub_key = cfg.tbs_sks.to_public();
 
         // Find our key index and make sure we know the private key for all our public key shares
-        let our_idx = pub_keys
+        let our_id = cfg // FIXME: make sure we use id instead of idx everywhere
+            .peer_tbs_pks
             .iter()
-            .position(|pk| pk == &ref_pub_key)
+            .find_map(|(&id, pk)| if pk == &ref_pub_key { Some(id) } else { None })
             .expect("Own key not found among pub keys.");
 
-        let aggregate_pub_keys =
-            TieredMultiZip::new(pub_keys.iter().map(|keys| keys.iter()).collect())
-                .map(|(amt, keys)| {
-                    // TODO: avoid this through better aggregation API allowing references or
-                    let keys = keys.into_iter().copied().collect::<Vec<_>>();
-                    (amt, keys.aggregate(threshold))
-                })
-                .collect();
+        assert_eq!(
+            cfg.peer_tbs_pks[&our_id],
+            cfg.tbs_sks
+                .iter()
+                .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+                .collect()
+        );
+
+        let aggregate_pub_keys = TieredMultiZip::new(
+            cfg.peer_tbs_pks
+                .iter()
+                .map(|(_, keys)| keys.iter())
+                .collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let keys = keys.into_iter().copied().collect::<Vec<_>>();
+            (amt, keys.aggregate(threshold))
+        })
+        .collect();
 
         Mint {
-            key_idx: our_idx,
-            sec_key,
-            pub_key_shares: pub_keys,
+            key_id: our_id,
+            sec_key: cfg.tbs_sks,
+            pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
             threshold,
             db,
@@ -322,7 +335,7 @@ impl Mint {
 impl Mint {
     fn combine(
         &self,
-        partial_sigs: Vec<(usize, PartialSigResponse)>,
+        partial_sigs: Vec<(PeerId, PartialSigResponse)>,
     ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
         // FIXME: decide on right boundary place for this invariant
         // Filter out duplicate contributions, they make share combinations fail
@@ -338,7 +351,7 @@ impl Mint {
         }
 
         // Determine the reference response to check against
-        let our_contribution = match &partial_sigs.iter().find(|(peer, _)| *peer == self.key_idx) {
+        let our_contribution = match &partial_sigs.iter().find(|(peer, _)| *peer == self.key_id) {
             Some((_, psigs)) => psigs,
             None => {
                 return (
@@ -387,7 +400,7 @@ impl Mint {
                 .into_iter()
                 .zip(peer_ids)
                 .filter_map(|((msg, sig), peer)| {
-                    let amount_key = match self.pub_key_shares[peer].tier(&amt) {
+                    let amount_key = match self.pub_key_shares[&peer].tier(&amt) {
                         Ok(key) => key,
                         Err(_) => {
                             peer_errors.push((peer, PeerErrorType::InvalidAmountTier));
@@ -408,16 +421,20 @@ impl Mint {
                 .collect::<Vec<_>>();
 
             // Check that there are still sufficient
-            let min_shares = min_shares(self.pub_key_shares.len(), self.threshold);
-            if valid_sigs.len() < min_shares {
+            if valid_sigs.len() < self.threshold {
                 return Err(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    min_shares,
+                    self.threshold,
                 ));
             }
 
-            let sig = combine_valid_shares(valid_sigs, self.pub_key_shares.len(), self.threshold);
+            let sig = combine_valid_shares(
+                valid_sigs
+                    .into_iter()
+                    .map(|(peer, share)| (peer as usize, share)), // FIXME: remove hack, build proper peer id type
+                self.threshold,
+            );
 
             Ok((amt, sig))
         })
@@ -466,7 +483,7 @@ impl Mint {
         );
 
         // FIXME: add own id to cfg
-        if peer == self.key_idx as u16 {
+        if peer == self.key_id as u16 {
             batch.append_delete(ProposedPartialSignatureKey {
                 request_id: output_id,
             });
@@ -478,7 +495,7 @@ impl Mint {
 
 /// Represents an array of mint indexes that delivered faulty shares
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct MintShareErrors(pub Vec<(usize, PeerErrorType)>);
+pub struct MintShareErrors(pub Vec<(PeerId, PeerErrorType)>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum PeerErrorType {
@@ -497,7 +514,7 @@ pub enum CombineError {
     #[error("We could not find our own contribution in the provided shares, so we have no validation reference")]
     NoOwnContribution,
     #[error("Peer {0} contributed {1} shares, 1 expected")]
-    MultiplePeerContributions(usize, usize),
+    MultiplePeerContributions(PeerId, usize),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]

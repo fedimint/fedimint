@@ -11,11 +11,11 @@ base64 = "0.13.0"
 bincode = "1.3.1"
 bitcoin = { version = "0.26.0" }
 bitcoin_hashes = "0.9.4"
-config = { path = "../config", features = [ "client" ] }
 futures = "0.3.9"
 hex = "0.4.3"
 lightning-invoice = "0.5.0"
 miniscript = "5.1.0"
+minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 musig = { path = "../crypto/musig" }
 rand = "0.6.5"

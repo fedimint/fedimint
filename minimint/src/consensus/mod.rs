@@ -1,9 +1,9 @@
 mod conflictfilter;
 
+use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
 use crate::rng::RngGenerator;
-use config::ServerConfig;
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
 use minimint_api::db::{Database, RawDatabase};

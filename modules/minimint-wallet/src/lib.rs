@@ -1,5 +1,7 @@
+pub mod config;
 mod db;
 
+use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingPegOutKey,
     PendingPegOutPrefixKey, PendingTransaction, PendingTransactionKey, PendingTransactionPrefixKey,
@@ -16,7 +18,6 @@ use bitcoin::{
     Address, AddressType, BlockHash, Network, Script, SigHashType, Transaction, TxIn, TxOut, Txid,
 };
 use bitcoincore_rpc_async::{Auth, RpcApi};
-use config::{Feerate, WalletConfig};
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::{Database, RawDatabase};
@@ -98,6 +99,24 @@ struct StatelessWallet<'a> {
     descriptor: &'a Descriptor<CompressedPublicKey>,
     secret_key: &'a secp256k1::SecretKey,
     secp: &'a secp256k1::Secp256k1<secp256k1::All>,
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct Feerate {
+    pub sats_per_kvb: u64,
 }
 
 #[async_trait(?Send)]
@@ -1000,6 +1019,13 @@ async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: bitcoincore_rpc_asy
     }
 }
 
+impl Feerate {
+    pub fn calculate_fee(&self, weight: usize) -> bitcoin::Amount {
+        let sats = self.sats_per_kvb * (weight as u64) / 1000;
+        bitcoin::Amount::from_sat(sats)
+    }
+}
+
 impl std::hash::Hash for PegOutSignatureItem {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.txid.hash(state);
@@ -1053,11 +1079,11 @@ impl From<PegInProofError> for WalletError {
 
 #[cfg(test)]
 mod tests {
+    use super::Feerate;
     use crate::db::UTXOKey;
     use crate::{PendingPegOut, SpendableUTXO, StatelessWallet};
     use bitcoin::hashes::Hash as BitcoinHash;
     use bitcoin::{Address, Amount, OutPoint, TxOut};
-    use config::Feerate;
     use minimint_api::{CompressedPublicKey, Tweakable};
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;

@@ -1,7 +1,7 @@
 use bitcoin::{Address, Script, Transaction};
 use bitcoin_hashes::Hash as BitcoinHash;
-use config::ClientConfig;
 use futures::future::JoinAll;
+use minimint::config::ClientConfig;
 use minimint_api::db::batch::{BatchItem, DbBatch};
 use minimint_api::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseKeyPrefixConst, DecodingError, RawDatabase,
@@ -117,8 +117,8 @@ impl MintClient {
         let mut successes: usize = 0;
         for url in self
             .cfg
-            .mints
-            .choose_multiple(&mut rng, self.cfg.mints.len())
+            .api_endpoints
+            .choose_multiple(&mut rng, self.cfg.api_endpoints.len())
         {
             let res = self
                 .http_client
@@ -176,14 +176,14 @@ impl MintClient {
         .map_err(|e| ClientError::PegInProofError(e))?;
 
         peg_in_proof
-            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .verify(&self.secp, &self.cfg.wallet.peg_in_descriptor)
             .expect("Invalid proof");
         let sats = peg_in_proof.tx_output().value;
         // FIXME: check against underflow
         let amount = Amount::from_sat(sats) - self.cfg.fee_consensus.fee_peg_in_abs;
 
         let (coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, &self.cfg.mint_pk, &mut rng);
+            CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &mut rng);
 
         let inputs = vec![mint_tx::Input::PegIn(peg_in_proof)];
         let outputs = vec![mint_tx::Output::Coins(
@@ -265,7 +265,7 @@ impl MintClient {
             .clone()
             .ok_or(ClientError::OutputNotReadyYet(outpoint))?;
 
-        let coins = issuance.finalize(bsig, &self.cfg.mint_pk)?;
+        let coins = issuance.finalize(bsig, &self.cfg.mint.tbs_pks)?;
 
         let mut batch = DbBatch::new();
         batch.autocommit(|tx| {
@@ -291,12 +291,12 @@ impl MintClient {
         F: Fn(&reqwest::Client, &str) -> RequestBuilder,
         O: DeserializeOwned,
     {
-        assert!(!self.cfg.mints.is_empty());
+        assert!(!self.cfg.api_endpoints.is_empty());
 
         // TODO: add per mint timeout
         let mut requests = self
             .cfg
-            .mints
+            .api_endpoints
             .iter()
             .map(|mint| query_builder(&self.http_client, mint.as_str()).send())
             .collect::<Vec<_>>();
@@ -381,7 +381,7 @@ impl MintClient {
     ) -> Result<TransactionId, ClientError> {
         let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
             coins.amount(),
-            &self.cfg.mint_pk, // TODO: cache somewhere
+            &self.cfg.mint.tbs_pks, // TODO: cache somewhere
             &mut rng,
         );
 
@@ -469,11 +469,12 @@ impl MintClient {
         // TODO: check if there are other failure cases
         let script = self
             .cfg
+            .wallet
             .peg_in_descriptor
             .tweak(&peg_in_pub_key, &self.secp)
             .script_pubkey();
         debug!("Peg-in script: {}", script);
-        let address = Address::from_script(&script, self.cfg.network)
+        let address = Address::from_script(&script, self.cfg.wallet.network)
             .expect("Script from descriptor should have an address");
 
         self.db

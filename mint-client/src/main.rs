@@ -1,6 +1,6 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
-use config::{load_from_file, ClientConfig};
+use minimint::config::{load_from_file, ClientConfig};
 use minimint_api::encoding::Decodable;
 use minimint_api::{Amount, Coins, TxOutProof};
 use mint_client::{MintClient, SpendableCoin};
