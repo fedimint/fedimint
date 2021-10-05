@@ -3,25 +3,19 @@
 This is an experimental implementation of a federated chaumian bank.
 
 ## Running it locally
-I'm currently using rust `rustc 1.54.0-nightly (ca82264ec 2021-05-09)` for development. I'll try to keep it up to date
-and eventually get off nightly.
+I'm currently using rust `rustc 1.54.0-nightly (ca82264ec 2021-05-09)` for development. I'll try to keep it up to date and eventually get off nightly.
 
 ### Generating config
-You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can
-generate the necessary configuration files as follows:
+You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can generate the necessary configuration files as follows:
 
 ```shell
 mkdir -p cfg
 cargo run --example configgen cfg <num_nodes> 5000 6000 <tier1> <tier2> …
 ```
 
-`<num_nodse` is the amount of nodes the federation shall consist of. It should be >=4 (I always test with 5) and not too big as the
-cryptography of the BFT protocol is rather intense and you should ideally have 1 core per node. The numbers `5000` and
-`6000` specify the beginning of the port range the inner-federation sockets and API sockets bind to. The remaining
-arguments will be interpreted as amount tiers in msat.
+`<num_nodes>` is the amount of nodes the federation shall consist of. It should be >=4 (I always test with 5) and not too big as the cryptography of the BFT protocol is rather intense and you should ideally have 1 core per node. The numbers `5000` and `6000` specify the beginning of the port range the inner-federation sockets and API sockets bind to. The remaining arguments will be interpreted as amount tiers in msat.
 
-This will both create all the `server-n.json` config files and one `client.json`. If you want to play with multiple
-clients you should create ons subdirectory per client and copy the `client.json` into each.
+This will both create all the `server-n.json` config files and one `client.json`. If you want to play with multiple clients you should create ons subdirectory per client and copy the `client.json` into each.
 
 ### Running the mints
 A script for running all mints and a regtest `bitcoind` at once is provided at `scripts/startfed.sh`. Run it as follows:
@@ -30,16 +24,12 @@ A script for running all mints and a regtest `bitcoind` at once is provided at `
 bash scripts/startfed.sh <num_nodes> 0
 ```
 
-The `0` in the end specifies how many nodes to leave out. E.g. changing it to one would skip the first node. This is
-useful to run a single node with a debugger attached.
+The `0` in the end specifies how many nodes to leave out. E.g. changing it to one would skip the first node. This is useful to run a single node with a debugger attached.
 
-Log output can be adjusted using the `RUST_LOG` environment variable and is set to `info` by default. Logging can be
-adjusted per module, see the [`env_logger` documentation](https://docs.rs/env_logger/0.8.4/env_logger/#enabling-logging)
-for details.
+Log output can be adjusted using the `RUST_LOG` environment variable and is set to `info` by default. Logging can be adjusted per module, see the [`env_logger` documentation](https://docs.rs/env_logger/0.8.4/env_logger/#enabling-logging) for details.
 
 ### Using the client
-First you need to make sure that your regtest `bitcoind` has some coins that are mature. For that you can generate a
-few hundred blocks to your own wallet:
+First you need to make sure that your regtest `bitcoind` has some coins that are mature. For that you can generate a few hundred blocks to your own wallet:
 
 ```shell
 ADDRESS="$(bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress)"
@@ -52,9 +42,7 @@ the you can use the peg-in script to deposit funds. It contains comments that ex
 bash scripts/pegin.sh <amount in BTC>
 ```
 
-Take care to not request too big of a peg-in (depending on your amount tier the smallest representations as tokens might
-be too big to finish signing in reasonable time) or too small (there is a 500sat fee that needs to be paid). After about
-20s your default client in `cfg` should have newly issued coins.
+Take care to not request too big of a peg-in (depending on your amount tier the smallest representations as tokens might be too big to finish signing in reasonable time) or too small (there is a 500sat fee that needs to be paid). After about 20s your default client in `cfg` should have newly issued coins.
 
 You can view your client's holdings using the `info` command:
 
@@ -67,8 +55,7 @@ Jun 15 14:57:22.066  INFO mint_client: We own 5 coins of denomination 100000 msa
 Jun 15 14:57:22.066  INFO mint_client: We own 9 coins of denomination 1000000 msat
 ```
 
-The `spend` subcommand allows to send tokens to another client. This will select the smallest possible set of the
-client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
+The `spend` subcommand allows to send tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
 
 ```
 minimint $ cargo run --bin mint-client --release -- cfg spend 400000

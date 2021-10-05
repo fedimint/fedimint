@@ -1,7 +1,6 @@
 # Database
 
-minimint uses a simple key-value store as its database. In theory any such KV store with the following features can
-be used:
+minimint uses a simple key-value store as its database. In theory any such KV store with the following features can be used:
 
 * insert, update, delete actions
 * transactions
@@ -10,8 +9,7 @@ be used:
 In practice we use [sled](https://docs.rs/sled/) as it is a native rust database and seems sufficiently performant.
 
 ## Server DB Layout
-The Database is split into different key spaces based on prefixing that can be understood as different tables (each
-"table's" content can be retrieved using prefix search). There are three general prefix ranges:
+The Database is split into different key spaces based on prefixing that can be understood as different tables (each "table's" content can be retrieved using prefix search). There are three general prefix ranges:
 
 * 0x00-0x0A: consensus
 * 0x10-0x1A: mint
