@@ -1,6 +1,6 @@
 # Minimint
 
-This is an experimental implementation of a federated chaumian bank.
+This is an experimental implementation of a federated Chaumian bank.
 
 ## Running it locally
 I'm currently using rust `rustc 1.54.0-nightly (ca82264ec 2021-05-09)` for development. I'll try to keep it up to date and eventually get off nightly.
@@ -36,7 +36,7 @@ ADDRESS="$(bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddr
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 200 "$ADDRESS"
 ```
 
-the you can use the peg-in script to deposit funds. It contains comments that explain the deposit process.
+Then you can use the peg-in script to deposit funds. It contains comments that explain the deposit process.
 
 ```shell
 bash scripts/pegin.sh <amount in BTC>
