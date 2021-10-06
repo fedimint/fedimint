@@ -99,7 +99,7 @@ point_impl!(BlindedSignature);
 point_impl!(BlindedSignatureShare);
 
 impl SecretKeyShare {
-    pub fn to_pub_key_share(&self) -> PublicKeyShare {
+    pub fn to_pub_key_share(self) -> PublicKeyShare {
         PublicKeyShare((G2Projective::generator() * self.0).to_affine())
     }
 }
