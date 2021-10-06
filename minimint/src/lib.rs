@@ -40,7 +40,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
         cfg.peers.keys().max().copied().map(|id| id.to_usize()),
         Some(cfg.peers.len() - 1)
     );
-    assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::ZERO));
+    assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::from(0)));
 
     let threshold = cfg.peers.len() - cfg.max_faulty();
 

@@ -128,8 +128,6 @@ pub struct FeeConsensus {
 }
 
 impl PeerId {
-    pub const ZERO: Self = Self(0);
-
     pub fn to_usize(self) -> usize {
         self.0 as usize
     }
