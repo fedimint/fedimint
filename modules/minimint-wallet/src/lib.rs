@@ -200,9 +200,7 @@ impl FederationModule for Wallet {
 
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
-            if let Err(e) =
-                self.process_peg_out_signature(batch.subtransaction(), peer.into(), &sig)
-            {
+            if let Err(e) = self.process_peg_out_signature(batch.subtransaction(), peer, &sig) {
                 warn!("Error processing peer {}'s peg-out signature: {}", peer, e)
             };
         }

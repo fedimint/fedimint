@@ -190,7 +190,7 @@ where
                 };
                 Some(Ok((key, value)))
             }
-            Err(e) => Some(Err(e.into())),
+            Err(e) => Some(Err(e)),
         }
     }
 }

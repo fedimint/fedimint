@@ -146,7 +146,7 @@ async fn spawn_hbbft(
             cfg.hbbft_sk.inner().clone(),
             cfg.peers
                 .iter()
-                .map(|(id, peer)| (*id, peer.hbbft_pk.clone()))
+                .map(|(id, peer)| (*id, peer.hbbft_pk))
                 .collect(),
         );
 

@@ -147,7 +147,7 @@ where
         select_all(
             self.connections
                 .iter_mut()
-                .map(|(id, peer)| Self::receive_from_peer(id.clone(), peer).boxed()),
+                .map(|(id, peer)| Self::receive_from_peer(*id, peer).boxed()),
         )
         .map(|(msg, _, _)| msg)
         .await

@@ -171,7 +171,7 @@ pub mod rng_adapt {
         fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Error> {
             self.0
                 .try_fill_bytes(dest)
-                .map_err(|e| secp256kfun::rand_core::Error::new(e))
+                .map_err(secp256kfun::rand_core::Error::new)
         }
     }
 }

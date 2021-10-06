@@ -173,7 +173,7 @@ impl MintClient {
             output_idx as u32,
             public_tweak_key,
         )
-        .map_err(|e| ClientError::PegInProofError(e))?;
+        .map_err(ClientError::PegInProofError)?;
 
         peg_in_proof
             .verify(&self.secp, &self.cfg.wallet.peg_in_descriptor)

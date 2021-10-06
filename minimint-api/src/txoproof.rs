@@ -197,14 +197,13 @@ impl<'de> Deserialize<'de> for TxOutProof {
     {
         if deserializer.is_human_readable() {
             let hex_str: &str = Deserialize::deserialize(deserializer)?;
-            let bytes =
-                hex::decode(hex_str).map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?;
+            let bytes = hex::decode(hex_str).map_err(<D as Deserializer<'de>>::Error::custom)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
-                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+                .map_err(<D as Deserializer<'de>>::Error::custom)?)
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
-                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+                .map_err(<D as Deserializer<'de>>::Error::custom)?)
         }
     }
 }

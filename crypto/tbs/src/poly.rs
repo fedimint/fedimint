@@ -53,7 +53,7 @@ where
 {
     let elements_closure = elements.clone();
     let lagrange_coefficient = move |i: usize| -> S {
-        let xi = elements_closure.clone().skip(i).next().unwrap().0;
+        let xi = elements_closure.clone().nth(i).unwrap().0;
 
         elements_closure
             .clone()

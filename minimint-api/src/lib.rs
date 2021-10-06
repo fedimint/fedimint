@@ -524,8 +524,7 @@ impl Encodable for TransactionId {
 impl Decodable for TransactionId {
     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes)
-            .map_err(|e| DecodeError::from_err(e))?;
+        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))
     }
 }

@@ -4,7 +4,7 @@ use rand_chacha::ChaChaRng;
 use sha3::digest::generic_array::typenum::U32;
 use sha3::Digest;
 
-const HASH_TAG: &'static [u8] = b"TBS_BLS12-381_";
+const HASH_TAG: &[u8] = b"TBS_BLS12-381_";
 
 pub fn hash_bytes_to_curve<G: Group>(data: &[u8]) -> G {
     let mut hash_engine = sha3::Sha3_256::new();
