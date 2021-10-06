@@ -11,6 +11,7 @@ use consensus::ConsensusOutcome;
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use minimint_api::db::RawDatabase;
+use minimint_api::PeerId;
 use rand::{CryptoRng, RngCore};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -36,10 +37,10 @@ mod rng;
 /// Start all the components of the mintan d plug them together
 pub async fn run_minimint(cfg: ServerConfig) {
     assert_eq!(
-        cfg.peers.keys().max().copied(),
-        Some((cfg.peers.len() as u16) - 1)
+        cfg.peers.keys().max().copied().map(|id| id.to_usize()),
+        Some(cfg.peers.len() - 1)
     );
-    assert_eq!(cfg.peers.keys().min().copied(), Some(0));
+    assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::ZERO));
 
     let threshold = cfg.peers.len() - cfg.max_faulty();
 

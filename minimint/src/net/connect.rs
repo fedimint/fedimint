@@ -7,6 +7,7 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use futures::{FutureExt, SinkExt};
 use hbbft::Target;
+use minimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -20,7 +21,7 @@ use tracing::{debug, error, info, trace};
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
-    connections: HashMap<u16, Framed<Compat<TcpStream>, T>>,
+    connections: HashMap<PeerId, Framed<Compat<TcpStream>, T>>,
 }
 
 impl<T: 'static> Connections<T>
@@ -57,8 +58,8 @@ where
         let identity = &cfg.identity;
         let handshakes = out_conns.into_iter().chain(in_conns).map(
             async move |mut stream| -> Result<_, std::io::Error> {
-                stream.write_u16(*identity).await?;
-                let peer = stream.read_u16().await?;
+                stream.write_u16((*identity).into()).await?;
+                let peer = stream.read_u16().await?.into();
                 Ok((peer, stream))
             },
         );
@@ -93,7 +94,7 @@ where
         Ok(connections)
     }
 
-    async fn connect_to_peer(port: u16, peer: u16) -> Result<TcpStream, std::io::Error> {
+    async fn connect_to_peer(port: u16, peer: PeerId) -> Result<TcpStream, std::io::Error> {
         debug!("Connecting to peer {}", peer);
         let res = TcpStream::connect(("127.0.0.1", port)).await;
         if res.is_err() {
@@ -102,7 +103,7 @@ where
         res
     }
 
-    async fn receive_from_peer(id: u16, peer: &mut Framed<Compat<TcpStream>, T>) -> (u16, T) {
+    async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> (PeerId, T) {
         let msg = peer
             .next()
             .await
@@ -120,7 +121,7 @@ impl<T> PeerConnections<T> for Connections<T>
 where
     T: Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
-    type Id = u16;
+    type Id = PeerId;
 
     async fn send(&mut self, target: Target<Self::Id>, msg: T) {
         trace!("Sending message to {:?}", target);

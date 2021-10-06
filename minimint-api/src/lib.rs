@@ -33,7 +33,6 @@ pub use tweakable::{Contract, Tweakable};
 pub use txoproof::{PegInProof, PegInProofError, TxOutProof};
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
-pub type PeerId = u16; // TODO: make this its own type
 
 hash_newtype!(
     TransactionId,
@@ -41,6 +40,22 @@ hash_newtype!(
     32,
     doc = "A transaction id for peg-ins, peg-outs and reissuances"
 );
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+)]
+pub struct PeerId(u16);
 
 /// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
 /// this is also why the amount type from rust-bitcoin isn't used instead.
@@ -110,6 +125,32 @@ pub struct FeeConsensus {
     pub fee_peg_in_abs: Amount,
     pub fee_coin_issuance_abs: Amount,
     pub fee_peg_out_abs: Amount,
+}
+
+impl PeerId {
+    pub const ZERO: Self = Self(0);
+
+    pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl std::fmt::Display for PeerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<u16> for PeerId {
+    fn from(id: u16) -> Self {
+        Self(id)
+    }
+}
+
+impl From<PeerId> for u16 {
+    fn from(peer: PeerId) -> u16 {
+        peer.0
+    }
 }
 
 impl Coin {

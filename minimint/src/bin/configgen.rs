@@ -24,7 +24,7 @@ fn main() {
     } = StructOpt::from_args();
     let mut rng = OsRng::new().unwrap();
 
-    let peers = (0..nodes).collect::<Vec<_>>();
+    let peers = (0..nodes).map(|id| id.into()).collect::<Vec<_>>();
     let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
         "Generating keys such that up to {} peers may fail/be evil",

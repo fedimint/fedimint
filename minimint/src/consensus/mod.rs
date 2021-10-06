@@ -10,7 +10,7 @@ use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::outcome::OutputOutcome;
 use minimint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
-use minimint_api::{FederationModule, TransactionId};
+use minimint_api::{FederationModule, PeerId, TransactionId};
 use minimint_derive::UnzipConsensus;
 use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
@@ -28,8 +28,8 @@ pub enum ConsensusItem {
     Wallet(<Wallet as FederationModule>::ConsensusItem),
 }
 
-pub type HoneyBadgerMessage = hbbft::honey_badger::Message<u16>;
-pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, u16>;
+pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
+pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 
 pub struct FediMintConsensus<R>
 where
@@ -121,8 +121,17 @@ where
         } = consensus_outcome
             .contributions
             .into_iter()
-            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
+            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer.into(), ci)))
             .unzip_consensus_item();
+
+        let wallet_cis = wallet_cis
+            .into_iter()
+            .map(|(id, item)| (id.into(), item))
+            .collect();
+        let mint_cis = mint_cis
+            .into_iter()
+            .map(|(id, item)| (id.into(), item))
+            .collect();
 
         let mut db_batch = DbBatch::new();
         self.wallet

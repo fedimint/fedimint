@@ -1,7 +1,7 @@
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
-use minimint_api::FeeConsensus;
+use minimint_api::{FeeConsensus, PeerId};
 use minimint_mint::config::{MintClientConfig, MintConfig};
 use minimint_wallet::config::{WalletClientConfig, WalletConfig};
 use serde::de::DeserializeOwned;
@@ -18,11 +18,11 @@ pub struct ServerOpts {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
-    pub identity: u16,
+    pub identity: PeerId,
     pub hbbft_port: u16,
     pub api_port: u16,
 
-    pub peers: BTreeMap<u16, Peer>,
+    pub peers: BTreeMap<PeerId, Peer>,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sk: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKey>,
     #[serde(with = "serde_binary_human_readable")]
@@ -67,20 +67,21 @@ impl GenerateConfig for ServerConfig {
     type ClientConfig = ClientConfig;
 
     fn trusted_dealer_gen(
-        peers: &[u16],
+        peers: &[PeerId],
         max_evil: usize,
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<u16, Self>, Self::ClientConfig) {
+    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
 
         let cfg_peers = netinfo
             .iter()
             .map(|(&id, netinf)| {
+                let id_u16: u16 = id.into();
                 let peer = Peer {
-                    hbbft_port: params.hbbft_base_port + id,
-                    api_port: params.api_base_port + id,
+                    hbbft_port: params.hbbft_base_port + id_u16,
+                    api_port: params.api_base_port + id_u16,
                     hbbft_pk: netinf.public_key(&id).unwrap().clone(),
                 };
 
@@ -103,10 +104,11 @@ impl GenerateConfig for ServerConfig {
         let server_config = netinfo
             .iter()
             .map(|(&id, netinf)| {
+                let id_u16: u16 = id.into();
                 let config = ServerConfig {
                     identity: id,
-                    hbbft_port: params.hbbft_base_port + id,
-                    api_port: params.api_base_port + id,
+                    hbbft_port: params.hbbft_base_port + id_u16,
+                    api_port: params.api_base_port + id_u16,
                     peers: cfg_peers.clone(),
                     hbbft_sk: SerdeSecret(netinf.secret_key().clone()),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
@@ -123,7 +125,12 @@ impl GenerateConfig for ServerConfig {
         let client_config = ClientConfig {
             api_endpoints: peers
                 .iter()
-                .map(|&peer| format!("http://127.0.0.1:{}", params.api_base_port + peer))
+                .map(|&peer| {
+                    format!(
+                        "http://127.0.0.1:{}",
+                        params.api_base_port + u16::from(peer)
+                    )
+                })
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
@@ -143,7 +150,7 @@ impl ServerConfig {
     }
 
     pub fn get_incoming_count(&self) -> u16 {
-        self.identity
+        self.identity.into()
     }
 
     pub fn max_faulty(&self) -> usize {
