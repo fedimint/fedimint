@@ -94,9 +94,9 @@ impl GenerateConfig for ServerConfig {
             MintConfig::trusted_dealer_gen(peers, max_evil, params.amount_tiers.as_ref(), &mut rng);
 
         let fee_consensus = FeeConsensus {
-            fee_coin_spend_abs: minimint_api::Amount::from_sat(0),
+            fee_coin_spend_abs: minimint_api::Amount::ZERO,
             fee_peg_in_abs: minimint_api::Amount::from_sat(500),
-            fee_coin_issuance_abs: minimint_api::Amount::from_sat(0),
+            fee_coin_issuance_abs: minimint_api::Amount::ZERO,
             fee_peg_out_abs: minimint_api::Amount::from_sat(500),
         };
 
