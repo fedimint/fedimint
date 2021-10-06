@@ -222,7 +222,7 @@ where
             })
             .collect::<Coins<C>>();
 
-        if amount == Amount::from_msat(0) {
+        if amount == Amount::ZERO {
             Some(coins)
         } else {
             None
@@ -248,6 +248,8 @@ impl Coins<()> {
 }
 
 impl Amount {
+    pub const ZERO: Self = Self { milli_sat: 0 };
+
     pub fn from_msat(msat: u64) -> Amount {
         Amount { milli_sat: msat }
     }
@@ -255,6 +257,12 @@ impl Amount {
     pub fn from_sat(sat: u64) -> Amount {
         Amount {
             milli_sat: sat * 1000,
+        }
+    }
+
+    pub fn saturating_sub(self, other: Amount) -> Self {
+        Amount {
+            milli_sat: self.milli_sat.saturating_sub(other.milli_sat),
         }
     }
 }

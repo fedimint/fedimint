@@ -179,8 +179,11 @@ impl MintClient {
             .verify(&self.secp, &self.cfg.wallet.peg_in_descriptor)
             .expect("Invalid proof");
         let sats = peg_in_proof.tx_output().value;
-        // FIXME: check against underflow
-        let amount = Amount::from_sat(sats) - self.cfg.fee_consensus.fee_peg_in_abs;
+
+        let amount = Amount::from_sat(sats).saturating_sub(self.cfg.fee_consensus.fee_peg_in_abs);
+        if amount == Amount::ZERO {
+            return Err(ClientError::PegInAmountTooSmall);
+        }
 
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &mut rng);
@@ -598,6 +601,8 @@ pub enum ClientError {
     FinalizationError(CoinFinalizationError),
     #[error("Could not find an ongoing matching peg-in")]
     NoMatchingPegInFound,
+    #[error("Peg-in amount must be greater than peg-in fee")]
+    PegInAmountTooSmall,
     #[error("Inconsistent peg-in proof: {0}")]
     PegInProofError(PegInProofError),
     #[error("The client's wallet has not enough coins or they are not in the right denomination")]
