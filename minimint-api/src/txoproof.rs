@@ -26,7 +26,7 @@ pub struct PegInProof {
     tweak_contract_key: musig::PubKey,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct TxOutProof {
     block_header: BlockHeader,
     merkle_proof: PartialMerkleTree,
@@ -243,6 +243,14 @@ impl Hash for TxOutProof {
         state.write(&bytes);
     }
 }
+
+impl PartialEq for TxOutProof {
+    fn eq(&self, other: &TxOutProof) -> bool {
+        self.block_header == other.block_header && self.merkle_proof == other.merkle_proof
+    }
+}
+
+impl Eq for TxOutProof {}
 
 impl Decodable for PegInProof {
     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {

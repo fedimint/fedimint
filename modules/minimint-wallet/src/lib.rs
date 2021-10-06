@@ -59,7 +59,7 @@ pub struct RoundConsensusItem {
     randomness: [u8; 32],
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PegOutSignatureItem {
     txid: Txid,
     signature: Vec<secp256k1::Signature>,
@@ -1036,6 +1036,14 @@ impl std::hash::Hash for PegOutSignatureItem {
         }
     }
 }
+
+impl PartialEq for PegOutSignatureItem {
+    fn eq(&self, other: &PegOutSignatureItem) -> bool {
+        self.txid == other.txid && self.signature == other.signature
+    }
+}
+
+impl Eq for PegOutSignatureItem {}
 
 #[derive(Debug, Error)]
 pub enum WalletError {

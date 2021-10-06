@@ -39,19 +39,19 @@ pub struct AggregatePublicKey(#[serde(with = "serde_impl::g2")] pub G2Affine);
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlindingKey(#[serde(with = "serde_impl::scalar")] pub Scalar);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct BlindedMessage(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct BlindedSignatureShare(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct BlindedSignature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Signature(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct Message(#[serde(with = "serde_impl::g1")] pub G1Affine);
 
 pub trait FromRandom {
@@ -89,6 +89,14 @@ macro_rules! point_impl {
                 self.0.to_compressed()
             }
         }
+
+        impl PartialEq for $type {
+            fn eq(&self, other: &$type) -> bool {
+                self.0 == other.0
+            }
+        }
+
+        impl Eq for $type {}
     };
 }
 
