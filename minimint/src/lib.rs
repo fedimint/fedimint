@@ -91,10 +91,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
                 .contributions
                 .values()
                 .flatten()
-                .filter(|ci| match ci {
-                    ConsensusItem::Wallet(_) => false,
-                    _ => true,
-                })
+                .filter(|ci| !matches!(ci, ConsensusItem::Wallet(_)))
                 .collect::<HashSet<_>>();
 
             let full_proposal = proposal.take().expect("Is always refilled");

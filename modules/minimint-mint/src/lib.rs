@@ -455,20 +455,18 @@ impl Mint {
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
     ) {
-        match self
+        if self
             .db
             .get_value::<_, SigResponse>(&OutputOutcomeKey(output_id))
             .expect("DB error")
+            .is_some()
         {
-            Some(_) => {
-                debug!(
-                    "Received sig share for finalized issuance {}, ignoring",
-                    output_id
-                );
-                return;
-            }
-            None => {}
-        };
+            debug!(
+                "Received sig share for finalized issuance {}, ignoring",
+                output_id
+            );
+            return;
+        }
 
         debug!(
             "Received sig share from peer {} for issuance {}",
