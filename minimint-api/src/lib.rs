@@ -507,7 +507,7 @@ where
         for _ in 0..len {
             let amt = Amount::consensus_decode(&mut d)?;
             let coin = C::consensus_decode(&mut d)?;
-            coins.entry(amt).or_insert(Vec::new()).push(coin);
+            coins.entry(amt).or_insert_with(Vec::new).push(coin);
         }
         Ok(Coins { coins })
     }

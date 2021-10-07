@@ -54,7 +54,7 @@ async fn fetch_outcome(req: Request<State>) -> tide::Result {
         .state()
         .fedimint
         .transaction_status(tx_hash)
-        .ok_or(tide::Error::from_str(404, "Not found"))?;
+        .ok_or_else(|| tide::Error::from_str(404, "Not found"))?;
 
     debug!("Sending outcome of transaction {}", tx_hash);
     let body = Body::from_json(&tx_status).expect("encoding error");
