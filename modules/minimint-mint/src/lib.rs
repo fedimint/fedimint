@@ -75,7 +75,7 @@ impl FederationModule for Mint {
     async fn begin_consensus_epoch<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
-        consensus_items: Vec<(u16, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
         for (peer, partial_sig) in consensus_items {
@@ -432,7 +432,7 @@ impl Mint {
             let sig = combine_valid_shares(
                 valid_sigs
                     .into_iter()
-                    .map(|(peer, share)| (peer as usize, share)), // FIXME: remove hack, build proper peer id type
+                    .map(|(peer, share)| (peer.to_usize(), share)),
                 self.threshold,
             );
 
@@ -451,7 +451,7 @@ impl Mint {
     fn process_partial_signature(
         &self,
         mut batch: BatchTx,
-        peer: u16,
+        peer: PeerId,
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
     ) {
@@ -483,7 +483,7 @@ impl Mint {
         );
 
         // FIXME: add own id to cfg
-        if peer == self.key_id as u16 {
+        if peer == self.key_id {
             batch.append_delete(ProposedPartialSignatureKey {
                 request_id: output_id,
             });

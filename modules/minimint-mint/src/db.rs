@@ -1,7 +1,7 @@
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::transaction::OutPoint;
-use minimint_api::CoinNonce;
+use minimint_api::{CoinNonce, PeerId};
 
 const DB_PREFIX_COIN_NONCE: u8 = 0x10;
 const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;
@@ -34,7 +34,7 @@ impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
 #[derive(Debug, Encodable, Decodable)]
 pub struct ReceivedPartialSignatureKey {
     pub request_id: OutPoint, // tx + output idx
-    pub peer_id: u16,
+    pub peer_id: PeerId,
 }
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {

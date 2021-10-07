@@ -23,7 +23,9 @@ use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::transaction::{OutPoint, PegOut};
-use minimint_api::{CompressedPublicKey, FederationModule, PegInProof, PegInProofError, Tweakable};
+use minimint_api::{
+    CompressedPublicKey, FederationModule, PeerId, PegInProof, PegInProofError, Tweakable,
+};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
@@ -184,7 +186,7 @@ impl FederationModule for Wallet {
     async fn begin_consensus_epoch<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
-        consensus_items: Vec<(u16, Self::ConsensusItem)>,
+        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
         trace!("Received consensus proposals {:?}", &consensus_items);
@@ -198,7 +200,9 @@ impl FederationModule for Wallet {
 
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
-            if let Err(e) = self.process_peg_out_signature(batch.subtransaction(), peer, &sig) {
+            if let Err(e) =
+                self.process_peg_out_signature(batch.subtransaction(), peer.into(), &sig)
+            {
                 warn!("Error processing peer {}'s peg-out signature: {}", peer, e)
             };
         }
@@ -449,7 +453,7 @@ impl Wallet {
     fn process_peg_out_signature(
         &self,
         mut batch: BatchTx,
-        peer: u16,
+        peer: PeerId,
         signature: &PegOutSignatureItem,
     ) -> Result<(), ProcessPegOutSigError> {
         let mut psbt = self

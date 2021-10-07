@@ -31,11 +31,11 @@ impl GenerateConfig for WalletConfig {
     type ClientConfig = WalletClientConfig;
 
     fn trusted_dealer_gen(
-        peers: &[u16],
+        peers: &[PeerId],
         max_evil: usize,
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<u16, Self>, Self::ClientConfig) {
+    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let secp = secp256k1::Secp256k1::new();
 
         let btc_pegin_keys = peers
