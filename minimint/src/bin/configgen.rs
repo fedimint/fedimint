@@ -1,6 +1,6 @@
 use minimint::config::{ServerConfig, ServerConfigParams};
 use minimint_api::config::GenerateConfig;
-use minimint_api::Amount;
+use minimint_api::{Amount, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -24,7 +24,7 @@ fn main() {
     } = StructOpt::from_args();
     let mut rng = OsRng::new().unwrap();
 
-    let peers = (0..nodes).map(|id| id.into()).collect::<Vec<_>>();
+    let peers = (0..nodes).map(|id| PeerId::from(id)).collect::<Vec<_>>();
     let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
         "Generating keys such that up to {} peers may fail/be evil",
