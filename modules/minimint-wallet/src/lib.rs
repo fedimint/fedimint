@@ -594,7 +594,7 @@ impl Wallet {
     ) -> u32 {
         assert!(!proposals.is_empty());
 
-        proposals.sort();
+        proposals.sort_unstable();
         let median_proposal = proposals[proposals.len() / 2];
 
         let consensus_height = self.consensus_height().unwrap_or(0);
