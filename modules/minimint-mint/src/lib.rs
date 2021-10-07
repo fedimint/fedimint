@@ -90,30 +90,27 @@ impl FederationModule for Mint {
     }
 
     fn validate_input(&self, input: &Self::TxInput) -> Result<Amount, Self::Error> {
-        input
-            .iter()
-            .map(|(amount, coin)| {
-                if !coin.verify(
-                    *self
-                        .pub_key
-                        .get(&amount)
-                        .ok_or(MintError::InvalidAmountTier(amount))?,
-                ) {
-                    return Err(MintError::InvalidSignature);
-                }
+        input.iter().try_for_each(|(amount, coin)| {
+            if !coin.verify(
+                *self
+                    .pub_key
+                    .get(&amount)
+                    .ok_or(MintError::InvalidAmountTier(amount))?,
+            ) {
+                return Err(MintError::InvalidSignature);
+            }
 
-                if self
-                    .db
-                    .get_value::<_, ()>(&NonceKey(coin.0.clone()))
-                    .expect("DB error")
-                    .is_some()
-                {
-                    return Err(MintError::SpentCoin);
-                }
+            if self
+                .db
+                .get_value::<_, ()>(&NonceKey(coin.0.clone()))
+                .expect("DB error")
+                .is_some()
+            {
+                return Err(MintError::SpentCoin);
+            }
 
-                Ok(())
-            })
-            .collect::<Result<(), MintError>>()?;
+            Ok(())
+        })?;
         Ok(input.amount())
     }
 
