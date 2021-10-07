@@ -1,6 +1,6 @@
 # Minimint
 
-This is an experimental implementation of a federated Chaumian bank.
+**This is an experimental implementation of a federated Chaumian bank. DO NOT USE IT WITH REAL MONEY, THERE ARE MULTIPLE KNOWN SECURITY ISSUES.**
 
 ## Running it locally
 I'm currently using rust `rustc 1.54.0-nightly (ca82264ec 2021-05-09)` for development. I'll try to keep it up to date and eventually get off nightly.
