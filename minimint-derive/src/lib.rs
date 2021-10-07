@@ -48,12 +48,12 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
         }
 
         pub struct #unzip_struct_ident {
-            #(#unzip_s_ident: Vec<(u16, #unzip_s_type)>),*
+            #(#unzip_s_ident: Vec<(PeerId, #unzip_s_type)>),*
         }
 
         impl<I> #unzip_trait_ident for I
         where
-            I: Iterator<Item = (u16, #ident)>,
+            I: Iterator<Item = (PeerId, #ident)>,
         {
             fn #unzip_fn_ident(mut self) -> #unzip_struct_ident {
                 #(let mut #unzip_s_ident = Vec::new();)*

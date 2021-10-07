@@ -121,17 +121,8 @@ where
         } = consensus_outcome
             .contributions
             .into_iter()
-            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer.into(), ci)))
+            .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus_item();
-
-        let wallet_cis = wallet_cis
-            .into_iter()
-            .map(|(id, item)| (id.into(), item))
-            .collect();
-        let mint_cis = mint_cis
-            .into_iter()
-            .map(|(id, item)| (id.into(), item))
-            .collect();
 
         let mut db_batch = DbBatch::new();
         self.wallet
@@ -156,7 +147,7 @@ where
         // TODO: implement own parallel execution to avoid allocations and get rid of rayon
         let par_db_batches = filtered_transactions
             .into_par_iter()
-            .map(|(peer, transaction): (u16, Transaction)| {
+            .map(|(peer, transaction)| {
                 trace!(
                     "Processing transaction {:?} from peer {}",
                     transaction,

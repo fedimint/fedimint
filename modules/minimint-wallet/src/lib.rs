@@ -196,10 +196,7 @@ impl FederationModule for Wallet {
         let UnzipWalletConsensusItem {
             peg_out_signature: peg_out_signatures,
             round_consensus,
-        } = consensus_items
-            .into_iter()
-            .map(|(peer, item)| (peer.into(), item))
-            .unzip_wallet_consensus_item();
+        } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
