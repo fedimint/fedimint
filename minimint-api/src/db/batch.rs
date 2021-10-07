@@ -85,6 +85,12 @@ impl<T> Accumulator<T> {
     }
 }
 
+impl<T> Default for Accumulator<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a, T> AccumulatorTx<'a, T> {
     /// Commit the current accumulator state
     pub fn commit(self) {

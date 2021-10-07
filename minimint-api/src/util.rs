@@ -13,7 +13,7 @@ impl<'a, I, C> TieredMultiZip<'a, I, C> {
     /// Creates a new MultiZip Iterator from `Coins` iterators. These have to be checked for
     /// structural equality! There also has to be at least one iterator in the `iter` vector.
     pub fn new(iters: Vec<I>) -> Self {
-        assert!(iters.len() >= 1);
+        assert!(!iters.is_empty());
 
         TieredMultiZip {
             iters,

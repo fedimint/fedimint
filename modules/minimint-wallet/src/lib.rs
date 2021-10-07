@@ -587,9 +587,9 @@ impl Wallet {
 
     /// # Panics
     /// * If proposals is empty
-    async fn process_block_height_proposals<'a>(
+    async fn process_block_height_proposals(
         &self,
-        batch: BatchTx<'a>,
+        batch: BatchTx<'_>,
         mut proposals: Vec<u32>,
     ) -> u32 {
         assert!(!proposals.is_empty());
@@ -623,7 +623,7 @@ impl Wallet {
         self.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    async fn sync_up_to_consensus_heigh<'a>(&self, mut batch: BatchTx<'a>, new_height: u32) {
+    async fn sync_up_to_consensus_heigh(&self, mut batch: BatchTx<'_>, new_height: u32) {
         let old_height = self.consensus_height().unwrap_or(0);
         if new_height < old_height {
             info!(

@@ -112,8 +112,8 @@ impl PegInProof {
         Ok(PegInProof {
             txout_proof,
             transaction,
-            tweak_contract_key,
             output_idx,
+            tweak_contract_key,
         })
     }
 
