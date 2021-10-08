@@ -3,8 +3,8 @@ on: [push, pull_request]
 name: CI
 
 jobs:
-  build_and_test:
-    name: MiniMint
+  build_and_unit_test:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -27,3 +27,13 @@ jobs:
         with:
           command: doc
           args: --all-features
+  build_and_integration_test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-05-09
+          default: true
+      - run: scripts/integrationtest.sh
