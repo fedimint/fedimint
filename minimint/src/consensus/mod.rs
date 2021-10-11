@@ -202,14 +202,14 @@ where
                     .consensus_proposal(self.rng_gen.get_rng())
                     .await
                     .into_iter()
-                    .map(|wci| ConsensusItem::Wallet(wci)),
+                    .map(ConsensusItem::Wallet),
             )
             .chain(
                 self.mint
                     .consensus_proposal(self.rng_gen.get_rng())
                     .await
                     .into_iter()
-                    .map(|mci| ConsensusItem::Mint(mci)),
+                    .map(ConsensusItem::Mint),
             )
             .collect()
     }

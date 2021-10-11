@@ -26,7 +26,7 @@ pub struct PegInProof {
     tweak_contract_key: musig::PubKey,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct TxOutProof {
     block_header: BlockHeader,
     merkle_proof: PartialMerkleTree,
@@ -112,8 +112,8 @@ impl PegInProof {
         Ok(PegInProof {
             txout_proof,
             transaction,
-            tweak_contract_key,
             output_idx,
+            tweak_contract_key,
         })
     }
 
@@ -197,14 +197,13 @@ impl<'de> Deserialize<'de> for TxOutProof {
     {
         if deserializer.is_human_readable() {
             let hex_str: &str = Deserialize::deserialize(deserializer)?;
-            let bytes =
-                hex::decode(hex_str).map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?;
+            let bytes = hex::decode(hex_str).map_err(<D as Deserializer<'de>>::Error::custom)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
-                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+                .map_err(<D as Deserializer<'de>>::Error::custom)?)
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
-                .map_err(|e| <D as Deserializer<'de>>::Error::custom(e))?)
+                .map_err(<D as Deserializer<'de>>::Error::custom)?)
         }
     }
 }
@@ -244,6 +243,14 @@ impl Hash for TxOutProof {
         state.write(&bytes);
     }
 }
+
+impl PartialEq for TxOutProof {
+    fn eq(&self, other: &TxOutProof) -> bool {
+        self.block_header == other.block_header && self.merkle_proof == other.merkle_proof
+    }
+}
+
+impl Eq for TxOutProof {}
 
 impl Decodable for PegInProof {
     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {

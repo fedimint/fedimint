@@ -173,7 +173,7 @@ impl MintClient {
             output_idx as u32,
             public_tweak_key,
         )
-        .map_err(|e| ClientError::PegInProofError(e))?;
+        .map_err(ClientError::PegInProofError)?;
 
         peg_in_proof
             .verify(&self.secp, &self.cfg.wallet.peg_in_descriptor)
@@ -674,7 +674,7 @@ impl DatabaseKeyPrefix for PegInKey {
 
 impl DatabaseKey for PegInKey {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        if data.len() < 1 {
+        if data.is_empty() {
             Err(DecodingError::wrong_length(1, data.len()))
         } else if data[0] != DB_PREFIX_PEG_IN {
             Err(DecodingError::wrong_prefix(DB_PREFIX_PEG_IN, data[0]))

@@ -77,7 +77,7 @@ impl GenerateConfig for WalletConfig {
             .collect();
 
         let client_cfg = WalletClientConfig {
-            peg_in_descriptor: peg_in_descriptor,
+            peg_in_descriptor,
             network: Network::Regtest,
         };
 

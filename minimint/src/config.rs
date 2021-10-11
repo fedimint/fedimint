@@ -82,7 +82,7 @@ impl GenerateConfig for ServerConfig {
                 let peer = Peer {
                     hbbft_port: params.hbbft_base_port + id_u16,
                     api_port: params.api_base_port + id_u16,
-                    hbbft_pk: netinf.public_key(&id).unwrap().clone(),
+                    hbbft_pk: *netinf.public_key(&id).unwrap(),
                 };
 
                 (id, peer)

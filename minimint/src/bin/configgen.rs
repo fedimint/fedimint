@@ -24,7 +24,7 @@ fn main() {
     } = StructOpt::from_args();
     let mut rng = OsRng::new().unwrap();
 
-    let peers = (0..nodes).map(|id| PeerId::from(id)).collect::<Vec<_>>();
+    let peers = (0..nodes).map(PeerId::from).collect::<Vec<_>>();
     let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
         "Generating keys such that up to {} peers may fail/be evil",
@@ -47,7 +47,7 @@ fn main() {
         serde_json::to_writer_pretty(file, &cfg).unwrap();
     }
 
-    let mut client_cfg_file_path: PathBuf = cfg_path.clone();
+    let mut client_cfg_file_path: PathBuf = cfg_path;
     client_cfg_file_path.push("client.json");
     let client_cfg_file =
         std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");

@@ -37,7 +37,7 @@ impl ToPublicKey for CompressedPublicKey {
     fn to_public_key(&self) -> PublicKey {
         PublicKey {
             compressed: true,
-            key: self.key.clone(),
+            key: self.key,
         }
     }
 

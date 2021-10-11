@@ -59,7 +59,7 @@ pub struct RoundConsensusItem {
     randomness: [u8; 32],
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PegOutSignatureItem {
     txid: Txid,
     signature: Vec<secp256k1::Signature>,
@@ -200,9 +200,7 @@ impl FederationModule for Wallet {
 
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
-            if let Err(e) =
-                self.process_peg_out_signature(batch.subtransaction(), peer.into(), &sig)
-            {
+            if let Err(e) = self.process_peg_out_signature(batch.subtransaction(), peer, &sig) {
                 warn!("Error processing peer {}'s peg-out signature: {}", peer, e)
             };
         }
@@ -589,14 +587,14 @@ impl Wallet {
 
     /// # Panics
     /// * If proposals is empty
-    async fn process_block_height_proposals<'a>(
+    async fn process_block_height_proposals(
         &self,
-        batch: BatchTx<'a>,
+        batch: BatchTx<'_>,
         mut proposals: Vec<u32>,
     ) -> u32 {
         assert!(!proposals.is_empty());
 
-        proposals.sort();
+        proposals.sort_unstable();
         let median_proposal = proposals[proposals.len() / 2];
 
         let consensus_height = self.consensus_height().unwrap_or(0);
@@ -625,7 +623,7 @@ impl Wallet {
         self.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    async fn sync_up_to_consensus_heigh<'a>(&self, mut batch: BatchTx<'a>, new_height: u32) {
+    async fn sync_up_to_consensus_heigh(&self, mut batch: BatchTx<'_>, new_height: u32) {
         let old_height = self.consensus_height().unwrap_or(0);
         if new_height < old_height {
             info!(
@@ -1038,6 +1036,14 @@ impl std::hash::Hash for PegOutSignatureItem {
         }
     }
 }
+
+impl PartialEq for PegOutSignatureItem {
+    fn eq(&self, other: &PegOutSignatureItem) -> bool {
+        self.txid == other.txid && self.signature == other.signature
+    }
+}
+
+impl Eq for PegOutSignatureItem {}
 
 #[derive(Debug, Error)]
 pub enum WalletError {

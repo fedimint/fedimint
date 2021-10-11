@@ -42,16 +42,14 @@ impl GenerateConfig for MintConfig {
                 let config = MintConfig {
                     tbs_sks: params
                         .iter()
-                        .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()].clone()))
+                        .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
                         .collect(),
                     peer_tbs_pks: peers
                         .iter()
                         .map(|&key_peer| {
                             let keys = params
                                 .iter()
-                                .map(|amount| {
-                                    (*amount, tbs_keys[amount].1[key_peer.to_usize()].clone())
-                                })
+                                .map(|amount| (*amount, tbs_keys[amount].1[key_peer.to_usize()]))
                                 .collect();
                             (key_peer, keys)
                         })

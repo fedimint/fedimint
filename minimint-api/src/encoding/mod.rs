@@ -45,8 +45,7 @@ macro_rules! impl_encode_decode_num {
                 mut d: D,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
-                d.read_exact(&mut bytes)
-                    .map_err(|e| DecodeError::from_err(e))?;
+                d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
                 Ok(<$num_type>::from_le_bytes(bytes))
             }
         }
