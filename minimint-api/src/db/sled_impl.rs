@@ -1,5 +1,6 @@
 use super::batch::{BatchItem, DbBatch};
 use super::{DatabaseError, DecodingError, RawDatabase};
+use crate::db::PrefixIter;
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
@@ -30,10 +31,7 @@ impl RawDatabase for sled::Tree {
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_find_by_prefix(
-        &self,
-        key_prefix: Vec<u8>,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>> {
+    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter {
         Box::new(self.scan_prefix(key_prefix).map(|res| {
             res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map_err(|e| DatabaseError::DbError(Box::new(e)))

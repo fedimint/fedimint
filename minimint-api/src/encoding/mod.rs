@@ -205,6 +205,8 @@ impl Decodable for () {
 }
 
 impl DecodeError {
+    // TODO: think about better name
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &'static str) -> Self {
         #[derive(Debug)]
         struct StrError(&'static str);
@@ -299,7 +301,7 @@ mod tests {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         enum TestEnum {
             Foo(Option<u64>),
-            Bar { baz: Vec<u8> },
+            Bar { bazz: Vec<u8> },
         }
 
         let test_cases = [
@@ -309,7 +311,9 @@ mod tests {
             ),
             (TestEnum::Foo(None), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]),
             (
-                TestEnum::Bar { baz: vec![1, 2, 3] },
+                TestEnum::Bar {
+                    bazz: vec![1, 2, 3],
+                },
                 vec![1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3],
             ),
         ];
