@@ -174,6 +174,24 @@ where
     }
 }
 
+impl<T> Encodable for Box<T>
+where
+    T: Encodable,
+{
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.as_ref().consensus_encode(writer)
+    }
+}
+
+impl<T> Decodable for Box<T>
+where
+    T: Decodable,
+{
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        Ok(Box::new(T::consensus_decode(d)?))
+    }
+}
+
 impl Encodable for () {
     fn consensus_encode<W: std::io::Write>(&self, _writer: W) -> Result<usize, std::io::Error> {
         Ok(0)
@@ -187,6 +205,8 @@ impl Decodable for () {
 }
 
 impl DecodeError {
+    // TODO: think about better name
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &'static str) -> Self {
         #[derive(Debug)]
         struct StrError(&'static str);
@@ -281,7 +301,7 @@ mod tests {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         enum TestEnum {
             Foo(Option<u64>),
-            Bar { baz: Vec<u8> },
+            Bar { bazz: Vec<u8> },
         }
 
         let test_cases = [
@@ -291,7 +311,9 @@ mod tests {
             ),
             (TestEnum::Foo(None), vec![0, 0, 0, 0, 0, 0, 0, 0, 0]),
             (
-                TestEnum::Bar { baz: vec![1, 2, 3] },
+                TestEnum::Bar {
+                    bazz: vec![1, 2, 3],
+                },
                 vec![1, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3],
             ),
         ];

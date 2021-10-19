@@ -58,7 +58,7 @@ where
                     }
                 }
                 Input::PegIn(ref peg_in) => {
-                    if !self.peg_in_set.insert(peg_in.clone()) {
+                    if !self.peg_in_set.insert(peg_in.as_ref().clone()) {
                         return None;
                     }
                 }

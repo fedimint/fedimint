@@ -32,6 +32,8 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
+pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>>;
+
 pub trait RawDatabase: Send + Sync {
     fn raw_insert_entry(
         &self,
@@ -43,10 +45,7 @@ pub trait RawDatabase: Send + Sync {
 
     fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError>;
 
-    fn raw_find_by_prefix(
-        &self,
-        key_prefix: Vec<u8>,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>>;
+    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter;
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
 }
@@ -82,7 +81,7 @@ where
     K: DatabaseKey,
     V: DatabaseValue,
 {
-    iter: Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>>,
+    iter: PrefixIter,
     _pd: PhantomData<(K, V)>,
 }
 

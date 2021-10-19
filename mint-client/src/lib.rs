@@ -188,7 +188,7 @@ impl MintClient {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &mut rng);
 
-        let inputs = vec![mint_tx::Input::PegIn(peg_in_proof)];
+        let inputs = vec![mint_tx::Input::PegIn(Box::new(peg_in_proof))];
         let outputs = vec![mint_tx::Output::Coins(
             sig_req
                 .0

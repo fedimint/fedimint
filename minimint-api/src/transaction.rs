@@ -16,7 +16,7 @@ pub struct Transaction {
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
     Coins(Coins<Coin>),
-    PegIn(PegInProof),
+    PegIn(Box<PegInProof>),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

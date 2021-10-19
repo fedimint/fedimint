@@ -266,11 +266,9 @@ mod tests {
         assert!(verify(msg, sig, pk));
 
         let new_order = [9, 5, 4, 7, 8, 6, 0, 1, 3, 2];
-        let shuffle_sigs = new_order
-            .iter()
-            .map(|idx| sigs[*idx].clone())
-            .collect::<Vec<_>>();
-        let bsig = combine_valid_shares(shuffle_sigs.into_iter(), threshold);
+
+        let shuffle_sigs = new_order.iter().map(|idx| sigs[*idx]);
+        let bsig = combine_valid_shares(shuffle_sigs, threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
     }

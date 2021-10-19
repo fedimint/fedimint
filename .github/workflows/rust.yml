@@ -3,8 +3,8 @@ on: [push, pull_request]
 name: CI
 
 jobs:
-  build_and_test:
-    name: MiniMint
+  build_and_unit_test:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -12,6 +12,7 @@ jobs:
         with:
           toolchain: nightly-2021-05-09
           default: true
+          components: clippy, rustfmt
       - uses: actions-rs/cargo@v1
         with:
           command: version
@@ -27,3 +28,21 @@ jobs:
         with:
           command: doc
           args: --all-features
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --all-features --all-targets --workspace -- -D warnings
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+  build_and_integration_test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-05-09
+          default: true
+      - run: scripts/integrationtest.sh

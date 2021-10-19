@@ -1,5 +1,6 @@
 use super::batch::{BatchItem, DbBatch};
 use super::{DatabaseError, RawDatabase};
+use crate::db::PrefixIter;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -36,10 +37,7 @@ impl RawDatabase for MemDatabase {
         Ok(self.data.lock().unwrap().remove(&key))
     }
 
-    fn raw_find_by_prefix(
-        &self,
-        key_prefix: Vec<u8>,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>>> {
+    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter {
         let mut data = self
             .data
             .lock()

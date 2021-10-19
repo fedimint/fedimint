@@ -1139,7 +1139,7 @@ mod tests {
                 1,
             )),
             SpendableUTXO {
-                tweak: tweak.clone(),
+                tweak,
                 amount: Amount::from_sat(42000),
                 script_pubkey: tweaked.script_pubkey(),
             },
