@@ -1,7 +1,8 @@
 use crate::encoding::{Decodable, Encodable};
 use crate::{Amount, Coin, Coins, FeeConsensus, PegInProof, TransactionId};
 use bitcoin_hashes::Hash as BitcoinHash;
-use musig::{PubKey, Sig};
+use rand::Rng;
+use secp256k1_zkp::schnorrsig;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -9,7 +10,7 @@ use thiserror::Error;
 pub struct Transaction {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
-    pub signature: Sig,
+    pub signature: schnorrsig::Signature,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -55,10 +56,10 @@ impl Input {
     // TODO: probably make this a single returned key once coins are separate inputs
     /// Returns an iterator over all the keys that need to sign the transaction for the input to
     /// be valid.
-    fn authorization_keys<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PubKey> + 'a> {
+    fn authorization_keys<'a>(&'a self) -> Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a> {
         match self {
-            Input::Coins(coins) => Box::new(coins.iter().map(|(_, coin)| coin.spend_key())),
-            Input::PegIn(proof) => Box::new(std::iter::once(proof.tweak_contract_key())),
+            Input::Coins(coins) => Box::new(coins.iter().map(|(_, coin)| *coin.spend_key())),
+            Input::PegIn(proof) => Box::new(std::iter::once(*proof.tweak_contract_key())),
         }
     }
 }
@@ -149,17 +150,19 @@ impl Transaction {
     }
 
     pub fn validate_signature(&self) -> Result<(), TransactionError> {
-        let public_keys = self
-            .inputs
-            .iter()
-            .flat_map(|input| input.authorization_keys())
-            .collect::<Vec<_>>();
+        let ctx = secp256k1_zkp::global::SECP256K1;
+        let agg_pub_key = agg_keys(
+            self.inputs
+                .iter()
+                .flat_map(|input| input.authorization_keys()),
+        );
+        let msg =
+            secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
-        if musig::verify(
-            self.tx_hash().into_inner(),
-            self.signature.clone(),
-            &public_keys,
-        ) {
+        if ctx
+            .schnorrsig_verify(&self.signature, &msg, &agg_pub_key)
+            .is_ok()
+        {
             Ok(())
         } else {
             Err(TransactionError::InvalidSignature)
@@ -171,6 +174,78 @@ impl std::fmt::Display for OutPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.txid, self.out_idx)
     }
+}
+
+/// Aggregates a stream of public keys. Be aware that the order of the keys matters for the
+/// aggregation result.
+///
+/// # Panics
+/// * If the `keys` iterator does not yield any keys
+pub fn agg_keys<I>(keys: I) -> schnorrsig::PublicKey
+where
+    I: Iterator<Item = schnorrsig::PublicKey>,
+{
+    new_pre_session(keys).agg_pk()
+}
+
+fn new_pre_session<I>(keys: I) -> secp256k1_zkp::MusigPreSession
+where
+    I: Iterator<Item = schnorrsig::PublicKey>,
+{
+    let ctx = secp256k1_zkp::global::SECP256K1;
+    let keys = keys.collect::<Vec<_>>();
+    assert!(
+        !keys.is_empty(),
+        "Must supply more than 0 keys for aggregation"
+    );
+
+    secp256k1_zkp::MusigPreSession::new(&ctx, &keys).expect("more than zero were supplied")
+}
+
+// FIXME: impl ThirtytwoByteHash for Message?
+pub fn agg_sign<I, R>(keys: I, msg: secp256k1_zkp::Message, mut rng: R) -> schnorrsig::Signature
+where
+    I: Iterator<Item = schnorrsig::KeyPair>,
+    R: rand::RngCore + rand::CryptoRng,
+{
+    let ctx = secp256k1_zkp::global::SECP256K1;
+    let keys = keys.collect::<Vec<_>>();
+    let pre_session = new_pre_session(
+        keys.iter()
+            .map(|key| schnorrsig::PublicKey::from_keypair(&ctx, key)),
+    );
+
+    let session_id: [u8; 32] = rng.gen();
+    let (sec_nonces, pub_nonces): (Vec<_>, Vec<_>) = keys
+        .iter()
+        .map(|key| {
+            // FIXME: upstream
+            pre_session
+                .nonce_gen(&ctx, &session_id, &key, &msg, None)
+                .expect("should not fail for valid inputs (ensured by type system)")
+        })
+        .unzip();
+
+    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(&ctx, &pub_nonces)
+        .expect("Should not fail for cooperative protocol runs");
+
+    let session = pre_session
+        .nonce_process(&ctx, &agg_nonce, &msg, None)
+        .expect("Should not fail for cooperative protocol runs");
+
+    let partial_sigs = sec_nonces
+        .into_iter()
+        .zip(keys.iter())
+        .map(|(mut nonce, key)| {
+            session
+                .partial_sign(&ctx, &mut nonce, &key, &pre_session)
+                .expect("Should not fail for cooperative protocol runs")
+        })
+        .collect::<Vec<_>>();
+
+    session
+        .partial_sig_agg(&ctx, &partial_sigs)
+        .expect("Should not fail for cooperative protocol runs")
 }
 
 #[derive(Debug, Error)]

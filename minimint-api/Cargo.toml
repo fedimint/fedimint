@@ -14,9 +14,8 @@ bitcoin_hashes = { version = "0.9.4", features = ["serde"] }
 hex = "0.4.3"
 minimint-derive = { path = "../minimint-derive" }
 miniscript = { version = "5.1.0", features = [ "use-serde" ] }
-musig = { path = "../crypto/musig"}
 rand = "0.6.0"
-secp256k1 = { version = "0.20.1", features = [ "serde", "bitcoin_hashes" ] }
+secp256k1-zkp = { git = "https://github.com/elsirion/rust-secp256k1-zkp", branch = "minimint", features = [ "serde", "bitcoin_hashes", "global-context" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 sha3 = "0.9.1"
 sled = "0.34"

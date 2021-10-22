@@ -8,11 +8,11 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct CompressedPublicKey {
-    pub key: secp256k1::PublicKey,
+    pub key: secp256k1_zkp::PublicKey,
 }
 
 impl CompressedPublicKey {
-    pub fn new(key: secp256k1::PublicKey) -> Self {
+    pub fn new(key: secp256k1_zkp::PublicKey) -> Self {
         CompressedPublicKey { key }
     }
 }
@@ -29,7 +29,7 @@ impl MiniscriptKey for CompressedPublicKey {
     }
 
     fn serialized_len(&self) -> usize {
-        secp256k1::constants::PUBLIC_KEY_SIZE
+        secp256k1_zkp::constants::PUBLIC_KEY_SIZE
     }
 }
 
@@ -53,11 +53,11 @@ impl std::fmt::Display for CompressedPublicKey {
 }
 
 impl FromStr for CompressedPublicKey {
-    type Err = secp256k1::Error;
+    type Err = secp256k1_zkp::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(CompressedPublicKey {
-            key: secp256k1::PublicKey::from_str(s)?,
+            key: secp256k1_zkp::PublicKey::from_str(s)?,
         })
     }
 }

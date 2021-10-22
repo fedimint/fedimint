@@ -2,7 +2,7 @@ use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
 use rand::CryptoRng;
-use secp256k1::rand::RngCore;
+use secp256k1_zkp::rand::RngCore;
 
 #[async_trait(?Send)]
 pub trait FederationModule {
