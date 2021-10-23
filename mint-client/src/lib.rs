@@ -17,7 +17,7 @@ use miniscript::DescriptorTrait;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::{RequestBuilder, StatusCode};
-use secp256k1_zkp::{All, Secp256k1};
+use secp256k1_zkp::{All, Secp256k1, Signing};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -164,14 +164,12 @@ impl MintClient {
             })
             .ok_or(ClientError::NoMatchingPegInFound)?;
         let secret_tweak_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-            &secp256k1_zkp::SECP256K1,
+            &self.secp,
             &secret_tweak_key_bytes,
         )
-        .unwrap();
-        let public_tweak_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &secp256k1_zkp::SECP256K1,
-            &secret_tweak_key,
-        );
+        .expect("sec key was generated and saved by us");
+        let public_tweak_key =
+            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &secret_tweak_key);
 
         let peg_in_proof = PegInProof::new(
             txout_proof,
@@ -192,7 +190,7 @@ impl MintClient {
         }
 
         let (coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &mut rng);
+            CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &self.secp, &mut rng);
 
         let inputs = vec![mint_tx::Input::PegIn(Box::new(peg_in_proof))];
         let outputs = vec![mint_tx::Output::Coins(
@@ -205,15 +203,18 @@ impl MintClient {
 
         let peg_in_req_sig = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            // FIXME: remove global ctx
-            // FIXME: document unwrap
             let sec_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-                &secp256k1_zkp::global::SECP256K1,
+                &self.secp,
                 &secret_tweak_key_bytes,
             )
-            .unwrap();
+            .expect("We checked key validity before saving to DB");
 
-            minimint_api::transaction::agg_sign(std::iter::once(sec_key), hash.as_hash(), &mut rng)
+            minimint_api::transaction::agg_sign(
+                std::iter::once(sec_key),
+                hash.as_hash(),
+                &self.secp,
+                &mut rng,
+            )
         };
 
         let mint_transaction = mint_tx::Transaction {
@@ -395,6 +396,7 @@ impl MintClient {
         let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
             coins.amount(),
             &self.cfg.mint.tbs_pks, // TODO: cache somewhere
+            &self.secp,
             &mut rng,
         );
 
@@ -409,17 +411,12 @@ impl MintClient {
         // TODO: abstract away tx building somehow
         let signature = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            // FIXME: remove global ctx
-            // FIXME: document unwrap
             let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-                    &secp256k1_zkp::global::SECP256K1,
-                    &key,
-                )
-                .unwrap()
+                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                    .expect("We checked key validity before saving to DB")
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &mut rng)
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -470,17 +467,12 @@ impl MintClient {
         let signature = {
             // FIXME: deduplicate tx signing code
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            // FIXME: remove global ctx
-            // FIXME: document unwrap
             let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-                    &secp256k1_zkp::global::SECP256K1,
-                    &key,
-                )
-                .unwrap()
+                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                    .expect("We checked key validity before saving to DB")
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &mut rng)
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -495,12 +487,9 @@ impl MintClient {
     }
 
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
-        let peg_in_sec_key =
-            secp256k1_zkp::schnorrsig::KeyPair::new(&secp256k1_zkp::global::SECP256K1, &mut rng);
-        let peg_in_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &secp256k1_zkp::global::SECP256K1,
-            &peg_in_sec_key,
-        );
+        let peg_in_sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(&self.secp, &mut rng);
+        let peg_in_pub_key =
+            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &peg_in_sec_key);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -529,16 +518,20 @@ impl MintClient {
 
 impl CoinFinalizationData {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    pub fn new<K>(
+    pub fn new<K, C>(
         amount: Amount,
         amount_tiers: &Keys<K>,
+        ctx: &Secp256k1<C>,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (CoinFinalizationData, SignRequest) {
+    ) -> (CoinFinalizationData, SignRequest)
+    where
+        C: Signing,
+    {
         let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
             Coins::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
-                    let (request, blind_msg) = CoinRequest::new(&mut rng);
+                    let (request, blind_msg) = CoinRequest::new(ctx, &mut rng);
                     ((amt, request), (amt, blind_msg))
                 })
                 .unzip();
@@ -597,12 +590,16 @@ impl CoinFinalizationData {
 impl CoinRequest {
     /// Generate a request session for a single coin and returns it plus the corresponding blinded
     /// message
-    fn new(mut rng: impl RngCore + CryptoRng) -> (CoinRequest, BlindedMessage) {
-        let spend_key =
-            secp256k1_zkp::schnorrsig::KeyPair::new(&secp256k1_zkp::global::SECP256K1, &mut rng);
+    fn new<C>(
+        ctx: &Secp256k1<C>,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> (CoinRequest, BlindedMessage)
+    where
+        C: Signing,
+    {
+        let spend_key = secp256k1_zkp::schnorrsig::KeyPair::new(ctx, &mut rng);
         let nonce = CoinNonce(secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &secp256k1_zkp::global::SECP256K1,
-            &spend_key,
+            &ctx, &spend_key,
         ));
 
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());

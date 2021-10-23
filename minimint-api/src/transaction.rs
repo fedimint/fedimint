@@ -2,7 +2,7 @@ use crate::encoding::{Decodable, Encodable};
 use crate::{Amount, Coin, Coins, FeeConsensus, PegInProof, TransactionId};
 use bitcoin_hashes::Hash as BitcoinHash;
 use rand::Rng;
-use secp256k1_zkp::schnorrsig;
+use secp256k1_zkp::{schnorrsig, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -185,35 +185,41 @@ pub fn agg_keys<I>(keys: I) -> schnorrsig::PublicKey
 where
     I: Iterator<Item = schnorrsig::PublicKey>,
 {
-    new_pre_session(keys).agg_pk()
+    new_pre_session(keys, &secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-fn new_pre_session<I>(keys: I) -> secp256k1_zkp::MusigPreSession
+fn new_pre_session<I, C>(keys: I, ctx: &Secp256k1<C>) -> secp256k1_zkp::MusigPreSession
 where
     I: Iterator<Item = schnorrsig::PublicKey>,
+    C: Signing,
 {
-    let ctx = secp256k1_zkp::global::SECP256K1;
     let keys = keys.collect::<Vec<_>>();
     assert!(
         !keys.is_empty(),
         "Must supply more than 0 keys for aggregation"
     );
 
-    secp256k1_zkp::MusigPreSession::new(&ctx, &keys).expect("more than zero were supplied")
+    secp256k1_zkp::MusigPreSession::new(ctx, &keys).expect("more than zero were supplied")
 }
 
-pub fn agg_sign<I, R, M>(keys: I, msg: M, mut rng: R) -> schnorrsig::Signature
+pub fn agg_sign<I, R, C, M>(
+    keys: I,
+    msg: M,
+    ctx: &Secp256k1<C>,
+    mut rng: R,
+) -> schnorrsig::Signature
 where
     I: Iterator<Item = schnorrsig::KeyPair>,
     R: rand::RngCore + rand::CryptoRng,
+    C: Signing,
     M: Into<secp256k1_zkp::Message>,
 {
-    let ctx = secp256k1_zkp::global::SECP256K1;
     let keys = keys.collect::<Vec<_>>();
     let msg = msg.into();
     let pre_session = new_pre_session(
         keys.iter()
-            .map(|key| schnorrsig::PublicKey::from_keypair(&ctx, key)),
+            .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key)),
+        ctx,
     );
 
     let session_id: [u8; 32] = rng.gen();
@@ -222,7 +228,7 @@ where
         .map(|key| {
             // FIXME: upstream
             pre_session
-                .nonce_gen(&ctx, &session_id, &key, &msg, None)
+                .nonce_gen(ctx, &session_id, &key, &msg, None)
                 .expect("should not fail for valid inputs (ensured by type system)")
         })
         .unzip();
@@ -231,7 +237,7 @@ where
         .expect("Should not fail for cooperative protocol runs");
 
     let session = pre_session
-        .nonce_process(&ctx, &agg_nonce, &msg, None)
+        .nonce_process(ctx, &agg_nonce, &msg, None)
         .expect("Should not fail for cooperative protocol runs");
 
     let partial_sigs = sec_nonces
@@ -239,13 +245,13 @@ where
         .zip(keys.iter())
         .map(|(mut nonce, key)| {
             session
-                .partial_sign(&ctx, &mut nonce, &key, &pre_session)
+                .partial_sign(ctx, &mut nonce, &key, &pre_session)
                 .expect("Should not fail for cooperative protocol runs")
         })
         .collect::<Vec<_>>();
 
     session
-        .partial_sig_agg(&ctx, &partial_sigs)
+        .partial_sig_agg(ctx, &partial_sigs)
         .expect("Should not fail for cooperative protocol runs")
 }
 

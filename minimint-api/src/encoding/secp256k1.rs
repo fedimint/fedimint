@@ -49,6 +49,9 @@ impl Decodable for secp256k1_zkp::schnorrsig::KeyPair {
         // to all parsing functions. This reduces the defense in depth of libsecp a bit, but should
         // not make it insecure. Given that the keys that are deserialized this way are used only
         // once (token keys) this trade-off seems sensible.
+        //
+        // In the future schnorr keys might also be used by the federation to hold coins. But these
+        // would most certainly be derived and not deserialized.
         secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
             &secp256k1_zkp::global::SECP256K1,
             &bytes,
@@ -107,6 +110,7 @@ mod tests {
         let sig = crate::transaction::agg_sign(
             std::iter::once(sec_key),
             secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!"),
+            &ctx,
             rand::thread_rng(),
         );
 
