@@ -106,7 +106,7 @@ mod tests {
 
         let sig = crate::transaction::agg_sign(
             std::iter::once(sec_key),
-            secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!").into(),
+            secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!"),
             rand::thread_rng(),
         );
 

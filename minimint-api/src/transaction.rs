@@ -202,14 +202,15 @@ where
     secp256k1_zkp::MusigPreSession::new(&ctx, &keys).expect("more than zero were supplied")
 }
 
-// FIXME: impl ThirtytwoByteHash for Message?
-pub fn agg_sign<I, R>(keys: I, msg: secp256k1_zkp::Message, mut rng: R) -> schnorrsig::Signature
+pub fn agg_sign<I, R, M>(keys: I, msg: M, mut rng: R) -> schnorrsig::Signature
 where
     I: Iterator<Item = schnorrsig::KeyPair>,
     R: rand::RngCore + rand::CryptoRng,
+    M: Into<secp256k1_zkp::Message>,
 {
     let ctx = secp256k1_zkp::global::SECP256K1;
     let keys = keys.collect::<Vec<_>>();
+    let msg = msg.into();
     let pre_session = new_pre_session(
         keys.iter()
             .map(|key| schnorrsig::PublicKey::from_keypair(&ctx, key)),

@@ -434,7 +434,8 @@ dependencies = [
 [[package]]
 name = "bitcoin_hashes"
 version = "0.9.7"
-source = "git+https://github.com/elsirion/bitcoin_hashes?branch=minimint#1c8cf480123c8b49de717abffcc0162262efd904"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ce18265ec2324ad075345d5814fbeed4f41f0a660055dc78840b74d19b874b1"
 dependencies = [
  "serde",
 ]
@@ -442,8 +443,10 @@ dependencies = [
 [[package]]
 name = "bitcoin_hashes"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "006cc91e1a1d99819bc5b8214be3555c1f0611b169f527a1fdc54ed1f2b745b0"
+source = "git+https://github.com/elsirion/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitcoinconsensus"
@@ -1720,7 +1723,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin",
- "bitcoin_hashes 0.9.7",
+ "bitcoin_hashes 0.10.0",
  "hex 0.4.3",
  "minimint-derive",
  "miniscript",

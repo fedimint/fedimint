@@ -12,5 +12,5 @@ members = [
 ]
 
 [patch.crates-io]
-bitcoin_hashes = { git = 'https://github.com/elsirion/bitcoin_hashes', branch = 'minimint' }
+bitcoin_hashes = { version = "0.10.0", git = 'https://github.com/elsirion/bitcoin_hashes', branch = 'minimint' }
 secp256k1 = { git = "https://github.com/elsirion/rust-secp256k1/", branch = "minimint" }

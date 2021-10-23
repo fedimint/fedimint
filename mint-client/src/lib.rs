@@ -205,7 +205,6 @@ impl MintClient {
 
         let peg_in_req_sig = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let hash_msg = secp256k1_zkp::Message::from_slice(&hash[..]).unwrap();
             // FIXME: remove global ctx
             // FIXME: document unwrap
             let sec_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
@@ -214,7 +213,7 @@ impl MintClient {
             )
             .unwrap();
 
-            minimint_api::transaction::agg_sign(std::iter::once(sec_key), hash_msg, &mut rng)
+            minimint_api::transaction::agg_sign(std::iter::once(sec_key), hash.as_hash(), &mut rng)
         };
 
         let mint_transaction = mint_tx::Transaction {
@@ -410,7 +409,6 @@ impl MintClient {
         // TODO: abstract away tx building somehow
         let signature = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let hash_msg = secp256k1_zkp::Message::from_slice(&hash[..]).unwrap();
             // FIXME: remove global ctx
             // FIXME: document unwrap
             let sec_keys = spend_keys.into_iter().map(|key| {
@@ -421,7 +419,7 @@ impl MintClient {
                 .unwrap()
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash_msg, &mut rng)
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -472,7 +470,6 @@ impl MintClient {
         let signature = {
             // FIXME: deduplicate tx signing code
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let hash_msg = secp256k1_zkp::Message::from_slice(&hash[..]).unwrap();
             // FIXME: remove global ctx
             // FIXME: document unwrap
             let sec_keys = spend_keys.into_iter().map(|key| {
@@ -483,7 +480,7 @@ impl MintClient {
                 .unwrap()
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash_msg, &mut rng)
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
