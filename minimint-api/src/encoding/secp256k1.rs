@@ -40,7 +40,7 @@ impl Encodable for secp256k1_zkp::schnorrsig::Signature {
             bytes.len(),
             secp256k1_zkp::constants::SCHNORRSIG_SIGNATURE_SIZE
         );
-        writer.write_all(&bytes)?;
+        writer.write_all(bytes)?;
         Ok(secp256k1_zkp::constants::SCHNORRSIG_SIGNATURE_SIZE)
     }
 }

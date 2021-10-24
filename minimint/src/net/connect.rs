@@ -56,13 +56,14 @@ where
             .expect("Failed to accept connection");
 
         let identity = &cfg.identity;
-        let handshakes = out_conns.into_iter().chain(in_conns).map(
-            async move |mut stream| -> Result<_, std::io::Error> {
+        let handshakes = out_conns
+            .into_iter()
+            .chain(in_conns)
+            .map(move |mut stream| async move {
                 stream.write_u16((*identity).into()).await?;
                 let peer = stream.read_u16().await?.into();
-                Ok((peer, stream))
-            },
-        );
+                Result::<_, std::io::Error>::Ok((peer, stream))
+            });
 
         let peers = try_join_all(handshakes)
             .await

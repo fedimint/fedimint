@@ -185,7 +185,7 @@ pub fn agg_keys<I>(keys: I) -> schnorrsig::PublicKey
 where
     I: Iterator<Item = schnorrsig::PublicKey>,
 {
-    new_pre_session(keys, &secp256k1_zkp::SECP256K1).agg_pk()
+    new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
 fn new_pre_session<I, C>(keys: I, ctx: &Secp256k1<C>) -> secp256k1_zkp::MusigPreSession
@@ -228,12 +228,12 @@ where
         .map(|key| {
             // FIXME: upstream
             pre_session
-                .nonce_gen(ctx, &session_id, &key, &msg, None)
+                .nonce_gen(ctx, &session_id, key, &msg, None)
                 .expect("should not fail for valid inputs (ensured by type system)")
         })
         .unzip();
 
-    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(&ctx, &pub_nonces)
+    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(ctx, &pub_nonces)
         .expect("Should not fail for cooperative protocol runs");
 
     let session = pre_session
@@ -245,7 +245,7 @@ where
         .zip(keys.iter())
         .map(|(mut nonce, key)| {
             session
-                .partial_sign(ctx, &mut nonce, &key, &pre_session)
+                .partial_sign(ctx, &mut nonce, key, &pre_session)
                 .expect("Should not fail for cooperative protocol runs")
         })
         .collect::<Vec<_>>();

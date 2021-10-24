@@ -4,12 +4,10 @@ set -euxo pipefail
 
 curl https://bitcoincore.org/bin/bitcoin-core-22.0/bitcoin-22.0-x86_64-linux-gnu.tar.gz | sudo tar -xz -C /usr --strip-components=1
 mkdir -p cfg
-cargo build --release --all-targets
+cargo build --release
 cargo run --release --bin configgen -- cfg 4 4000 5000 1000 10000 100000 1000000 10000000
 
 # FIXME: deduplicate startfed.sh
-cargo build --release --all-targets
-
 bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin &
 sleep 3
 

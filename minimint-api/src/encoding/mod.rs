@@ -100,7 +100,7 @@ where
     T: Encodable,
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
-        (&self as &[T]).consensus_encode(writer)
+        (self as &[T]).consensus_encode(writer)
     }
 }
 
