@@ -1,5 +1,3 @@
-#![feature(min_type_alias_impl_trait)]
-
 extern crate self as minimint_api;
 
 use bitcoin_hashes::sha256::Hash as Sha256;
@@ -314,14 +312,19 @@ impl<C> FromIterator<(Amount, C)> for Coins<C> {
     }
 }
 
-impl<C> IntoIterator for Coins<C> {
+impl<C> IntoIterator for Coins<C>
+where
+    C: 'static,
+{
     type Item = (Amount, C);
-    type IntoIter = impl Iterator<Item = (Amount, C)>;
+    type IntoIter = Box<dyn Iterator<Item = (Amount, C)>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.coins
-            .into_iter()
-            .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c)))
+        Box::new(
+            self.coins
+                .into_iter()
+                .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c))),
+        )
     }
 }
 

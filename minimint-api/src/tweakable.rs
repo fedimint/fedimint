@@ -35,7 +35,7 @@ impl Contract for secp256k1_zkp::PublicKey {
 
 impl Contract for Vec<u8> {
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_all(&self)
+        writer.write_all(self)
     }
 }
 

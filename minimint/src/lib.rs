@@ -1,5 +1,3 @@
-#![feature(async_closure)]
-
 extern crate minimint_api;
 
 use crate::consensus::{ConsensusItem, FediMintConsensus};

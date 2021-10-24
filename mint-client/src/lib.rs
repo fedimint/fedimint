@@ -599,7 +599,7 @@ impl CoinRequest {
     {
         let spend_key = secp256k1_zkp::schnorrsig::KeyPair::new(ctx, &mut rng);
         let nonce = CoinNonce(secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &ctx, &spend_key,
+            ctx, &spend_key,
         ));
 
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());

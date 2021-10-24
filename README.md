@@ -2,8 +2,8 @@
 
 **This is an experimental implementation of a federated Chaumian bank. DO NOT USE IT WITH REAL MONEY, THERE ARE MULTIPLE KNOWN SECURITY ISSUES.**
 
-## Running it locally
-I'm currently using rust `rustc 1.54.0-nightly (ca82264ec 2021-05-09)` for development. I'll try to keep it up to date and eventually get off nightly.
+## Running MiniMint locally
+MiniMint is tested and developed using rust `stable`, you can get it through your package manager or from [rustup.rs](https://rustup.rs/).
 
 ### Generating config
 You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can generate the necessary configuration files as follows:

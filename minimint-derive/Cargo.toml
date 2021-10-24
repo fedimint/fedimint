@@ -6,6 +6,9 @@ edition = "2018"
 [lib]
 proc-macro = true
 
+[features]
+diagnostics = []
+
 [dependencies]
 heck = "0.3"
 proc-macro2 = "1.0"

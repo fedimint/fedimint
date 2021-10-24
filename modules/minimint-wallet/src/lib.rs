@@ -499,7 +499,7 @@ impl Wallet {
             self.secp
                 .verify(
                     &Message::from_slice(&tx_hash[..]).unwrap(),
-                    &signature,
+                    signature,
                     &tweaked_peer_key.key,
                 )
                 .map_err(|_| ProcessPegOutSigError::InvalidSignature)?;
@@ -849,7 +849,7 @@ impl<'a> StatelessWallet<'a> {
                     sighash_type: None,
                     redeem_script: None,
                     witness_script: Some(
-                        self.descriptor.tweak(&utxo.tweak, &self.secp).script_code(),
+                        self.descriptor.tweak(&utxo.tweak, self.secp).script_code(),
                     ),
                     bip32_derivation: Default::default(),
                     final_script_sig: None,
@@ -895,7 +895,7 @@ impl<'a> StatelessWallet<'a> {
                     .proprietary
                     .get(&proprietary_tweak_key())
                     .expect("Malformed PSBT: expected tweak");
-                let pub_key = secp256k1::PublicKey::from_secret_key(&self.secp, &secret_key);
+                let pub_key = secp256k1::PublicKey::from_secret_key(self.secp, &secret_key);
 
                 let tweak = {
                     let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
@@ -933,7 +933,7 @@ impl<'a> StatelessWallet<'a> {
             psbt_input.partial_sigs.insert(
                 bitcoin::PublicKey {
                     compressed: true,
-                    key: secp256k1::PublicKey::from_secret_key(&self.secp, &tweaked_secret),
+                    key: secp256k1::PublicKey::from_secret_key(self.secp, &tweaked_secret),
                 },
                 signature,
             );
@@ -950,7 +950,7 @@ impl<'a> StatelessWallet<'a> {
 
             let mut tweak_key = pub_key.key;
             tweak_key
-                .add_exp_assign(&self.secp, &hashed_tweak)
+                .add_exp_assign(self.secp, &hashed_tweak)
                 .expect("tweaking failed");
 
             CompressedPublicKey { key: tweak_key }
