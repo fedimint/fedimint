@@ -508,7 +508,7 @@ impl MintClient {
                 &PegInKey {
                     peg_in_script: script,
                 },
-                &peg_in_sec_key,
+                &peg_in_sec_key.serialize_secret(),
             )
             .expect("DB error");
 
