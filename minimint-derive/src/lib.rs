@@ -1,4 +1,4 @@
-#![feature(proc_macro_diagnostic)]
+#![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
 use heck::SnakeCase;
 use proc_macro::{self, TokenStream};
@@ -25,10 +25,14 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
         _ => Err("UnzipConsensus can only be derived for enums"),
     };
 
+    #[allow(unreachable_code)]
     let variants = match variants {
         Ok(variants) => variants,
         Err(e) => {
+            #[cfg(feature = "diagnostics")]
             ident.span().unstable().error(e).emit();
+            #[cfg(not(feature = "diagnostics"))]
+            panic!("Error: {}", e);
             return TokenStream::new();
         }
     };
@@ -166,12 +170,16 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                 }
             }
         }
+        #[allow(unreachable_code)]
         syn::Data::Union(_) => {
+            #[cfg(feature = "diagnostics")]
             ident
                 .span()
                 .unstable()
                 .error("Encodable can't be derived for unions")
                 .emit();
+            #[cfg(not(feature = "diagnostics"))]
+            panic!("Error: Encodable can't be derived for unions");
             return TokenStream::new();
         }
     };
@@ -269,12 +277,17 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                 }
             }
         }
+        #[allow(unreachable_code)]
         syn::Data::Union(_) => {
+            #[cfg(feature = "diagnostics")]
             ident
                 .span()
                 .unstable()
                 .error("Encodable can't be derived for unions")
                 .emit();
+            #[cfg(not(feature = "diagnostics"))]
+            panic!("Error: Encodable can't be derived for unions");
+
             return TokenStream::new();
         }
     };
