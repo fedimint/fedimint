@@ -81,7 +81,7 @@ pub struct Wallet {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct SpendableUTXO {
-    pub tweak: musig::PubKey,
+    pub tweak: secp256k1::schnorrsig::PublicKey,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     // FIXME: why do we save the script pub key? We can derive it from the tweak and the descriptor
@@ -268,7 +268,7 @@ impl FederationModule for Wallet {
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
             SpendableUTXO {
-                tweak: input.tweak_contract_key().clone(),
+                tweak: *input.tweak_contract_key(),
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
                 script_pubkey: input.tx_output().script_pubkey.clone(),
             },
@@ -858,12 +858,9 @@ impl<'a> StatelessWallet<'a> {
                     sha256_preimages: Default::default(),
                     hash160_preimages: Default::default(),
                     hash256_preimages: Default::default(),
-                    proprietary: vec![(
-                        proprietary_tweak_key(),
-                        bincode::serialize(&utxo.tweak).unwrap(),
-                    )]
-                    .into_iter()
-                    .collect(),
+                    proprietary: vec![(proprietary_tweak_key(), utxo.tweak.serialize().to_vec())]
+                        .into_iter()
+                        .collect(),
                     unknown: Default::default(),
                 })
                 .collect(),
@@ -1131,7 +1128,7 @@ mod tests {
             pending_since_block: 0,
         }];
 
-        let tweak = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng)).to_public();
+        let tweak = secp256k1::schnorrsig::PublicKey::from_slice(&[0x02; 32][..]).unwrap();
         let tweaked = descriptor.tweak(&tweak, &ctx);
         let utxos = vec![(
             UTXOKey(OutPoint::new(

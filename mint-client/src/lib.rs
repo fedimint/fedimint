@@ -1,5 +1,4 @@
 use bitcoin::{Address, Script, Transaction};
-use bitcoin_hashes::Hash as BitcoinHash;
 use futures::future::JoinAll;
 use minimint::config::ClientConfig;
 use minimint_api::db::batch::{BatchItem, DbBatch};
@@ -15,11 +14,10 @@ use minimint_api::{
     SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
 };
 use miniscript::DescriptorTrait;
-use musig::rng_adapt::RngAdaptor;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
 use reqwest::{RequestBuilder, StatusCode};
-use secp256k1::{All, Secp256k1};
+use secp256k1_zkp::{All, Secp256k1, Signing};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -44,7 +42,7 @@ pub struct MintClient {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
-    spend_key: musig::SecKey,
+    spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
     /// Nonce belonging to the secret key
     nonce: CoinNonce,
     /// Key to unblind the blind signature supplied by the mint for this coin
@@ -64,7 +62,7 @@ pub struct CoinFinalizationData {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableCoin {
     pub coin: Coin,
-    pub spend_key: musig::SecKey,
+    pub spend_key: [u8; 32],
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -151,21 +149,27 @@ impl MintClient {
         btc_transaction: Transaction,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
-        let (output_idx, secret_tweak_key) = btc_transaction
+        let (output_idx, secret_tweak_key_bytes) = btc_transaction
             .output
             .iter()
             .enumerate()
             .find_map(|(idx, out)| {
                 debug!("Output script: {}", out.script_pubkey);
                 self.db
-                    .get_value::<_, musig::SecKey>(&PegInKey {
+                    .get_value::<_, [u8; 32]>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .expect("DB error")
                     .map(|tweak_secret| (idx, tweak_secret))
             })
             .ok_or(ClientError::NoMatchingPegInFound)?;
-        let public_tweak_key = secret_tweak_key.to_public();
+        let secret_tweak_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
+            &self.secp,
+            &secret_tweak_key_bytes,
+        )
+        .expect("sec key was generated and saved by us");
+        let public_tweak_key =
+            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &secret_tweak_key);
 
         let peg_in_proof = PegInProof::new(
             txout_proof,
@@ -186,7 +190,7 @@ impl MintClient {
         }
 
         let (coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &mut rng);
+            CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &self.secp, &mut rng);
 
         let inputs = vec![mint_tx::Input::PegIn(Box::new(peg_in_proof))];
         let outputs = vec![mint_tx::Output::Coins(
@@ -199,10 +203,17 @@ impl MintClient {
 
         let peg_in_req_sig = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            musig::sign(
-                hash.into_inner(),
-                [secret_tweak_key].iter(),
-                musig::rng_adapt::RngAdaptor(&mut rng),
+            let sec_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
+                &self.secp,
+                &secret_tweak_key_bytes,
+            )
+            .expect("We checked key validity before saving to DB");
+
+            minimint_api::transaction::agg_sign(
+                std::iter::once(sec_key),
+                hash.as_hash(),
+                &self.secp,
+                &mut rng,
             )
         };
 
@@ -385,6 +396,7 @@ impl MintClient {
         let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
             coins.amount(),
             &self.cfg.mint.tbs_pks, // TODO: cache somewhere
+            &self.secp,
             &mut rng,
         );
 
@@ -398,9 +410,13 @@ impl MintClient {
 
         // TODO: abstract away tx building somehow
         let signature = {
-            let tx_hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let rng_adapt = musig::rng_adapt::RngAdaptor(&mut rng);
-            musig::sign(tx_hash.into_inner(), spend_keys.iter(), rng_adapt)
+            let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
+            let sec_keys = spend_keys.into_iter().map(|key| {
+                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                    .expect("We checked key validity before saving to DB")
+            });
+
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -449,8 +465,14 @@ impl MintClient {
         })];
 
         let signature = {
+            // FIXME: deduplicate tx signing code
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            musig::sign(hash.into_inner(), spend_keys.iter(), RngAdaptor(&mut rng))
+            let sec_keys = spend_keys.into_iter().map(|key| {
+                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                    .expect("We checked key validity before saving to DB")
+            });
+
+            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -465,8 +487,9 @@ impl MintClient {
     }
 
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, mut rng: R) -> Address {
-        let peg_in_sec_key = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng));
-        let peg_in_pub_key = peg_in_sec_key.to_public();
+        let peg_in_sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(&self.secp, &mut rng);
+        let peg_in_pub_key =
+            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &peg_in_sec_key);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -485,7 +508,7 @@ impl MintClient {
                 &PegInKey {
                     peg_in_script: script,
                 },
-                &peg_in_sec_key,
+                &peg_in_sec_key.serialize_secret(),
             )
             .expect("DB error");
 
@@ -495,16 +518,20 @@ impl MintClient {
 
 impl CoinFinalizationData {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
-    pub fn new<K>(
+    pub fn new<K, C>(
         amount: Amount,
         amount_tiers: &Keys<K>,
+        ctx: &Secp256k1<C>,
         mut rng: impl RngCore + CryptoRng,
-    ) -> (CoinFinalizationData, SignRequest) {
+    ) -> (CoinFinalizationData, SignRequest)
+    where
+        C: Signing,
+    {
         let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
             Coins::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
-                    let (request, blind_msg) = CoinRequest::new(&mut rng);
+                    let (request, blind_msg) = CoinRequest::new(ctx, &mut rng);
                     ((amt, request), (amt, blind_msg))
                 })
                 .unzip();
@@ -544,7 +571,7 @@ impl CoinFinalizationData {
                 if coin.verify(*mint_pub_key.tier(&amt)?) {
                     let coin = SpendableCoin {
                         coin,
-                        spend_key: coin_req.spend_key.clone(),
+                        spend_key: coin_req.spend_key,
                     };
 
                     Ok((amt, coin))
@@ -563,14 +590,22 @@ impl CoinFinalizationData {
 impl CoinRequest {
     /// Generate a request session for a single coin and returns it plus the corresponding blinded
     /// message
-    fn new(mut rng: impl RngCore + CryptoRng) -> (CoinRequest, BlindedMessage) {
-        let spend_key = musig::SecKey::random(musig::rng_adapt::RngAdaptor(&mut rng));
-        let nonce = CoinNonce(spend_key.to_public());
+    fn new<C>(
+        ctx: &Secp256k1<C>,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> (CoinRequest, BlindedMessage)
+    where
+        C: Signing,
+    {
+        let spend_key = secp256k1_zkp::schnorrsig::KeyPair::new(ctx, &mut rng);
+        let nonce = CoinNonce(secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
+            &ctx, &spend_key,
+        ));
 
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         let cr = CoinRequest {
-            spend_key,
+            spend_key: spend_key.serialize_secret(),
             nonce,
             blinding_key,
         };

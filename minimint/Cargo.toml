@@ -18,10 +18,9 @@ minimint-api = { path = "../minimint-api" }
 minimint-derive = { path = "../minimint-derive" }
 minimint-mint = { path = "../modules/minimint-mint" }
 minimint-wallet = { path = "../modules/minimint-wallet" }
-musig = { path = "../crypto/musig" }
 rand = "0.6.5"
 rayon = "1.5.0"
-secp256k1 = { version = "0.20.1", features = [ "global-context", "bitcoin_hashes" ] }
+secp256k1-zkp = { git = "https://github.com/elsirion/rust-secp256k1-zkp", branch = "minimint", features = [ "global-context", "bitcoin_hashes" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.61"
 sha3 = "0.9.1"
