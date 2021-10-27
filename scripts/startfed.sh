@@ -2,7 +2,7 @@
 
 SIZE="$1"
 
-cargo build --release --all-targets
+cargo build --release --bin server
 
 bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin &
 

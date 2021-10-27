@@ -10,7 +10,7 @@ You first need to generate some config. All scripts assume config to be located 
 
 ```shell
 mkdir -p cfg
-cargo run --example configgen cfg <num_nodes> 5000 6000 <tier1> <tier2> …
+cargo run --bin configgen cfg <num_nodes> 5000 6000 <tier1> <tier2> …
 ```
 
 `<num_nodes>` is the amount of nodes the federation shall consist of. It should be >=4 (I always test with 5) and not too big as the cryptography of the BFT protocol is rather intense and you should ideally have 1 core per node. The numbers `5000` and `6000` specify the beginning of the port range the inner-federation sockets and API sockets bind to. The remaining arguments will be interpreted as amount tiers in msat.
