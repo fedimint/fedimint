@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
 clightningrpc = { git = "https://github.com/elsirion/rust-clightning-rpc", rev = "28b0b062dfb7d758a3a0753c274febe4a7faa584" }
-lightning-invoice = "0.5.0"
+lightning-invoice = "0.11.0"
 minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 mint-client = { path = "../mint-client" }
@@ -18,5 +18,5 @@ sled = "0.34.6"
 structopt = "0.3.21"
 tide = "0.16.0"
 tracing = "0.1.26"
-tracing-subscriber = "0.2.18"
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 tokio = {version = "1.0", features = ["full"]}

@@ -139,7 +139,7 @@ async fn main() {
             client.peg_out(amount, address, &mut rng).await.unwrap();
         }
         Command::LnPay { gateway, bolt11 } => {
-            let amt = Amount::from_msat(bolt11.amount_pico_btc().unwrap() / 10);
+            let amt = Amount::from_msat(bolt11.amount_milli_satoshis().unwrap());
             let http = reqwest::Client::new();
 
             let coins = client.coins().select_coins(amt).expect("Not enough funds");

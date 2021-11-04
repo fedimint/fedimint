@@ -39,7 +39,7 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
     let invoice = lightning_invoice::Invoice::from_str(&pay_req.invoice)
         .map_err(|e| tide::Error::new(400, e))?;
 
-    let amt_ln_invoice_msat = invoice.amount_pico_btc().expect("no amount given") / 10;
+    let amt_ln_invoice_msat = invoice.amount_milli_satoshis().expect("no amount given");
     let amt_coins_msat = pay_req.coins.amount().milli_sat;
 
     debug!(

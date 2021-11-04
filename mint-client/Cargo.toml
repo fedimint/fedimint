@@ -9,12 +9,12 @@ edition = "2018"
 [dependencies]
 base64 = "0.13.0"
 bincode = "1.3.1"
-bitcoin = { version = "0.26.0" }
-bitcoin_hashes = "0.9.4"
+bitcoin = "0.27.0"
+bitcoin_hashes = "0.10.0"
 futures = "0.3.9"
 hex = "0.4.3"
-lightning-invoice = "0.5.0"
-miniscript = "5.1.0"
+lightning-invoice = "0.11.0"
+miniscript = "6.0.0"
 minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 rand = "0.6.5"
@@ -28,4 +28,4 @@ tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
-tracing-subscriber = "0.2.15"
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
