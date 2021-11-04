@@ -79,11 +79,9 @@ mod tests {
         let pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, &sec_key);
         test_roundtrip(pub_key);
 
-        let sig = crate::transaction::agg_sign(
-            std::iter::once(sec_key),
-            secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!"),
-            &ctx,
-            rand::thread_rng(),
+        let sig = ctx.schnorrsig_sign(
+            &secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!").into(),
+            &sec_key,
         );
 
         test_roundtrip(sig);

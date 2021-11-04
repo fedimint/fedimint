@@ -1,8 +1,9 @@
-use crate::Feerate;
+use crate::keys::CompressedPublicKey;
+use crate::{Feerate, PegInDescriptor};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use minimint_api::config::GenerateConfig;
-use minimint_api::{CompressedPublicKey, PeerId, PegInDescriptor};
+use minimint_api::PeerId;
 use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

@@ -1,7 +1,7 @@
+use crate::CoinNonce;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::transaction::OutPoint;
-use minimint_api::{CoinNonce, PeerId};
+use minimint_api::{OutPoint, PeerId};
 
 const DB_PREFIX_COIN_NONCE: u8 = 0x10;
 const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;

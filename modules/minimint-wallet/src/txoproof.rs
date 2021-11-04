@@ -1,10 +1,10 @@
-use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::keys::CompressedPublicKey;
-use crate::{Contract, Tweakable};
+use crate::tweakable::{Contract, Tweakable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+use minimint_api::encoding::{Decodable, DecodeError, Encodable};
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
-use secp256k1_zkp::{Secp256k1, Verification};
+use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::hash::Hash;
@@ -23,7 +23,7 @@ pub struct PegInProof {
     transaction: Transaction,
     // Check that the idx is in range
     output_idx: u32,
-    tweak_contract_key: secp256k1_zkp::schnorrsig::PublicKey,
+    tweak_contract_key: secp256k1::schnorrsig::PublicKey,
 }
 
 #[derive(Clone, Debug)]
@@ -91,7 +91,7 @@ impl PegInProof {
         txout_proof: TxOutProof,
         transaction: Transaction,
         output_idx: u32,
-        tweak_contract_key: secp256k1_zkp::schnorrsig::PublicKey,
+        tweak_contract_key: secp256k1::schnorrsig::PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
@@ -143,11 +143,11 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &secp256k1_zkp::schnorrsig::PublicKey {
+    pub fn tweak_contract_key(&self) -> &secp256k1::schnorrsig::PublicKey {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (secp256k1_zkp::schnorrsig::PublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (secp256k1::schnorrsig::PublicKey, bitcoin::Txid) {
         (self.tweak_contract_key, self.transaction.txid())
     }
 
@@ -258,7 +258,7 @@ impl Decodable for PegInProof {
             txout_proof: TxOutProof::consensus_decode(&mut d)?,
             transaction: Transaction::consensus_decode(&mut d)?,
             output_idx: u32::consensus_decode(&mut d)?,
-            tweak_contract_key: secp256k1_zkp::schnorrsig::PublicKey::consensus_decode(&mut d)?,
+            tweak_contract_key: secp256k1::schnorrsig::PublicKey::consensus_decode(&mut d)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
@@ -281,7 +281,7 @@ pub enum PegInProofError {
 #[cfg(test)]
 mod tests {
     use super::TxOutProof;
-    use crate::encoding::Decodable;
+    use minimint_api::encoding::Decodable;
     use std::io::Cursor;
 
     #[test]

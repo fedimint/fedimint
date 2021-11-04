@@ -1,21 +1,24 @@
 extern crate minimint_api;
 
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+
+use hbbft::honey_badger::{HoneyBadger, Step};
+use hbbft::{Epoched, NetworkInfo};
+use rand::{CryptoRng, RngCore};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use tokio::task::{spawn, JoinHandle};
+use tracing::{debug, info, trace, warn};
+
+use config::ServerConfig;
+use consensus::ConsensusOutcome;
+use minimint_api::db::RawDatabase;
+use minimint_api::PeerId;
+
 use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
-use config::ServerConfig;
-use consensus::ConsensusOutcome;
-use hbbft::honey_badger::{HoneyBadger, Step};
-use hbbft::{Epoched, NetworkInfo};
-use minimint_api::db::RawDatabase;
-use minimint_api::PeerId;
-use rand::{CryptoRng, RngCore};
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::task::{spawn, JoinHandle};
-use tracing::{debug, info, trace, warn};
 
 /// The actual implementation of the federated mint
 pub mod consensus;
@@ -29,8 +32,15 @@ pub mod net;
 /// MiniMint toplevel config
 pub mod config;
 
+pub mod outcome;
 /// Some abstractions to handle randomness
 mod rng;
+pub mod transaction;
+
+pub mod modules {
+    pub use minimint_mint as mint;
+    pub use minimint_wallet as wallet;
+}
 
 /// Start all the components of the mintan d plug them together
 pub async fn run_minimint(cfg: ServerConfig) {

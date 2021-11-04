@@ -1,5 +1,7 @@
-use minimint_api::transaction::{Input, Transaction};
-use minimint_api::{Coin, Coins, PegInProof};
+use crate::transaction::{Input, Transaction};
+use minimint_mint::tiered::coins::Coins;
+use minimint_mint::Coin;
+use minimint_wallet::txoproof::PegInProof;
 use std::collections::HashSet;
 
 pub trait ConflictFilterable<T>

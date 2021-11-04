@@ -1,5 +1,5 @@
-pub mod config;
-mod db;
+use std::hash::Hasher;
+use std::sync::Arc;
 
 use crate::config::WalletConfig;
 use crate::db::{
@@ -7,6 +7,9 @@ use crate::db::{
     PendingPegOutPrefixKey, PendingTransaction, PendingTransactionKey, PendingTransactionPrefixKey,
     RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
 };
+use crate::keys::CompressedPublicKey;
+use crate::tweakable::Tweakable;
+use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
@@ -22,20 +25,21 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::transaction::{OutPoint, PegOut};
-use minimint_api::{
-    CompressedPublicKey, FederationModule, PeerId, PegInProof, PegInProofError, Tweakable,
-};
+use minimint_api::{FederationModule, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{Message, Signature};
 use serde::{Deserialize, Serialize};
-use std::hash::Hasher;
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, warn};
+
+pub mod config;
+mod db;
+pub mod keys;
+pub mod tweakable;
+pub mod txoproof;
 
 pub const CONFIRMATION_TARGET: u16 = 24;
 
@@ -45,6 +49,8 @@ pub const CONFIRMATION_TARGET: u16 = 24;
 pub const MIN_PEG_OUT_URGENCY: u32 = 100;
 
 pub type PartialSig = Vec<u8>;
+
+pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus)]
 pub enum WalletConsensusItem {
@@ -119,6 +125,13 @@ struct StatelessWallet<'a> {
 )]
 pub struct Feerate {
     pub sats_per_kvb: u64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PegOut {
+    pub recipient: bitcoin::Address,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
 }
 
 #[async_trait(?Send)]
@@ -295,7 +308,7 @@ impl FederationModule for Wallet {
         &'a self,
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
-        out_point: minimint_api::transaction::OutPoint,
+        out_point: minimint_api::OutPoint,
     ) -> Result<minimint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
@@ -327,10 +340,8 @@ impl FederationModule for Wallet {
         };
 
         // Check if we should create a peg-out transaction
-        let (peg_out_ids, pending_peg_outs): (
-            Vec<minimint_api::transaction::OutPoint>,
-            Vec<PendingPegOut>,
-        ) = self.pending_peg_outs().into_iter().unzip();
+        let (peg_out_ids, pending_peg_outs): (Vec<minimint_api::OutPoint>, Vec<PendingPegOut>) =
+            self.pending_peg_outs().into_iter().unzip();
         let urgency = pending_peg_outs
             .iter()
             .map(|peg_out| round_consensus.block_height - peg_out.pending_since_block)
@@ -1084,16 +1095,20 @@ impl From<PegInProofError> for WalletError {
 
 #[cfg(test)]
 mod tests {
-    use super::Feerate;
-    use crate::db::UTXOKey;
-    use crate::{PendingPegOut, SpendableUTXO, StatelessWallet};
+    use std::str::FromStr;
+
     use bitcoin::hashes::Hash as BitcoinHash;
     use bitcoin::{Address, Amount, OutPoint, TxOut};
-    use minimint_api::{CompressedPublicKey, Tweakable};
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;
     use miniscript::{Descriptor, DescriptorTrait, Segwitv0};
-    use std::str::FromStr;
+
+    use crate::db::UTXOKey;
+    use crate::keys::CompressedPublicKey;
+    use crate::tweakable::Tweakable;
+    use crate::{PendingPegOut, SpendableUTXO, StatelessWallet};
+
+    use super::Feerate;
 
     #[test]
     fn sign_tx() {

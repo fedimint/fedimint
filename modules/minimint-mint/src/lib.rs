@@ -1,6 +1,3 @@
-pub mod config;
-mod db;
-
 use crate::config::MintConfig;
 use crate::db::{
     NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
@@ -11,12 +8,8 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::{Database, RawDatabase};
-use minimint_api::transaction::{BlindToken, OutPoint};
-use minimint_api::util::TieredMultiZip;
-use minimint_api::{
-    Amount, Coin, Coins, FederationModule, InvalidAmountTierError, Keys, PartialSigResponse,
-    PeerId, SigResponse,
-};
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::{Amount, FederationModule, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -28,7 +21,16 @@ use tbs::{
     PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
+use tiered::coins::Coins;
+use tiered::coins::TieredMultiZip;
+pub use tiered::keys::Keys;
 use tracing::{debug, error, warn};
+
+pub mod config;
+
+mod db;
+/// Data structures taking into account different amount tiers
+pub mod tiered;
 
 /// Federated mint member mint
 pub struct Mint {
@@ -43,8 +45,35 @@ pub struct Mint {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PartiallySignedRequest {
     out_point: OutPoint,
-    partial_signature: minimint_api::PartialSigResponse,
+    partial_signature: PartialSigResponse,
 }
+
+/// Request to blind sign a certain amount of coins
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct SignRequest(pub Coins<tbs::BlindedMessage>);
+
+// FIXME: optimize out blinded msg by making the mint remember it
+/// Blind signature share for a [`SignRequest`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
+
+/// Blind signature for a [`SignRequest`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
+
+/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
+/// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
+/// is required.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Coin(pub CoinNonce, pub tbs::Signature);
+
+/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
+/// spent coin's spending keys to avoid mint frontrunning.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct CoinNonce(pub secp256k1_zkp::schnorrsig::PublicKey);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct BlindToken(pub tbs::BlindedMessage);
 
 #[async_trait(?Send)]
 impl FederationModule for Mint {
@@ -485,6 +514,54 @@ impl Mint {
         }
 
         batch.commit();
+    }
+}
+
+impl Coin {
+    /// Verify the coin's validity under a mit key `pk`
+    pub fn verify(&self, pk: tbs::AggregatePublicKey) -> bool {
+        tbs::verify(self.0.to_message(), self.1, pk)
+    }
+
+    /// Access the nonce as the public key to the spend key
+    pub fn spend_key(&self) -> &secp256k1_zkp::schnorrsig::PublicKey {
+        &self.0 .0
+    }
+}
+
+impl CoinNonce {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bincode::serialize_into(&mut bytes, &self.0).unwrap();
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        // FIXME: handle errors or the client can be crashed
+        bincode::deserialize(bytes).unwrap()
+    }
+
+    pub fn to_message(&self) -> tbs::Message {
+        tbs::Message::from_bytes(&self.0.serialize()[..])
+    }
+}
+
+impl From<SignRequest> for Coins<BlindToken> {
+    fn from(sig_req: SignRequest) -> Self {
+        sig_req
+            .0
+            .into_iter()
+            .map(|(amt, token)| (amt, crate::BlindToken(token)))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+pub struct InvalidAmountTierError(pub Amount);
+
+impl std::fmt::Display for InvalidAmountTierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Amount tier unknown to mint: {}", self.0)
     }
 }
 

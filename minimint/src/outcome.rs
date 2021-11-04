@@ -1,4 +1,4 @@
-use crate::SigResponse;
+use minimint_mint::SigResponse;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]

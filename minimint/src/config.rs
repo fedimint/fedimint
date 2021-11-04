@@ -1,7 +1,7 @@
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
-use minimint_api::{FeeConsensus, PeerId};
+use minimint_api::PeerId;
 use minimint_mint::config::{MintClientConfig, MintConfig};
 use minimint_wallet::config::{WalletClientConfig, WalletConfig};
 use serde::de::DeserializeOwned;
@@ -60,6 +60,15 @@ pub struct ClientConfig {
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub fee_consensus: FeeConsensus,
+}
+
+// TODO: get rid of it here, modules should govern their oen fees
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub fee_coin_spend_abs: minimint_api::Amount,
+    pub fee_peg_in_abs: minimint_api::Amount,
+    pub fee_coin_issuance_abs: minimint_api::Amount,
+    pub fee_peg_out_abs: minimint_api::Amount,
 }
 
 impl GenerateConfig for ServerConfig {

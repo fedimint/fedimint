@@ -1,6 +1,6 @@
 use crate::config::ServerConfig;
 use crate::consensus::FediMintConsensus;
-use minimint_api::transaction::Transaction;
+use crate::transaction::Transaction;
 use minimint_api::TransactionId;
 use std::fmt::Formatter;
 use std::sync::Arc;

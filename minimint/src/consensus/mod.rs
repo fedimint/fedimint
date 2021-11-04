@@ -3,14 +3,14 @@ mod conflictfilter;
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
+use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
+use crate::transaction::{Input, Output, Transaction, TransactionError};
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::outcome::OutputOutcome;
-use minimint_api::transaction::{Input, OutPoint, Output, Transaction, TransactionError};
-use minimint_api::{FederationModule, PeerId, TransactionId};
+use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_derive::UnzipConsensus;
 use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
@@ -275,7 +275,7 @@ where
     pub fn transaction_status(
         &self,
         txid: TransactionId,
-    ) -> Option<minimint_api::outcome::TransactionStatus> {
+    ) -> Option<crate::outcome::TransactionStatus> {
         let is_proposal = self
             .db
             .get_value::<_, Transaction>(&ProposedTransactionKey(txid))
@@ -317,12 +317,12 @@ where
                 })
                 .collect();
 
-            Some(minimint_api::outcome::TransactionStatus::Accepted {
+            Some(crate::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,
                 outputs,
             })
         } else if is_proposal {
-            Some(minimint_api::outcome::TransactionStatus::AwaitingConsensus)
+            Some(crate::outcome::TransactionStatus::AwaitingConsensus)
         } else {
             None
         }

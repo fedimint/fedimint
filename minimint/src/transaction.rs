@@ -1,6 +1,11 @@
-use crate::encoding::{Decodable, Encodable};
-use crate::{Amount, Coin, Coins, FeeConsensus, PegInProof, TransactionId};
-use bitcoin_hashes::Hash as BitcoinHash;
+use crate::config::FeeConsensus;
+use bitcoin::hashes::Hash as BitcoinHash;
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::{Amount, TransactionId};
+use minimint_mint::tiered::coins::Coins;
+use minimint_mint::{BlindToken, Coin};
+use minimint_wallet::txoproof::PegInProof;
+use minimint_wallet::PegOut;
 use rand::Rng;
 use secp256k1_zkp::{schnorrsig, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -27,29 +32,13 @@ pub enum Output {
     // TODO: lightning integration goes here
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PegOut {
-    pub recipient: bitcoin::Address,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct BlindToken(pub tbs::BlindedMessage);
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct OutPoint {
-    pub txid: TransactionId,
-    pub out_idx: u64,
-}
-
 /// Common properties of transaction in- and outputs
 pub trait TransactionItem {
     /// The amount before fees represented by the in/output
-    fn amount(&self) -> crate::Amount;
+    fn amount(&self) -> minimint_api::Amount;
 
     /// The fee that will be charged for this in/output
-    fn fee(&self, fee_consensus: &FeeConsensus) -> crate::Amount;
+    fn fee(&self, fee_consensus: &FeeConsensus) -> minimint_api::Amount;
 }
 
 impl Input {
@@ -167,12 +156,6 @@ impl Transaction {
         } else {
             Err(TransactionError::InvalidSignature)
         }
-    }
-}
-
-impl std::fmt::Display for OutPoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.txid, self.out_idx)
     }
 }
 

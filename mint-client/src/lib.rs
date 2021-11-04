@@ -1,18 +1,22 @@
 use bitcoin::{Address, Script, Transaction};
 use futures::future::JoinAll;
 use minimint::config::ClientConfig;
+use minimint::modules::mint::tiered::coins::Coins;
+use minimint::modules::mint::{
+    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+};
+use minimint::modules::wallet::tweakable::Tweakable;
+use minimint::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use minimint::modules::wallet::PegOut;
+use minimint::outcome::{Final, OutputOutcome, TransactionStatus};
+use minimint::transaction as mint_tx;
 use minimint_api::db::batch::{BatchItem, DbBatch};
 use minimint_api::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseKeyPrefixConst, DecodingError, RawDatabase,
 };
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::outcome::{Final, OutputOutcome, TransactionStatus};
-use minimint_api::transaction as mint_tx;
-use minimint_api::transaction::OutPoint;
-use minimint_api::{
-    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
-    SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
-};
+use minimint_api::OutPoint;
+use minimint_api::{Amount, TransactionId};
 use miniscript::DescriptorTrait;
 use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
@@ -197,7 +201,7 @@ impl MintClient {
             sig_req
                 .0
                 .into_iter()
-                .map(|(amt, token)| (amt, mint_tx::BlindToken(token)))
+                .map(|(amt, token)| (amt, BlindToken(token)))
                 .collect(),
         )];
 
@@ -209,7 +213,7 @@ impl MintClient {
             )
             .expect("We checked key validity before saving to DB");
 
-            minimint_api::transaction::agg_sign(
+            minimint::transaction::agg_sign(
                 std::iter::once(sec_key),
                 hash.as_hash(),
                 &self.secp,
@@ -416,7 +420,7 @@ impl MintClient {
                     .expect("We checked key validity before saving to DB")
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -459,7 +463,7 @@ impl MintClient {
             .unzip();
 
         let inputs = vec![mint_tx::Input::Coins(coins)];
-        let outputs = vec![mint_tx::Output::PegOut(mint_tx::PegOut {
+        let outputs = vec![mint_tx::Output::PegOut(PegOut {
             recipient: address,
             amount: amt,
         })];
@@ -472,7 +476,7 @@ impl MintClient {
                     .expect("We checked key validity before saving to DB")
             });
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
