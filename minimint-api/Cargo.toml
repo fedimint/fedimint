@@ -22,7 +22,7 @@ sled = "0.34"
 tbs = { path = "../crypto/tbs"}
 thiserror = "1.0.23"
 tracing ="0.1.22"
-validator = { version = "0.13", features = ["derive"] }
+validator = { version = "0.14.0", features = ["derive"] }
 
 [dev-dependencies]
 tempdir = "0.3.7"
