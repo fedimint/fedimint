@@ -1,11 +1,7 @@
 use crate::config::FeeConsensus;
 use bitcoin::hashes::Hash as BitcoinHash;
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{Amount, TransactionId};
-use minimint_mint::tiered::coins::Coins;
-use minimint_mint::{BlindToken, Coin};
-use minimint_wallet::txoproof::PegInProof;
-use minimint_wallet::PegOut;
+use minimint_api::{Amount, FederationModule, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorrsig, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -21,14 +17,14 @@ pub struct Transaction {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
-    Coins(Coins<Coin>),
-    PegIn(Box<PegInProof>),
+    Mint(<minimint_mint::Mint as FederationModule>::TxInput),
+    Wallet(<minimint_wallet::Wallet as FederationModule>::TxInput),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Output {
-    Coins(Coins<BlindToken>),
-    PegOut(PegOut),
+    Mint(<minimint_mint::Mint as FederationModule>::TxOutput),
+    Wallet(<minimint_wallet::Wallet as FederationModule>::TxOutput),
     // TODO: lightning integration goes here
 }
 
@@ -47,8 +43,8 @@ impl Input {
     /// be valid.
     fn authorization_keys<'a>(&'a self) -> Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a> {
         match self {
-            Input::Coins(coins) => Box::new(coins.iter().map(|(_, coin)| *coin.spend_key())),
-            Input::PegIn(proof) => Box::new(std::iter::once(*proof.tweak_contract_key())),
+            Input::Mint(coins) => Box::new(coins.iter().map(|(_, coin)| *coin.spend_key())),
+            Input::Wallet(proof) => Box::new(std::iter::once(*proof.tweak_contract_key())),
         }
     }
 }
@@ -56,15 +52,15 @@ impl Input {
 impl TransactionItem for Input {
     fn amount(&self) -> Amount {
         match self {
-            Input::Coins(coins) => coins.amount(),
-            Input::PegIn(peg_in) => Amount::from_sat(peg_in.tx_output().value),
+            Input::Mint(coins) => coins.amount(),
+            Input::Wallet(peg_in) => Amount::from_sat(peg_in.tx_output().value),
         }
     }
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Input::Coins(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Input::PegIn(_) => fee_consensus.fee_peg_in_abs,
+            Input::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
+            Input::Wallet(_) => fee_consensus.fee_peg_in_abs,
         }
     }
 }
@@ -72,15 +68,15 @@ impl TransactionItem for Input {
 impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
-            Output::Coins(coins) => coins.amount(),
-            Output::PegOut(peg_out) => peg_out.amount.into(),
+            Output::Mint(coins) => coins.amount(),
+            Output::Wallet(peg_out) => peg_out.amount.into(),
         }
     }
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Output::Coins(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Output::PegOut(_) => fee_consensus.fee_peg_out_abs,
+            Output::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
+            Output::Wallet(_) => fee_consensus.fee_peg_out_abs,
         }
     }
 }

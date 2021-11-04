@@ -137,7 +137,7 @@ pub struct PegOut {
 #[async_trait(?Send)]
 impl FederationModule for Wallet {
     type Error = WalletError;
-    type TxInput = PegInProof;
+    type TxInput = Box<PegInProof>;
     type TxOutput = PegOut;
     // TODO: implement outcome
     type TxOutputOutcome = ();

@@ -70,12 +70,12 @@ where
 
         for input in &transaction.inputs {
             match input {
-                Input::Coins(coins) => {
+                Input::Mint(coins) => {
                     self.mint
                         .validate_input(coins)
                         .map_err(TransactionSubmissionError::InputCoinError)?;
                 }
-                Input::PegIn(peg_in) => {
+                Input::Wallet(peg_in) => {
                     self.wallet
                         .validate_input(peg_in)
                         .map_err(TransactionSubmissionError::InputPegIn)?;
@@ -85,12 +85,12 @@ where
 
         for output in &transaction.outputs {
             match output {
-                Output::Coins(coins) => {
+                Output::Mint(coins) => {
                     self.mint
                         .validate_output(coins)
                         .map_err(TransactionSubmissionError::OutputCoinError)?;
                 }
-                Output::PegOut(peg_out) => {
+                Output::Wallet(peg_out) => {
                     self.wallet
                         .validate_output(peg_out)
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
@@ -226,12 +226,12 @@ where
 
         for input in transaction.inputs {
             match input {
-                Input::Coins(coins) => {
+                Input::Mint(coins) => {
                     self.mint
                         .apply_input(batch.subtransaction(), &coins)
                         .map_err(TransactionSubmissionError::InputCoinError)?;
                 }
-                Input::PegIn(peg_in) => {
+                Input::Wallet(peg_in) => {
                     self.wallet
                         .apply_input(batch.subtransaction(), &peg_in)
                         .map_err(TransactionSubmissionError::InputPegIn)?;
@@ -241,7 +241,7 @@ where
 
         for (idx, output) in transaction.outputs.into_iter().enumerate() {
             match output {
-                Output::Coins(new_tokens) => {
+                Output::Mint(new_tokens) => {
                     self.mint
                         .apply_output(
                             batch.subtransaction(),
@@ -253,7 +253,7 @@ where
                         )
                         .map_err(TransactionSubmissionError::OutputCoinError)?;
                 }
-                Output::PegOut(peg_out) => {
+                Output::Wallet(peg_out) => {
                     self.wallet
                         .apply_output(
                             batch.subtransaction(),
@@ -299,14 +299,14 @@ where
                         out_idx: out_idx as u64,
                     };
                     match output {
-                        Output::Coins(_) => {
+                        Output::Mint(_) => {
                             let outcome = self
                                 .mint
                                 .output_status(outpoint)
                                 .expect("the transaction was processed, so should be known");
                             OutputOutcome::Mint(outcome)
                         }
-                        Output::PegOut(_) => {
+                        Output::Wallet(_) => {
                             let outcome = self
                                 .wallet
                                 .output_status(outpoint)

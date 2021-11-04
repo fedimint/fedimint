@@ -196,8 +196,8 @@ impl MintClient {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &self.secp, &mut rng);
 
-        let inputs = vec![mint_tx::Input::PegIn(Box::new(peg_in_proof))];
-        let outputs = vec![mint_tx::Output::Coins(
+        let inputs = vec![mint_tx::Input::Wallet(Box::new(peg_in_proof))];
+        let outputs = vec![mint_tx::Output::Mint(
             sig_req
                 .0
                 .into_iter()
@@ -409,8 +409,8 @@ impl MintClient {
             .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let inputs = vec![mint_tx::Input::Coins(coins)];
-        let outputs = vec![mint_tx::Output::Coins(sig_req.into())];
+        let inputs = vec![mint_tx::Input::Mint(coins)];
+        let outputs = vec![mint_tx::Output::Mint(sig_req.into())];
 
         // TODO: abstract away tx building somehow
         let signature = {
@@ -462,8 +462,8 @@ impl MintClient {
             .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let inputs = vec![mint_tx::Input::Coins(coins)];
-        let outputs = vec![mint_tx::Output::PegOut(PegOut {
+        let inputs = vec![mint_tx::Input::Mint(coins)];
+        let outputs = vec![mint_tx::Output::Wallet(PegOut {
             recipient: address,
             amount: amt,
         })];

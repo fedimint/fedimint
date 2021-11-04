@@ -53,13 +53,13 @@ where
         let tx = (self.tx_accessor)(&next);
         for input in &tx.inputs {
             match input {
-                Input::Coins(ref coins) => {
+                Input::Mint(ref coins) => {
                     // TODO: can this be done without cloning? E.g. hashing?
                     if !self.coin_set.insert(coins.clone()) {
                         return None;
                     }
                 }
-                Input::PegIn(ref peg_in) => {
+                Input::Wallet(ref peg_in) => {
                     if !self.peg_in_set.insert(peg_in.as_ref().clone()) {
                         return None;
                     }
