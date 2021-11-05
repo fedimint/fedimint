@@ -23,27 +23,27 @@ impl MemDatabase {
 impl RawDatabase for MemDatabase {
     fn raw_insert_entry(
         &self,
-        key: Vec<u8>,
+        key: &[u8],
         value: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, DatabaseError> {
-        Ok(self.data.lock().unwrap().insert(key, value))
+        Ok(self.data.lock().unwrap().insert(key.to_vec(), value))
     }
 
-    fn raw_get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
-        Ok(self.data.lock().unwrap().get(&key).cloned())
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self.data.lock().unwrap().get(key).cloned())
     }
 
-    fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
-        Ok(self.data.lock().unwrap().remove(&key))
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+        Ok(self.data.lock().unwrap().remove(key))
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter {
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
         let mut data = self
             .data
             .lock()
             .unwrap()
-            .range::<Vec<u8>, _>((&key_prefix)..)
-            .take_while(|(key, _)| key.starts_with(&key_prefix))
+            .range::<Vec<u8>, _>((key_prefix.to_vec())..)
+            .take_while(|(key, _)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
             .collect::<Vec<_>>();
         data.reverse();
@@ -58,7 +58,7 @@ impl RawDatabase for MemDatabase {
             match change {
                 BatchItem::InsertNewElement(element) => {
                     if self
-                        .raw_insert_entry(element.key.to_bytes(), element.value.to_bytes())?
+                        .raw_insert_entry(&element.key.to_bytes(), element.value.to_bytes())?
                         .is_some()
                     {
                         error!("Database replaced element! This should not happen!");
@@ -66,16 +66,16 @@ impl RawDatabase for MemDatabase {
                     }
                 }
                 BatchItem::InsertElement(element) => {
-                    self.raw_insert_entry(element.key.to_bytes(), element.value.to_bytes())?;
+                    self.raw_insert_entry(&element.key.to_bytes(), element.value.to_bytes())?;
                 }
                 BatchItem::DeleteElement(key) => {
-                    if self.raw_remove_entry(key.to_bytes())?.is_none() {
+                    if self.raw_remove_entry(&key.to_bytes())?.is_none() {
                         error!("Database deleted absent element! This should not happen!");
                         trace!("Problematic key: {:?}", key);
                     }
                 }
                 BatchItem::MaybeDeleteElement(key) => {
-                    self.raw_remove_entry(key.to_bytes())?;
+                    self.raw_remove_entry(&key.to_bytes())?;
                 }
             }
         }
