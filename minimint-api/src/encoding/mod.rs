@@ -203,6 +203,18 @@ impl Decodable for () {
     }
 }
 
+impl Encodable for String {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.as_bytes().consensus_encode(writer)
+    }
+}
+
+impl Decodable for String {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        String::from_utf8(Decodable::consensus_decode(d)?).map_err(DecodeError::from_err)
+    }
+}
+
 impl DecodeError {
     // TODO: think about better name
     #[allow(clippy::should_implement_trait)]
