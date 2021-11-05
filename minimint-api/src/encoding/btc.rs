@@ -1,4 +1,5 @@
 use crate::encoding::{Decodable, DecodeError, Encodable};
+use bitcoin::hashes::Hash as BitcoinHash;
 use std::io::Error;
 
 macro_rules! impl_encode_decode_bridge {
@@ -58,5 +59,19 @@ impl Decodable for bitcoin::Address {
             .map_err(DecodeError::from_err)?
             .parse()
             .map_err(DecodeError::from_err)
+    }
+}
+
+impl Encodable for bitcoin::hashes::sha256::Hash {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        (&self[..]).consensus_encode(writer)
+    }
+}
+
+impl Decodable for bitcoin::hashes::sha256::Hash {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        Ok(bitcoin::hashes::sha256::Hash::from_inner(
+            Decodable::consensus_decode(d)?,
+        ))
     }
 }
