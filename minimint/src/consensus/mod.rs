@@ -66,22 +66,22 @@ where
         debug!("Received mint transaction {}", tx_hash);
 
         transaction.validate_funding(&self.cfg.fee_consensus)?;
-        transaction.validate_signature()?;
 
+        let mut pub_keys = Vec::new();
         for input in &transaction.inputs {
-            match input {
-                Input::Mint(coins) => {
-                    self.mint
-                        .validate_input(coins)
-                        .map_err(TransactionSubmissionError::InputCoinError)?;
-                }
-                Input::Wallet(peg_in) => {
-                    self.wallet
-                        .validate_input(peg_in)
-                        .map_err(TransactionSubmissionError::InputPegIn)?;
-                }
-            }
+            let meta = match input {
+                Input::Mint(coins) => self
+                    .mint
+                    .validate_input(coins)
+                    .map_err(TransactionSubmissionError::InputCoinError)?,
+                Input::Wallet(peg_in) => self
+                    .wallet
+                    .validate_input(peg_in)
+                    .map_err(TransactionSubmissionError::InputPegIn)?,
+            };
+            pub_keys.push(meta.puk_keys);
         }
+        transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for output in &transaction.outputs {
             match output {
@@ -220,24 +220,24 @@ where
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
         transaction.validate_funding(&self.cfg.fee_consensus)?;
-        transaction.validate_signature()?;
 
         let tx_hash = transaction.tx_hash();
 
-        for input in transaction.inputs {
-            match input {
-                Input::Mint(coins) => {
-                    self.mint
-                        .apply_input(batch.subtransaction(), &coins)
-                        .map_err(TransactionSubmissionError::InputCoinError)?;
-                }
-                Input::Wallet(peg_in) => {
-                    self.wallet
-                        .apply_input(batch.subtransaction(), &peg_in)
-                        .map_err(TransactionSubmissionError::InputPegIn)?;
-                }
-            }
+        let mut pub_keys = Vec::new();
+        for input in transaction.inputs.iter() {
+            let meta = match input {
+                Input::Mint(coins) => self
+                    .mint
+                    .apply_input(batch.subtransaction(), coins)
+                    .map_err(TransactionSubmissionError::InputCoinError)?,
+                Input::Wallet(peg_in) => self
+                    .wallet
+                    .apply_input(batch.subtransaction(), peg_in)
+                    .map_err(TransactionSubmissionError::InputPegIn)?,
+            };
+            pub_keys.push(meta.puk_keys);
         }
+        transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for (idx, output) in transaction.outputs.into_iter().enumerate() {
             match output {

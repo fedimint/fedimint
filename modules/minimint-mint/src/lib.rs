@@ -9,7 +9,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{Amount, FederationModule, OutPoint, PeerId};
+use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -118,7 +118,7 @@ impl FederationModule for Mint {
         batch.commit();
     }
 
-    fn validate_input(&self, input: &Self::TxInput) -> Result<Amount, Self::Error> {
+    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
         input.iter().try_for_each(|(amount, coin)| {
             if !coin.verify(
                 *self
@@ -140,15 +140,19 @@ impl FederationModule for Mint {
 
             Ok(())
         })?;
-        Ok(input.amount())
+
+        Ok(InputMeta {
+            amount: input.amount(),
+            puk_keys: Box::new(input.iter().map(|(_, coin)| *coin.spend_key())),
+        })
     }
 
-    fn apply_input<'a>(
+    fn apply_input<'a, 'b>(
         &'a self,
         mut batch: BatchTx<'a>,
-        input: &'a Self::TxInput,
-    ) -> Result<Amount, Self::Error> {
-        let amount = self.validate_input(input)?;
+        input: &'b Self::TxInput,
+    ) -> Result<InputMeta<'b>, Self::Error> {
+        let meta = self.validate_input(input)?;
 
         batch.append_from_iter(
             input
@@ -157,7 +161,7 @@ impl FederationModule for Mint {
         );
         batch.commit();
 
-        Ok(amount)
+        Ok(meta)
     }
 
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {

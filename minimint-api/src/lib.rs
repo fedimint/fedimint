@@ -3,7 +3,7 @@ extern crate self as minimint_api;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
-pub use module::FederationModule;
+pub use module::{FederationModule, InputMeta};
 use serde::{Deserialize, Serialize};
 use std::io::Error;
 use std::num::ParseIntError;

@@ -37,18 +37,6 @@ pub trait TransactionItem {
     fn fee(&self, fee_consensus: &FeeConsensus) -> minimint_api::Amount;
 }
 
-impl Input {
-    // TODO: probably make this a single returned key once coins are separate inputs
-    /// Returns an iterator over all the keys that need to sign the transaction for the input to
-    /// be valid.
-    fn authorization_keys<'a>(&'a self) -> Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a> {
-        match self {
-            Input::Mint(coins) => Box::new(coins.iter().map(|(_, coin)| *coin.spend_key())),
-            Input::Wallet(proof) => Box::new(std::iter::once(*proof.tweak_contract_key())),
-        }
-    }
-}
-
 impl TransactionItem for Input {
     fn amount(&self) -> Amount {
         match self {
@@ -134,13 +122,12 @@ impl Transaction {
         TransactionId::from_engine(engine)
     }
 
-    pub fn validate_signature(&self) -> Result<(), TransactionError> {
+    pub fn validate_signature(
+        &self,
+        keys: impl Iterator<Item = schnorrsig::PublicKey>,
+    ) -> Result<(), TransactionError> {
         let ctx = secp256k1_zkp::global::SECP256K1;
-        let agg_pub_key = agg_keys(
-            self.inputs
-                .iter()
-                .flat_map(|input| input.authorization_keys()),
-        );
+        let agg_pub_key = agg_keys(keys);
         let msg =
             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 

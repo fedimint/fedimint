@@ -25,7 +25,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{FederationModule, OutPoint, PeerId};
+use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
@@ -251,7 +251,7 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
-    fn validate_input(&self, input: &Self::TxInput) -> Result<minimint_api::Amount, Self::Error> {
+    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
         if !self.block_is_known(input.proof_block()) {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()));
         }
@@ -267,16 +267,19 @@ impl FederationModule for Wallet {
             return Err(WalletError::PegInAlreadyClaimed);
         }
 
-        Ok(minimint_api::Amount::from_sat(input.tx_output().value))
+        Ok(InputMeta {
+            amount: minimint_api::Amount::from_sat(input.tx_output().value),
+            puk_keys: Box::new(std::iter::once(*input.tweak_contract_key())),
+        })
     }
 
-    fn apply_input<'a>(
+    fn apply_input<'a, 'b>(
         &'a self,
         mut batch: BatchTx<'a>,
-        input: &'a Self::TxInput,
-    ) -> Result<minimint_api::Amount, Self::Error> {
-        let amount = self.validate_input(input)?;
-        debug!("Claiming peg-in {} worth {}", input.outpoint(), amount);
+        input: &'b Self::TxInput,
+    ) -> Result<InputMeta<'b>, Self::Error> {
+        let meta = self.validate_input(input)?;
+        debug!("Claiming peg-in {} worth {}", input.outpoint(), meta.amount);
 
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
@@ -288,7 +291,7 @@ impl FederationModule for Wallet {
         );
 
         batch.commit();
-        Ok(amount)
+        Ok(meta)
     }
 
     fn validate_output(
