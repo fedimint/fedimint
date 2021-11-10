@@ -172,6 +172,12 @@ impl std::ops::Add for Amount {
     }
 }
 
+impl std::ops::AddAssign for Amount {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl std::iter::Sum for Amount {
     fn sum<I: Iterator<Item = Amount>>(iter: I) -> Self {
         Amount {
