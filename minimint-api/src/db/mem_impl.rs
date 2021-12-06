@@ -18,6 +18,12 @@ impl MemDatabase {
     pub fn new() -> MemDatabase {
         Default::default()
     }
+
+    pub fn dump_db(&self) {
+        for (key, value) in self.data.lock().unwrap().iter() {
+            eprintln!("{}: {}", hex::encode(key), hex::encode(value));
+        }
+    }
 }
 
 impl RawDatabase for MemDatabase {
