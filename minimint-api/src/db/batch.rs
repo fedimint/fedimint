@@ -46,6 +46,7 @@ impl Element {
 ///
 /// Resetting happens automatically when a [`AccumulatorTx`] is dropped after going out of scope.
 /// To prevent this from happening [`AccumulatorTx::commit`] should be called before.
+#[derive(Debug, Clone)]
 pub struct Accumulator<T> {
     buffer: Vec<T>,
 }

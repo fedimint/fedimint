@@ -1,3 +1,5 @@
+pub mod testing;
+
 use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;

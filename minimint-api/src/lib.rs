@@ -14,7 +14,7 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 pub mod config;
 pub mod db;
 pub mod encoding;
-mod module;
+pub mod module;
 
 hash_newtype!(
     TransactionId,

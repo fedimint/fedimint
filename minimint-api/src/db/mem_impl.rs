@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tracing::{error, trace};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct MemDatabase {
     data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<u8>>>>,
 }
