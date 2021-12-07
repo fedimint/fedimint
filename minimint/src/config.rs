@@ -2,6 +2,7 @@ use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
 use minimint_api::PeerId;
+use minimint_ln::config::{LightningModuleClientConfig, LightningModuleConfig};
 use minimint_mint::config::{MintClientConfig, MintConfig};
 use minimint_wallet::config::{WalletClientConfig, WalletConfig};
 use serde::de::DeserializeOwned;
@@ -34,6 +35,7 @@ pub struct ServerConfig {
 
     pub wallet: WalletConfig,
     pub mint: MintConfig,
+    pub ln: LightningModuleConfig,
 
     // TODO: make consensus defined
     pub fee_consensus: FeeConsensus,
@@ -59,6 +61,7 @@ pub struct ClientConfig {
     pub api_endpoints: Vec<String>,
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
+    pub ln: LightningModuleClientConfig,
     pub fee_consensus: FeeConsensus,
 }
 
@@ -69,6 +72,8 @@ pub struct FeeConsensus {
     pub fee_peg_in_abs: minimint_api::Amount,
     pub fee_coin_issuance_abs: minimint_api::Amount,
     pub fee_peg_out_abs: minimint_api::Amount,
+    pub fee_contract_input: minimint_api::Amount,
+    pub fee_contract_output: minimint_api::Amount,
 }
 
 impl GenerateConfig for ServerConfig {
@@ -102,12 +107,16 @@ impl GenerateConfig for ServerConfig {
             WalletConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
         let (mint_server_cfg, mint_client_cfg) =
             MintConfig::trusted_dealer_gen(peers, max_evil, params.amount_tiers.as_ref(), &mut rng);
+        let (ln_server_cfg, ln_client_cfg) =
+            LightningModuleConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
 
         let fee_consensus = FeeConsensus {
             fee_coin_spend_abs: minimint_api::Amount::ZERO,
             fee_peg_in_abs: minimint_api::Amount::from_sat(500),
             fee_coin_issuance_abs: minimint_api::Amount::ZERO,
             fee_peg_out_abs: minimint_api::Amount::from_sat(500),
+            fee_contract_input: minimint_api::Amount::ZERO,
+            fee_contract_output: minimint_api::Amount::ZERO,
         };
 
         let server_config = netinfo
@@ -125,6 +134,7 @@ impl GenerateConfig for ServerConfig {
                     db_path: format!("cfg/mint-{}.db", id).into(),
                     wallet: wallet_server_cfg[&id].clone(),
                     mint: mint_server_cfg[&id].clone(),
+                    ln: ln_server_cfg[&id].clone(),
                     fee_consensus: fee_consensus.clone(),
                 };
                 (id, config)
@@ -143,6 +153,7 @@ impl GenerateConfig for ServerConfig {
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
+            ln: ln_client_cfg,
             fee_consensus,
         };
 

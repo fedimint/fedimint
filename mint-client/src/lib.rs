@@ -277,7 +277,7 @@ impl MintClient {
             .get(outpoint.out_idx as usize)
             .and_then(|outcome| match outcome {
                 OutputOutcome::Mint(mo) => Some(mo),
-                OutputOutcome::Wallet(_) => None,
+                _ => None,
             })
             .ok_or(ClientError::InvalidOutcomeWrongStructure(outpoint))?
             .clone()

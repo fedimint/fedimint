@@ -23,6 +23,7 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand:
     let mut server = tide::with_state(state);
     server.at("/transaction").put(submit_transaction);
     server.at("/transaction/:txid").get(fetch_outcome);
+    server.at("/offers").get(list_offers);
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
         .await
@@ -58,5 +59,12 @@ async fn fetch_outcome(req: Request<State>) -> tide::Result {
 
     debug!("Sending outcome of transaction {}", tx_hash);
     let body = Body::from_json(&tx_status).expect("encoding error");
+    Ok(body.into())
+}
+
+async fn list_offers(req: Request<State>) -> tide::Result {
+    let offers = req.state().fedimint.ln.get_offers();
+
+    let body = Body::from_json(&offers).expect("encoding error");
     Ok(body.into())
 }

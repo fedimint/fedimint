@@ -1,3 +1,6 @@
+use minimint_api::FederationModule;
+use minimint_ln::contracts::ContractOutcome;
+use minimint_ln::LightningModule;
 use minimint_mint::SigResponse;
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +24,7 @@ pub enum OutputOutcome {
     Mint(Option<SigResponse>),
     // TODO: maybe include the transaction id eventually. But unclear how to propagate it cleanly right now.
     Wallet(()),
+    LN(<LightningModule as FederationModule>::TxOutputOutcome),
 }
 
 pub trait Final {
@@ -33,6 +37,17 @@ impl Final for OutputOutcome {
             OutputOutcome::Mint(Some(_)) => true,
             OutputOutcome::Mint(None) => false,
             OutputOutcome::Wallet(()) => true,
+            OutputOutcome::LN(minimint_ln::OutputOutcome::Offer { .. }) => true,
+            OutputOutcome::LN(minimint_ln::OutputOutcome::Contract { outcome, .. }) => {
+                match outcome {
+                    ContractOutcome::Account => true,
+                    ContractOutcome::Incoming(
+                        minimint_ln::contracts::incoming::DecryptedPreimage::Some(_),
+                    ) => true,
+                    ContractOutcome::Incoming(_) => false,
+                    ContractOutcome::Outgoing => true,
+                }
+            }
         }
     }
 }

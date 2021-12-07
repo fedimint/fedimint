@@ -14,6 +14,7 @@ use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use minimint_api::db::RawDatabase;
 use minimint_api::PeerId;
+use minimint_ln::LightningModule;
 
 use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
@@ -61,11 +62,14 @@ pub async fn run_minimint(cfg: ServerConfig) {
         .await
         .expect("Couldn't create wallet");
 
+    let ln = LightningModule::new(cfg.ln.clone(), database.clone());
+
     let mint_consensus = Arc::new(FediMintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(rand::rngs::OsRng::new().unwrap()))), //FIXME
         cfg: cfg.clone(),
         mint,
         wallet,
+        ln,
         db: database,
     });
 

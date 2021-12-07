@@ -1689,6 +1689,7 @@ dependencies = [
  "itertools",
  "minimint-api",
  "minimint-derive",
+ "minimint-ln",
  "minimint-mint",
  "minimint-wallet",
  "rand 0.6.5",

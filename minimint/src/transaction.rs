@@ -19,13 +19,16 @@ pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
     Mint(<minimint_mint::Mint as FederationModule>::TxInput),
     Wallet(<minimint_wallet::Wallet as FederationModule>::TxInput),
+    LN(<minimint_ln::LightningModule as FederationModule>::TxInput),
 }
 
+// TODO: check if clippy is right
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Output {
     Mint(<minimint_mint::Mint as FederationModule>::TxOutput),
     Wallet(<minimint_wallet::Wallet as FederationModule>::TxOutput),
-    // TODO: lightning integration goes here
+    LN(<minimint_ln::LightningModule as FederationModule>::TxOutput),
 }
 
 /// Common properties of transaction in- and outputs
@@ -42,6 +45,7 @@ impl TransactionItem for Input {
         match self {
             Input::Mint(coins) => coins.amount(),
             Input::Wallet(peg_in) => Amount::from_sat(peg_in.tx_output().value),
+            Input::LN(input) => input.amount,
         }
     }
 
@@ -49,6 +53,7 @@ impl TransactionItem for Input {
         match self {
             Input::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
             Input::Wallet(_) => fee_consensus.fee_peg_in_abs,
+            Input::LN(_) => fee_consensus.fee_contract_input,
         }
     }
 }
@@ -58,6 +63,8 @@ impl TransactionItem for Output {
         match self {
             Output::Mint(coins) => coins.amount(),
             Output::Wallet(peg_out) => peg_out.amount.into(),
+            Output::LN(minimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
+            Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
     }
 
@@ -65,6 +72,11 @@ impl TransactionItem for Output {
         match self {
             Output::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
             Output::Wallet(_) => fee_consensus.fee_peg_out_abs,
+            Output::LN(minimint_ln::ContractOrOfferOutput::Contract(_)) => {
+                fee_consensus.fee_contract_output
+            }
+            // TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
+            Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
     }
 }

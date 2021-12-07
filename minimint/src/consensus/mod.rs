@@ -12,6 +12,7 @@ use minimint_api::db::{Database, RawDatabase};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_derive::UnzipConsensus;
+use minimint_ln::{LightningModule, LightningModuleError};
 use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
 use rand::{CryptoRng, RngCore};
@@ -26,6 +27,7 @@ pub enum ConsensusItem {
     Transaction(Transaction),
     Mint(<Mint as FederationModule>::ConsensusItem),
     Wallet(<Wallet as FederationModule>::ConsensusItem),
+    LN(<LightningModule as FederationModule>::ConsensusItem),
 }
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
@@ -43,6 +45,7 @@ where
     /// Our local mint
     pub mint: Mint, // TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
     pub wallet: Wallet,
+    pub ln: LightningModule,
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Arc<dyn RawDatabase>,
@@ -78,6 +81,10 @@ where
                     .wallet
                     .validate_input(peg_in)
                     .map_err(TransactionSubmissionError::InputPegIn)?,
+                Input::LN(input) => self
+                    .ln
+                    .validate_input(input)
+                    .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
         }
@@ -94,6 +101,11 @@ where
                     self.wallet
                         .validate_output(peg_out)
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
+                }
+                Output::LN(output) => {
+                    self.ln
+                        .validate_output(output)
+                        .map_err(TransactionSubmissionError::ContractOutputError)?;
                 }
             }
         }
@@ -118,6 +130,7 @@ where
             transaction: transaction_cis,
             wallet: wallet_cis,
             mint: mint_cis,
+            ln: ln_cis,
         } = consensus_outcome
             .contributions
             .into_iter()
@@ -130,6 +143,9 @@ where
             .await;
         self.mint
             .begin_consensus_epoch(db_batch.transaction(), mint_cis, self.rng_gen.get_rng())
+            .await;
+        self.ln
+            .begin_consensus_epoch(db_batch.transaction(), ln_cis, self.rng_gen.get_rng())
             .await;
         self.db.apply_batch(db_batch).expect("DB error");
 
@@ -234,36 +250,35 @@ where
                     .wallet
                     .apply_input(batch.subtransaction(), peg_in)
                     .map_err(TransactionSubmissionError::InputPegIn)?,
+                Input::LN(input) => self
+                    .ln
+                    .apply_input(batch.subtransaction(), input)
+                    .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for (idx, output) in transaction.outputs.into_iter().enumerate() {
+            let out_point = OutPoint {
+                txid: tx_hash,
+                out_idx: idx as u64,
+            };
             match output {
                 Output::Mint(new_tokens) => {
                     self.mint
-                        .apply_output(
-                            batch.subtransaction(),
-                            &new_tokens,
-                            OutPoint {
-                                txid: tx_hash,
-                                out_idx: idx as u64,
-                            },
-                        )
+                        .apply_output(batch.subtransaction(), &new_tokens, out_point)
                         .map_err(TransactionSubmissionError::OutputCoinError)?;
                 }
                 Output::Wallet(peg_out) => {
                     self.wallet
-                        .apply_output(
-                            batch.subtransaction(),
-                            &peg_out,
-                            OutPoint {
-                                txid: tx_hash,
-                                out_idx: idx as u64,
-                            },
-                        )
+                        .apply_output(batch.subtransaction(), &peg_out, out_point)
                         .map_err(TransactionSubmissionError::OutputPegOut)?;
+                }
+                Output::LN(output) => {
+                    self.ln
+                        .apply_output(batch.subtransaction(), &output, out_point)
+                        .map_err(TransactionSubmissionError::ContractOutputError)?;
                 }
             }
         }
@@ -313,6 +328,13 @@ where
                                 .expect("the transaction was processed, so should be known");
                             OutputOutcome::Wallet(outcome)
                         }
+                        Output::LN(_) => {
+                            let outcome = self
+                                .ln
+                                .output_status(outpoint)
+                                .expect("the transaction was processed, so should be known");
+                            OutputOutcome::LN(outcome)
+                        }
                     }
                 })
                 .collect();
@@ -337,10 +359,14 @@ pub enum TransactionSubmissionError {
     InputCoinError(MintError),
     #[error("Input peg-in error: {0}")]
     InputPegIn(WalletError),
+    #[error("LN contract input error: {0}")]
+    ContractInputError(LightningModuleError),
     #[error("Output coin error: {0}")]
     OutputCoinError(MintError),
     #[error("Output coin error: {0}")]
     OutputPegOut(WalletError),
+    #[error("LN contract output error: {0}")]
+    ContractOutputError(LightningModuleError),
 }
 
 impl From<TransactionError> for TransactionSubmissionError {
