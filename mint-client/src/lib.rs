@@ -263,9 +263,6 @@ impl MintClient {
         }
 
         let outputs = match tx_outcome {
-            TransactionStatus::AwaitingConsensus => {
-                unreachable!()
-            }
             TransactionStatus::Error(e) => {
                 panic!("Mint error: {}", e)
             }

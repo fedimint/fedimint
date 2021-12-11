@@ -291,12 +291,6 @@ where
         &self,
         txid: TransactionId,
     ) -> Option<crate::outcome::TransactionStatus> {
-        let is_proposal = self
-            .db
-            .get_value::<_, Transaction>(&ProposedTransactionKey(txid))
-            .expect("DB error")
-            .is_some();
-
         let accepted: Option<AcceptedTransaction> = self
             .db
             .get_value::<_, AcceptedTransaction>(&AcceptedTransactionKey(txid))
@@ -343,8 +337,6 @@ where
                 epoch: accepted_tx.epoch,
                 outputs,
             })
-        } else if is_proposal {
-            Some(crate::outcome::TransactionStatus::AwaitingConsensus)
         } else {
             None
         }
