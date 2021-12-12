@@ -3,6 +3,7 @@ use minimint_ln::contracts::ContractOutcome;
 use minimint_ln::LightningModule;
 use minimint_mint::SigResponse;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum TransactionStatus {
@@ -27,6 +28,16 @@ pub enum OutputOutcome {
 
 pub trait Final {
     fn is_final(&self) -> bool;
+}
+
+pub trait TryIntoOutcome: Sized {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant>;
+}
+
+impl OutputOutcome {
+    pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, MismatchingVariant> {
+        T::try_into_outcome(self)
+    }
 }
 
 impl Final for OutputOutcome {
@@ -55,6 +66,40 @@ impl Final for TransactionStatus {
         match self {
             TransactionStatus::Error(_) => true,
             TransactionStatus::Accepted { outputs, .. } => outputs.iter().all(|out| out.is_final()),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Mismatching outcome variant: expected {0}, got {1}")]
+pub struct MismatchingVariant(&'static str, &'static str);
+
+impl TryIntoOutcome for Option<SigResponse> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+        match common_outcome {
+            OutputOutcome::Mint(outcome) => Ok(outcome),
+            OutputOutcome::Wallet(_) => Err(MismatchingVariant("mint", "wallet")),
+            OutputOutcome::LN(_) => Err(MismatchingVariant("mint", "ln")),
+        }
+    }
+}
+
+impl TryIntoOutcome for () {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+        match common_outcome {
+            OutputOutcome::Mint(_) => Err(MismatchingVariant("wallet", "mint")),
+            OutputOutcome::Wallet(outcome) => Ok(outcome),
+            OutputOutcome::LN(_) => Err(MismatchingVariant("wallet", "ln")),
+        }
+    }
+}
+
+impl TryIntoOutcome for minimint_ln::OutputOutcome {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+        match common_outcome {
+            OutputOutcome::Mint(_) => Err(MismatchingVariant("ln", "mint")),
+            OutputOutcome::Wallet(_) => Err(MismatchingVariant("ln", "wallet")),
+            OutputOutcome::LN(outcome) => Ok(outcome),
         }
     }
 }
