@@ -80,7 +80,7 @@ impl FederationModule for Mint {
     type Error = MintError;
     type TxInput = Coins<Coin>;
     type TxOutput = Coins<BlindToken>;
-    type TxOutputOutcome = Option<SigResponse>;
+    type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
 
     async fn consensus_proposal<'a>(

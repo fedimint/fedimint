@@ -33,14 +33,16 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand:
 async fn submit_transaction(mut req: Request<State>) -> tide::Result {
     trace!("Received API request {:?}", req);
     let transaction: Transaction = req.body_json().await?;
+    let tx_id = transaction.tx_hash();
     debug!("Sending peg-in request to consensus");
     req.state()
         .fedimint
         .submit_transaction(transaction)
         .expect("Could not submit sign request to consensus");
 
-    // TODO: give feedback
-    Ok(Response::new(200))
+    // TODO: give feedback in case of error
+    let body = Body::from_json(&tx_id).expect("encoding error");
+    Ok(body.into())
 }
 
 async fn fetch_outcome(req: Request<State>) -> tide::Result {
