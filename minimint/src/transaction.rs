@@ -138,12 +138,20 @@ impl Transaction {
         &self,
         keys: impl Iterator<Item = schnorrsig::PublicKey>,
     ) -> Result<(), TransactionError> {
-        let ctx = secp256k1_zkp::global::SECP256K1;
-        let agg_pub_key = agg_keys(keys);
+        let keys = keys.collect::<Vec<_>>();
+
+        // If there are no keys from inputs there are no inputs to protect from re-binding. This
+        // behavior is useful for non-monetary transactions that just announce something, like LN
+        // incoming contract offers.
+        if keys.is_empty() {
+            return Ok(());
+        }
+
+        let agg_pub_key = agg_keys(&keys);
         let msg =
             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
-        if ctx
+        if secp256k1_zkp::global::SECP256K1
             .schnorrsig_verify(&self.signature, &msg, &agg_pub_key)
             .is_ok()
         {
@@ -159,46 +167,42 @@ impl Transaction {
 ///
 /// # Panics
 /// * If the `keys` iterator does not yield any keys
-pub fn agg_keys<I>(keys: I) -> schnorrsig::PublicKey
-where
-    I: Iterator<Item = schnorrsig::PublicKey>,
-{
+pub fn agg_keys(keys: &[schnorrsig::PublicKey]) -> schnorrsig::PublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-fn new_pre_session<I, C>(keys: I, ctx: &Secp256k1<C>) -> secp256k1_zkp::MusigPreSession
+fn new_pre_session<C>(
+    keys: &[schnorrsig::PublicKey],
+    ctx: &Secp256k1<C>,
+) -> secp256k1_zkp::MusigPreSession
 where
-    I: Iterator<Item = schnorrsig::PublicKey>,
     C: Signing,
 {
-    let keys = keys.collect::<Vec<_>>();
     assert!(
         !keys.is_empty(),
         "Must supply more than 0 keys for aggregation"
     );
 
-    secp256k1_zkp::MusigPreSession::new(ctx, &keys).expect("more than zero were supplied")
+    secp256k1_zkp::MusigPreSession::new(ctx, keys).expect("more than zero were supplied")
 }
 
-pub fn agg_sign<I, R, C, M>(
-    keys: I,
+pub fn agg_sign<R, C, M>(
+    keys: &[schnorrsig::KeyPair],
     msg: M,
     ctx: &Secp256k1<C>,
     mut rng: R,
 ) -> schnorrsig::Signature
 where
-    I: Iterator<Item = schnorrsig::KeyPair>,
     R: rand::RngCore + rand::CryptoRng,
     C: Signing,
     M: Into<secp256k1_zkp::Message>,
 {
-    let keys = keys.collect::<Vec<_>>();
     let msg = msg.into();
-    let pre_session = new_pre_session(
-        keys.iter()
-            .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key)),
-        ctx,
-    );
+    let pub_keys = keys
+        .iter()
+        .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key))
+        .collect::<Vec<_>>();
+    let pre_session = new_pre_session(&pub_keys, ctx);
 
     let session_id: [u8; 32] = rng.gen();
     let (sec_nonces, pub_nonces): (Vec<_>, Vec<_>) = keys

@@ -183,12 +183,7 @@ impl MintClient {
             )
             .expect("We checked key validity before saving to DB");
 
-            minimint::transaction::agg_sign(
-                std::iter::once(sec_key),
-                hash.as_hash(),
-                &self.secp,
-                &mut rng,
-            )
+            minimint::transaction::agg_sign(&[sec_key], hash.as_hash(), &self.secp, &mut rng)
         };
 
         let mint_transaction = mint_tx::Transaction {
@@ -324,12 +319,15 @@ impl MintClient {
         // TODO: abstract away tx building somehow
         let signature = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
-                    .expect("We checked key validity before saving to DB")
-            });
+            let sec_keys = spend_keys
+                .into_iter()
+                .map(|key| {
+                    secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                        .expect("We checked key validity before saving to DB")
+                })
+                .collect::<Vec<_>>();
 
-            minimint::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(&sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
@@ -384,12 +382,15 @@ impl MintClient {
         let signature = {
             // FIXME: deduplicate tx signing code
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
-                    .expect("We checked key validity before saving to DB")
-            });
+            let sec_keys = spend_keys
+                .into_iter()
+                .map(|key| {
+                    secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                        .expect("We checked key validity before saving to DB")
+                })
+                .collect::<Vec<_>>();
 
-            minimint::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(&sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
