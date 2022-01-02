@@ -189,7 +189,7 @@ impl MintClient {
         let mint_transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature: peg_in_req_sig,
+            signature: Some(peg_in_req_sig),
         };
 
         let tx_id = mint_transaction.tx_hash();
@@ -333,7 +333,7 @@ impl MintClient {
         let transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature,
+            signature: Some(signature),
         };
 
         let tx_id = transaction.tx_hash();
@@ -396,7 +396,7 @@ impl MintClient {
         let transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature,
+            signature: Some(signature),
         };
         let tx_id = transaction.tx_hash();
 

@@ -11,7 +11,7 @@ use thiserror::Error;
 pub struct Transaction {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
-    pub signature: schnorrsig::Signature,
+    pub signature: Option<schnorrsig::Signature>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -147,12 +147,18 @@ impl Transaction {
             return Ok(());
         }
 
+        // Unless keys were empty we require a signature
+        let signature = self
+            .signature
+            .as_ref()
+            .ok_or(TransactionError::MissingSignature)?;
+
         let agg_pub_key = agg_keys(&keys);
         let msg =
             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
         if secp256k1_zkp::global::SECP256K1
-            .schnorrsig_verify(&self.signature, &msg, &agg_pub_key)
+            .schnorrsig_verify(signature, &msg, &agg_pub_key)
             .is_ok()
         {
             Ok(())
@@ -247,4 +253,6 @@ pub enum TransactionError {
     },
     #[error("The transaction's signature is invalid")]
     InvalidSignature,
+    #[error("The transaction did not have a signature although there were inputs to be signed")]
+    MissingSignature,
 }
