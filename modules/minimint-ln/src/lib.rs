@@ -148,9 +148,7 @@ impl FederationModule for LightningModule {
         batch.append_from_iter(consensus_items.into_iter().filter_map(
             |(peer, decryption_share)| {
                 let contract: ContractAccount = self
-                    .db
-                    .get_value(&ContractKey(decryption_share.contract_id))
-                    .expect("DB error")
+                    .get_contract_account(decryption_share.contract_id)
                     .or_else(|| {
                         warn!("Received decryption share fot non-incoming contract");
                         None
@@ -186,9 +184,7 @@ impl FederationModule for LightningModule {
 
     fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
         let account: ContractAccount = self
-            .db
-            .get_value(&ContractKey(input.crontract_id))
-            .expect("DB error")
+            .get_contract_account(input.crontract_id)
             .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
 
         if account.amount < input.amount {
@@ -390,9 +386,7 @@ impl FederationModule for LightningModule {
             debug!("Beginning to decrypt preimage of contract {}", contract_id);
 
             let contract = self
-                .db
-                .get_value::<_, ContractAccount>(&ContractKey(contract_id))
-                .expect("DB error")
+                .get_contract_account(contract_id)
                 .expect("decryption shares without contracts should be discarded earlier"); // FIXME: verify
 
             let (incoming_contract, out_point) = match contract.contract {
@@ -530,6 +524,12 @@ impl LightningModule {
             .find_by_prefix::<_, OfferKey, IncomingContractOffer>(&OfferKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
+    }
+
+    pub fn get_contract_account(&self, contract_id: ContractId) -> Option<ContractAccount> {
+        self.db
+            .get_value::<_, ContractAccount>(&ContractKey(contract_id))
+            .expect("DB error")
     }
 }
 
