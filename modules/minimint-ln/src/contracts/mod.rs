@@ -35,7 +35,7 @@ pub enum Contract {
 
 /// A contract after execution as saved in the database
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
 pub enum FundedContract {
     Account(account::AccountContract),
     Incoming(incoming::FundedIncomingContract),

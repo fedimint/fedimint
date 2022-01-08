@@ -2,6 +2,7 @@ use crate::config::ServerConfig;
 use crate::consensus::FediMintConsensus;
 use crate::transaction::Transaction;
 use minimint_api::TransactionId;
+use minimint_ln::contracts::ContractId;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use tide::{Body, Request, Response};
@@ -24,6 +25,7 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand:
     server.at("/transaction").put(submit_transaction);
     server.at("/transaction/:txid").get(fetch_outcome);
     server.at("/offers").get(list_offers);
+    server.at("/account/:contract_id").get(get_contract_account);
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
         .await
@@ -68,5 +70,27 @@ async fn list_offers(req: Request<State>) -> tide::Result {
     let offers = req.state().fedimint.ln.get_offers();
 
     let body = Body::from_json(&offers).expect("encoding error");
+    Ok(body.into())
+}
+
+async fn get_contract_account(req: Request<State>) -> tide::Result {
+    let contract_id: ContractId = match req
+        .param("contract_id")
+        .expect("Contract id not supplied")
+        .parse()
+    {
+        Ok(id) => id,
+        Err(_) => return Ok(Response::new(400)),
+    };
+
+    let contract_account = req
+        .state()
+        .fedimint
+        .ln
+        .get_contract_account(contract_id)
+        .ok_or_else(|| tide::Error::from_str(404, "Not found"))?;
+
+    debug!("Sending contract account info for {}", contract_id);
+    let body = Body::from_json(&contract_account).expect("encoding error");
     Ok(body.into())
 }

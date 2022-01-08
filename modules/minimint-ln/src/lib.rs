@@ -94,7 +94,7 @@ pub struct ContractOutput {
     pub contract: contracts::Contract,
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Encodable, Decodable, Serialize, Deserialize)]
 pub struct ContractAccount {
     pub amount: minimint_api::Amount,
     pub contract: contracts::FundedContract,
