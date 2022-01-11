@@ -5,12 +5,14 @@ mod outgoing;
 use crate::api::FederationApi;
 use crate::ln::db::OutgoingPaymentKey;
 use crate::ln::gateway::LightningGateway;
-use crate::ln::outgoing::OutgoingContractData;
+use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::ApiError;
 use lightning_invoice::Invoice;
 use minimint::modules::ln;
 use minimint::modules::ln::contracts::outgoing::OutgoingContract;
-use minimint::modules::ln::contracts::{Contract, ContractId, IdentifyableContract};
+use minimint::modules::ln::contracts::{
+    Contract, ContractId, FundedContract, IdentifyableContract,
+};
 use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput, ContractOutput};
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::RawDatabase;
@@ -77,6 +79,17 @@ impl LnClient {
             .await
             .map_err(LnClientError::ApiError)
     }
+
+    pub async fn get_outgoing_contract(&self, id: ContractId) -> Result<OutgoingContractAccount> {
+        let account = self.get_contract_account(id).await?;
+        match account.contract {
+            FundedContract::Outgoing(c) => Ok(OutgoingContractAccount {
+                amount: account.amount,
+                contract: c,
+            }),
+            _ => Err(LnClientError::WrongAccountType),
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, LnClientError>;
@@ -87,4 +100,6 @@ pub enum LnClientError {
     MissingInvoiceAmount,
     #[error("Mint API error: {0}")]
     ApiError(ApiError),
+    #[error("Mint returned unexpected account type")]
+    WrongAccountType,
 }
