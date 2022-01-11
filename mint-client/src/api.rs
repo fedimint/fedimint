@@ -88,6 +88,7 @@ impl FederationApi for HttpFederationApi {
 
     /// Submit a transaction to all federtion members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
+        // TODO: check the id is correct
         self.put("/transaction", tx).await
     }
 }

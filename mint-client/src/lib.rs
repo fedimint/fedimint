@@ -19,6 +19,7 @@ use crate::mint::{MintClientError, SpendableCoin};
 use crate::wallet::WalletClientError;
 
 mod api;
+pub mod ln;
 pub mod mint;
 pub mod wallet;
 
@@ -27,9 +28,10 @@ pub struct MintClient {
     db: Arc<dyn RawDatabase>,
     api: Arc<dyn api::FederationApi>,
     secp: Secp256k1<All>,
-
     wallet: wallet::WalletClient,
     mint: mint::MintClient,
+    #[allow(dead_code)]
+    ln: ln::LnClient,
 }
 
 impl MintClient {
@@ -68,6 +70,12 @@ impl MintClient {
             api: api.clone(),
             secp: secp.clone(),
         };
+        let ln = ln::LnClient {
+            db: db.clone(),
+            cfg: cfg.ln.clone(),
+            api: api.clone(),
+            secp: secp.clone(),
+        };
         MintClient {
             cfg,
             db,
@@ -75,6 +83,7 @@ impl MintClient {
             secp,
             wallet,
             mint,
+            ln,
         }
     }
 
