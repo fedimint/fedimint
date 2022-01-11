@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use futures::{Future, StreamExt, TryFutureExt};
+use minimint::modules::ln::contracts::ContractId;
+use minimint::modules::ln::ContractAccount;
 use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
 use minimint::transaction::Transaction;
 use minimint_api::{OutPoint, PeerId, TransactionId};
@@ -18,6 +20,10 @@ pub trait FederationApi: Send + Sync {
 
     /// Submit a transaction to all federtion members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
+
+    // TODO: more generic module API extensibility
+    /// Fetch ln contract state
+    async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
 }
 
 #[async_trait]
@@ -90,6 +96,10 @@ impl FederationApi for HttpFederationApi {
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         // TODO: check the id is correct
         self.put("/transaction", tx).await
+    }
+
+    async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
+        self.get(&format!("/account/{}", contract)).await
     }
 }
 

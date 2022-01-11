@@ -6,11 +6,12 @@ use crate::api::FederationApi;
 use crate::ln::db::OutgoingPaymentKey;
 use crate::ln::gateway::LightningGateway;
 use crate::ln::outgoing::OutgoingContractData;
+use crate::ApiError;
 use lightning_invoice::Invoice;
 use minimint::modules::ln;
 use minimint::modules::ln::contracts::outgoing::OutgoingContract;
-use minimint::modules::ln::contracts::{Contract, IdentifyableContract};
-use minimint::modules::ln::{ContractOrOfferOutput, ContractOutput};
+use minimint::modules::ln::contracts::{Contract, ContractId, IdentifyableContract};
+use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput, ContractOutput};
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::RawDatabase;
 use minimint_api::Amount;
@@ -69,6 +70,13 @@ impl LnClient {
             contract: Contract::Outgoing(contract),
         }))
     }
+
+    pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
+        self.api
+            .fetch_contract(id)
+            .await
+            .map_err(LnClientError::ApiError)
+    }
 }
 
 pub type Result<T> = std::result::Result<T, LnClientError>;
@@ -77,4 +85,6 @@ pub type Result<T> = std::result::Result<T, LnClientError>;
 pub enum LnClientError {
     #[error("We can't pay an amountless invoice")]
     MissingInvoiceAmount,
+    #[error("Mint API error: {0}")]
+    ApiError(ApiError),
 }
