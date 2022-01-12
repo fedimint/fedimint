@@ -3,7 +3,7 @@ pub mod gateway;
 mod outgoing;
 
 use crate::api::FederationApi;
-use crate::ln::db::OutgoingPaymentKey;
+use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::ApiError;
@@ -13,9 +13,11 @@ use minimint::modules::ln::contracts::outgoing::OutgoingContract;
 use minimint::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
 };
-use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput, ContractOutput};
+use minimint::modules::ln::{
+    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
+};
 use minimint_api::db::batch::BatchTx;
-use minimint_api::db::RawDatabase;
+use minimint_api::db::{Database, RawDatabase};
 use minimint_api::Amount;
 use rand::{CryptoRng, RngCore};
 use std::sync::Arc;
@@ -62,11 +64,15 @@ impl LnClient {
 
         let outgoing_payment = OutgoingContractData {
             recovery_key: user_sk,
-            contract: contract.clone(),
+            contract_account: OutgoingContractAccount {
+                amount: contract_amount,
+                contract: contract.clone(),
+            },
         };
 
         batch.append_insert_new(OutgoingPaymentKey(contract.contract_id()), outgoing_payment);
 
+        batch.commit();
         Ok(ContractOrOfferOutput::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
@@ -89,6 +95,33 @@ impl LnClient {
             }),
             _ => Err(LnClientError::WrongAccountType),
         }
+    }
+
+    pub fn refundable_outgoing_contracts(&self, block_height: u64) -> Vec<OutgoingContractData> {
+        // TODO: unify block height type
+        self.db
+            .find_by_prefix::<_, OutgoingPaymentKey, OutgoingContractData>(
+                &OutgoingPaymentKeyPrefix,
+            )
+            .filter_map(|res| {
+                let (_key, outgoing_data) = res.expect("DB error");
+                if outgoing_data.contract_account.contract.timelock as u64 <= block_height {
+                    Some(outgoing_data)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn create_refund_outgoing_contract_input<'a>(
+        &self,
+        contract_data: &'a OutgoingContractData,
+    ) -> (&'a secp256k1_zkp::schnorrsig::KeyPair, ContractInput) {
+        (
+            &contract_data.recovery_key,
+            contract_data.contract_account.refund(),
+        )
     }
 }
 
@@ -116,6 +149,8 @@ mod tests {
     use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
     use minimint::modules::ln::ContractOrOfferOutput;
     use minimint::modules::ln::{ContractAccount, LightningModule};
+    use minimint::modules::wallet::db::RoundConsensusKey;
+    use minimint::modules::wallet::{Feerate, RoundConsensus};
     use minimint::outcome::{OutputOutcome, TransactionStatus};
     use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
@@ -123,6 +158,7 @@ mod tests {
     use minimint_api::db::{Database, RawDatabase};
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
+    use std::ops::DerefMut;
     use std::sync::Arc;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
@@ -191,10 +227,29 @@ mod tests {
         (fed, client, client_db)
     }
 
+    /// We first fake a certain block height. This is an ugly hack due to how the consensus value
+    /// from the wallet is currently used by the ln module.
+    fn set_block_height(fed: &mut Fed, height: u64) {
+        fed.patch_dbs(|db| {
+            db.insert_entry(
+                &RoundConsensusKey,
+                &RoundConsensus {
+                    block_height: height as u32,
+                    fee_rate: Feerate { sats_per_kvb: 0 },
+                    randomness_beacon: [0; 32],
+                },
+            )
+            .unwrap();
+        });
+    }
+
     #[tokio::test]
-    async fn test_fund_outgoing() {
+    async fn test_outgoing() {
         let mut rng = rand::thread_rng();
+        let ctx = secp256k1_zkp::Secp256k1::new();
         let (fed, client, client_db) = new_mint_and_client().await;
+
+        set_block_height(fed.lock().await.deref_mut(), 1);
 
         let out_point = OutPoint {
             txid: Default::default(),
@@ -262,6 +317,36 @@ mod tests {
         // TODO: test that the client has its key
 
         let expected_amount_msat = invoice_amt_msat + (invoice_amt_msat / 100);
-        assert_eq!(contract_acc.amount, Amount::from_msat(expected_amount_msat))
+        let expected_amount = Amount::from_msat(expected_amount_msat);
+        assert_eq!(contract_acc.amount, expected_amount);
+
+        // We need to compensate for the wallet's confirmation target
+        set_block_height(fed.lock().await.deref_mut(), (timelock - 1) as u64);
+
+        assert!(client
+            .refundable_outgoing_contracts((timelock - 1) as u64)
+            .is_empty());
+        let refund_inputs = client.refundable_outgoing_contracts((timelock) as u64);
+        assert_eq!(refund_inputs.len(), 1);
+        let contract_data = refund_inputs.into_iter().next().unwrap();
+        let (refund_key, refund_input) =
+            client.create_refund_outgoing_contract_input(&contract_data);
+        assert!(fed.lock().await.verify_input(&refund_input).is_err());
+
+        // We need to compensate for the wallet's confirmation target
+        set_block_height(fed.lock().await.deref_mut(), (timelock) as u64);
+
+        let meta = fed.lock().await.verify_input(&refund_input).unwrap();
+        let refund_pk = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, refund_key);
+        assert_eq!(meta.keys, vec![refund_pk]);
+        assert_eq!(meta.amount, expected_amount);
+
+        fed.lock().await.consensus_round(&[refund_input], &[]).await;
+
+        let account = client
+            .get_outgoing_contract(contract.contract_id())
+            .await
+            .unwrap();
+        assert_eq!(account.amount, Amount::ZERO);
     }
 }

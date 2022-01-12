@@ -10,3 +10,10 @@ pub struct OutgoingPaymentKey(pub ContractId);
 impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
     const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
 }
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingPaymentKeyPrefix;
+
+impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+}

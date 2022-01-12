@@ -196,7 +196,6 @@ impl FederationModule for LightningModule {
 
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                // TODO: properly define semantics, same as LN (> vs >=)
                 if outgoing.timelock > self.block_height() {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
