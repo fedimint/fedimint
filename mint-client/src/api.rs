@@ -9,11 +9,11 @@ use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Mint API client that will try to run queries against all `members` expecting equal
 /// results from at least `min_eq_results` of them. Members that return differing results are
 /// returned as a member faults list.
-pub struct MintApi {
+pub struct FederationApi {
     federation_member_api_hosts: Vec<(PeerId, Url)>,
     http_client: reqwest::Client,
 }
@@ -34,10 +34,10 @@ pub enum ApiError {
 
 type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;
 
-impl MintApi {
+impl FederationApi {
     /// Creates a new API client
-    pub fn new(members: Vec<(PeerId, Url)>) -> MintApi {
-        MintApi {
+    pub fn new(members: Vec<(PeerId, Url)>) -> FederationApi {
+        FederationApi {
             federation_member_api_hosts: members,
             http_client: Default::default(),
         }

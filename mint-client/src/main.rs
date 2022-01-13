@@ -5,7 +5,8 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint_api::encoding::Decodable;
 use minimint_api::Amount;
-use mint_client::{MintClient, SpendableCoin};
+use mint_client::mint::SpendableCoin;
+use mint_client::MintClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -111,13 +112,12 @@ async fn main() {
             );
         }
         Command::Spend { amount } => {
-            match client.coins().select_coins(amount) {
-                Some(outgoing_coins) => {
-                    client.spend_coins(&outgoing_coins);
+            match client.select_and_spend_coins(amount) {
+                Ok(outgoing_coins) => {
                     println!("{}", serialize_coins(&outgoing_coins));
                 }
-                None => {
-                    error!("Not enough funds or in wrong denominations!")
+                Err(e) => {
+                    error!("Error: {:?}", e);
                 }
             };
         }
@@ -144,8 +144,9 @@ async fn main() {
             let amt = Amount::from_msat(bolt11.amount_milli_satoshis().unwrap());
             let http = reqwest::Client::new();
 
-            let coins = client.coins().select_coins(amt).expect("Not enough funds");
-            client.spend_coins(&coins);
+            let coins = client
+                .select_and_spend_coins(amt)
+                .expect("Not enough coins");
             let success = http
                 .post(&gateway)
                 .json(&PayRequest {
