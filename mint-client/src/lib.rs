@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use bitcoin::{Address, Transaction};
+use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use thiserror::Error;
@@ -9,12 +10,15 @@ use minimint::config::ClientConfig;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::{PegInProofError, TxOutProof};
 use minimint::transaction as mint_tx;
+use minimint::transaction::{Output, TransactionItem};
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::{Database, RawDatabase};
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 
 use crate::api::{ApiError, FederationApi};
+use crate::ln::gateway::LightningGateway;
+use crate::ln::LnClientError;
 use crate::mint::{MintClientError, SpendableCoin};
 use crate::wallet::WalletClientError;
 
@@ -253,6 +257,54 @@ impl MintClient {
     pub fn coins(&self) -> Coins<SpendableCoin> {
         self.mint.coins()
     }
+
+    pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
+        &self,
+        gateway: &LightningGateway,
+        invoice: Invoice,
+        absolute_timelock: u32,
+        mut rng: R,
+    ) -> Result<TransactionId, ClientError> {
+        let mut batch = DbBatch::new();
+
+        let ln_output = Output::LN(
+            self.ln
+                .create_outgoing_output(
+                    batch.transaction(),
+                    invoice,
+                    gateway,
+                    absolute_timelock,
+                    &mut rng,
+                )
+                .await?,
+        );
+
+        let amount = ln_output.amount();
+        let (coin_keys, coin_input) = self.mint.create_coin_input(batch.transaction(), amount)?;
+
+        let inputs = vec![mint_tx::Input::Mint(coin_input)];
+        let outputs = vec![ln_output];
+        let txid = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
+
+        let signature =
+            minimint::transaction::agg_sign(&coin_keys, txid.as_hash(), &self.secp, &mut rng);
+
+        let transaction = mint_tx::Transaction {
+            inputs,
+            outputs,
+            signature: Some(signature),
+        };
+
+        let mint_tx_id = self.api.submit_transaction(transaction).await?;
+        // TODO: make check part of submit_transaction
+        assert_eq!(
+            txid, mint_tx_id,
+            "Federation is faulty, returned wrong tx id."
+        );
+
+        self.db.apply_batch(batch).expect("DB error");
+        Ok(txid)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -263,6 +315,8 @@ pub enum ClientError {
     WalletClientError(WalletClientError),
     #[error("Mint client error: {0}")]
     MintClientError(MintClientError),
+    #[error("Lightning client error: {0}")]
+    LnClientError(LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
 }
@@ -282,5 +336,11 @@ impl From<WalletClientError> for ClientError {
 impl From<MintClientError> for ClientError {
     fn from(e: MintClientError) -> Self {
         ClientError::MintClientError(e)
+    }
+}
+
+impl From<LnClientError> for ClientError {
+    fn from(e: LnClientError) -> Self {
+        ClientError::LnClientError(e)
     }
 }
