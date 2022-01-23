@@ -1844,6 +1844,7 @@ dependencies = [
  "structopt",
  "tbs",
  "thiserror",
+ "tide",
  "tokio",
  "tracing",
  "tracing-subscriber",
