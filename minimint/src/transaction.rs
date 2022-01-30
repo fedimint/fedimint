@@ -1,6 +1,7 @@
-use crate::encoding::{Decodable, Encodable};
-use crate::{Amount, Coin, Coins, FeeConsensus, PegInProof, TransactionId};
-use bitcoin_hashes::Hash as BitcoinHash;
+use crate::config::FeeConsensus;
+use bitcoin::hashes::Hash as BitcoinHash;
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::{Amount, FederationModule, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorrsig, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -10,72 +11,49 @@ use thiserror::Error;
 pub struct Transaction {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
-    pub signature: schnorrsig::Signature,
+    pub signature: Option<schnorrsig::Signature>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
-    Coins(Coins<Coin>),
-    PegIn(Box<PegInProof>),
+    Mint(<minimint_mint::Mint as FederationModule>::TxInput),
+    Wallet(<minimint_wallet::Wallet as FederationModule>::TxInput),
+    LN(<minimint_ln::LightningModule as FederationModule>::TxInput),
 }
 
+// TODO: check if clippy is right
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Output {
-    Coins(Coins<BlindToken>),
-    PegOut(PegOut),
-    // TODO: lightning integration goes here
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PegOut {
-    pub recipient: bitcoin::Address,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    pub amount: bitcoin::Amount,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct BlindToken(pub tbs::BlindedMessage);
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct OutPoint {
-    pub txid: TransactionId,
-    pub out_idx: u64,
+    Mint(<minimint_mint::Mint as FederationModule>::TxOutput),
+    Wallet(<minimint_wallet::Wallet as FederationModule>::TxOutput),
+    LN(<minimint_ln::LightningModule as FederationModule>::TxOutput),
 }
 
 /// Common properties of transaction in- and outputs
 pub trait TransactionItem {
     /// The amount before fees represented by the in/output
-    fn amount(&self) -> crate::Amount;
+    fn amount(&self) -> minimint_api::Amount;
 
     /// The fee that will be charged for this in/output
-    fn fee(&self, fee_consensus: &FeeConsensus) -> crate::Amount;
-}
-
-impl Input {
-    // TODO: probably make this a single returned key once coins are separate inputs
-    /// Returns an iterator over all the keys that need to sign the transaction for the input to
-    /// be valid.
-    fn authorization_keys<'a>(&'a self) -> Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a> {
-        match self {
-            Input::Coins(coins) => Box::new(coins.iter().map(|(_, coin)| *coin.spend_key())),
-            Input::PegIn(proof) => Box::new(std::iter::once(*proof.tweak_contract_key())),
-        }
-    }
+    fn fee(&self, fee_consensus: &FeeConsensus) -> minimint_api::Amount;
 }
 
 impl TransactionItem for Input {
     fn amount(&self) -> Amount {
         match self {
-            Input::Coins(coins) => coins.amount(),
-            Input::PegIn(peg_in) => Amount::from_sat(peg_in.tx_output().value),
+            Input::Mint(coins) => coins.amount(),
+            Input::Wallet(peg_in) => Amount::from_sat(peg_in.tx_output().value),
+            Input::LN(input) => input.amount,
         }
     }
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Input::Coins(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Input::PegIn(_) => fee_consensus.fee_peg_in_abs,
+            Input::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
+            Input::Wallet(_) => fee_consensus.fee_peg_in_abs,
+            Input::LN(_) => fee_consensus.fee_contract_input,
         }
     }
 }
@@ -83,15 +61,22 @@ impl TransactionItem for Input {
 impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
-            Output::Coins(coins) => coins.amount(),
-            Output::PegOut(peg_out) => peg_out.amount.into(),
+            Output::Mint(coins) => coins.amount(),
+            Output::Wallet(peg_out) => peg_out.amount.into(),
+            Output::LN(minimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
+            Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
     }
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Output::Coins(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Output::PegOut(_) => fee_consensus.fee_peg_out_abs,
+            Output::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
+            Output::Wallet(_) => fee_consensus.fee_peg_out_abs,
+            Output::LN(minimint_ln::ContractOrOfferOutput::Contract(_)) => {
+                fee_consensus.fee_contract_output
+            }
+            // TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
+            Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
     }
 }
@@ -149,18 +134,31 @@ impl Transaction {
         TransactionId::from_engine(engine)
     }
 
-    pub fn validate_signature(&self) -> Result<(), TransactionError> {
-        let ctx = secp256k1_zkp::global::SECP256K1;
-        let agg_pub_key = agg_keys(
-            self.inputs
-                .iter()
-                .flat_map(|input| input.authorization_keys()),
-        );
+    pub fn validate_signature(
+        &self,
+        keys: impl Iterator<Item = schnorrsig::PublicKey>,
+    ) -> Result<(), TransactionError> {
+        let keys = keys.collect::<Vec<_>>();
+
+        // If there are no keys from inputs there are no inputs to protect from re-binding. This
+        // behavior is useful for non-monetary transactions that just announce something, like LN
+        // incoming contract offers.
+        if keys.is_empty() {
+            return Ok(());
+        }
+
+        // Unless keys were empty we require a signature
+        let signature = self
+            .signature
+            .as_ref()
+            .ok_or(TransactionError::MissingSignature)?;
+
+        let agg_pub_key = agg_keys(&keys);
         let msg =
             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
-        if ctx
-            .schnorrsig_verify(&self.signature, &msg, &agg_pub_key)
+        if secp256k1_zkp::global::SECP256K1
+            .schnorrsig_verify(signature, &msg, &agg_pub_key)
             .is_ok()
         {
             Ok(())
@@ -170,57 +168,47 @@ impl Transaction {
     }
 }
 
-impl std::fmt::Display for OutPoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.txid, self.out_idx)
-    }
-}
-
 /// Aggregates a stream of public keys. Be aware that the order of the keys matters for the
 /// aggregation result.
 ///
 /// # Panics
 /// * If the `keys` iterator does not yield any keys
-pub fn agg_keys<I>(keys: I) -> schnorrsig::PublicKey
-where
-    I: Iterator<Item = schnorrsig::PublicKey>,
-{
+pub fn agg_keys(keys: &[schnorrsig::PublicKey]) -> schnorrsig::PublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-fn new_pre_session<I, C>(keys: I, ctx: &Secp256k1<C>) -> secp256k1_zkp::MusigPreSession
+fn new_pre_session<C>(
+    keys: &[schnorrsig::PublicKey],
+    ctx: &Secp256k1<C>,
+) -> secp256k1_zkp::MusigPreSession
 where
-    I: Iterator<Item = schnorrsig::PublicKey>,
     C: Signing,
 {
-    let keys = keys.collect::<Vec<_>>();
     assert!(
         !keys.is_empty(),
         "Must supply more than 0 keys for aggregation"
     );
 
-    secp256k1_zkp::MusigPreSession::new(ctx, &keys).expect("more than zero were supplied")
+    secp256k1_zkp::MusigPreSession::new(ctx, keys).expect("more than zero were supplied")
 }
 
-pub fn agg_sign<I, R, C, M>(
-    keys: I,
+pub fn agg_sign<R, C, M>(
+    keys: &[schnorrsig::KeyPair],
     msg: M,
     ctx: &Secp256k1<C>,
     mut rng: R,
 ) -> schnorrsig::Signature
 where
-    I: Iterator<Item = schnorrsig::KeyPair>,
     R: rand::RngCore + rand::CryptoRng,
     C: Signing,
     M: Into<secp256k1_zkp::Message>,
 {
-    let keys = keys.collect::<Vec<_>>();
     let msg = msg.into();
-    let pre_session = new_pre_session(
-        keys.iter()
-            .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key)),
-        ctx,
-    );
+    let pub_keys = keys
+        .iter()
+        .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key))
+        .collect::<Vec<_>>();
+    let pre_session = new_pre_session(&pub_keys, ctx);
 
     let session_id: [u8; 32] = rng.gen();
     let (sec_nonces, pub_nonces): (Vec<_>, Vec<_>) = keys
@@ -265,4 +253,6 @@ pub enum TransactionError {
     },
     #[error("The transaction's signature is invalid")]
     InvalidSignature,
+    #[error("The transaction did not have a signature although there were inputs to be signed")]
+    MissingSignature,
 }

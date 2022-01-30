@@ -1,6 +1,3 @@
-pub mod config;
-mod db;
-
 use crate::config::MintConfig;
 use crate::db::{
     NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
@@ -11,12 +8,8 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::{Database, RawDatabase};
-use minimint_api::transaction::{BlindToken, OutPoint};
-use minimint_api::util::TieredMultiZip;
-use minimint_api::{
-    Amount, Coin, Coins, FederationModule, InvalidAmountTierError, Keys, PartialSigResponse,
-    PeerId, SigResponse,
-};
+use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -28,7 +21,16 @@ use tbs::{
     PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
+use tiered::coins::Coins;
+use tiered::coins::TieredMultiZip;
+pub use tiered::keys::Keys;
 use tracing::{debug, error, warn};
+
+pub mod config;
+
+mod db;
+/// Data structures taking into account different amount tiers
+pub mod tiered;
 
 /// Federated mint member mint
 pub struct Mint {
@@ -43,15 +45,42 @@ pub struct Mint {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PartiallySignedRequest {
     out_point: OutPoint,
-    partial_signature: minimint_api::PartialSigResponse,
+    partial_signature: PartialSigResponse,
 }
+
+/// Request to blind sign a certain amount of coins
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct SignRequest(pub Coins<tbs::BlindedMessage>);
+
+// FIXME: optimize out blinded msg by making the mint remember it
+/// Blind signature share for a [`SignRequest`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
+
+/// Blind signature for a [`SignRequest`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
+
+/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
+/// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
+/// is required.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Coin(pub CoinNonce, pub tbs::Signature);
+
+/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
+/// spent coin's spending keys to avoid mint frontrunning.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct CoinNonce(pub secp256k1_zkp::schnorrsig::PublicKey);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct BlindToken(pub tbs::BlindedMessage);
 
 #[async_trait(?Send)]
 impl FederationModule for Mint {
     type Error = MintError;
     type TxInput = Coins<Coin>;
     type TxOutput = Coins<BlindToken>;
-    type TxOutputOutcome = Option<SigResponse>;
+    type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
 
     async fn consensus_proposal<'a>(
@@ -89,7 +118,7 @@ impl FederationModule for Mint {
         batch.commit();
     }
 
-    fn validate_input(&self, input: &Self::TxInput) -> Result<Amount, Self::Error> {
+    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
         input.iter().try_for_each(|(amount, coin)| {
             if !coin.verify(
                 *self
@@ -111,15 +140,19 @@ impl FederationModule for Mint {
 
             Ok(())
         })?;
-        Ok(input.amount())
+
+        Ok(InputMeta {
+            amount: input.amount(),
+            puk_keys: Box::new(input.iter().map(|(_, coin)| *coin.spend_key())),
+        })
     }
 
-    fn apply_input<'a>(
+    fn apply_input<'a, 'b>(
         &'a self,
         mut batch: BatchTx<'a>,
-        input: &'a Self::TxInput,
-    ) -> Result<Amount, Self::Error> {
-        let amount = self.validate_input(input)?;
+        input: &'b Self::TxInput,
+    ) -> Result<InputMeta<'b>, Self::Error> {
+        let meta = self.validate_input(input)?;
 
         batch.append_from_iter(
             input
@@ -128,7 +161,7 @@ impl FederationModule for Mint {
         );
         batch.commit();
 
-        Ok(amount)
+        Ok(meta)
     }
 
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
@@ -485,6 +518,54 @@ impl Mint {
         }
 
         batch.commit();
+    }
+}
+
+impl Coin {
+    /// Verify the coin's validity under a mit key `pk`
+    pub fn verify(&self, pk: tbs::AggregatePublicKey) -> bool {
+        tbs::verify(self.0.to_message(), self.1, pk)
+    }
+
+    /// Access the nonce as the public key to the spend key
+    pub fn spend_key(&self) -> &secp256k1_zkp::schnorrsig::PublicKey {
+        &self.0 .0
+    }
+}
+
+impl CoinNonce {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bincode::serialize_into(&mut bytes, &self.0).unwrap();
+        bytes
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        // FIXME: handle errors or the client can be crashed
+        bincode::deserialize(bytes).unwrap()
+    }
+
+    pub fn to_message(&self) -> tbs::Message {
+        tbs::Message::from_bytes(&self.0.serialize()[..])
+    }
+}
+
+impl From<SignRequest> for Coins<BlindToken> {
+    fn from(sig_req: SignRequest) -> Self {
+        sig_req
+            .0
+            .into_iter()
+            .map(|(amt, token)| (amt, crate::BlindToken(token)))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+pub struct InvalidAmountTierError(pub Amount);
+
+impl std::fmt::Display for InvalidAmountTierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Amount tier unknown to mint: {}", self.0)
     }
 }
 

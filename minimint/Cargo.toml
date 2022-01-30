@@ -16,6 +16,7 @@ hex = "0.4.2"
 itertools = "0.10.0"
 minimint-api = { path = "../minimint-api" }
 minimint-derive = { path = "../minimint-derive" }
+minimint-ln = { path = "../modules/minimint-ln" }
 minimint-mint = { path = "../modules/minimint-mint" }
 minimint-wallet = { path = "../modules/minimint-wallet" }
 rand = "0.6.5"

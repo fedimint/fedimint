@@ -1533,11 +1533,34 @@ checksum = "a60553f9a9e039a333b4e9b20573b9e9b9c0bb3a11e201ccc48ef4283456d673"
 
 [[package]]
 name = "lightning"
+version = "0.0.102"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0679c22408337cb4a866a6c9d420b15b996cbc4018ae31a0223ad15699fb1aad"
+dependencies = [
+ "bitcoin",
+ "secp256k1",
+]
+
+[[package]]
+name = "lightning"
 version = "0.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f4cc6a6bc500226fe2716b8557fe66b57fd8d86348e4478b57de13a4dd6b8f0"
 dependencies = [
  "bitcoin",
+ "secp256k1",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b060be861d272988bb4f97eb3e0e11729bf8833ffefb918e0a50375b9d5aac82"
+dependencies = [
+ "bech32",
+ "bitcoin_hashes",
+ "lightning 0.0.102",
+ "num-traits",
  "secp256k1",
 ]
 
@@ -1549,7 +1572,7 @@ checksum = "8f7cc25650f634e074b0b64a793ac535f7ad2ae418dd7f0ac88972832d2f22bc"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
- "lightning",
+ "lightning 0.0.103",
  "num-traits",
  "secp256k1",
 ]
@@ -1560,7 +1583,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "clightningrpc",
- "lightning-invoice",
+ "lightning-invoice 0.11.0",
  "minimint",
  "minimint-api",
  "mint-client",
@@ -1666,6 +1689,7 @@ dependencies = [
  "itertools",
  "minimint-api",
  "minimint-derive",
+ "minimint-ln",
  "minimint-mint",
  "minimint-wallet",
  "rand 0.6.5",
@@ -1690,22 +1714,18 @@ name = "minimint-api"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "hex",
  "minimint-derive",
- "miniscript",
  "rand 0.6.5",
  "secp256k1-zkp",
  "serde",
- "sha3",
  "sled",
  "tbs",
  "tempdir",
  "thiserror",
  "tracing",
- "validator",
 ]
 
 [[package]]
@@ -1719,16 +1739,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimint-ln"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "itertools",
+ "lightning-invoice 0.10.0",
+ "minimint-api",
+ "secp256k1",
+ "serde",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "minimint-mint"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bincode",
  "counter",
  "itertools",
  "minimint-api",
  "minimint-derive",
  "rand 0.6.5",
  "rayon",
+ "secp256k1-zkp",
  "serde",
  "tbs",
  "thiserror",
@@ -1740,10 +1781,8 @@ name = "minimint-wallet"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bincode",
  "bitcoin",
  "bitcoincore-rpc",
- "futures",
  "hex",
  "itertools",
  "minimint-api",
@@ -1755,6 +1794,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "validator",
 ]
 
 [[package]]
@@ -1787,7 +1827,7 @@ dependencies = [
  "bitcoin_hashes",
  "futures",
  "hex",
- "lightning-invoice",
+ "lightning-invoice 0.11.0",
  "minimint",
  "minimint-api",
  "miniscript",
@@ -3063,9 +3103,9 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 
 [[package]]
 name = "tokio"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "588b2d10a336da58d877567cd8fb8a14b463e2104910f8132cd054b4b96e29ee"
+checksum = "70e992e41e0d2fb9f755b37446f20900f64446ef54874f40a60c78f021ac6144"
 dependencies = [
  "autocfg 1.0.1",
  "bytes",
@@ -3083,9 +3123,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "114383b041aa6212c579467afa0075fbbdd0718de036100bc0ba7961d8cb9095"
+checksum = "c9efc1aba077437943f7515666aa2b882dfabfbfdf89c819ea75a8d6e9eaba5e"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -3158,9 +3198,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.1"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80a4ddde70311d8da398062ecf6fc2c309337de6b0f77d6c27aff8d53f6fca52"
+checksum = "245da694cc7fc4729f3f418b304cb57789f1bed2a78c575407ab8a23f53cb4d3"
 dependencies = [
  "ansi_term 0.12.1",
  "lazy_static",
@@ -3256,9 +3296,9 @@ dependencies = [
 
 [[package]]
 name = "validator"
-version = "0.14.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d0f08911ab0fee2c5009580f04615fa868898ee57de10692a45da0c3bcc3e5e"
+checksum = "be110dc66fa015b8b1d2c4eae40c495a27fae55f82b9cae3efb8178241ed20eb"
 dependencies = [
  "idna",
  "lazy_static",
@@ -3273,9 +3313,9 @@ dependencies = [
 
 [[package]]
 name = "validator_derive"
-version = "0.14.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d85135714dba11a1bd0b3eb1744169266f1a38977bf4e3ff5e2e1acb8c2b7eee"
+checksum = "68f14fe757e2894ce4271991901567be07fbc3eac6b24246122214e1d5a16554"
 dependencies = [
  "if_chain",
  "lazy_static",
@@ -3289,13 +3329,9 @@ dependencies = [
 
 [[package]]
 name = "validator_types"
-version = "0.14.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ded9d97e1d42327632f5f3bae6403c04886e2de3036261ef42deebd931a6a291"
-dependencies = [
- "proc-macro2 1.0.32",
- "syn 1.0.81",
-]
+checksum = "ad9680608df133af2c1ddd5eaf1ddce91d60d61b6bc51494ef326458365a470a"
 
 [[package]]
 name = "value-bag"

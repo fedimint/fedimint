@@ -1,5 +1,6 @@
+use crate::Keys;
 use minimint_api::config::GenerateConfig;
-use minimint_api::{Amount, Keys, PeerId};
+use minimint_api::{Amount, PeerId};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

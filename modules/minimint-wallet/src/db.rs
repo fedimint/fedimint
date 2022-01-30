@@ -39,7 +39,7 @@ impl DatabaseKeyPrefixConst for RoundConsensusKey {
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingPegOutKey(pub minimint_api::transaction::OutPoint);
+pub struct PendingPegOutKey(pub minimint_api::OutPoint);
 
 impl DatabaseKeyPrefixConst for PendingPegOutKey {
     const DB_PREFIX: u8 = DB_PREFIX_PEDNING_PEGOUT;

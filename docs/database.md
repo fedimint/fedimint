@@ -15,6 +15,7 @@ The Database is split into different key spaces based on prefixing that can be u
 * `0x10-0x1A`: mint
 * `0x20-0x2A`: client (different db, but to be sure)
 * `0x30-0x3A`: wallet
+* `0x40-0x4A`: lightning
 
 ### Consensus
 
@@ -43,6 +44,16 @@ The Database is split into different key spaces based on prefixing that can be u
 | Unsigned transaction      | `0x34`   | bitcoin tx id (32 bytes)                  | PSBT                                      |
 | Pending transaction       | `0x35`   | bitcoin tx id (32 bytes)                  | consensus encoded tx, change tweak        |
 | Pending Peg Out Signature | `0x36`   | bitcoin tx id (32 bytes)                  | list of signatures (1 per input)          |
+
+### Lightning
+
+| Name                             | Prefix | Key                                 | Value                        |
+|----------------------------------|--------|-------------------------------------|------------------------------|
+| Accounts                         | 0x40   | contract id (sha256)                | `ContractAccount`            |
+| Offers                           | 0x41   | payment hash (sha256)               | `IncomingContractOffer`      |
+| Our Decryption Shares            | 0x42   | contract id (sha256)                | `DecryptionShare`            |
+| Consensus Decryption Shares      | 0x43   | contract id (sha256), peer id (u16) | `DecryptionShare`            |
+| Contract Update (output outcome) | 0x44   | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
 
 ## Client DB Layout
 

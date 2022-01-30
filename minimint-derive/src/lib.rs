@@ -21,7 +21,7 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
 
                 Ok((variant.ident.clone(), fields[0].ty.clone()))
             })
-            .collect::<Result<Vec<_>, _>>(),
+            .collect::<std::result::Result<Vec<_>, _>>(),
         _ => Err("UnzipConsensus can only be derived for enums"),
     };
 
@@ -96,7 +96,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                     .collect::<Vec<_>>();
                 quote! {
                     impl Encodable for #ident {
-                        fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+                        fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> std::result::Result<usize, std::io::Error> {
                             let mut len = 0;
                             #(len += Encodable::consensus_encode(&self.#field_names, &mut writer)?;)*
                             Ok(len)
@@ -111,7 +111,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                     .collect::<Vec<_>>();
                 quote! {
                     impl Encodable for #ident {
-                        fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+                        fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> std::result::Result<usize, std::io::Error> {
                             let mut len = 0;
                             #(len += Encodable::consensus_encode(&self.#field_names, &mut writer)?;)*
                             Ok(len)
@@ -160,7 +160,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
 
             quote! {
                 impl Encodable for #ident {
-                    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+                    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> std::result::Result<usize, std::io::Error> {
                         let mut len = 0;
                         match self {
                             #(#match_arms)*
@@ -202,7 +202,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                     .collect::<Vec<_>>();
                 quote! {
                     impl Decodable for #ident {
-                        fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, ::minimint_api::encoding::DecodeError> {
+                        fn consensus_decode<D: std::io::Read>(mut d: D) -> std::result::Result<Self, ::minimint_api::encoding::DecodeError> {
                             let mut len = 0;
                             #(let #field_names = Decodable::consensus_decode(&mut d)?;)*
                             Ok(#ident(#(#field_names,)*))
@@ -217,7 +217,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
                     .collect::<Vec<_>>();
                 quote! {
                     impl Decodable for #ident {
-                        fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, ::minimint_api::encoding::DecodeError> {
+                        fn consensus_decode<D: std::io::Read>(mut d: D) -> std::result::Result<Self, ::minimint_api::encoding::DecodeError> {
                             let mut len = 0;
                             #(let #field_names = Decodable::consensus_decode(&mut d)?;)*
                             Ok(#ident{
@@ -264,7 +264,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
 
             quote! {
                 impl Decodable for #ident {
-                    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, ::minimint_api::encoding::DecodeError> {
+                    fn consensus_decode<D: std::io::Read>(mut d: D) -> std::result::Result<Self, ::minimint_api::encoding::DecodeError> {
                         let variant = <u64 as Decodable>::consensus_decode(&mut d)? as usize;
                         let decoded = match variant {
                             #(#match_arms)*

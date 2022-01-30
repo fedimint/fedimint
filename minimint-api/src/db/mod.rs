@@ -37,15 +37,15 @@ pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), Databas
 pub trait RawDatabase: Send + Sync {
     fn raw_insert_entry(
         &self,
-        key: Vec<u8>,
+        key: &[u8],
         value: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, DatabaseError>;
 
-    fn raw_get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError>;
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError>;
 
-    fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError>;
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError>;
 
-    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter;
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter;
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
 }
@@ -94,7 +94,7 @@ where
         K: DatabaseKey,
         V: DatabaseValue,
     {
-        match self.raw_insert_entry(key.to_bytes(), value.to_bytes())? {
+        match self.raw_insert_entry(&key.to_bytes(), value.to_bytes())? {
             Some(old_val_bytes) => {
                 trace!(
                     "insert_entry: Decoding {} from bytes {:?}",
@@ -113,7 +113,7 @@ where
         V: DatabaseValue,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_get_value(key_bytes)? {
+        let value_bytes = match self.raw_get_value(&key_bytes)? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -132,7 +132,7 @@ where
         V: DatabaseValue,
     {
         let key_bytes = key.to_bytes();
-        let value_bytes = match self.raw_remove_entry(key_bytes)? {
+        let value_bytes = match self.raw_remove_entry(&key_bytes)? {
             Some(value) => value,
             None => return Ok(None),
         };
@@ -153,7 +153,7 @@ where
     {
         let prefix_bytes = key_prefix.to_bytes();
         DbIter {
-            iter: self.raw_find_by_prefix(prefix_bytes),
+            iter: self.raw_find_by_prefix(&prefix_bytes),
             _pd: Default::default(),
         }
     }

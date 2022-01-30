@@ -1,8 +1,16 @@
+pub mod testing;
+
 use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
+use secp256k1_zkp::schnorrsig;
+
+pub struct InputMeta<'a> {
+    pub amount: Amount,
+    pub puk_keys: Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a>,
+}
 
 #[async_trait(?Send)]
 pub trait FederationModule {
@@ -33,7 +41,7 @@ pub trait FederationModule {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input(&self, input: &Self::TxInput) -> Result<Amount, Self::Error>;
+    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -42,11 +50,11 @@ pub trait FederationModule {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a>(
+    fn apply_input<'a, 'b>(
         &'a self,
         batch: BatchTx<'a>,
-        input: &'a Self::TxInput,
-    ) -> Result<Amount, Self::Error>;
+        input: &'b Self::TxInput,
+    ) -> Result<InputMeta<'b>, Self::Error>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
@@ -68,7 +76,7 @@ pub trait FederationModule {
         &'a self,
         batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
-        out_point: crate::transaction::OutPoint,
+        out_point: crate::OutPoint,
     ) -> Result<Amount, Self::Error>;
 
     /// This function is called once all transactions have been processed and changes were written
@@ -82,8 +90,5 @@ pub trait FederationModule {
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(
-        &self,
-        out_point: crate::transaction::OutPoint,
-    ) -> Option<Self::TxOutputOutcome>;
+    fn output_status(&self, out_point: crate::OutPoint) -> Option<Self::TxOutputOutcome>;
 }

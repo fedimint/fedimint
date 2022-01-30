@@ -1,8 +1,10 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::{load_from_file, ClientConfig};
+use minimint::modules::mint::tiered::coins::Coins;
+use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint_api::encoding::Decodable;
-use minimint_api::{Amount, Coins, TxOutProof};
+use minimint_api::Amount;
 use mint_client::{MintClient, SpendableCoin};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};

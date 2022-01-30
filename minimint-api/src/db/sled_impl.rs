@@ -8,7 +8,7 @@ use tracing::{error, trace};
 impl RawDatabase for sled::Tree {
     fn raw_insert_entry(
         &self,
-        key: Vec<u8>,
+        key: &[u8],
         value: Vec<u8>,
     ) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self
@@ -17,21 +17,21 @@ impl RawDatabase for sled::Tree {
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_get_value(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self
             .get(key)
             .map_err(|e| DatabaseError::DbError(Box::new(e)))?
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_remove_entry(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self
             .remove(key)
             .map_err(|e| DatabaseError::DbError(Box::new(e)))?
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: Vec<u8>) -> PrefixIter {
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
         Box::new(self.scan_prefix(key_prefix).map(|res| {
             res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map_err(|e| DatabaseError::DbError(Box::new(e)))

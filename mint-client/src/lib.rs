@@ -1,24 +1,28 @@
+mod api;
+
+use crate::api::ApiError;
 use bitcoin::{Address, Script, Transaction};
 use futures::future::JoinAll;
 use minimint::config::ClientConfig;
+use minimint::modules::mint::tiered::coins::Coins;
+use minimint::modules::mint::{
+    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+};
+use minimint::modules::wallet::tweakable::Tweakable;
+use minimint::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use minimint::modules::wallet::PegOut;
+use minimint::transaction as mint_tx;
 use minimint_api::db::batch::{BatchItem, DbBatch};
 use minimint_api::db::{
     Database, DatabaseKey, DatabaseKeyPrefix, DatabaseKeyPrefixConst, DecodingError, RawDatabase,
 };
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::outcome::{Final, OutputOutcome, TransactionStatus};
-use minimint_api::transaction as mint_tx;
-use minimint_api::transaction::OutPoint;
-use minimint_api::{
-    Amount, Coin, CoinNonce, Coins, InvalidAmountTierError, Keys, PegInProof, PegInProofError,
-    SigResponse, SignRequest, TransactionId, Tweakable, TxOutProof,
-};
+use minimint_api::{Amount, TransactionId};
+use minimint_api::{OutPoint, PeerId};
 use miniscript::DescriptorTrait;
-use rand::seq::SliceRandom;
 use rand::{CryptoRng, RngCore};
-use reqwest::{RequestBuilder, StatusCode};
+use reqwest::StatusCode;
 use secp256k1_zkp::{All, Secp256k1, Signing};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
@@ -33,7 +37,7 @@ pub const DB_PREFIX_PEG_IN: u8 = 0x22;
 pub struct MintClient {
     cfg: ClientConfig,
     db: Arc<dyn RawDatabase>,
-    http_client: reqwest::Client, // TODO: use trait object
+    api: api::MintApi, // TODO: fin way to mock out for testability
     secp: Secp256k1<All>,
 }
 
@@ -98,49 +102,19 @@ pub struct PegInPrefixKey;
 
 impl MintClient {
     pub fn new(cfg: ClientConfig, db: Arc<dyn RawDatabase>, secp: Secp256k1<All>) -> Self {
-        MintClient {
-            cfg,
-            db,
-            http_client: Default::default(),
-            secp,
-        }
-    }
+        let api = api::MintApi::new(
+            cfg.api_endpoints
+                .iter()
+                .enumerate()
+                .map(|(id, url)| {
+                    let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
+                    let url = url.parse().expect("Invalid URL in config");
+                    (peer_id, url)
+                })
+                .collect(),
+        );
 
-    pub async fn send_tx<R: RngCore>(
-        &self,
-        tx: mint_tx::Transaction,
-        mut rng: R,
-    ) -> Result<(), ClientError> {
-        // Try all mints in random order, break early if enough could be reached
-        let mut successes: usize = 0;
-        for url in self
-            .cfg
-            .api_endpoints
-            .choose_multiple(&mut rng, self.cfg.api_endpoints.len())
-        {
-            let res = self
-                .http_client
-                .put(&format!("{}/transaction", url))
-                .json(&tx)
-                .send()
-                .await
-                .expect("API error");
-
-            if res.status() == StatusCode::OK {
-                successes += 1;
-            }
-
-            if successes >= 2 {
-                // TODO: make this max-faulty +1
-                break;
-            }
-        }
-
-        if successes == 0 {
-            Err(ClientError::MintError)
-        } else {
-            Ok(())
-        }
+        MintClient { cfg, db, api, secp }
     }
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
@@ -192,12 +166,12 @@ impl MintClient {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, &self.cfg.mint.tbs_pks, &self.secp, &mut rng);
 
-        let inputs = vec![mint_tx::Input::PegIn(Box::new(peg_in_proof))];
-        let outputs = vec![mint_tx::Output::Coins(
+        let inputs = vec![mint_tx::Input::Wallet(Box::new(peg_in_proof))];
+        let outputs = vec![mint_tx::Output::Mint(
             sig_req
                 .0
                 .into_iter()
-                .map(|(amt, token)| (amt, mint_tx::BlindToken(token)))
+                .map(|(amt, token)| (amt, BlindToken(token)))
                 .collect(),
         )];
 
@@ -209,18 +183,13 @@ impl MintClient {
             )
             .expect("We checked key validity before saving to DB");
 
-            minimint_api::transaction::agg_sign(
-                std::iter::once(sec_key),
-                hash.as_hash(),
-                &self.secp,
-                &mut rng,
-            )
+            minimint::transaction::agg_sign(&[sec_key], hash.as_hash(), &self.secp, &mut rng)
         };
 
         let mint_transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature: peg_in_req_sig,
+            signature: Some(peg_in_req_sig),
         };
 
         let tx_id = mint_transaction.tx_hash();
@@ -233,7 +202,11 @@ impl MintClient {
             .insert_entry(&issuance_key, &coin_finalization_data)
             .expect("DB error");
 
-        self.send_tx(mint_transaction, &mut rng).await?;
+        let mint_tx_id = self.api.submit_transaction(mint_transaction).await?;
+        assert_eq!(
+            tx_id, mint_tx_id,
+            "Federation is faulty, returned wrong tx id."
+        );
         Ok(tx_id)
     }
 
@@ -246,37 +219,10 @@ impl MintClient {
                 CoinFinalizationError::UnknowinIssuance,
             ))?;
 
-        let tx_outcome = self
-            .query_any_mint::<TransactionStatus, _>(|client, mint| {
-                let url = format!("{}/transaction/{}", mint, outpoint.txid);
-                client.get(&url)
-            })
-            .await?;
-
-        // TODO: check another mint if the answer was malicious
-        if !tx_outcome.is_final() {
-            return Err(ClientError::OutputNotReadyYet(outpoint));
-        }
-
-        let outputs = match tx_outcome {
-            TransactionStatus::AwaitingConsensus => {
-                unreachable!()
-            }
-            TransactionStatus::Error(e) => {
-                panic!("Mint error: {}", e)
-            }
-            TransactionStatus::Accepted { outputs, .. } => outputs,
-        };
-
-        // TODO: remove clone
-        let bsig = outputs
-            .get(outpoint.out_idx as usize)
-            .and_then(|outcome| match outcome {
-                OutputOutcome::Mint(mo) => Some(mo),
-                OutputOutcome::Wallet(_) => None,
-            })
-            .ok_or(ClientError::InvalidOutcomeWrongStructure(outpoint))?
-            .clone()
+        let bsig = self
+            .api
+            .fetch_output_outcome::<Option<SigResponse>>(outpoint)
+            .await?
             .ok_or(ClientError::OutputNotReadyYet(outpoint))?;
 
         let coins = issuance.finalize(bsig, &self.cfg.mint.tbs_pks)?;
@@ -300,44 +246,6 @@ impl MintClient {
         Ok(())
     }
 
-    async fn query_any_mint<O, F>(&self, query_builder: F) -> Result<O, ClientError>
-    where
-        F: Fn(&reqwest::Client, &str) -> RequestBuilder,
-        O: DeserializeOwned,
-    {
-        assert!(!self.cfg.api_endpoints.is_empty());
-
-        // TODO: add per mint timeout
-        let mut requests = self
-            .cfg
-            .api_endpoints
-            .iter()
-            .map(|mint| query_builder(&self.http_client, mint.as_str()).send())
-            .collect::<Vec<_>>();
-
-        loop {
-            let select = futures::future::select_all(requests);
-            let (res, _, remaining_requests) = select.await;
-            requests = remaining_requests;
-
-            match res {
-                Ok(resp) => match resp.json().await {
-                    Ok(val) => return Ok(val),
-                    Err(_) => {
-                        if requests.is_empty() {
-                            return Err(ClientError::MintError);
-                        }
-                    }
-                },
-                Err(_) => {
-                    if requests.is_empty() {
-                        return Err(ClientError::MintError);
-                    }
-                }
-            }
-        }
-    }
-
     pub async fn fetch_all_coins(&self) -> Result<Vec<TransactionId>, ClientError> {
         self.db
             .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
@@ -350,7 +258,7 @@ impl MintClient {
                         match self.fetch_coins(id.0).await {
                             Ok(()) => return Ok(id.0.txid),
                             // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                            Err(ClientError::MintError | ClientError::OutputNotReadyYet(_)) => {
+                            Err(e) if e.is_retryable_fetch_coins() => {
                                 tokio::time::sleep(Duration::from_secs(1)).await
                             }
                             Err(e) => return Err(e),
@@ -405,24 +313,27 @@ impl MintClient {
             .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let inputs = vec![mint_tx::Input::Coins(coins)];
-        let outputs = vec![mint_tx::Output::Coins(sig_req.into())];
+        let inputs = vec![mint_tx::Input::Mint(coins)];
+        let outputs = vec![mint_tx::Output::Mint(sig_req.into())];
 
         // TODO: abstract away tx building somehow
         let signature = {
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
-                    .expect("We checked key validity before saving to DB")
-            });
+            let sec_keys = spend_keys
+                .into_iter()
+                .map(|key| {
+                    secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                        .expect("We checked key validity before saving to DB")
+                })
+                .collect::<Vec<_>>();
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(&sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature,
+            signature: Some(signature),
         };
 
         let tx_id = transaction.tx_hash();
@@ -434,7 +345,11 @@ impl MintClient {
             .insert_entry(&issuance_key, &coin_finalization_data)
             .expect("DB error");
 
-        self.send_tx(transaction, &mut rng).await?;
+        let mint_tx_id = self.api.submit_transaction(transaction).await?;
+        assert_eq!(
+            tx_id, mint_tx_id,
+            "Federation is faulty, returned wrong tx id."
+        );
         Ok(tx_id)
     }
 
@@ -458,8 +373,8 @@ impl MintClient {
             .map(|(amt, coin)| (coin.spend_key, (amt, coin.coin)))
             .unzip();
 
-        let inputs = vec![mint_tx::Input::Coins(coins)];
-        let outputs = vec![mint_tx::Output::PegOut(mint_tx::PegOut {
+        let inputs = vec![mint_tx::Input::Mint(coins)];
+        let outputs = vec![mint_tx::Output::Wallet(PegOut {
             recipient: address,
             amount: amt,
         })];
@@ -467,22 +382,29 @@ impl MintClient {
         let signature = {
             // FIXME: deduplicate tx signing code
             let hash = mint_tx::Transaction::tx_hash_from_parts(&inputs, &outputs);
-            let sec_keys = spend_keys.into_iter().map(|key| {
-                secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
-                    .expect("We checked key validity before saving to DB")
-            });
+            let sec_keys = spend_keys
+                .into_iter()
+                .map(|key| {
+                    secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(&self.secp, &key)
+                        .expect("We checked key validity before saving to DB")
+                })
+                .collect::<Vec<_>>();
 
-            minimint_api::transaction::agg_sign(sec_keys, hash.as_hash(), &self.secp, &mut rng)
+            minimint::transaction::agg_sign(&sec_keys, hash.as_hash(), &self.secp, &mut rng)
         };
 
         let transaction = mint_tx::Transaction {
             inputs,
             outputs,
-            signature,
+            signature: Some(signature),
         };
         let tx_id = transaction.tx_hash();
 
-        self.send_tx(transaction, &mut rng).await?;
+        let mint_tx_id = self.api.submit_transaction(transaction).await?;
+        assert_eq!(
+            tx_id, mint_tx_id,
+            "Federation is faulty, returned wrong tx id."
+        );
         Ok(tx_id)
     }
 
@@ -630,8 +552,8 @@ pub enum CoinFinalizationError {
 
 #[derive(Error, Debug)]
 pub enum ClientError {
-    #[error("All mints responded with an error")]
-    MintError,
+    #[error("Error querying federation: {0}")]
+    MintApiError(ApiError),
     #[error("Could not finalize issuance request: {0}")]
     FinalizationError(CoinFinalizationError),
     #[error("Could not find an ongoing matching peg-in")]
@@ -659,6 +581,12 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 impl From<CoinFinalizationError> for ClientError {
     fn from(e: CoinFinalizationError) -> Self {
         ClientError::FinalizationError(e)
+    }
+}
+
+impl From<ApiError> for ClientError {
+    fn from(e: ApiError) -> Self {
+        ClientError::MintApiError(e)
     }
 }
 
@@ -724,5 +652,17 @@ impl DatabaseKey for PegInKey {
 impl DatabaseKeyPrefix for PegInPrefixKey {
     fn to_bytes(&self) -> Vec<u8> {
         vec![DB_PREFIX_PEG_IN]
+    }
+}
+
+impl ClientError {
+    pub fn is_retryable_fetch_coins(&self) -> bool {
+        match self {
+            ClientError::MintApiError(ApiError::HttpError(e)) => {
+                e.status() == Some(StatusCode::NOT_FOUND)
+            }
+            ClientError::OutputNotReadyYet(_) => true,
+            _ => false,
+        }
     }
 }
