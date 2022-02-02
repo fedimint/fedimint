@@ -25,7 +25,7 @@ pub mod wallet;
 pub struct MintClient {
     cfg: ClientConfig,
     db: Arc<dyn RawDatabase>,
-    api: api::HttpFederationApi, // TODO: fin way to mock out for testability
+    api: Arc<dyn api::FederationApi>,
     secp: Secp256k1<All>,
 
     wallet: wallet::WalletClient,
@@ -45,7 +45,15 @@ impl MintClient {
                 })
                 .collect(),
         );
+        Self::new_with_api(cfg, db, Arc::new(api), secp)
+    }
 
+    pub fn new_with_api(
+        cfg: ClientConfig,
+        db: Arc<dyn RawDatabase>,
+        api: Arc<dyn FederationApi>,
+        secp: Secp256k1<All>,
+    ) -> MintClient {
         // TODO: don't clone, maybe make sub-clients only borrow context?
         let wallet = wallet::WalletClient {
             db: db.clone(),
