@@ -33,7 +33,7 @@ where
         C: GenerateConfig,
         F: Fn(C, MemDatabase) -> M, // TODO: put constructor into Module trait
     {
-        let peers = (1..=members)
+        let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
         let (server_cfg, client_cfg) =
