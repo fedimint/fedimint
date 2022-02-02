@@ -1,6 +1,6 @@
 mod db;
 
-use crate::api::{ApiError, FederationApi};
+use crate::api::{ApiError, FederationApiExt, HttpFederationApi};
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use minimint::modules::mint;
@@ -27,7 +27,7 @@ use tracing::{debug, trace};
 pub struct MintClient {
     pub db: Arc<dyn RawDatabase>,
     pub cfg: mint::config::MintClientConfig,
-    pub api: FederationApi,
+    pub api: HttpFederationApi,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
 }
 

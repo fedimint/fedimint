@@ -1,4 +1,4 @@
-use crate::api::FederationApi;
+use crate::api::HttpFederationApi;
 use crate::PegInProofError;
 use bitcoin::Address;
 use db::PegInKey;
@@ -24,7 +24,7 @@ mod db;
 pub struct WalletClient {
     pub db: Arc<dyn RawDatabase>,
     pub cfg: wallet::config::WalletClientConfig,
-    pub api: FederationApi,
+    pub api: HttpFederationApi,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     // TODO: find better way to handle fees
     pub fee_consensus: FeeConsensus,
