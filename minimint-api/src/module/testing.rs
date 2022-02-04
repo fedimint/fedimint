@@ -4,6 +4,7 @@ use crate::db::mem_impl::MemDatabase;
 use crate::db::{Database, RawDatabase};
 use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use std::fmt::Debug;
+use std::future::Future;
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, MemDatabase)>,
@@ -23,7 +24,7 @@ where
     M::Error: Debug + Eq,
     M::TxOutputOutcome: Eq + Debug,
 {
-    pub fn new<C, F>(
+    pub async fn new<C, F, FF>(
         members: usize,
         max_evil: usize,
         constructor: F,
@@ -31,7 +32,8 @@ where
     ) -> FakeFed<M, C::ClientConfig>
     where
         C: GenerateConfig,
-        F: Fn(C, MemDatabase) -> M, // TODO: put constructor into Module trait
+        F: Fn(C, MemDatabase) -> FF, // TODO: put constructor into Module trait
+        FF: Future<Output = M>,
     {
         let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
@@ -39,14 +41,12 @@ where
         let (server_cfg, client_cfg) =
             C::trusted_dealer_gen(&peers, max_evil, params, rand::rngs::OsRng::new().unwrap());
 
-        let members = server_cfg
-            .into_iter()
-            .map(|(peer, cfg)| {
-                let mem_db = MemDatabase::new();
-                let member = constructor(cfg, mem_db.clone());
-                (peer, member, mem_db)
-            })
-            .collect();
+        let mut members = vec![];
+        for (peer, cfg) in server_cfg {
+            let mem_db = MemDatabase::new();
+            let member = constructor(cfg, mem_db.clone()).await;
+            members.push((peer, member, mem_db));
+        }
 
         FakeFed {
             members,

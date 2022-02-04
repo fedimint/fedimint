@@ -457,11 +457,11 @@ mod tests {
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
                 1,
-                |cfg, db| Mint::new(cfg, 3, Arc::new(db)),
+                |cfg, db| async { Mint::new(cfg, 3, Arc::new(db)) },
                 &[Amount::from_sat(1), Amount::from_sat(10)][..],
-            ),
+            )
+            .await,
         ));
-
         let api = FakeApi { mint: fed.clone() };
 
         let client_db: Arc<dyn RawDatabase> = Arc::new(MemDatabase::new());

@@ -1,6 +1,7 @@
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use crate::bitcoind::BitcoindRpc;
 use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingPegOutKey,
@@ -11,7 +12,6 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::bip143::SigHashCache;
@@ -20,7 +20,7 @@ use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
 use bitcoin::{
     Address, AddressType, BlockHash, Network, Script, SigHashType, Transaction, TxIn, TxOut, Txid,
 };
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::Auth;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::{Database, RawDatabase};
@@ -35,6 +35,7 @@ use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
+pub mod bitcoind;
 pub mod config;
 mod db;
 pub mod keys;
@@ -81,7 +82,7 @@ pub struct RoundConsensus {
 pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
-    btc_rpc: bitcoincore_rpc::Client,
+    btc_rpc: Box<dyn BitcoindRpc>,
     db: Arc<dyn RawDatabase>,
 }
 
@@ -148,8 +149,7 @@ impl FederationModule for Wallet {
         mut rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
         // TODO: implement retry logic in case bitcoind is temporarily unreachable
-        let our_network_height =
-            tokio::task::block_in_place(|| self.btc_rpc.get_block_count()).unwrap() as u32;
+        let our_network_height = self.btc_rpc.get_block_height().await as u32;
         let our_target_height = our_network_height.saturating_sub(self.cfg.finalty_delay);
 
         // In case the wallet just got created the height is not committed to the DB yet but will
@@ -167,15 +167,11 @@ impl FederationModule for Wallet {
             last_consensus_height
         };
 
-        let fee_rate = tokio::task::block_in_place(|| {
-            self.btc_rpc.estimate_smart_fee(CONFIRMATION_TARGET, None)
-        })
-        .unwrap() // TODO: implement retry logic in case bitcoind is temporarily unreachable
-        .fee_rate
-        .map(|per_kb| Feerate {
-            sats_per_kvb: per_kb.as_sat(),
-        })
-        .unwrap_or(self.cfg.default_fee);
+        let fee_rate = self
+            .btc_rpc
+            .get_fee_rate(CONFIRMATION_TARGET)
+            .await
+            .unwrap_or(self.cfg.default_fee);
 
         let round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
@@ -414,30 +410,35 @@ impl FederationModule for Wallet {
 
 impl Wallet {
     pub async fn new(cfg: WalletConfig, db: Arc<dyn RawDatabase>) -> Result<Wallet, WalletError> {
-        let broadcaster_cfg = cfg.clone();
+        let gen_cfg = cfg.clone();
+        let bitcoind_rpc_gen = move || -> Box<dyn BitcoindRpc> {
+            Box::new(
+                bitcoincore_rpc::Client::new(
+                    &gen_cfg.btc_rpc_address,
+                    Auth::UserPass(gen_cfg.btc_rpc_user.clone(), gen_cfg.btc_rpc_pass.clone()),
+                )
+                .expect("Could not connect to bitcoind"),
+            )
+        };
+
+        Self::new_with_bitcoind(cfg, db, bitcoind_rpc_gen).await
+    }
+
+    // TODO: work around bitcoind_gen being a closure, maybe make clonable?
+    pub async fn new_with_bitcoind(
+        cfg: WalletConfig,
+        db: Arc<dyn RawDatabase>,
+        bitcoind_gen: impl Fn() -> Box<dyn BitcoindRpc>,
+    ) -> Result<Wallet, WalletError> {
+        let broadcaster_bitcoind_rpc = bitcoind_gen();
         let broadcaster_db = db.clone();
         tokio::spawn(async move {
-            let btc_rpc_address = broadcaster_cfg.btc_rpc_address.clone();
-
-            // FIXME: become resilient against bitcoind outages
-            let btc_rpc = bitcoincore_rpc::Client::new(
-                &btc_rpc_address,
-                Auth::UserPass(
-                    broadcaster_cfg.btc_rpc_user.clone(),
-                    broadcaster_cfg.btc_rpc_pass.clone(),
-                ),
-            )
-            .expect("Failed to connect to bitcoind");
-
-            broadcast_pending_tx(broadcaster_db, btc_rpc).await;
+            broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).await;
         });
 
-        let btc_rpc = bitcoincore_rpc::Client::new(
-            &cfg.btc_rpc_address,
-            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-        )?;
+        let bitcoind_rpc = bitcoind_gen();
 
-        let bitcoind_net = get_network(&btc_rpc).await?;
+        let bitcoind_net = bitcoind_rpc.get_network().await;
         if bitcoind_net != cfg.network {
             return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
         }
@@ -445,7 +446,7 @@ impl Wallet {
         let wallet = Wallet {
             cfg,
             secp: Default::default(),
-            btc_rpc,
+            btc_rpc: bitcoind_rpc,
             db,
         };
 
@@ -572,6 +573,8 @@ impl Wallet {
             }
         };
 
+        // FIXME: actually submit tx (must have been lost in refactoring?)
+        // FIXME: recognize change
         // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
         // extracted tx for periodic transmission and to accept the change into our wallet
         // eventually once it confirms.
@@ -667,9 +670,7 @@ impl Wallet {
             // TODO: use batching for mainnet syncing
             trace!("Fetching block hash for block {}", height);
             // TODO: implement retying failed RPC commands till they succeed while loudly complaining to alert the operator
-            let block_hash =
-                tokio::task::block_in_place(|| self.btc_rpc.get_block_hash(height as u64))
-                    .expect("Ignoring failure here would throw us out of consensus");
+            let block_hash = self.btc_rpc.get_block_hash(height as u64).await; // TODO: use u64 for height everywhere
             batch.append_insert_new(
                 BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
                 (),
@@ -972,16 +973,6 @@ impl<'a> StatelessWallet<'a> {
     }
 }
 
-async fn get_network(rpc_client: &bitcoincore_rpc::Client) -> Result<Network, WalletError> {
-    let bc = tokio::task::block_in_place(|| rpc_client.get_blockchain_info())?;
-    match bc.chain.as_str() {
-        "main" => Ok(Network::Bitcoin),
-        "test" => Ok(Network::Testnet),
-        "regtest" => Ok(Network::Regtest),
-        _ => Err(WalletError::UnknownNetwork(bc.chain)),
-    }
-}
-
 fn proprietary_tweak_key() -> ProprietaryKey {
     ProprietaryKey {
         prefix: b"minimint".to_vec(),
@@ -1001,7 +992,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
     }
 }
 
-async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: bitcoincore_rpc::Client) {
+async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: Box<dyn BitcoindRpc>) {
     loop {
         let pending_tx = db
             .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(
@@ -1011,20 +1002,13 @@ async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: bitcoincore_rpc::Cl
             .expect("DB error");
 
         for (_, PendingTransaction { tx, .. }) in pending_tx {
-            let mut raw_tx = Vec::new();
-            tx.consensus_encode(&mut raw_tx)
-                .expect("Nothing can go wrong with a vec");
-
-            trace!(
+            debug!(
                 "Broadcasting peg-out tx {} (weight {})",
                 tx.txid(),
                 tx.get_weight()
             );
-            trace!("Transaction: {}", raw_tx.to_hex());
-            if let Err(e) = tokio::task::block_in_place(|| rpc.send_raw_transaction(&raw_tx)) {
-                // FIXME: resubmit periodically, also in case it drops out of the mempool
-                trace!("Could not submit peg out transaction: {}", e);
-            }
+            trace!("Transaction: {:?}", tx);
+            rpc.submit_transaction(tx).await;
         }
         tokio::time::sleep(Duration::from_secs(10)).await;
     }

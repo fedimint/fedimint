@@ -23,9 +23,10 @@ async fn test_account() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| LightningModule::new(cfg, Arc::new(db)),
+        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
         &(),
-    );
+    )
+    .await;
 
     let (_sk, pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
     let contract = Contract::Account(AccountContract { key: pk });
@@ -68,9 +69,10 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| LightningModule::new(cfg, Arc::new(db)),
+        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
         &(),
-    );
+    )
+    .await;
 
     let (_, gw_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
     let (_, user_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
@@ -139,9 +141,10 @@ async fn test_incoming() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| LightningModule::new(cfg, Arc::new(db)),
+        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
         &(),
-    );
+    )
+    .await;
 
     let (_, gw_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
     let (_, user_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
