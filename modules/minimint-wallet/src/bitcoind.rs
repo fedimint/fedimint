@@ -76,3 +76,95 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
         }
     }
 }
+
+#[allow(dead_code)]
+pub mod test {
+    use crate::bitcoind::BitcoindRpc;
+    use crate::Feerate;
+    use async_trait::async_trait;
+    use bitcoin::hashes::Hash;
+    use bitcoin::{BlockHash, Network, Transaction};
+    use std::collections::VecDeque;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    #[derive(Debug, Default)]
+    pub struct FakeBitcoindRpcState {
+        fee_rate: Option<Feerate>,
+        block_height: u64,
+        transactions: VecDeque<Transaction>,
+    }
+
+    #[derive(Clone, Default)]
+    pub struct FakeBitcoindRpc {
+        state: Arc<Mutex<FakeBitcoindRpcState>>,
+    }
+
+    pub struct FakeBitcoindRpcController {
+        pub state: Arc<Mutex<FakeBitcoindRpcState>>,
+    }
+
+    #[async_trait]
+    impl BitcoindRpc for FakeBitcoindRpc {
+        async fn get_network(&self) -> Network {
+            bitcoin::Network::Regtest
+        }
+
+        async fn get_block_height(&self) -> u64 {
+            self.state.lock().await.block_height
+        }
+
+        async fn get_block_hash(&self, height: u64) -> BlockHash {
+            let mut bytes = [0u8; 32];
+            bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
+            BlockHash::from_inner(bytes)
+        }
+
+        async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
+            self.state.lock().await.fee_rate
+        }
+
+        async fn submit_transaction(&self, transaction: Transaction) {
+            self.state.lock().await.transactions.push_back(transaction);
+        }
+    }
+
+    impl FakeBitcoindRpc {
+        pub fn new() -> FakeBitcoindRpc {
+            FakeBitcoindRpc::default()
+        }
+
+        pub fn controller(&self) -> FakeBitcoindRpcController {
+            FakeBitcoindRpcController {
+                state: self.state.clone(),
+            }
+        }
+    }
+
+    impl FakeBitcoindRpcController {
+        pub async fn set_fee_rate(&self, fee_rate: Option<Feerate>) {
+            self.state.lock().await.fee_rate = fee_rate;
+        }
+
+        pub async fn set_block_height(&self, block_height: u64) {
+            self.state.lock().await.block_height = block_height
+        }
+
+        pub async fn is_btc_sent_to(
+            &self,
+            amount: bitcoin::Amount,
+            recipient: bitcoin::Address,
+        ) -> bool {
+            self.state
+                .lock()
+                .await
+                .transactions
+                .iter()
+                .flat_map(|tx| tx.output.iter())
+                .any(|output| {
+                    output.value == amount.as_sat()
+                        && output.script_pubkey == recipient.script_pubkey()
+                })
+        }
+    }
+}
