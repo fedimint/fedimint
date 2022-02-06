@@ -5,13 +5,15 @@ use minimint::config::{load_from_file, ClientConfig};
 use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
 use tide::Body;
-use tracing::{error, info};
+use tracing::{error};
 use tracing_subscriber::EnvFilter;
-use minimint_api::Amount;
+use minimint_api::{Amount, TransactionId};
 use mint_client::mint::SpendableCoin;
 use minimint::modules::mint::tiered::coins::Coins;
 use serde_json::json;
 use bitcoin_hashes::hex::ToHex;
+
+
 
 #[derive(Clone)]
 pub struct State {
@@ -23,16 +25,37 @@ struct Opts {
     workdir: PathBuf,
 }
 
+/*
 #[derive(Debug, Deserialize, Serialize)]
 struct InfoResponse {
     total : serde_json::Value,
     coins : serde_json::Value,
 }
+*/
+#[derive(Serialize)]
+struct InfoResponse {
+    total : CoinTotal,
+    coins : Vec<CoinGrouped>,
+}
+#[derive(Serialize)]
+struct CoinTotal{
+    coin_count : usize,
+    amount : Amount,
+}
+#[derive(Serialize)]
+struct CoinGrouped{
+    amount : usize,
+    tier : u64
+}
+#[derive(Serialize)]
+struct SpendResponse {
+    token : String,
+}
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Serialize)]
 struct ReissueResponse {
-    id : serde_json::Value,
-    fetched : serde_json::Value
+    id : String,
+    fetched : Vec<TransactionId>,
 }
 
 #[derive(Deserialize,Serialize, Debug)]
@@ -42,51 +65,25 @@ struct ReqBody<T> {
 }
 
 impl InfoResponse {
-    fn new(coins: Coins<SpendableCoin>) -> Self{
-        //just ignore this ugly block of code pls (will refactor)
-        let mut total_map =serde_json::map::Map::new();
-        let mut coins_map =serde_json::map::Map::new();
-        let mut coins_arr : Vec<serde_json::Value> = vec![serde_json::Value::Null];
-        total_map.insert("coins".to_owned(), serde_json::json!(coins.coin_count()));
-        total_map.insert("amount".to_owned(), serde_json::json!(coins.amount()));
-        for (amount, coins) in coins.coins {
-            info!("We own {} coins of denomination {}", coins.len(), amount);
-            coins_map.insert("denomination".to_owned(), serde_json::json!(amount));
-            coins_map.insert("amount".to_owned(), serde_json::json!(coins.len()));
-            coins_arr.push(serde_json::json!(coins_map));
-        }
-        let  json_total = serde_json::Value::Object(total_map);
-        let  json_coins = serde_json::Value::Array(coins_arr);
-        let res = InfoResponse {
-            total : json_total,
-            coins : json_coins
-        };
-        res
+    fn new(coins: Coins<SpendableCoin>) -> Self {
+        let info_total =  CoinTotal { coin_count: coins.coin_count(), amount: coins.amount() };
+        let info_coins : Vec<CoinGrouped> = coins.coins.iter()
+            .map(|(tier, c)| CoinGrouped { amount : c.len(), tier : tier.milli_sat})
+            .collect();
+        InfoResponse { total : info_total, coins : info_coins }
     }
 }
 
 impl ReissueResponse {
-    async fn new(client :&MintClient, coins:Coins<SpendableCoin>) -> Self {
+    async fn new(mint_client :&MintClient, coins:Coins<SpendableCoin>) -> Self {
         let mut rng = rand::rngs::OsRng::new().unwrap();
-        let mut coins_map = serde_json::Map::new();
-        let mut fetched_arr : Vec<serde_json::Value> = vec![serde_json::Value::Null];
-        info!("Starting reissuance transaction for {}", coins.amount());
-        let id = client.reissue(coins, &mut rng).await.unwrap();
-        info!(
-                "Started reissuance {}, result will be fetched",
-                id.to_hex()
-            );
-        coins_map.insert("coins".to_owned(), serde_json::json!(  id.to_hex()));
-        //make mime application/octet-stream chunked so client dosent have to wait in idle(endpoint caller dosent get blocked)
-        for id in client.fetch_all_coins().await.unwrap() {
-            info!("Fetched coins from issuance {}", id.to_hex());
-            fetched_arr.push(serde_json::json!(id.to_hex()));
-        }
-        let  json_coins = serde_json::Value::Object(coins_map);
-        let  json_fetched = serde_json::Value::Array(fetched_arr);
+        let id = mint_client.reissue(coins, &mut rng).await.unwrap();
+
+        let  id = id.to_hex();
+        let  fetched : Vec<TransactionId>= mint_client.fetch_all_coins().await.unwrap();
         let res = ReissueResponse {
-            id: json_coins,
-            fetched: json_fetched
+            id,
+            fetched,
         };
         res
     }
@@ -123,7 +120,7 @@ async fn main() -> tide::Result<()>{
         let State {
             ref mint_client,
         } = req.state();
-        let res = InfoResponse::new(mint_client.coins());
+        let res = json!(InfoResponse::new(mint_client.coins()));
         Body::from_json(&res)
     });
 
@@ -133,33 +130,30 @@ async fn main() -> tide::Result<()>{
      let State {
             ref mint_client,
         } = req.state();
-
-          let mut res : serde_json::Value = serde_json::Value::Null;
           let amount = Amount::from_sat(req_body.value);
-
-          match mint_client.select_and_spend_coins(amount) {
-              Ok(outgoing_coins) => {
-                  println!("{}", serialize_coins(&outgoing_coins));
-                  res = json!(&serialize_coins(&outgoing_coins));
-              }
-              Err(e) => {
-                  error!("Error: {:?}", e);
-                  //TODO return error in body
-              }
-          };
+          let mut token = String::from("error");
+              match mint_client.select_and_spend_coins(amount) {
+                  Ok(outgoing_coins) => {
+                      token = serialize_coins(&outgoing_coins)
+                  }
+                  Err(e) => {
+                      error!("Error: {:?}", e);
+                      //TODO return error in body
+                  }
+              };
+          let res = json!(SpendResponse{token});
           Body::from_json(&res)
     });
 
     app.at("/reissue").post(|mut req : tide::Request<State>| async move {
+        //make mime application/octet-stream chunked
         let req_body : ReqBody<String> = req.body_json().await?;
         let State {
             ref mint_client,
         } = req.state();
-
-
+        
         let coins : Coins<SpendableCoin> = parse_coins(&req_body.value);
-
-        let res = ReissueResponse::new(&mint_client, coins).await; //should not block caller -> respond chunked
+        let res = json!(ReissueResponse::new(&mint_client, coins).await);
         Body::from_json(&res)
 
     });
