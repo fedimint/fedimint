@@ -37,7 +37,7 @@ use tracing::{debug, error, info, trace, warn};
 
 pub mod bitcoind;
 pub mod config;
-mod db;
+pub mod db;
 pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
@@ -1079,6 +1079,17 @@ impl From<PegInProofError> for WalletError {
         WalletError::PegInProofError(e)
     }
 }
+
+// FIXME: make FakeFed not require Eq
+/// **WARNING**: this is only intended to be used for testing
+impl PartialEq for WalletError {
+    fn eq(&self, other: &Self) -> bool {
+        format!("{:?}", self) == format!("{:?}", other)
+    }
+}
+
+/// **WARNING**: this is only intended to be used for testing
+impl Eq for WalletError {}
 
 #[cfg(test)]
 mod tests {
