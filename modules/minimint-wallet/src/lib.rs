@@ -319,9 +319,7 @@ impl FederationModule for Wallet {
             PendingPegOut {
                 destination: output.recipient.script_pubkey(),
                 amount: output.amount,
-                pending_since_block: self
-                    .consensus_height()
-                    .expect("Wallet should be initialized at this point"),
+                pending_since_block: self.consensus_height().unwrap_or(0),
             },
         );
         batch.commit();
@@ -533,6 +531,7 @@ impl Wallet {
             {
                 return Err(ProcessPegOutSigError::DuplicateSignature);
             }
+            // TODO: delete signature item if it's our own
         }
 
         // FIXME: actually recognize change UTXOs on maturity
@@ -573,7 +572,8 @@ impl Wallet {
             }
         };
 
-        // FIXME: actually submit tx (must have been lost in refactoring?)
+        debug!("Finalized peg-out tx: {}", tx.txid());
+        trace!("transaction = {:?}", tx);
         // FIXME: recognize change
         // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
         // extracted tx for periodic transmission and to accept the change into our wallet
