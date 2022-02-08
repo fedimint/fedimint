@@ -43,7 +43,7 @@ pub mod modules {
     pub use minimint_wallet as wallet;
 }
 
-/// Start all the components of the mintan d plug them together
+/// Start all the components of the mint and plug them together
 pub async fn run_minimint(cfg: ServerConfig) {
     assert_eq!(
         cfg.peers.keys().max().copied().map(|id| id.to_usize()),
