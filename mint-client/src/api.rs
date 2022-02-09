@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use futures::{Future, StreamExt, TryFutureExt};
 use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
 use minimint::transaction::Transaction;
@@ -6,14 +7,58 @@ use reqwest::Url;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::pin::Pin;
 use thiserror::Error;
+
+#[async_trait]
+pub trait FederationApi: Send + Sync {
+    /// Fetch the outcome of an entire transaction
+    async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
+
+    /// Submit a transaction to all federtion members
+    async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
+}
+
+#[async_trait]
+pub trait FederationApiExt {
+    /// Fetch the outcome of a single transaction output
+    async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
+    where
+        T: TryIntoOutcome + Send;
+}
+
+#[async_trait]
+impl<'a, A> FederationApiExt for A
+where
+    A: Deref<Target = dyn FederationApi + 'a> + Sync + ?Sized,
+{
+    async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
+    where
+        T: TryIntoOutcome + Send,
+    {
+        match self.fetch_tx_outcome(out_point.txid).await? {
+            TransactionStatus::Error(e) => Err(ApiError::TransactionError(e)),
+            TransactionStatus::Accepted { outputs, .. } => {
+                let outputs_len = outputs.len();
+                outputs
+                    .into_iter()
+                    .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
+                    .ok_or(ApiError::OutPointOutOfRange(
+                        outputs_len,
+                        out_point.out_idx as usize,
+                    ))
+                    .and_then(|output| output.try_into_variant().map_err(ApiError::WrongOutputType))
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 /// Mint API client that will try to run queries against all `members` expecting equal
 /// results from at least `min_eq_results` of them. Members that return differing results are
 /// returned as a member faults list.
-pub struct FederationApi {
+pub struct HttpFederationApi {
     federation_member_api_hosts: Vec<(PeerId, Url)>,
     http_client: reqwest::Client,
 }
@@ -34,44 +79,26 @@ pub enum ApiError {
 
 type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;
 
-impl FederationApi {
-    /// Creates a new API client
-    pub fn new(members: Vec<(PeerId, Url)>) -> FederationApi {
-        FederationApi {
-            federation_member_api_hosts: members,
-            http_client: Default::default(),
-        }
-    }
-
+#[async_trait]
+impl FederationApi for HttpFederationApi {
     /// Fetch the outcome of an entire transaction
-    pub async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
+    async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
         self.get(&format!("/transaction/{}", tx)).await
     }
 
-    /// Fetch the outcome of a single transaction output
-    pub async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
-    where
-        T: TryIntoOutcome,
-    {
-        match self.fetch_tx_outcome(out_point.txid).await? {
-            TransactionStatus::Error(e) => Err(ApiError::TransactionError(e)),
-            TransactionStatus::Accepted { outputs, .. } => {
-                let outputs_len = outputs.len();
-                outputs
-                    .into_iter()
-                    .nth(out_point.out_idx as usize) // avoid clone as would be necessary with .get(…)
-                    .ok_or(ApiError::OutPointOutOfRange(
-                        outputs_len,
-                        out_point.out_idx as usize,
-                    ))
-                    .and_then(|output| output.try_into_variant().map_err(ApiError::WrongOutputType))
-            }
-        }
-    }
-
     /// Submit a transaction to all federtion members
-    pub async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
+    async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         self.put("/transaction", tx).await
+    }
+}
+
+impl HttpFederationApi {
+    /// Creates a new API client
+    pub fn new(members: Vec<(PeerId, Url)>) -> HttpFederationApi {
+        HttpFederationApi {
+            federation_member_api_hosts: members,
+            http_client: Default::default(),
+        }
     }
 
     /// Send a GET request to all federation members and make sure that there is consensus about the

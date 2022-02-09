@@ -93,11 +93,11 @@ impl From<PeerId> for u16 {
 impl Amount {
     pub const ZERO: Self = Self { milli_sat: 0 };
 
-    pub fn from_msat(msat: u64) -> Amount {
+    pub const fn from_msat(msat: u64) -> Amount {
         Amount { milli_sat: msat }
     }
 
-    pub fn from_sat(sat: u64) -> Amount {
+    pub const fn from_sat(sat: u64) -> Amount {
         Amount {
             milli_sat: sat * 1000,
         }
