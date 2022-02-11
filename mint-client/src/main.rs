@@ -106,10 +106,7 @@ async fn main() {
         Command::Reissue { coins } => {
             info!("Starting reissuance transaction for {}", coins.amount());
             let id = client.reissue(coins, &mut rng).await.unwrap();
-            info!(
-                "Started reissuance {}, please fetch the result later",
-                id.to_hex()
-            );
+            info!("Started reissuance {}, please fetch the result later", id);
         }
         Command::Spend { amount } => {
             match client.select_and_spend_coins(amount) {
