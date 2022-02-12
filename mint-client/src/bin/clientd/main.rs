@@ -2,17 +2,15 @@ use tide;
 use mint_client::{MintClient};
 use std::{path::PathBuf, sync::Arc};
 use minimint::config::{load_from_file, ClientConfig};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use structopt::StructOpt;
 use tide::Body;
-use tracing::{error};
-use tracing_subscriber::EnvFilter;
 use minimint_api::{Amount, TransactionId};
 use mint_client::mint::SpendableCoin;
 use minimint::modules::mint::tiered::coins::Coins;
-use serde_json::json;
 use bitcoin_hashes::hex::ToHex;
-
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 
 #[derive(Clone)]
@@ -25,13 +23,6 @@ struct Opts {
     workdir: PathBuf,
 }
 
-/*
-#[derive(Debug, Deserialize, Serialize)]
-struct InfoResponse {
-    total : serde_json::Value,
-    coins : serde_json::Value,
-}
-*/
 #[derive(Serialize)]
 struct InfoResponse {
     total : CoinTotal,
@@ -58,11 +49,6 @@ struct ReissueResponse {
     fetched : Vec<TransactionId>,
 }
 
-#[derive(Deserialize,Serialize, Debug)]
-struct ReqBody<T> {
-    //I dont like this
-    value : T
-}
 
 impl InfoResponse {
     fn new(coins: Coins<SpendableCoin>) -> Self {
@@ -90,15 +76,13 @@ impl ReissueResponse {
 }
 #[tokio::main]
 async fn main() -> tide::Result<()>{
-    //collect trace to print info
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
         .init();
-
-
-    //Instantiate Client
+    info!("no waring");
+    error!("no warning");
     let opts: Opts = StructOpt::from_args();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
@@ -107,7 +91,7 @@ async fn main() -> tide::Result<()>{
         .unwrap() //handle error ?
         .open_tree("mint-client")
         .unwrap(); //handle error ?
-    let client = MintClient::new(cfg, Arc::new(db), Default::default()); //Why Arc ?
+    let client = MintClient::new(cfg, Arc::new(db), Default::default());
 
 
     let state = State {
@@ -120,48 +104,40 @@ async fn main() -> tide::Result<()>{
         let State {
             ref mint_client,
         } = req.state();
-        let res = json!(InfoResponse::new(mint_client.coins()));
-        Body::from_json(&res)
+        Body::from_json(&InfoResponse::new(mint_client.coins()))
     });
 
 
       app.at("/spend").post(|mut req : tide::Request<State>| async move {
-          let req_body : ReqBody<u64> = req.body_json().await?;
+          let value : u64 = req.body_json().await.expect("expected diffrent json");
      let State {
             ref mint_client,
         } = req.state();
-          let amount = Amount::from_sat(req_body.value);
+          let amount = Amount::from_sat(value);
           let mut token = String::from("error");
               match mint_client.select_and_spend_coins(amount) {
                   Ok(outgoing_coins) => {
                       token = serialize_coins(&outgoing_coins)
                   }
-                  Err(e) => {
-                      error!("Error: {:?}", e);
+                  Err(_e) => {
                       //TODO return error in body
                   }
               };
-          let res = json!(SpendResponse{token});
-          Body::from_json(&res)
+          Body::from_json(&SpendResponse{token})
     });
 
     app.at("/reissue").post(|mut req : tide::Request<State>| async move {
-        //make mime application/octet-stream chunked
-        let req_body : ReqBody<String> = req.body_json().await?;
+        let value : String = req.body_json().await?;
         let State {
             ref mint_client,
         } = req.state();
-        
-        let coins : Coins<SpendableCoin> = parse_coins(&req_body.value);
-        let res = json!(ReissueResponse::new(&mint_client, coins).await);
-        Body::from_json(&res)
+
+        let coins : Coins<SpendableCoin> = parse_coins(&value);
+        Body::from_json(&ReissueResponse::new(&mint_client, coins).await)
 
     });
 
-
     app.listen("127.0.0.1:8080").await?;
-
-
     Ok(())
 }
 
