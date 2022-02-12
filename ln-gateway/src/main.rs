@@ -2,7 +2,6 @@ use clightningrpc::lightningrpc::PayOptions;
 use clightningrpc::LightningRPC;
 use minimint::config::{load_from_file, ClientConfig};
 use minimint::modules::mint::tiered::coins::Coins;
-use minimint_api::OutPoint;
 use mint_client::mint::SpendableCoin;
 use mint_client::MintClient;
 use serde::{Deserialize, Serialize};
@@ -58,13 +57,13 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
     } = req.state();
 
     debug!("Trying to reissue");
-    let txid = mint_client
+    let out_point = mint_client
         .reissue(pay_req.coins, &mut rng)
         .await
         .expect("error while starting reissuance");
     debug!("Fetching coins");
     loop {
-        match mint_client.fetch_coins(OutPoint { txid, out_idx: 0 }).await {
+        match mint_client.fetch_coins(out_point).await {
             Ok(()) => break,
             // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
             Err(e) if e.is_retryable_fetch_coins() => {

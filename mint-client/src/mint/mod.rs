@@ -372,6 +372,8 @@ pub enum MintClientError {
 }
 
 impl MintClientError {
+    /// Returns `true` if the error means that the queried coin output isn't ready yet but might
+    /// become ready later.
     pub fn is_retryable_fetch_coins(&self) -> bool {
         match self {
             MintClientError::ApiError(ApiError::HttpError(e)) => {

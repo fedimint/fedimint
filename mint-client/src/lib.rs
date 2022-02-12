@@ -128,11 +128,20 @@ impl MintClient {
         Ok(txid)
     }
 
+    /// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent
+    /// double spends. Users must ensure that the reissuance transaction is accepted before
+    /// accepting `coins` as a valid payment.
+    ///
+    /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
+    /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
+    /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
         coins: Coins<SpendableCoin>,
         mut rng: R,
-    ) -> Result<TransactionId, ClientError> {
+    ) -> Result<OutPoint, ClientError> {
+        const OUT_IDX: u64 = 0;
+
         let mut batch = DbBatch::new();
 
         let amount = coins.amount();
@@ -146,7 +155,10 @@ impl MintClient {
 
         self.mint.save_coin_finalization_data(
             batch.transaction(),
-            OutPoint { txid, out_idx: 0 },
+            OutPoint {
+                txid,
+                out_idx: OUT_IDX,
+            },
             coin_finalization_data,
         );
 
@@ -167,7 +179,10 @@ impl MintClient {
         );
 
         self.db.apply_batch(batch).expect("DB error");
-        Ok(txid)
+        Ok(OutPoint {
+            txid,
+            out_idx: OUT_IDX,
+        })
     }
 
     pub async fn peg_out<R: RngCore + CryptoRng>(
@@ -227,6 +242,9 @@ impl MintClient {
         Ok(coins)
     }
 
+    /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
+    /// the federation too early. Use [`MintClientError::is_retryable_fetch_coins`] to determine
+    /// if the operation should be retried at a later time.
     pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<(), MintClientError> {
         let mut batch = DbBatch::new();
         self.mint.fetch_coins(batch.transaction(), outpoint).await?;
