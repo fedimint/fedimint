@@ -1,22 +1,21 @@
 mod db;
 
-use crate::api::{ApiError, FederationApi};
+use crate::api::ApiError;
+use crate::BorrowedClientContext;
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use minimint::modules::mint;
+use minimint::modules::mint::config::MintClientConfig;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
 use minimint_api::db::batch::{BatchItem, BatchTx};
-use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
 use rand::{CryptoRng, Rng, RngCore};
 use reqwest::StatusCode;
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
@@ -24,11 +23,8 @@ use tracing::{debug, trace};
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
-pub struct MintClient {
-    pub db: Arc<dyn Database>,
-    pub cfg: mint::config::MintClientConfig,
-    pub api: Arc<dyn FederationApi>,
-    pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+pub struct MintClient<'c> {
+    pub context: BorrowedClientContext<'c, MintClientConfig>,
 }
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
@@ -59,9 +55,10 @@ pub struct SpendableCoin {
     pub spend_key: [u8; 32],
 }
 
-impl MintClient {
+impl<'c> MintClient<'c> {
     pub fn coins(&self) -> Coins<SpendableCoin> {
-        self.db
+        self.context
+            .db
             .find_by_prefix::<_, CoinKey, SpendableCoin>(&CoinKeyPrefix)
             .map(|res| {
                 let (key, spendable_coin) = res.expect("DB error");
@@ -122,15 +119,17 @@ impl MintClient {
             .into_iter()
             .map(|(amt, coin)| {
                 let spend_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-                    &self.secp,
+                    self.context.secp,
                     &coin.spend_key,
                 )
                 .map_err(|_| MintClientError::ReceivedUspendableCoin)?;
 
                 // We check for coin validity in case we got it from an untrusted third party. We
                 // don't want to needlessly create invalid tx and bother the federation with them.
-                let spend_pub_key =
-                    secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &spend_key);
+                let spend_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
+                    self.context.secp,
+                    &spend_key,
+                );
                 if &spend_pub_key == coin.coin.spend_key() {
                     Ok((spend_key, (amt, coin.coin)))
                 } else {
@@ -146,8 +145,12 @@ impl MintClient {
         amount: Amount,
         mut rng: R,
     ) -> (CoinFinalizationData, Coins<BlindToken>) {
-        let (coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, &self.cfg.tbs_pks, &self.secp, &mut rng);
+        let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
+            amount,
+            &self.context.config.tbs_pks,
+            self.context.secp,
+            &mut rng,
+        );
 
         let coin_output = sig_req
             .0
@@ -174,6 +177,7 @@ impl MintClient {
 
     pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, outpoint: OutPoint) -> Result<()> {
         let issuance = self
+            .context
             .db
             .get_value::<_, CoinFinalizationData>(&OutputFinalizationKey(outpoint))
             .expect("DB error")
@@ -182,12 +186,13 @@ impl MintClient {
             ))?;
 
         let bsig = self
+            .context
             .api
             .fetch_output_outcome::<Option<SigResponse>>(outpoint)
             .await?
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
 
-        let coins = issuance.finalize(bsig, &self.cfg.tbs_pks)?;
+        let coins = issuance.finalize(bsig, &self.context.config.tbs_pks)?;
 
         batch.append_from_iter(
             coins
@@ -209,6 +214,7 @@ impl MintClient {
 
     pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<TransactionId>> {
         let active_issuances = self
+            .context
             .db
             .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
                 &OutputFinalizationKeyPrefix,
@@ -407,6 +413,7 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 mod tests {
     use crate::api::FederationApi;
     use crate::mint::MintClient;
+    use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use minimint::modules::ln::contracts::ContractId;
@@ -459,8 +466,10 @@ mod tests {
         }
     }
 
-    async fn new_mint_and_client() -> (Arc<tokio::sync::Mutex<Fed>>, MintClient, Arc<dyn Database>)
-    {
+    async fn new_mint_and_client() -> (
+        Arc<tokio::sync::Mutex<Fed>>,
+        OwnedClientContext<MintClientConfig>,
+    ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
@@ -472,21 +481,20 @@ mod tests {
         ));
         let api = FakeApi { mint: fed.clone() };
 
-        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
-        let client = MintClient {
-            db: client_db.clone(),
-            cfg: fed.lock().await.client_cfg().clone(),
-            api: Arc::new(api),
+        let client_context = OwnedClientContext {
+            config: fed.lock().await.client_cfg().clone(),
+            db: Box::new(MemDatabase::new()),
+            api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client, client_db)
+        (fed, client_context)
     }
 
     async fn issue_tokens<'a, R: rand::RngCore + rand::CryptoRng>(
         fed: &'a tokio::sync::Mutex<Fed>,
-        client: &'a MintClient,
-        client_db: Arc<dyn Database>,
+        client: &'a MintClient<'a>,
+        client_db: &'a dyn Database,
         amt: Amount,
         rng: &'a mut R,
     ) {
@@ -514,10 +522,21 @@ mod tests {
     #[tokio::test]
     async fn create_output() {
         let mut rng = rand::rngs::OsRng::new().unwrap();
-        let (fed, client, client_db) = new_mint_and_client().await;
+        let (fed, client_context) = new_mint_and_client().await;
+
+        let client = MintClient {
+            context: client_context.borrow_with_module_config(|x| x),
+        };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
-        issue_tokens(&fed, &client, client_db.clone(), ISSUE_AMOUNT, &mut rng).await;
+        issue_tokens(
+            &fed,
+            &client,
+            client_context.db.as_ref(),
+            ISSUE_AMOUNT,
+            &mut rng,
+        )
+        .await;
 
         assert_eq!(client.coins().amount(), ISSUE_AMOUNT)
     }
@@ -529,15 +548,26 @@ mod tests {
 
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
-        let (fed, client, client_db) = new_mint_and_client().await;
-        issue_tokens(&fed, &client, client_db.clone(), SPEND_AMOUNT * 2, &mut rng).await;
+        let (fed, client_context) = new_mint_and_client().await;
+        let client = MintClient {
+            context: client_context.borrow_with_module_config(|x| x),
+        };
+
+        issue_tokens(
+            &fed,
+            &client,
+            client_context.db.as_ref(),
+            SPEND_AMOUNT * 2,
+            &mut rng,
+        )
+        .await;
 
         // Spending works
         let mut batch = DbBatch::new();
         let (spend_keys, input) = client
             .create_coin_input(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
-        client_db.apply_batch(batch).unwrap();
+        client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount, SPEND_AMOUNT);
@@ -565,7 +595,7 @@ mod tests {
         let (spend_keys, input) = client
             .create_coin_input(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
-        client_db.apply_batch(batch).unwrap();
+        client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount, SPEND_AMOUNT);

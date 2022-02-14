@@ -11,7 +11,6 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::Arc;
 use structopt::StructOpt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -89,7 +88,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg, Arc::new(db), Default::default());
+    let client = UserClient::new(cfg, Box::new(db), Default::default());
 
     match opts.command {
         Command::PegInAddress => {

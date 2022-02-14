@@ -1,19 +1,16 @@
-use crate::api::FederationApi;
-
+use crate::BorrowedClientContext;
 use bitcoin::Address;
 use db::PegInKey;
 use minimint::config::FeeConsensus;
-use minimint::modules::wallet;
+use minimint::modules::wallet::config::WalletClientConfig;
 use minimint::modules::wallet::tweakable::Tweakable;
 use minimint::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 use minimint::modules::wallet::PegOut;
 use minimint_api::db::batch::BatchTx;
-use minimint_api::db::Database;
 use minimint_api::Amount;
 use miniscript::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::schnorrsig::KeyPair;
-use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
 
@@ -21,34 +18,31 @@ mod db;
 
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
-pub struct WalletClient {
-    pub db: Arc<dyn Database>,
-    pub cfg: wallet::config::WalletClientConfig,
-    pub api: Arc<dyn FederationApi>,
-    pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-    // TODO: find better way to handle fees
+pub struct WalletClient<'c> {
+    pub context: BorrowedClientContext<'c, WalletClientConfig>,
     pub fee_consensus: FeeConsensus,
 }
 
-impl WalletClient {
+impl<'c> WalletClient<'c> {
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(
         &self,
         mut batch: BatchTx<'_>,
         mut rng: R,
     ) -> Address {
-        let peg_in_sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(&self.secp, &mut rng);
+        let peg_in_sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(self.context.secp, &mut rng);
         let peg_in_pub_key =
-            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &peg_in_sec_key);
+            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(self.context.secp, &peg_in_sec_key);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
         let script = self
-            .cfg
+            .context
+            .config
             .peg_in_descriptor
-            .tweak(&peg_in_pub_key, &self.secp)
+            .tweak(&peg_in_pub_key, self.context.secp)
             .script_pubkey();
         debug!("Peg-in script: {}", script);
-        let address = Address::from_script(&script, self.cfg.network)
+        let address = Address::from_script(&script, self.context.config.network)
             .expect("Script from descriptor should have an address");
 
         batch.append_insert_new(
@@ -73,7 +67,8 @@ impl WalletClient {
             .enumerate()
             .find_map(|(idx, out)| {
                 debug!("Output script: {}", out.script_pubkey);
-                self.db
+                self.context
+                    .db
                     .get_value::<_, [u8; 32]>(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
@@ -82,12 +77,14 @@ impl WalletClient {
             })
             .ok_or(WalletClientError::NoMatchingPegInFound)?;
         let secret_tweak_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-            &self.secp,
+            self.context.secp,
             &secret_tweak_key_bytes,
         )
         .expect("sec key was generated and saved by us");
-        let public_tweak_key =
-            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &secret_tweak_key);
+        let public_tweak_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
+            self.context.secp,
+            &secret_tweak_key,
+        );
 
         let peg_in_proof = PegInProof::new(
             txout_proof,
@@ -98,7 +95,7 @@ impl WalletClient {
         .map_err(WalletClientError::PegInProofError)?;
 
         peg_in_proof
-            .verify(&self.secp, &self.cfg.peg_in_descriptor)
+            .verify(self.context.secp, &self.context.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)?;
         let sats = peg_in_proof.tx_output().value;
 
@@ -137,6 +134,7 @@ pub enum WalletClientError {
 mod tests {
     use crate::api::FederationApi;
     use crate::wallet::WalletClient;
+    use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::Address;
     use minimint::config::FeeConsensus;
@@ -150,7 +148,6 @@ mod tests {
     use minimint::outcome::{OutputOutcome, TransactionStatus};
     use minimint::transaction::Transaction;
     use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use miniscript::DescriptorTrait;
@@ -192,8 +189,7 @@ mod tests {
 
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
-        WalletClient,
-        Arc<dyn Database>,
+        OwnedClientContext<WalletClientConfig>,
         FakeBitcoindRpcController,
     ) {
         let btc_rpc = FakeBitcoindRpc::new();
@@ -220,12 +216,22 @@ mod tests {
 
         let api = FakeApi { _mint: fed.clone() };
 
-        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
-        let client = WalletClient {
-            db: client_db.clone(),
-            cfg: fed.lock().await.client_cfg().clone(),
-            api: Arc::new(api),
+        let client = OwnedClientContext {
+            config: fed.lock().await.client_cfg().clone(),
+            db: Box::new(MemDatabase::new()),
+            api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
+        };
+
+        (fed, client, btc_rpc_controller)
+    }
+
+    #[tokio::test]
+    async fn create_output() {
+        let ctx = secp256k1_zkp::Secp256k1::new();
+        let (fed, client_context, btc_rpc) = new_mint_and_client().await;
+        let client = WalletClient {
+            context: client_context.borrow_with_module_config(|x| x),
             fee_consensus: FeeConsensus {
                 fee_coin_spend_abs: Amount::ZERO,
                 fee_peg_in_abs: Amount::ZERO,
@@ -235,14 +241,6 @@ mod tests {
                 fee_contract_output: Amount::ZERO,
             },
         };
-
-        (fed, client, client_db, btc_rpc_controller)
-    }
-
-    #[tokio::test]
-    async fn create_output() {
-        let ctx = secp256k1_zkp::Secp256k1::new();
-        let (fed, client, _, btc_rpc) = new_mint_and_client().await;
 
         // generate fake UTXO
         let client_cfg = fed.lock().await.client_cfg().clone();

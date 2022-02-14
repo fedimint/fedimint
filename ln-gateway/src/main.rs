@@ -109,7 +109,7 @@ async fn main() -> tide::Result<()> {
         .open_tree("mint-client")
         .unwrap();
 
-    let client = UserClient::new(cfg.client, Arc::new(db), Default::default());
+    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
     let ln_client = LightningRPC::new(cfg.ln_socket);
 
     let state = State {
