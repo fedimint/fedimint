@@ -56,7 +56,7 @@ pub struct IncomingContract {
 /// The funded version of an [`IncomingCotnract`] contains the [`OutPoint`] of it's creation. Since
 /// this kind of contract can only be funded once this out point is unambiguous. The out point is
 /// used to update the output outcome once decryption finishes.
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FundedIncomingContract {
     pub contract: IncomingContract,
     /// Incoming contracts are funded exactly once, so they have an associated out-point. We use it

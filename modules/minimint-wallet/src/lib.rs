@@ -74,9 +74,9 @@ pub struct PegOutSignatureItem {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensus {
-    block_height: u32,
-    fee_rate: Feerate,
-    randomness_beacon: [u8; 32],
+    pub block_height: u32,
+    pub fee_rate: Feerate,
+    pub randomness_beacon: [u8; 32],
 }
 
 pub struct Wallet {

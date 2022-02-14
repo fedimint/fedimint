@@ -409,6 +409,8 @@ mod tests {
     use crate::mint::MintClient;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
+    use minimint::modules::ln::contracts::ContractId;
+    use minimint::modules::ln::ContractAccount;
     use minimint::modules::mint::config::MintClientConfig;
     use minimint::modules::mint::Mint;
     use minimint::outcome::{OutputOutcome, TransactionStatus};
@@ -446,6 +448,13 @@ mod tests {
         }
 
         async fn submit_transaction(&self, _tx: Transaction) -> crate::api::Result<TransactionId> {
+            unimplemented!()
+        }
+
+        async fn fetch_contract(
+            &self,
+            _contract: ContractId,
+        ) -> crate::api::Result<ContractAccount> {
             unimplemented!()
         }
     }

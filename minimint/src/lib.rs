@@ -39,6 +39,7 @@ mod rng;
 pub mod transaction;
 
 pub mod modules {
+    pub use minimint_ln as ln;
     pub use minimint_mint as mint;
     pub use minimint_wallet as wallet;
 }

@@ -10,6 +10,7 @@ async-trait = "0.1"
 bincode = "1"
 bitcoin_hashes = "0.10"
 itertools = "0.10.1"
+lightning = "0.0.103"
 lightning-invoice = "0.10"
 minimint-api = { path = "../../minimint-api" }
 secp256k1 = "0.20"

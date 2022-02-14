@@ -94,7 +94,7 @@ pub struct ContractOutput {
     pub contract: contracts::Contract,
 }
 
-#[derive(Debug, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct ContractAccount {
     pub amount: minimint_api::Amount,
     pub contract: contracts::FundedContract,
@@ -196,7 +196,6 @@ impl FederationModule for LightningModule {
 
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                // TODO: properly define semantics, same as LN (> vs >=)
                 if outgoing.timelock > self.block_height() {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
