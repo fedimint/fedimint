@@ -2,11 +2,10 @@ mod db;
 pub mod gateway;
 mod outgoing;
 
-use crate::api::FederationApi;
+use crate::api::{ApiError, FederationApi};
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::ApiError;
 use lightning_invoice::Invoice;
 use minimint::modules::ln;
 use minimint::modules::ln::contracts::outgoing::OutgoingContract;

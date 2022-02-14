@@ -1,11 +1,11 @@
 use crate::api::FederationApi;
-use crate::PegInProofError;
+
 use bitcoin::Address;
 use db::PegInKey;
 use minimint::config::FeeConsensus;
 use minimint::modules::wallet;
 use minimint::modules::wallet::tweakable::Tweakable;
-use minimint::modules::wallet::txoproof::{PegInProof, TxOutProof};
+use minimint::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 use minimint::modules::wallet::PegOut;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::Database;

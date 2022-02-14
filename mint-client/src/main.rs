@@ -6,7 +6,7 @@ use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint_api::encoding::Decodable;
 use minimint_api::Amount;
 use mint_client::mint::SpendableCoin;
-use mint_client::MintClient;
+use mint_client::UserClient;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -89,7 +89,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = MintClient::new(cfg, Arc::new(db), Default::default());
+    let client = UserClient::new(cfg, Arc::new(db), Default::default());
 
     match opts.command {
         Command::PegInAddress => {

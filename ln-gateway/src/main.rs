@@ -3,7 +3,7 @@ use clightningrpc::LightningRPC;
 use minimint::config::{load_from_file, ClientConfig};
 use minimint::modules::mint::tiered::coins::Coins;
 use mint_client::mint::SpendableCoin;
-use mint_client::MintClient;
+use mint_client::UserClient;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -28,7 +28,7 @@ struct Config {
 
 #[derive(Clone)]
 pub struct State {
-    mint_client: Arc<MintClient>,
+    mint_client: Arc<UserClient>,
     ln_client: Arc<LightningRPC>,
 }
 
@@ -109,7 +109,7 @@ async fn main() -> tide::Result<()> {
         .open_tree("mint-client")
         .unwrap();
 
-    let client = MintClient::new(cfg.client, Arc::new(db), Default::default());
+    let client = UserClient::new(cfg.client, Arc::new(db), Default::default());
     let ln_client = LightningRPC::new(cfg.ln_socket);
 
     let state = State {
