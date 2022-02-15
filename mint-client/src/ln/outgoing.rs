@@ -18,11 +18,11 @@ pub struct OutgoingContractAccount {
 
 impl OutgoingContractAccount {
     #[allow(dead_code)]
-    pub fn claim(&self, preimage: [u8; 32]) -> ContractInput {
+    pub fn claim(&self, preimage: Preimage) -> ContractInput {
         ContractInput {
             crontract_id: self.contract.contract_id(),
             amount: self.amount,
-            witness: Some(Preimage(preimage)),
+            witness: Some(preimage),
         }
     }
 
