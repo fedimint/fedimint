@@ -212,6 +212,17 @@ impl<'c> MintClient<'c> {
         Ok(())
     }
 
+    pub fn list_active_issuances(&self) -> Vec<OutPoint> {
+        self.context
+            .db
+            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
+                &OutputFinalizationKeyPrefix,
+            )
+            .map(|res| res.expect("DB error").0 .0)
+            .collect()
+    }
+
+    // FIXME: remove
     pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<TransactionId>> {
         let active_issuances = self
             .context
