@@ -13,7 +13,6 @@ use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
 use rand::{CryptoRng, Rng, RngCore};
-use reqwest::StatusCode;
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -393,9 +392,7 @@ impl MintClientError {
     /// become ready later.
     pub fn is_retryable_fetch_coins(&self) -> bool {
         match self {
-            MintClientError::ApiError(ApiError::HttpError(e)) => {
-                e.status() == Some(StatusCode::NOT_FOUND)
-            }
+            MintClientError::ApiError(e) => e.is_retryable_fetch_coins(),
             MintClientError::OutputNotReadyYet(_) => true,
             _ => false,
         }

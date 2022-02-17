@@ -10,7 +10,7 @@ pub struct OutgoingContractData {
     pub contract_account: OutgoingContractAccount,
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct OutgoingContractAccount {
     pub amount: Amount,
     pub contract: OutgoingContract,

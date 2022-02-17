@@ -5,12 +5,13 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint_api::encoding::Decodable;
 use minimint_api::Amount;
+use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::UserClient;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
+use std::time::Duration;
 use structopt::StructOpt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -51,10 +52,7 @@ enum Command {
     },
 
     /// Pay a lightning invoice via a gateway
-    LnPay {
-        gateway: String,
-        bolt11: lightning_invoice::Invoice,
-    },
+    LnPay { bolt11: lightning_invoice::Invoice },
 
     /// Fetch (re-)issued coins and finalize issuance process
     Fetch,
@@ -69,6 +67,12 @@ struct PayRequest {
     invoice: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ClientAndGatewayConfig {
+    client: ClientConfig,
+    gateway: LightningGateway,
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -80,7 +84,7 @@ async fn main() {
     let opts: Options = StructOpt::from_args();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
-    let cfg: ClientConfig = load_from_file(&cfg_path);
+    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
     let db = sled::open(&db_path)
         .unwrap()
         .open_tree("mint-client")
@@ -88,7 +92,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg, Box::new(db), Default::default());
+    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
 
     match opts.command {
         Command::PegInAddress => {
@@ -141,27 +145,23 @@ async fn main() {
         Command::PegOut { address, amount } => {
             client.peg_out(amount, address, &mut rng).await.unwrap();
         }
-        Command::LnPay { gateway, bolt11 } => {
-            let amt = Amount::from_msat(bolt11.amount_milli_satoshis().unwrap());
+        Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();
 
-            let coins = client
-                .select_and_spend_coins(amt)
+            let contract_id = client
+                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
+                .await
                 .expect("Not enough coins");
-            let success = http
-                .post(&gateway)
-                .json(&PayRequest {
-                    coins,
-                    invoice: bolt11.to_string(),
-                })
+
+            // FIXME:don't use sleep, find out what to actually wait for
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            http.post(&format!("{}/pay_invoice", cfg.gateway.api))
+                .json(&contract_id)
+                .timeout(Duration::from_secs(10))
                 .send()
                 .await
-                .map(|response| response.status() == StatusCode::OK)
-                .unwrap_or(false);
-
-            if !success {
-                error!("Payment failed")
-            }
+                .unwrap();
         }
     }
 }

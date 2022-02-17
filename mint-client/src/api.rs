@@ -5,7 +5,7 @@ use minimint::modules::ln::ContractAccount;
 use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
 use minimint::transaction::Transaction;
 use minimint_api::{OutPoint, PeerId, TransactionId};
-use reqwest::Url;
+use reqwest::{StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
@@ -71,6 +71,17 @@ pub enum ApiError {
     OutPointOutOfRange(usize, usize),
     #[error("Returned output type did not match expectation: {0}")]
     WrongOutputType(MismatchingVariant),
+}
+
+impl ApiError {
+    /// Returns `true` if the error means that the queried coin output isn't ready yet but might
+    /// become ready later.
+    pub fn is_retryable_fetch_coins(&self) -> bool {
+        match self {
+            ApiError::HttpError(e) => e.status() == Some(StatusCode::NOT_FOUND),
+            _ => false,
+        }
+    }
 }
 
 type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;

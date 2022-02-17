@@ -1,6 +1,6 @@
 mod db;
 pub mod gateway;
-mod outgoing;
+pub mod outgoing;
 
 use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
@@ -144,7 +144,6 @@ mod tests {
     use crate::ln::LnClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
-    use lightning::routing::network_graph::RoutingFees;
     use lightning_invoice::Invoice;
     use minimint::modules::ln::config::LightningModuleClientConfig;
     use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
@@ -281,11 +280,6 @@ mod tests {
                 mint_pub_key,
                 node_pub_key,
                 api: "".to_string(),
-                // FIXME: GW fees don't really make sense without client side routing, we just overpay and hope for the best
-                fees: RoutingFees {
-                    base_msat: 0,
-                    proportional_millionths: 0,
-                },
             }
         };
         let timelock = 42;

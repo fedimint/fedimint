@@ -7,6 +7,8 @@ use crate::{api, OwnedClientContext};
 use bitcoin::{Address, Transaction};
 use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
+use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
+use minimint::modules::ln::ContractOrOfferOutput;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint::transaction as mint_tx;
@@ -18,6 +20,8 @@ use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use thiserror::Error;
+
+const TIMELOCK: u64 = 100;
 
 pub struct UserClient {
     context: OwnedClientContext<ClientConfig>,
@@ -288,22 +292,30 @@ impl UserClient {
         &self,
         gateway: &LightningGateway,
         invoice: Invoice,
-        absolute_timelock: u32,
         mut rng: R,
-    ) -> Result<TransactionId, ClientError> {
+    ) -> Result<ContractId, ClientError> {
         let mut batch = DbBatch::new();
 
-        let ln_output = Output::LN(
-            self.ln_client()
-                .create_outgoing_output(
-                    batch.transaction(),
-                    invoice,
-                    gateway,
-                    absolute_timelock,
-                    &mut rng,
-                )
-                .await?,
-        );
+        let consensus_height = self.context.api.fetch_consensus_block_height().await?;
+        let absolute_timelock = consensus_height + TIMELOCK;
+
+        let contract = self
+            .ln_client()
+            .create_outgoing_output(
+                batch.transaction(),
+                invoice,
+                gateway,
+                absolute_timelock as u32,
+                &mut rng,
+            )
+            .await?;
+        let contract_id = match &contract {
+            ContractOrOfferOutput::Contract(c) => c.contract.contract_id(),
+            ContractOrOfferOutput::Offer(_) => {
+                panic!()
+            } // FIXME: impl TryFrom
+        };
+        let ln_output = Output::LN(contract);
 
         let amount = ln_output.amount();
         let (coin_keys, coin_input) = self
@@ -335,7 +347,7 @@ impl UserClient {
         );
 
         self.context.db.apply_batch(batch).expect("DB error");
-        Ok(txid)
+        Ok(contract_id)
     }
 }
 
