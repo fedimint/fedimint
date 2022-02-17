@@ -464,6 +464,10 @@ mod tests {
         ) -> crate::api::Result<ContractAccount> {
             unimplemented!()
         }
+
+        async fn fetch_consensus_block_height(&self) -> crate::api::Result<u64> {
+            unimplemented!()
+        }
     }
 
     async fn new_mint_and_client() -> (
