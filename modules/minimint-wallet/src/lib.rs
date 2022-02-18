@@ -1043,7 +1043,7 @@ pub enum WalletError {
     #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
     WrongNetwork(Network, Network),
     #[error("Error querying bitcoind: {0}")]
-    RpcErrot(bitcoincore_rpc::Error),
+    RpcError(bitcoincore_rpc::Error),
     #[error("Unknown bitcoin network: {0}")]
     UnknownNetwork(String),
     #[error("Unknown block hash in peg-in proof: {0}")]
@@ -1070,7 +1070,7 @@ pub enum ProcessPegOutSigError {
 
 impl From<bitcoincore_rpc::Error> for WalletError {
     fn from(e: bitcoincore_rpc::Error) -> Self {
-        WalletError::RpcErrot(e)
+        WalletError::RpcError(e)
     }
 }
 
