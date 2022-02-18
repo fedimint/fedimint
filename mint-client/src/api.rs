@@ -9,7 +9,6 @@ use reqwest::Url;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use std::pin::Pin;
 use thiserror::Error;
 
@@ -26,20 +25,8 @@ pub trait FederationApi: Send + Sync {
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
 }
 
-#[async_trait]
-pub trait FederationApiExt {
-    /// Fetch the outcome of a single transaction output
-    async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
-    where
-        T: TryIntoOutcome + Send;
-}
-
-#[async_trait]
-impl<'a, A> FederationApiExt for A
-where
-    A: Deref<Target = dyn FederationApi + 'a> + Sync + ?Sized,
-{
-    async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
+impl<'a> dyn FederationApi + 'a {
+    pub async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
     where
         T: TryIntoOutcome + Send,
     {

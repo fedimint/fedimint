@@ -1,6 +1,6 @@
 mod db;
 
-use crate::api::{ApiError, FederationApi, FederationApiExt};
+use crate::api::{ApiError, FederationApi};
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use minimint::modules::mint;
