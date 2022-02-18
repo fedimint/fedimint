@@ -27,7 +27,7 @@ use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
@@ -58,7 +58,7 @@ use tracing::{debug, error, trace, warn};
 /// [Incoming]: contracts::incoming::IncomingContract
 pub struct LightningModule {
     cfg: LightningModuleConfig,
-    db: Arc<dyn RawDatabase>,
+    db: Arc<dyn Database>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -477,7 +477,7 @@ impl FederationModule for LightningModule {
 }
 
 impl LightningModule {
-    pub fn new(cfg: LightningModuleConfig, db: Arc<dyn RawDatabase>) -> LightningModule {
+    pub fn new(cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
         LightningModule { cfg, db }
     }
 

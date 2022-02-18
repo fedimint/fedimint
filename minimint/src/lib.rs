@@ -12,7 +12,7 @@ use tracing::{debug, info, trace, warn};
 
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
-use minimint_api::db::RawDatabase;
+use minimint_api::db::Database;
 use minimint_api::PeerId;
 use minimint_ln::LightningModule;
 
@@ -54,7 +54,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
 
     let threshold = cfg.peers.len() - cfg.max_faulty();
 
-    let database: Arc<dyn RawDatabase> =
+    let database: Arc<dyn Database> =
         Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap());
 
     let mint = minimint_mint::Mint::new(cfg.mint.clone(), threshold, database.clone());

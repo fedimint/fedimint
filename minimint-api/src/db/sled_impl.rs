@@ -1,11 +1,11 @@
 use super::batch::{BatchItem, DbBatch};
-use super::{DatabaseError, DecodingError, RawDatabase};
+use super::{Database, DatabaseError, DecodingError};
 use crate::db::PrefixIter;
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
 // TODO: maybe make the concrete impl its own crate
-impl RawDatabase for sled::Tree {
+impl Database for sled::Tree {
     fn raw_insert_entry(
         &self,
         key: &[u8],

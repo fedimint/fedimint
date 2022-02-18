@@ -8,7 +8,7 @@ use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_derive::UnzipConsensus;
@@ -48,7 +48,7 @@ where
     pub ln: LightningModule,
 
     /// KV Database into which all state is persisted to recover from in case of a crash
-    pub db: Arc<dyn RawDatabase>,
+    pub db: Arc<dyn Database>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

@@ -7,7 +7,7 @@ use crate::db::{
 use async_trait::async_trait;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
@@ -39,7 +39,7 @@ pub struct Mint {
     pub_key_shares: BTreeMap<PeerId, Keys<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
     threshold: usize, // TODO: move to cfg
-    db: Arc<dyn RawDatabase>,
+    db: Arc<dyn Database>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -311,7 +311,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, threshold: usize, db: Arc<dyn RawDatabase>) -> Mint {
+    pub fn new(cfg: MintConfig, threshold: usize, db: Arc<dyn Database>) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
