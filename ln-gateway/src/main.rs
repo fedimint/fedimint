@@ -22,7 +22,7 @@ struct PayRequest {
 
 #[derive(Debug, Deserialize)]
 struct Config {
-    ln_socket: String,
+    ln_socket: PathBuf,
     client: ClientConfig,
 }
 
