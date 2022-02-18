@@ -3,7 +3,6 @@ use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::Deref;
 use thiserror::Error;
 use tracing::trace;
 
@@ -34,7 +33,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 
 pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>> + Send>;
 
-pub trait RawDatabase: Send + Sync {
+pub trait Database: Send + Sync {
     fn raw_insert_entry(
         &self,
         key: &[u8],
@@ -50,32 +49,6 @@ pub trait RawDatabase: Send + Sync {
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
 }
 
-pub trait Database {
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue;
-
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue;
-
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
-    where
-        K: DatabaseKey,
-        V: DatabaseValue;
-
-    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<K, V>
-    where
-        KP: DatabaseKeyPrefix,
-        K: DatabaseKey,
-        V: DatabaseValue;
-
-    /// Apply a batch atomically
-    fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
-}
-
 pub struct DbIter<K, V>
 where
     K: DatabaseKey,
@@ -85,11 +58,8 @@ where
     _pd: PhantomData<(K, V)>,
 }
 
-impl<'a, D> Database for D
-where
-    D: Deref<Target = dyn RawDatabase + 'a> + ?Sized,
-{
-    fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
+impl<'a> dyn Database + 'a {
+    pub fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -107,7 +77,7 @@ where
         }
     }
 
-    fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    pub fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -126,7 +96,7 @@ where
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
-    fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    pub fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
     where
         K: DatabaseKey,
         V: DatabaseValue,
@@ -145,7 +115,7 @@ where
         Ok(Some(V::from_bytes(&value_bytes)?))
     }
 
-    fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<K, V>
+    pub fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<K, V>
     where
         KP: DatabaseKeyPrefix,
         K: DatabaseKey,
@@ -158,7 +128,7 @@ where
         }
     }
 
-    fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+    pub fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
         self.raw_apply_batch(batch)
     }
 }
@@ -286,7 +256,7 @@ impl From<DecodingError> for DatabaseError {
 
 #[cfg(test)]
 mod tests {
-    use super::{Database, RawDatabase};
+    use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
     use std::sync::Arc;
@@ -301,7 +271,7 @@ mod tests {
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
 
-    pub fn test_db_impl(db: Arc<dyn RawDatabase + 'static>) {
+    pub fn test_db_impl(db: Arc<dyn Database + 'static>) {
         assert!(db
             .insert_entry(&TestKey(42), &TestVal(1337))
             .unwrap()

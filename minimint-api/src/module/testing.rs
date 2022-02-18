@@ -1,7 +1,7 @@
 use crate::config::GenerateConfig;
 use crate::db::batch::DbBatch;
 use crate::db::mem_impl::MemDatabase;
-use crate::db::{Database, RawDatabase};
+use crate::db::Database;
 use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use std::fmt::Debug;
 use std::future::Future;
@@ -112,7 +112,7 @@ where
                     .expect("Faulty output");
             }
 
-            (db as &mut dyn RawDatabase)
+            (db as &mut dyn Database)
                 .apply_batch(batch)
                 .expect("DB error");
 
@@ -121,7 +121,7 @@ where
                 .end_consensus_epoch(batch.transaction(), &mut rng)
                 .await;
 
-            (db as &mut dyn RawDatabase)
+            (db as &mut dyn Database)
                 .apply_batch(batch)
                 .expect("DB error");
         }
@@ -141,7 +141,7 @@ where
 
     pub fn patch_dbs<U>(&mut self, update: U)
     where
-        U: Fn(&mut dyn RawDatabase),
+        U: Fn(&mut dyn Database),
     {
         for (_, _, db) in &mut self.members {
             update(db);

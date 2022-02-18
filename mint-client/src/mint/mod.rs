@@ -9,7 +9,7 @@ use minimint::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
 use minimint_api::db::batch::{BatchItem, BatchTx};
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
 use rand::{CryptoRng, Rng, RngCore};
@@ -25,7 +25,7 @@ use tracing::{debug, trace};
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 pub struct MintClient {
-    pub db: Arc<dyn RawDatabase>,
+    pub db: Arc<dyn Database>,
     pub cfg: mint::config::MintClientConfig,
     pub api: Arc<dyn FederationApi>,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -417,7 +417,7 @@ mod tests {
     use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::{Database, RawDatabase};
+    use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use std::sync::Arc;
@@ -459,11 +459,8 @@ mod tests {
         }
     }
 
-    async fn new_mint_and_client() -> (
-        Arc<tokio::sync::Mutex<Fed>>,
-        MintClient,
-        Arc<dyn RawDatabase>,
-    ) {
+    async fn new_mint_and_client() -> (Arc<tokio::sync::Mutex<Fed>>, MintClient, Arc<dyn Database>)
+    {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
@@ -475,7 +472,7 @@ mod tests {
         ));
         let api = FakeApi { mint: fed.clone() };
 
-        let client_db: Arc<dyn RawDatabase> = Arc::new(MemDatabase::new());
+        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
         let client = MintClient {
             db: client_db.clone(),
             cfg: fed.lock().await.client_cfg().clone(),
@@ -489,7 +486,7 @@ mod tests {
     async fn issue_tokens<'a, R: rand::RngCore + rand::CryptoRng>(
         fed: &'a tokio::sync::Mutex<Fed>,
         client: &'a MintClient,
-        client_db: Arc<dyn RawDatabase>,
+        client_db: Arc<dyn Database>,
         amt: Amount,
         rng: &'a mut R,
     ) {

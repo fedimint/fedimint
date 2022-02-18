@@ -8,7 +8,7 @@ use minimint::modules::wallet::tweakable::Tweakable;
 use minimint::modules::wallet::txoproof::{PegInProof, TxOutProof};
 use minimint::modules::wallet::PegOut;
 use minimint_api::db::batch::BatchTx;
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::Amount;
 use miniscript::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
@@ -22,7 +22,7 @@ mod db;
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 pub struct WalletClient {
-    pub db: Arc<dyn RawDatabase>,
+    pub db: Arc<dyn Database>,
     pub cfg: wallet::config::WalletClientConfig,
     pub api: Arc<dyn FederationApi>,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -150,7 +150,7 @@ mod tests {
     use minimint::outcome::{OutputOutcome, TransactionStatus};
     use minimint::transaction::Transaction;
     use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::{Database, RawDatabase};
+    use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use miniscript::DescriptorTrait;
@@ -193,7 +193,7 @@ mod tests {
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         WalletClient,
-        Arc<dyn RawDatabase>,
+        Arc<dyn Database>,
         FakeBitcoindRpcController,
     ) {
         let btc_rpc = FakeBitcoindRpc::new();
@@ -220,7 +220,7 @@ mod tests {
 
         let api = FakeApi { _mint: fed.clone() };
 
-        let client_db: Arc<dyn RawDatabase> = Arc::new(MemDatabase::new());
+        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
         let client = WalletClient {
             db: client_db.clone(),
             cfg: fed.lock().await.client_cfg().clone(),

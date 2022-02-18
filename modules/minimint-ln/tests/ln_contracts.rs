@@ -1,5 +1,5 @@
 use bitcoin_hashes::Hash as BitcoinHash;
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
 use minimint_ln::config::LightningModuleClientConfig;
@@ -223,7 +223,7 @@ async fn test_incoming() {
 }
 
 /// Hack to set consensus height of wallet module which is being used by the LN module too for now.
-fn set_block_height(db: &mut dyn RawDatabase, block_height: u32) {
+fn set_block_height(db: &mut dyn Database, block_height: u32) {
     use minimint_api::encoding::{Decodable, Encodable};
 
     const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;

@@ -23,7 +23,7 @@ use bitcoin::{
 use bitcoincore_rpc::Auth;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
@@ -83,7 +83,7 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: Box<dyn BitcoindRpc>,
-    db: Arc<dyn RawDatabase>,
+    db: Arc<dyn Database>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -407,7 +407,7 @@ impl FederationModule for Wallet {
 }
 
 impl Wallet {
-    pub async fn new(cfg: WalletConfig, db: Arc<dyn RawDatabase>) -> Result<Wallet, WalletError> {
+    pub async fn new(cfg: WalletConfig, db: Arc<dyn Database>) -> Result<Wallet, WalletError> {
         let gen_cfg = cfg.clone();
         let bitcoind_rpc_gen = move || -> Box<dyn BitcoindRpc> {
             Box::new(
@@ -425,7 +425,7 @@ impl Wallet {
     // TODO: work around bitcoind_gen being a closure, maybe make clonable?
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
-        db: Arc<dyn RawDatabase>,
+        db: Arc<dyn Database>,
         bitcoind_gen: impl Fn() -> Box<dyn BitcoindRpc>,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind_gen();
@@ -992,7 +992,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
     }
 }
 
-async fn broadcast_pending_tx(db: Arc<dyn RawDatabase>, rpc: Box<dyn BitcoindRpc>) {
+async fn broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
     loop {
         let pending_tx = db
             .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(

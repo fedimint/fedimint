@@ -1,5 +1,5 @@
 use super::batch::{BatchItem, DbBatch};
-use super::{DatabaseError, RawDatabase};
+use super::{Database, DatabaseError};
 use crate::db::PrefixIter;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -26,7 +26,7 @@ impl MemDatabase {
     }
 }
 
-impl RawDatabase for MemDatabase {
+impl Database for MemDatabase {
     fn raw_insert_entry(
         &self,
         key: &[u8],

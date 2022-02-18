@@ -12,7 +12,7 @@ use minimint::modules::wallet::txoproof::{PegInProofError, TxOutProof};
 use minimint::transaction as mint_tx;
 use minimint::transaction::{Output, TransactionItem};
 use minimint_api::db::batch::DbBatch;
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 
@@ -29,7 +29,7 @@ pub mod wallet;
 
 pub struct MintClient {
     cfg: ClientConfig,
-    db: Arc<dyn RawDatabase>,
+    db: Arc<dyn Database>,
     api: Arc<dyn api::FederationApi>,
     secp: Secp256k1<All>,
     wallet: wallet::WalletClient,
@@ -39,7 +39,7 @@ pub struct MintClient {
 }
 
 impl MintClient {
-    pub fn new(cfg: ClientConfig, db: Arc<dyn RawDatabase>, secp: Secp256k1<All>) -> Self {
+    pub fn new(cfg: ClientConfig, db: Arc<dyn Database>, secp: Secp256k1<All>) -> Self {
         let api = api::HttpFederationApi::new(
             cfg.api_endpoints
                 .iter()
@@ -56,7 +56,7 @@ impl MintClient {
 
     pub fn new_with_api(
         cfg: ClientConfig,
-        db: Arc<dyn RawDatabase>,
+        db: Arc<dyn Database>,
         api: Arc<dyn FederationApi>,
         secp: Secp256k1<All>,
     ) -> MintClient {

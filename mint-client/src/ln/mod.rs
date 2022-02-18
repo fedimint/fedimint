@@ -17,14 +17,14 @@ use minimint::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
 };
 use minimint_api::db::batch::BatchTx;
-use minimint_api::db::{Database, RawDatabase};
+use minimint_api::db::Database;
 use minimint_api::Amount;
 use rand::{CryptoRng, RngCore};
 use std::sync::Arc;
 use thiserror::Error;
 
 pub struct LnClient {
-    pub db: Arc<dyn RawDatabase>,
+    pub db: Arc<dyn Database>,
     pub cfg: ln::config::LightningModuleClientConfig,
     pub api: Arc<dyn FederationApi>,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -155,7 +155,7 @@ mod tests {
     use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::{Database, RawDatabase};
+    use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use std::ops::DerefMut;
@@ -203,8 +203,7 @@ mod tests {
         }
     }
 
-    async fn new_mint_and_client() -> (Arc<tokio::sync::Mutex<Fed>>, LnClient, Arc<dyn RawDatabase>)
-    {
+    async fn new_mint_and_client() -> (Arc<tokio::sync::Mutex<Fed>>, LnClient, Arc<dyn Database>) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
                 4,
@@ -216,7 +215,7 @@ mod tests {
         ));
         let api = FakeApi { mint: fed.clone() };
 
-        let client_db: Arc<dyn RawDatabase> = Arc::new(MemDatabase::new());
+        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
         let client = LnClient {
             db: client_db.clone(),
             cfg: fed.lock().await.client_cfg().clone(),
