@@ -21,6 +21,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use std::time::Duration;
 use thiserror::Error;
+use minimint::outcome::TransactionStatus;
 
 const TIMELOCK: u64 = 100;
 
@@ -378,6 +379,28 @@ impl UserClient {
         tokio::time::timeout(timeout, self.wait_contract(contract))
             .await
             .map_err(|_| ClientError::WaitContractTimeout)?
+    }
+
+    /// Fetches the TransactionStatus for a txid
+    /// Polling should *only* be set to true if it is anticipated that the txid is valid but has not yet been processed
+    pub async fn fetch_tx_outcome(&self, tx : TransactionId, polling : bool) -> Result<TransactionStatus, ClientError> {
+        //did not choose to use the MintClientError is_retryable logic because the 404 error should normaly
+        //not be retryable just in this specific case...
+        let status;
+        loop {
+            match self.api.fetch_tx_outcome(tx).await {
+                Ok(s) => {
+                    status = s;
+                    break;
+                }
+                Err(_e) if polling => {
+                    tokio::time::sleep(Duration::from_secs(1)).await
+                }
+                Err(e) => return Err(ClientError::MintApiError(e)),
+            }
+        }
+        Ok(status)
+
     }
 }
 

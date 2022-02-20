@@ -1,16 +1,16 @@
 use tide;
+use tide::Request;
+use tide::Response;
 use mint_client::{MintClient};
 use std::{path::PathBuf, sync::Arc};
 use minimint::config::{load_from_file, ClientConfig};
 use serde::Serialize;
 use structopt::StructOpt;
 use tide::Body;
-use minimint_api::{Amount, TransactionId};
+use minimint_api::{Amount, OutPoint};
 use mint_client::mint::SpendableCoin;
 use minimint::modules::mint::tiered::coins::Coins;
-use bitcoin_hashes::hex::ToHex;
-use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
+use minimint::outcome::TransactionStatus;
 
 
 #[derive(Clone)]
@@ -45,8 +45,8 @@ struct SpendResponse {
 
 #[derive(Serialize)]
 struct ReissueResponse {
-    id : String,
-    fetched : Vec<TransactionId>,
+    out_point : OutPoint,
+    status : TransactionStatus,
 }
 
 
@@ -61,28 +61,16 @@ impl InfoResponse {
 }
 
 impl ReissueResponse {
-    async fn new(mint_client :&MintClient, coins:Coins<SpendableCoin>) -> Self {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
-        let id = mint_client.reissue(coins, &mut rng).await.unwrap();
+     fn new(out_point : OutPoint, status : TransactionStatus) -> ReissueResponse {
 
-        let  id = id.to_hex();
-        let  fetched : Vec<TransactionId>= mint_client.fetch_all_coins().await.unwrap();
-        let res = ReissueResponse {
-            id,
-            fetched,
-        };
-        res
+        ReissueResponse {
+            out_point,
+            status,
+        }
     }
 }
 #[tokio::main]
 async fn main() -> tide::Result<()>{
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
-    info!("no waring");
-    error!("no warning");
     let opts: Opts = StructOpt::from_args();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
@@ -92,53 +80,81 @@ async fn main() -> tide::Result<()>{
         .open_tree("mint-client")
         .unwrap(); //handle error ?
     let client = MintClient::new(cfg, Arc::new(db), Default::default());
-
-
     let state = State {
         mint_client: Arc::new(client),
     };
     let mut app = tide::with_state(state);
 
-    //need move because async block could outlive the post function and needs to take ownership of req ?
-    app.at("/info").post(|req : tide::Request<State>| async move{
-        let State {
-            ref mint_client,
-        } = req.state();
-        Body::from_json(&InfoResponse::new(mint_client.coins()))
-    });
-
-
-      app.at("/spend").post(|mut req : tide::Request<State>| async move {
-          let value : u64 = req.body_json().await.expect("expected diffrent json");
-     let State {
-            ref mint_client,
-        } = req.state();
-          let amount = Amount::from_sat(value);
-          let mut token = String::from("error");
-              match mint_client.select_and_spend_coins(amount) {
-                  Ok(outgoing_coins) => {
-                      token = serialize_coins(&outgoing_coins)
-                  }
-                  Err(_e) => {
-                      //TODO return error in body
-                  }
-              };
-          Body::from_json(&SpendResponse{token})
-    });
-
-    app.at("/reissue").post(|mut req : tide::Request<State>| async move {
-        let value : String = req.body_json().await?;
-        let State {
-            ref mint_client,
-        } = req.state();
-
-        let coins : Coins<SpendableCoin> = parse_coins(&value);
-        Body::from_json(&ReissueResponse::new(&mint_client, coins).await)
-
-    });
-
+    app.at("/info").post(info);
+    app.at("/spend").post(spend);
+    app.at("/reissue").post(reissue);
+    app.at("/reissue_validate").post(reissue_validate);
     app.listen("127.0.0.1:8080").await?;
     Ok(())
+}
+
+/// Endpoint:Info responds with total coins owned, coins owned for every tier, and pending (not signed but accepted) coins
+async fn info(req: Request<State>) -> tide::Result {
+    let mint_client = &req.state().mint_client;
+    let body= Body::from_json(&InfoResponse::new(mint_client.coins())).expect("encoding error");
+    Ok(body.into())
+}
+/// Endpoint:Spend responds with (adequately) selected spendable coins
+async fn spend(mut req: Request<State>) -> tide::Result {
+    let value : u64 = req.body_json().await.expect("expected diffrent json");
+    let mint_client = &req.state().mint_client;
+    let amount = Amount::from_sat(value);
+    let mut token = String::from("error");
+    match mint_client.select_and_spend_coins(amount) {
+        Ok(outgoing_coins) => {
+            token = serialize_coins(&outgoing_coins)
+        }
+        Err(_e) => {
+            //TODO return error in body
+        }
+    };
+    let body = Body::from_json(&SpendResponse{token}).unwrap();
+    Ok(body.into())
+}
+///Endpoint:ReissueValidate starts reissuance and responds when accepted (blocking)
+async fn reissue_validate(mut req: Request<State>) -> tide::Result {
+    let value : String = req.body_json().await?;
+    let mint_client = &req.state().mint_client;
+
+    let coins : Coins<SpendableCoin> = parse_coins(&value);
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let out_point = mint_client.reissue(coins, &mut rng).await.unwrap();
+    let status = match mint_client.fetch_tx_outcome(out_point.txid, true).await{
+        Err(e) => TransactionStatus::Error(e.to_string()),
+        Ok(s) => s
+    };
+    let body = Body::from_json(&ReissueResponse::new(out_point, status)).unwrap();
+    let c = Arc::clone(&mint_client);
+    tokio::spawn(async move {
+        fetch(c).await;
+    });
+    Ok(body.into())
+}
+///Endpoint:Reissue starts reissuance, the caller has to be aware that this might fail
+async fn reissue(mut req: Request<State>) -> tide::Result {
+    let value : String = req.body_json().await?;
+    let mint_client = &req.state().mint_client;
+    let mint_client_task = Arc::clone(&mint_client);
+    tokio::spawn(async move {
+        let coins : Coins<SpendableCoin> = parse_coins(&value);
+        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let out_point = mint_client_task.reissue(coins, &mut rng).await.unwrap();
+        match mint_client_task.fetch_tx_outcome(out_point.txid, true).await{
+            Err(_) => (), //maybe save somehow
+            Ok(s) => fetch(mint_client_task).await,
+        };
+    });
+    Ok(Response::new(200))
+}
+
+async fn fetch(mint_client : Arc<MintClient>) {
+    //log the returned txids ?
+    mint_client.fetch_all_coins().await;
 }
 
 fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
