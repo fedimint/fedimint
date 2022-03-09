@@ -48,7 +48,7 @@ fn main() {
     }
 
     let mut client_cfg_file_path: PathBuf = cfg_path;
-    client_cfg_file_path.push("client.json");
+    client_cfg_file_path.push("federation_client.json");
     let client_cfg_file =
         std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
 

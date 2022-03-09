@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::Instant;
+use tracing::debug;
 use tracing::{error, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,6 +58,7 @@ impl LnGateway {
         contract_id: ContractId,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(), LnGatewayError> {
+        debug!("Fetching contract {}", contract_id);
         let contract_account = self
             .federation_client
             .fetch_outgoing_contract(contract_id)
@@ -66,6 +68,11 @@ impl LnGateway {
             .federation_client
             .validate_outgoing_account(&contract_account)
             .await?;
+
+        debug!(
+            "Fetched and validated contract account: {:?}",
+            contract_account
+        );
 
         self.federation_client
             .save_outgoing_payment(contract_account.clone());
@@ -79,7 +86,13 @@ impl LnGateway {
             )
             .await
         {
-            Ok(preimage) => preimage,
+            Ok(preimage) => {
+                debug!(
+                    "Successfully paid LN invoice, received preimage {:?}",
+                    preimage
+                );
+                preimage
+            }
             Err(e) => {
                 warn!("LN payment failed, aborting");
                 self.federation_client.abort_outgoing_payment(contract_id);
@@ -88,12 +101,14 @@ impl LnGateway {
         };
 
         // FIXME: figure out how to treat RNGs (maybe include in context?)
+        debug!("Claiming outgoing contract");
         self.federation_client
             .claim_outgoing_contract(contract_id, preimage, rng)
             .await?;
         self.federation_client
             .await_claimed_outgoing_accepted(contract_id)
             .await;
+        debug!("Claim transaction accepted");
 
         Ok(())
     }

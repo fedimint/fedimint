@@ -5,8 +5,11 @@ pub mod mint;
 pub mod wallet;
 
 use crate::api::FederationApi;
+use crate::ln::gateway::LightningGateway;
 pub use clients::user::UserClient;
+use minimint::config::ClientConfig;
 use minimint_api::db::Database;
+use serde::{Deserialize, Serialize};
 
 pub struct BorrowedClientContext<'a, C> {
     config: &'a C,
@@ -37,4 +40,10 @@ impl<CO> OwnedClientContext<CO> {
             secp: &self.secp,
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ClientAndGatewayConfig {
+    pub client: ClientConfig,
+    pub gateway: LightningGateway,
 }

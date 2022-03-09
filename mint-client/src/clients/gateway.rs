@@ -24,10 +24,10 @@ pub struct GatewayClient {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GatewayClientConfig {
-    common: ClientConfig,
+    pub common: ClientConfig,
     #[serde(with = "serde_keypair")]
-    redeem_key: secp256k1_zkp::schnorrsig::KeyPair,
-    timelock_delta: u64,
+    pub redeem_key: secp256k1_zkp::schnorrsig::KeyPair,
+    pub timelock_delta: u64,
 }
 
 #[derive(Debug)]

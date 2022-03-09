@@ -19,6 +19,7 @@ struct Opts {
 }
 
 async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
+    debug!("Gateway received outgoing pay request");
     let rng = rand::rngs::OsRng::new().unwrap();
     let contract: ContractId = req.body_json().await?;
     let State { ref gateway } = req.state();
@@ -44,8 +45,8 @@ async fn main() -> tide::Result<()> {
         .init();
 
     let opts: Opts = StructOpt::from_args();
-    let cfg_path = opts.workdir.join("client.json");
-    let db_path = opts.workdir.join("client.db");
+    let cfg_path = opts.workdir.join("gateway.json");
+    let db_path = opts.workdir.join("gateway.db");
     let cfg: LnGatewayConfig = load_from_file(&cfg_path);
     let db = sled::open(&db_path)
         .unwrap()

@@ -1,13 +1,12 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
-use minimint::config::{load_from_file, ClientConfig};
+use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint_api::encoding::Decodable;
 use minimint_api::Amount;
-use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
-use mint_client::UserClient;
+use mint_client::{ClientAndGatewayConfig, UserClient};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
@@ -65,12 +64,6 @@ enum Command {
 struct PayRequest {
     coins: Coins<SpendableCoin>,
     invoice: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ClientAndGatewayConfig {
-    client: ClientConfig,
-    gateway: LightningGateway,
 }
 
 #[tokio::main]
