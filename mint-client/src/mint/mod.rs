@@ -249,6 +249,16 @@ impl<'c> MintClient<'c> {
         batch.commit();
         Ok(tx_ids)
     }
+
+    pub fn get_active_issuances(&self) -> Vec<(OutputFinalizationKey, CoinFinalizationData)> {
+        self
+            .db
+            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
+                &OutputFinalizationKeyPrefix,
+            )
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .expect("DB error")
+    }
 }
 
 impl CoinFinalizationData {
@@ -319,6 +329,10 @@ impl CoinFinalizationData {
 
     pub fn coin_count(&self) -> usize {
         self.coins.coins.values().map(|v| v.len()).sum()
+    }
+    //ambigous change pls
+    pub fn coin_amount(&self) -> Amount {
+        self.coins.amount()
     }
 }
 

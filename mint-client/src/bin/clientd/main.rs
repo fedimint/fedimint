@@ -8,7 +8,7 @@ use serde::Serialize;
 use structopt::StructOpt;
 use tide::Body;
 use minimint_api::{Amount, OutPoint};
-use mint_client::mint::SpendableCoin;
+use mint_client::mint::{CoinFinalizationData, SpendableCoin};
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 
@@ -27,6 +27,14 @@ struct Opts {
 struct InfoResponse {
     total : CoinTotal,
     coins : Vec<CoinGrouped>,
+    pending : PendingResponse,
+}
+
+#[derive(Serialize)]
+struct PendingResponse {
+    transactions : usize,
+    acc_coins : usize,
+    acc_amount : Amount,
 }
 #[derive(Serialize)]
 struct CoinTotal{
@@ -49,14 +57,20 @@ struct ReissueResponse {
     status : TransactionStatus,
 }
 
-
+impl PendingResponse {
+    fn new(all_pending : Vec<CoinFinalizationData>) -> Self {
+        let acc_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
+        let acc_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
+        PendingResponse { transactions : all_pending.len(), acc_coins, acc_amount }
+    }
+}
 impl InfoResponse {
-    fn new(coins: Coins<SpendableCoin>) -> Self {
+    fn new(coins: Coins<SpendableCoin>, cfd : Vec<CoinFinalizationData>) -> Self {
         let info_total =  CoinTotal { coin_count: coins.coin_count(), amount: coins.amount() };
         let info_coins : Vec<CoinGrouped> = coins.coins.iter()
             .map(|(tier, c)| CoinGrouped { amount : c.len(), tier : tier.milli_sat})
             .collect();
-        InfoResponse { total : info_total, coins : info_coins }
+        InfoResponse { total : info_total, coins : info_coins, pending : PendingResponse::new(cfd)}
     }
 }
 
@@ -89,6 +103,7 @@ async fn main() -> tide::Result<()>{
     app.at("/spend").post(spend);
     app.at("/reissue").post(reissue);
     app.at("/reissue_validate").post(reissue_validate);
+    app.at("/pending").post(pending);
     app.listen("127.0.0.1:8080").await?;
     Ok(())
 }
@@ -96,7 +111,16 @@ async fn main() -> tide::Result<()>{
 /// Endpoint:Info responds with total coins owned, coins owned for every tier, and pending (not signed but accepted) coins
 async fn info(req: Request<State>) -> tide::Result {
     let mint_client = &req.state().mint_client;
-    let body= Body::from_json(&InfoResponse::new(mint_client.coins())).expect("encoding error");
+    let cfd = mint_client.fetch_active_issuances();
+    let body= Body::from_json(&InfoResponse::new(mint_client.coins(), cfd)).expect("encoding error");
+    Ok(body.into())
+}
+
+/// Endpoint:Pending responds with all pending coins
+async fn pending(req : Request<State>) -> tide::Result {
+    let mint_client = &req.state().mint_client;
+    let cfd = mint_client.fetch_active_issuances();
+    let body= Body::from_json(&PendingResponse::new(cfd)).expect("encoding error");
     Ok(body.into())
 }
 /// Endpoint:Spend responds with (adequately) selected spendable coins
