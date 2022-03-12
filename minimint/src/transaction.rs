@@ -116,7 +116,7 @@ impl Transaction {
     }
 
     /// Hash the transaction excluding the signature. This hash is what the signature inside the
-    /// transaction commits to. To generate it without already having a signature use [Transaction::tx_hash_from_parts()].
+    /// transaction commits to. To generate it without already having a signature use [`Self::tx_hash_from_parts`].
     pub fn tx_hash(&self) -> TransactionId {
         Self::tx_hash_from_parts(&self.inputs, &self.outputs)
     }
