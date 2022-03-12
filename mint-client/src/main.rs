@@ -25,37 +25,42 @@ struct Options {
 
 #[derive(StructOpt)]
 enum Command {
-    #[structopt(about = "Generate a new peg-in address, funds sent to it can later be claimed")]
+    /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
-    #[structopt(
-        about = "Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)"
-    )]
+
+    /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
     PegIn {
         #[structopt(parse(try_from_str = from_hex))]
         txout_proof: TxOutProof,
         #[structopt(parse(try_from_str = from_hex))]
         transaction: Transaction,
     },
-    #[structopt(about = "Reissue tokens received from a third party to avoid double spends")]
+
+    /// Reissue tokens received from a third party to avoid double spends
     Reissue {
         #[structopt(parse(from_str = parse_coins))]
         coins: Coins<SpendableCoin>,
     },
-    #[structopt(about = "Prepare coins to send to a third party as a payment")]
+
+    /// Prepare coins to send to a third party as a payment
     Spend { amount: Amount },
-    #[structopt(about = "Withdraw funds from the federation")]
+
+    /// Withdraw funds from the federation
     PegOut {
         address: Address,
         amount: bitcoin::Amount,
     },
-    #[structopt(about = "Pay a lightning invoice via a gateway")]
+
+    /// Pay a lightning invoice via a gateway
     LnPay {
         gateway: String,
         bolt11: lightning_invoice::Invoice,
     },
-    #[structopt(about = "Fetch (re-)issued coins and finalize issuance process")]
+
+    /// Fetch (re-)issued coins and finalize issuance process
     Fetch,
-    #[structopt(about = "Display wallet info (holdings, tiers)")]
+
+    /// Display wallet info (holdings, tiers)
     Info,
 }
 
