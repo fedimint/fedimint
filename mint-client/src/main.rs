@@ -72,6 +72,7 @@ async fn main() {
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
+        .with_writer(std::io::stderr)
         .init();
 
     let opts: Options = StructOpt::from_args();
@@ -149,9 +150,14 @@ async fn main() {
             // FIXME:don't use sleep, find out what to actually wait for
             tokio::time::sleep(Duration::from_secs(5)).await;
 
+            info!(
+                "Funded outgoing contract {}, notifying gateway",
+                contract_id
+            );
+
             http.post(&format!("{}/pay_invoice", cfg.gateway.api))
                 .json(&contract_id)
-                .timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(15))
                 .send()
                 .await
                 .unwrap();
