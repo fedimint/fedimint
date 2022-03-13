@@ -27,6 +27,8 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: doc
+      - name: Doc warnings
+        run: "[ $(cargo doc 2>&1 | grep -v 'output filename collision' | grep warning | wc -l) == 0 ]"
       - uses: actions-rs/cargo@v1
         with:
           command: clippy

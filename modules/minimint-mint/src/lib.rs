@@ -62,7 +62,7 @@ pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignat
 pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
-/// this form it can oly be validated, not spent since for that the corresponding [`musig::SecKey`]
+/// this form it can oly be validated, not spent since for that the corresponding secret spend key
 /// is required.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Coin(pub CoinNonce, pub tbs::Signature);

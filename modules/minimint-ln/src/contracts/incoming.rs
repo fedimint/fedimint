@@ -53,7 +53,7 @@ pub struct IncomingContract {
     pub gateway_key: secp256k1::schnorrsig::PublicKey,
 }
 
-/// The funded version of an [`IncomingCotnract`] contains the [`OutPoint`] of it's creation. Since
+/// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it's creation. Since
 /// this kind of contract can only be funded once this out point is unambiguous. The out point is
 /// used to update the output outcome once decryption finishes.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
