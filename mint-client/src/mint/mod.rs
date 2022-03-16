@@ -330,7 +330,6 @@ impl CoinFinalizationData {
     pub fn coin_count(&self) -> usize {
         self.coins.coins.values().map(|v| v.len()).sum()
     }
-    //ambigous change pls
     pub fn coin_amount(&self) -> Amount {
         self.coins.amount()
     }

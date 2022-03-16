@@ -25,26 +25,21 @@ struct Opts {
 
 #[derive(Serialize)]
 struct InfoResponse {
-    total : CoinTotal,
-    coins : Vec<CoinGrouped>,
+    coins : Vec<CoinsByTier>,
     pending : PendingResponse,
 }
 
 #[derive(Serialize)]
 struct PendingResponse {
+    //TODO Also return Vec<TransactionId>
     transactions : usize,
-    acc_coins : usize,
-    acc_amount : Amount,
+    acc_qty_coins : usize,
+    acc_val_amount : Amount,
 }
 #[derive(Serialize)]
-struct CoinTotal{
-    coin_count : usize,
-    amount : Amount,
-}
-#[derive(Serialize)]
-struct CoinGrouped{
-    amount : usize,
-    tier : u64
+struct CoinsByTier{
+    tier : u64,
+    quantity : usize,
 }
 #[derive(Serialize)]
 struct SpendResponse {
@@ -59,18 +54,17 @@ struct ReissueResponse {
 
 impl PendingResponse {
     fn new(all_pending : Vec<CoinFinalizationData>) -> Self {
-        let acc_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
-        let acc_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
-        PendingResponse { transactions : all_pending.len(), acc_coins, acc_amount }
+        let acc_qty_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
+        let acc_val_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
+        PendingResponse { transactions : all_pending.len(), acc_qty_coins, acc_val_amount }
     }
 }
 impl InfoResponse {
     fn new(coins: Coins<SpendableCoin>, cfd : Vec<CoinFinalizationData>) -> Self {
-        let info_total =  CoinTotal { coin_count: coins.coin_count(), amount: coins.amount() };
-        let info_coins : Vec<CoinGrouped> = coins.coins.iter()
-            .map(|(tier, c)| CoinGrouped { amount : c.len(), tier : tier.milli_sat})
+        let info_coins : Vec<CoinsByTier> = coins.coins.iter()
+            .map(|(tier, c)| CoinsByTier { quantity : c.len(), tier : tier.milli_sat})
             .collect();
-        InfoResponse { total : info_total, coins : info_coins, pending : PendingResponse::new(cfd)}
+        InfoResponse { coins : info_coins, pending : PendingResponse::new(cfd)}
     }
 }
 

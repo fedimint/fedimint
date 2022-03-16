@@ -1,7 +1,7 @@
 use crate::api::{ApiError, FederationApi};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::{LnClient, LnClientError};
-use crate::mint::{MintClient, MintClientError, SpendableCoin};
+use crate::mint::{CoinFinalizationData, MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
 use bitcoin::{Address, Transaction};
@@ -401,6 +401,12 @@ impl UserClient {
         }
         Ok(status)
 
+    }
+
+    pub fn fetch_active_issuances(&self) -> Vec<CoinFinalizationData>{
+        let (_keys, coins) : (Vec<_>, Vec<CoinFinalizationData>) = self
+            .mint.get_active_issuances().iter().cloned().unzip();
+        coins
     }
 }
 
