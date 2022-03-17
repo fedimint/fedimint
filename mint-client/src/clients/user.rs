@@ -410,6 +410,74 @@ impl UserClient {
     }
 }
 
+// -> clientd
+/// Holds all possible Responses of the RPC-CLient
+#[derive(Serialize, Deserialize)]
+pub enum ResBody {
+    Info {
+        coins : Vec<CoinsByTier>,
+        pending : Box<ResBody>,
+    },
+    Pending {
+        //TODO: Also return Vec<TransactionId> (?)
+        transactions : usize,
+        acc_qty_coins : usize,
+        acc_val_amount : Amount,
+    },
+    Spend {
+        token : String,
+    },
+    Reissue {
+        out_point : OutPoint,
+        status : TransactionStatus,
+    },
+    Error {
+        err : String,
+    },
+    Empty,
+}
+/// Holds quantity of coins per tier
+#[derive(Serialize, Deserialize)]
+pub struct CoinsByTier{
+    tier : u64,
+    quantity : usize,
+}
+
+impl ResBody {
+    pub fn build_info(coins: Coins<SpendableCoin>, cfd : Vec<CoinFinalizationData>) -> Self {
+        let info_coins : Vec<CoinsByTier> = coins.coins.iter()
+            .map(|(tier, c)| CoinsByTier { quantity : c.len(), tier : tier.milli_sat})
+            .collect();
+        ResBody::Info { coins : info_coins, pending : Box::new(ResBody::build_pending(cfd))}
+    }
+
+    pub fn build_pending(all_pending : Vec<CoinFinalizationData>) -> Self {
+        let acc_qty_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
+        let acc_val_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
+        ResBody::Pending { transactions : all_pending.len(), acc_qty_coins, acc_val_amount }
+    }
+
+    pub fn build_spend(token : String) -> Self {
+        ResBody::Spend { token }
+    }
+
+    pub fn build_reissue(out_point : OutPoint, status : TransactionStatus) -> Self {
+        ResBody::Reissue {out_point, status}
+    }
+}
+//TODO: implement Display trait for ResBody/CoinsByTier (for client-cli)
+
+pub fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
+    let bytes = bincode::serialize(&c).unwrap();
+    base64::encode(&bytes)
+}
+
+pub fn parse_coins(s: &str) -> Coins<SpendableCoin> {
+    let bytes = base64::decode(s).unwrap();
+    bincode::deserialize(&bytes).unwrap()
+}
+// <- clientd
+
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Error querying federation: {0}")]
