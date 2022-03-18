@@ -48,7 +48,7 @@ async fn main() -> tide::Result<()>{
     Ok(())
 }
 
-/// Endpoint:Info responds with total coins owned, coins owned for every tier, and pending (not signed but accepted) coins
+/// Endpoint: responds with [`ResBody::Info`]
 async fn info(req: Request<State>) -> tide::Result {
     let mint_client = &req.state().mint_client;
     let cfd = mint_client.fetch_active_issuances();
@@ -57,7 +57,7 @@ async fn info(req: Request<State>) -> tide::Result {
     Ok(body.into())
 }
 
-/// Endpoint:Pending responds with all pending coins
+/// Endpoint: responds with [`ResBody::Pending`]
 async fn pending(req : Request<State>) -> tide::Result {
     let mint_client = &req.state().mint_client;
     let cfd = mint_client.fetch_active_issuances();
@@ -65,7 +65,7 @@ async fn pending(req : Request<State>) -> tide::Result {
     let body = Body::from_json(&ResBody::build_pending(cfd)).unwrap();
     Ok(body.into())
 }
-/// Endpoint:Spend responds with (adequately) selected spendable coins
+/// Endpoint: responds with [`ResBody::Spend`]
 async fn spend(mut req: Request<State>) -> tide::Result {
     let value : u64 = match req.body_json().await {
         Ok(i) => i,
@@ -90,7 +90,7 @@ async fn spend(mut req: Request<State>) -> tide::Result {
     let body = Body::from_json(&res).unwrap();
     Ok(body.into())
 }
-///Endpoint:ReissueValidate starts reissuance and responds when accepted (blocking)
+/// Endpoint: starts a re-issuance and responds with [`ResBody::Reissue`], and fetches in the background
 async fn reissue_validate(mut req: Request<State>) -> tide::Result {
     let value : String = req.body_json().await?; //Approach B
     let mint_client = Arc::clone(&req.state().mint_client);
@@ -110,12 +110,11 @@ async fn reissue_validate(mut req: Request<State>) -> tide::Result {
     });
     Ok(body.into())
 }
-///Endpoint:Reissue starts reissuance, the caller has to be aware that this might fail
+/// Endpoint: always responds with Status 200. The caller has to be aware that it can fail and might query /event afterwards.
 async fn reissue(mut req: Request<State>) -> tide::Result {
     let value : String = req.body_json().await?;
     let mint_client = Arc::clone(&req.state().mint_client);
     let events = Arc::clone(&req.state().events);
-    //let mint_client_task = Arc::clone(&mint_client);
     tokio::spawn(async move {
         let coins : Coins<SpendableCoin> = parse_coins(&value);
         let mut rng = rand::rngs::OsRng::new().unwrap();
@@ -135,8 +134,10 @@ async fn reissue(mut req: Request<State>) -> tide::Result {
     Ok(Response::new(200))
 }
 
+/// Endpoint: responds with [`ResBody::EventDump`]
 async fn events(req: Request<State>) -> tide::Result {
     //note : I think if you crtl c in the reissue/fetch process it can breack things (unfetchable "lost coins")
+    //had to reset cfg
     let events_ptr = Arc::clone(&req.state().events);
     let mut events_guard = events_ptr.lock().unwrap();
     let events = events_guard.borrow_mut();

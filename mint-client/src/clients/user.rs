@@ -411,60 +411,73 @@ impl UserClient {
 }
 
 // -> clientd
-/// Holds all possible Responses of the RPC-CLient
-#[derive(Serialize, Deserialize)]
+/// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
+#[derive(Serialize, Deserialize, Clone)]
 pub enum ResBody {
+    ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Info[i].quantity * Info[i].tier)
+    /// Also contains the [`ResBody::Pending`] variant.
     Info {
         coins : Vec<CoinsByTier>,
         pending : Box<ResBody>,
     },
+    /// Active issuances : Not yet (bey the federation) signed BUT accepted coins
     Pending {
         //TODO: Also return Vec<TransactionId> (?)
         transactions : usize,
         acc_qty_coins : usize,
         acc_val_amount : Amount,
     },
+    /// Holds the serialized [`Coins<SpendableCoin>`]
     Spend {
         token : String,
     },
+    /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]
     Reissue {
         out_point : OutPoint,
         status : TransactionStatus,
     },
-    Error {
-        err : String,
+    /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
+    EventDump {
+        events : Vec<ResBody>,
     },
+    /// Represents an event which occurred. Might be an Error or Non-Error
+    Event {
+        time : u64,
+        msg : String
+    },
+    /// Represents an empty response
     Empty,
 }
 /// Holds quantity of coins per tier
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CoinsByTier{
     tier : u64,
     quantity : usize,
 }
 
 impl ResBody {
+    /// Builds the [`ResBody::Info`] variant.
     pub fn build_info(coins: Coins<SpendableCoin>, cfd : Vec<CoinFinalizationData>) -> Self {
         let info_coins : Vec<CoinsByTier> = coins.coins.iter()
             .map(|(tier, c)| CoinsByTier { quantity : c.len(), tier : tier.milli_sat})
             .collect();
         ResBody::Info { coins : info_coins, pending : Box::new(ResBody::build_pending(cfd))}
     }
-
+    /// Builds the [`ResBody::Pending`] variant.
     pub fn build_pending(all_pending : Vec<CoinFinalizationData>) -> Self {
         let acc_qty_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
         let acc_val_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
         ResBody::Pending { transactions : all_pending.len(), acc_qty_coins, acc_val_amount }
     }
-
+    /// Builds the [`ResBody::Spend`] variant.
     pub fn build_spend(token : String) -> Self {
         ResBody::Spend { token }
     }
-
+    /// Builds the [`ResBody::Reissue`] variant.
     pub fn build_reissue(out_point : OutPoint, status : TransactionStatus) -> Self {
         ResBody::Reissue {out_point, status}
     }
-
+    /// Builds the [`ResBody::Event`] variant, by taking the event message and adding a timestamp
     pub fn build_event(msg : String) -> Self{
         let time = SystemTime::now();
         let d = time.duration_since(UNIX_EPOCH).unwrap(); // hrmph - unwrap doesn't seem ideal
@@ -472,6 +485,7 @@ impl ResBody {
         ResBody::Event {time , msg}
 
     }
+    /// Builds the [`ResBody::EventDump`] variant. The supplied event stack will be cleared.
     pub fn build_event_dump(events : &mut Vec<ResBody>) -> Self {
         let e = events.clone();
         events.clear();
