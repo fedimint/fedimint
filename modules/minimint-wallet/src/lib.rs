@@ -570,7 +570,7 @@ impl Wallet {
 
         debug!("Finalized peg-out tx: {}", tx.txid());
         trace!("transaction = {:?}", tx);
-        // FIXME: recognize change
+
         // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
         // extracted tx for periodic transmission and to accept the change into our wallet
         // eventually once it confirms.
