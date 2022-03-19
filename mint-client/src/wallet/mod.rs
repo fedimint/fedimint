@@ -143,14 +143,12 @@ mod tests {
     use minimint::modules::wallet::bitcoind::test::{FakeBitcoindRpc, FakeBitcoindRpcController};
     use minimint::modules::wallet::config::WalletClientConfig;
     use minimint::modules::wallet::db::UTXOKey;
-    use minimint::modules::wallet::tweakable::Tweakable;
     use minimint::modules::wallet::{SpendableUTXO, Wallet};
     use minimint::outcome::{OutputOutcome, TransactionStatus};
     use minimint::transaction::Transaction;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
-    use miniscript::DescriptorTrait;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
@@ -232,7 +230,6 @@ mod tests {
 
     #[tokio::test]
     async fn create_output() {
-        let ctx = secp256k1_zkp::Secp256k1::new();
         let (fed, client_context, btc_rpc) = new_mint_and_client().await;
         let client = WalletClient {
             context: client_context.borrow_with_module_config(|x| x),
@@ -247,17 +244,12 @@ mod tests {
         };
 
         // generate fake UTXO
-        let client_cfg = fed.lock().await.client_cfg().clone();
         fed.lock().await.patch_dbs(|db| {
             let out_point = bitcoin::OutPoint::default();
             let tweak = secp256k1_zkp::schnorrsig::PublicKey::from_slice(&[42; 32][..]).unwrap();
             let utxo = SpendableUTXO {
                 tweak,
                 amount: bitcoin::Amount::from_sat(48000),
-                script_pubkey: client_cfg
-                    .peg_in_descriptor
-                    .tweak(&tweak, &ctx)
-                    .script_pubkey(),
             };
 
             db.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
