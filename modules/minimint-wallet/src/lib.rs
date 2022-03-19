@@ -714,6 +714,15 @@ impl Wallet {
             .expect("DB error")
     }
 
+    pub fn get_wallet_value(&self) -> bitcoin::Amount {
+        let sat_sum = self
+            .available_utxos()
+            .into_iter()
+            .map(|(_, utxo)| utxo.amount.as_sat())
+            .sum();
+        bitcoin::Amount::from_sat(sat_sum)
+    }
+
     fn offline_wallet(&self) -> StatelessWallet {
         StatelessWallet {
             descriptor: &self.cfg.peg_in_descriptor,
