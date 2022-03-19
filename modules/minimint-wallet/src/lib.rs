@@ -385,11 +385,22 @@ impl FederationModule for Wallet {
                 })
                 .collect::<Vec<_>>();
 
+            // Delete used UTXOs
+            batch.append_from_iter(
+                psbt.global
+                    .unsigned_tx
+                    .input
+                    .iter()
+                    .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
+            );
+
+            // Delete pe-outs from pending list
             batch.append_from_iter(
                 peg_out_ids
                     .into_iter()
                     .map(|peg_out| BatchItem::delete(PendingPegOutKey(peg_out))),
             );
+
             batch.append_insert_new(UnsignedTransactionKey(psbt.global.unsigned_tx.txid()), psbt);
             batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
         }
