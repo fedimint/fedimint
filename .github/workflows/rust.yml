@@ -46,4 +46,11 @@ jobs:
         with:
           toolchain: stable
           default: true
-      - run: scripts/integrationtest.sh
+      - name: Install jq
+        run: sudo apt-get install -y jq
+      - name: Install bitcoin
+        run: curl https://bitcoincore.org/bin/bitcoin-core-22.0/bitcoin-22.0-x86_64-linux-gnu.tar.gz | sudo tar -xz -C /usr --strip-components=1
+      - name: Install c-lightning
+        run: curl -L https://github.com/ElementsProject/lightning/releases/download/v0.10.2/clightning-v0.10.2-Ubuntu-20.04.tar.xz | sudo tar -xJv -C /usr --strip-components=2
+      - name: Run Tests
+        run: scripts/integrationtest.sh

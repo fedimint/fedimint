@@ -26,6 +26,7 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand:
     server.at("/transaction/:txid").get(fetch_outcome);
     server.at("/offers").get(list_offers);
     server.at("/account/:contract_id").get(get_contract_account);
+    server.at("/block_height").get(get_consensus_block_height);
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
         .await
@@ -92,5 +93,13 @@ async fn get_contract_account(req: Request<State>) -> tide::Result {
 
     debug!("Sending contract account info for {}", contract_id);
     let body = Body::from_json(&contract_account).expect("encoding error");
+    Ok(body.into())
+}
+
+async fn get_consensus_block_height(req: Request<State>) -> tide::Result {
+    let block_height = req.state().fedimint.wallet.consensus_height().unwrap_or(0);
+
+    debug!("Sending consensus block height {}", block_height);
+    let body = Body::from_json(&block_height).expect("encoding error");
     Ok(body.into())
 }

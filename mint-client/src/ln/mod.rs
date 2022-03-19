@@ -1,14 +1,14 @@
 mod db;
 pub mod gateway;
-mod outgoing;
+pub mod outgoing;
 
-use crate::api::FederationApi;
+use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::ApiError;
+use crate::BorrowedClientContext;
 use lightning_invoice::Invoice;
-use minimint::modules::ln;
+use minimint::modules::ln::config::LightningModuleClientConfig;
 use minimint::modules::ln::contracts::outgoing::OutgoingContract;
 use minimint::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
@@ -17,21 +17,16 @@ use minimint::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
 };
 use minimint_api::db::batch::BatchTx;
-use minimint_api::db::Database;
 use minimint_api::Amount;
 use rand::{CryptoRng, RngCore};
-use std::sync::Arc;
 use thiserror::Error;
 
-pub struct LnClient {
-    pub db: Arc<dyn Database>,
-    pub cfg: ln::config::LightningModuleClientConfig,
-    pub api: Arc<dyn FederationApi>,
-    pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+pub struct LnClient<'c> {
+    pub context: BorrowedClientContext<'c, LightningModuleClientConfig>,
 }
 
 #[allow(dead_code)]
-impl LnClient {
+impl<'c> LnClient<'c> {
     /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
     pub async fn create_outgoing_output<'a>(
@@ -52,13 +47,16 @@ impl LnClient {
             Amount::from_msat(contract_amount_msat)
         };
 
-        let user_sk = secp256k1_zkp::schnorrsig::KeyPair::new(&self.secp, &mut rng);
+        let user_sk = secp256k1_zkp::schnorrsig::KeyPair::new(self.context.secp, &mut rng);
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
             gateway_key: gateway.mint_pub_key,
             timelock,
-            user_key: secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&self.secp, &user_sk),
+            user_key: secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
+                self.context.secp,
+                &user_sk,
+            ),
             invoice: invoice.to_string(),
         };
 
@@ -80,7 +78,8 @@ impl LnClient {
     }
 
     pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
-        self.api
+        self.context
+            .api
             .fetch_contract(id)
             .await
             .map_err(LnClientError::ApiError)
@@ -99,7 +98,8 @@ impl LnClient {
 
     pub fn refundable_outgoing_contracts(&self, block_height: u64) -> Vec<OutgoingContractData> {
         // TODO: unify block height type
-        self.db
+        self.context
+            .db
             .find_by_prefix::<_, OutgoingPaymentKey, OutgoingContractData>(
                 &OutgoingPaymentKeyPrefix,
             )
@@ -142,8 +142,8 @@ mod tests {
     use crate::api::FederationApi;
     use crate::ln::gateway::LightningGateway;
     use crate::ln::LnClient;
+    use crate::OwnedClientContext;
     use async_trait::async_trait;
-    use lightning::routing::network_graph::RoutingFees;
     use lightning_invoice::Invoice;
     use minimint::modules::ln::config::LightningModuleClientConfig;
     use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
@@ -155,7 +155,6 @@ mod tests {
     use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use std::ops::DerefMut;
@@ -201,9 +200,16 @@ mod tests {
                 .fetch_from_all(|m| m.get_contract_account(contract))
                 .unwrap())
         }
+
+        async fn fetch_consensus_block_height(&self) -> crate::api::Result<u64> {
+            unimplemented!()
+        }
     }
 
-    async fn new_mint_and_client() -> (Arc<tokio::sync::Mutex<Fed>>, LnClient, Arc<dyn Database>) {
+    async fn new_mint_and_client() -> (
+        Arc<tokio::sync::Mutex<Fed>>,
+        OwnedClientContext<LightningModuleClientConfig>,
+    ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
                 4,
@@ -215,15 +221,14 @@ mod tests {
         ));
         let api = FakeApi { mint: fed.clone() };
 
-        let client_db: Arc<dyn Database> = Arc::new(MemDatabase::new());
-        let client = LnClient {
-            db: client_db.clone(),
-            cfg: fed.lock().await.client_cfg().clone(),
-            api: Arc::new(api),
+        let client_context = OwnedClientContext {
+            config: fed.lock().await.client_cfg().clone(),
+            db: Box::new(MemDatabase::new()),
+            api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client, client_db)
+        (fed, client_context)
     }
 
     /// We first fake a certain block height. This is an ugly hack due to how the consensus value
@@ -246,7 +251,11 @@ mod tests {
     async fn test_outgoing() {
         let mut rng = rand::thread_rng();
         let ctx = secp256k1_zkp::Secp256k1::new();
-        let (fed, client, client_db) = new_mint_and_client().await;
+        let (fed, client_context) = new_mint_and_client().await;
+
+        let client = LnClient {
+            context: client_context.borrow_with_module_config(|x| x),
+        };
 
         set_block_height(fed.lock().await.deref_mut(), 1);
 
@@ -271,11 +280,6 @@ mod tests {
                 mint_pub_key,
                 node_pub_key,
                 api: "".to_string(),
-                // FIXME: GW fees don't really make sense without client side routing, we just overpay and hope for the best
-                fees: RoutingFees {
-                    base_msat: 0,
-                    proportional_millionths: 0,
-                },
             }
         };
         let timelock = 42;
@@ -291,7 +295,7 @@ mod tests {
             )
             .await
             .unwrap();
-        client_db.apply_batch(batch).unwrap();
+        client_context.db.apply_batch(batch).unwrap();
 
         let contract = match &output {
             ContractOrOfferOutput::Contract(c) => &c.contract,
