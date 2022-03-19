@@ -91,11 +91,8 @@ pub struct SpendableUTXO {
     pub tweak: secp256k1::schnorrsig::PublicKey,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
-    // FIXME: why do we save the script pub key? We can derive it from the tweak and the descriptor
-    pub script_pubkey: Script,
 }
 
-// TODO: move pegout logic out of wallet into minimint consensus
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PendingPegOut {
     destination: Script,
@@ -282,7 +279,6 @@ impl FederationModule for Wallet {
             SpendableUTXO {
                 tweak: *input.tweak_contract_key(),
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
-                script_pubkey: input.tx_output().script_pubkey.clone(),
             },
         );
 
@@ -852,29 +848,38 @@ impl<'a> StatelessWallet<'a> {
             },
             inputs: selected_utxos
                 .into_iter()
-                .map(|(_utxo_key, utxo)| Input {
-                    non_witness_utxo: None,
-                    witness_utxo: Some(TxOut {
-                        value: utxo.amount.as_sat(),
-                        script_pubkey: utxo.script_pubkey,
-                    }),
-                    partial_sigs: Default::default(),
-                    sighash_type: None,
-                    redeem_script: None,
-                    witness_script: Some(
-                        self.descriptor.tweak(&utxo.tweak, self.secp).script_code(),
-                    ),
-                    bip32_derivation: Default::default(),
-                    final_script_sig: None,
-                    final_script_witness: None,
-                    ripemd160_preimages: Default::default(),
-                    sha256_preimages: Default::default(),
-                    hash160_preimages: Default::default(),
-                    hash256_preimages: Default::default(),
-                    proprietary: vec![(proprietary_tweak_key(), utxo.tweak.serialize().to_vec())]
+                .map(|(_utxo_key, utxo)| {
+                    let script_pubkey = self
+                        .descriptor
+                        .tweak(&utxo.tweak, self.secp)
+                        .script_pubkey();
+                    Input {
+                        non_witness_utxo: None,
+                        witness_utxo: Some(TxOut {
+                            value: utxo.amount.as_sat(),
+                            script_pubkey,
+                        }),
+                        partial_sigs: Default::default(),
+                        sighash_type: None,
+                        redeem_script: None,
+                        witness_script: Some(
+                            self.descriptor.tweak(&utxo.tweak, self.secp).script_code(),
+                        ),
+                        bip32_derivation: Default::default(),
+                        final_script_sig: None,
+                        final_script_witness: None,
+                        ripemd160_preimages: Default::default(),
+                        sha256_preimages: Default::default(),
+                        hash160_preimages: Default::default(),
+                        hash256_preimages: Default::default(),
+                        proprietary: vec![(
+                            proprietary_tweak_key(),
+                            utxo.tweak.serialize().to_vec(),
+                        )]
                         .into_iter()
                         .collect(),
-                    unknown: Default::default(),
+                        unknown: Default::default(),
+                    }
                 })
                 .collect(),
             outputs: outputs
@@ -1149,7 +1154,6 @@ mod tests {
             SpendableUTXO {
                 tweak,
                 amount: Amount::from_sat(42000),
-                script_pubkey: tweaked.script_pubkey(),
             },
         )];
 
