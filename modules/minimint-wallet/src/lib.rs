@@ -93,7 +93,6 @@ pub struct SpendableUTXO {
     pub amount: bitcoin::Amount,
 }
 
-// TODO: move pegout logic out of wallet into minimint consensus
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PendingPegOut {
     destination: Script,

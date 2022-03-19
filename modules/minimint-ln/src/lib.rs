@@ -104,7 +104,6 @@ pub struct ContractAccount {
 pub enum OutputOutcome {
     Contract {
         id: ContractId,
-        // new_amount: minimint_api::Amount, // TODO: make optional, update later
         outcome: ContractOutcome,
     },
     Offer {

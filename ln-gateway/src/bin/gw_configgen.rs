@@ -41,7 +41,7 @@ fn main() {
         client: federation_client_cfg,
         gateway: LightningGateway {
             mint_pub_key: pk_fed,
-            node_pub_key: pk_ln, // FIXME: remove and fetch from LN node?
+            node_pub_key: pk_ln,
             api: "http://127.0.0.1:8080".to_string(),
         },
     };

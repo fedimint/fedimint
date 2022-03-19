@@ -40,7 +40,7 @@ where
     /// Cryptographic random number generator used for everything
     pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
     /// Configuration describing the federation and containing our secrets
-    pub cfg: ServerConfig, // TODO: make custom config
+    pub cfg: ServerConfig,
 
     /// Our local mint
     pub mint: Mint, // TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
