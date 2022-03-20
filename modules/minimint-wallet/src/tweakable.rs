@@ -1,5 +1,6 @@
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
 use secp256k1::{Secp256k1, Verification};
+use std::io::Write;
 
 /// An object that can be used as a ricardian contract to tweak a key
 pub trait Contract {
@@ -35,6 +36,12 @@ impl Contract for secp256k1::PublicKey {
 
 impl Contract for Vec<u8> {
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(self)
+    }
+}
+
+impl Contract for [u8; 32] {
+    fn encode<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_all(self)
     }
 }

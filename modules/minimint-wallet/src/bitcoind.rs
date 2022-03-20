@@ -1,11 +1,13 @@
 use crate::Feerate;
 use async_trait::async_trait;
-use bitcoin::{BlockHash, Network, Transaction};
+use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::RpcApi;
 use tracing::warn;
 
 /// Trait that allows interacting with the Bitcoin blockchain
+///
+/// Functions may panic if if the bitcoind node is not reachable.
 #[async_trait]
 pub trait BitcoindRpc: Send + Sync {
     /// Returns the Bitcoin network the node is connected to
@@ -24,6 +26,12 @@ pub trait BitcoindRpc: Send + Sync {
     /// average heavier blocks on a fork) this is prevented by only querying hashes for blocks
     /// tailing the chain tip by a certain number of blocks.
     async fn get_block_hash(&self, height: u64) -> BlockHash;
+
+    /// Returns the block with the given hash
+    ///
+    /// # Panics
+    /// If the block doesn't exist.
+    async fn get_block(&self, hash: &BlockHash) -> bitcoin::Block;
 
     /// Estimates the fee rate for a given confirmation target. Make sure that all federation
     /// members use the same algorithm to avoid widely diverging results. If the node is not ready
@@ -59,6 +67,11 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
             .expect("Bitcoind returned an error")
     }
 
+    async fn get_block(&self, hash: &BlockHash) -> Block {
+        tokio::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block(self, hash))
+            .expect("Bitcoind returned an error")
+    }
+
     async fn get_fee_rate(&self, confirmation_target: u16) -> Option<Feerate> {
         tokio::task::block_in_place(|| {
             self.estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
@@ -83,8 +96,8 @@ pub mod test {
     use crate::Feerate;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
-    use bitcoin::{BlockHash, Network, Transaction};
-    use std::collections::VecDeque;
+    use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
+    use std::collections::{HashMap, VecDeque};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -93,6 +106,7 @@ pub mod test {
         fee_rate: Option<Feerate>,
         block_height: u64,
         transactions: VecDeque<Transaction>,
+        tx_in_blocks: HashMap<BlockHash, Vec<Transaction>>,
     }
 
     #[derive(Clone, Default)]
@@ -115,9 +129,29 @@ pub mod test {
         }
 
         async fn get_block_hash(&self, height: u64) -> BlockHash {
-            let mut bytes = [0u8; 32];
-            bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
-            BlockHash::from_inner(bytes)
+            height_hash(height)
+        }
+
+        async fn get_block(&self, hash: &BlockHash) -> Block {
+            let txdata = self
+                .state
+                .lock()
+                .await
+                .tx_in_blocks
+                .get(hash)
+                .cloned()
+                .unwrap_or_default();
+            Block {
+                header: BlockHeader {
+                    version: 0,
+                    prev_blockhash: Default::default(),
+                    merkle_root: Default::default(),
+                    time: 0,
+                    bits: 0,
+                    nonce: 0,
+                },
+                txdata,
+            }
         }
 
         async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
@@ -166,5 +200,23 @@ pub mod test {
                         && output.script_pubkey == recipient.script_pubkey()
                 })
         }
+
+        pub async fn add_pending_tx_to_block(&self, block: u64) {
+            let block_hash = height_hash(block);
+            let mut state = self.state.lock().await;
+            #[allow(clippy::needless_collect)]
+            let txns = state.transactions.drain(..).collect::<Vec<_>>();
+            state
+                .tx_in_blocks
+                .entry(block_hash)
+                .or_default()
+                .extend(txns.into_iter());
+        }
+    }
+
+    fn height_hash(height: u64) -> BlockHash {
+        let mut bytes = [0u8; 32];
+        bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
+        BlockHash::from_inner(bytes)
     }
 }
