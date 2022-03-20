@@ -246,7 +246,7 @@ mod tests {
         // generate fake UTXO
         fed.lock().await.patch_dbs(|db| {
             let out_point = bitcoin::OutPoint::default();
-            let tweak = secp256k1_zkp::schnorrsig::PublicKey::from_slice(&[42; 32][..]).unwrap();
+            let tweak = [42; 32];
             let utxo = SpendableUTXO {
                 tweak,
                 amount: bitcoin::Amount::from_sat(48000),
@@ -285,5 +285,22 @@ mod tests {
         // wait for broadcast
         tokio::time::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
+
+        let wallet_value = fed
+            .lock()
+            .await
+            .fetch_from_all(|wallet| wallet.get_wallet_value());
+        assert_eq!(wallet_value, bitcoin::Amount::from_sat(0));
+
+        // test change recognition, wallet should hold some sats
+        btc_rpc.add_pending_tx_to_block(202).await;
+        btc_rpc.set_block_height(301).await;
+        fed.lock().await.consensus_round(&[], &[]).await;
+
+        let wallet_value = fed
+            .lock()
+            .await
+            .fetch_from_all(|wallet| wallet.get_wallet_value());
+        assert!(wallet_value > bitcoin::Amount::from_sat(0));
     }
 }

@@ -90,5 +90,5 @@ impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PendingTransaction {
     pub tx: Transaction,
-    pub tweak: Option<Vec<u8>>,
+    pub tweak: [u8; 32],
 }

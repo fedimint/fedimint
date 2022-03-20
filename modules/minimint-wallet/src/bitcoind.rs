@@ -96,8 +96,8 @@ pub mod test {
     use crate::Feerate;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
-    use bitcoin::{Block, BlockHash, Network, Transaction};
-    use std::collections::VecDeque;
+    use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
+    use std::collections::{HashMap, VecDeque};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -106,6 +106,7 @@ pub mod test {
         fee_rate: Option<Feerate>,
         block_height: u64,
         transactions: VecDeque<Transaction>,
+        tx_in_blocks: HashMap<BlockHash, Vec<Transaction>>,
     }
 
     #[derive(Clone, Default)]
@@ -128,13 +129,29 @@ pub mod test {
         }
 
         async fn get_block_hash(&self, height: u64) -> BlockHash {
-            let mut bytes = [0u8; 32];
-            bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
-            BlockHash::from_inner(bytes)
+            height_hash(height)
         }
 
-        async fn get_block(&self, _hash: &BlockHash) -> Block {
-            unimplemented!()
+        async fn get_block(&self, hash: &BlockHash) -> Block {
+            let txdata = self
+                .state
+                .lock()
+                .await
+                .tx_in_blocks
+                .get(hash)
+                .cloned()
+                .unwrap_or_default();
+            Block {
+                header: BlockHeader {
+                    version: 0,
+                    prev_blockhash: Default::default(),
+                    merkle_root: Default::default(),
+                    time: 0,
+                    bits: 0,
+                    nonce: 0,
+                },
+                txdata,
+            }
         }
 
         async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
@@ -183,5 +200,23 @@ pub mod test {
                         && output.script_pubkey == recipient.script_pubkey()
                 })
         }
+
+        pub async fn add_pending_tx_to_block(&self, block: u64) {
+            let block_hash = height_hash(block);
+            let mut state = self.state.lock().await;
+            #[allow(clippy::needless_collect)]
+            let txns = state.transactions.drain(..).collect::<Vec<_>>();
+            state
+                .tx_in_blocks
+                .entry(block_hash)
+                .or_default()
+                .extend(txns.into_iter());
+        }
+    }
+
+    fn height_hash(height: u64) -> BlockHash {
+        let mut bytes = [0u8; 32];
+        bytes[..8].copy_from_slice(&height.to_le_bytes()[..]);
+        BlockHash::from_inner(bytes)
     }
 }
