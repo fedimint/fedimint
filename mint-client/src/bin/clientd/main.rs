@@ -1,18 +1,18 @@
-use tide::{Request, Response, Body};
-use mint_client::{MintClient, ResBody,parse_coins, serialize_coins};
-use std::{path::PathBuf, sync::Arc, sync::Mutex};
-use std::borrow::BorrowMut;
 use minimint::config::{load_from_file, ClientConfig};
-use structopt::StructOpt;
-use minimint_api::{Amount};
-use mint_client::mint::{SpendableCoin};
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
+use minimint_api::Amount;
+use mint_client::mint::SpendableCoin;
+use mint_client::{parse_coins, serialize_coins, MintClient, ResBody};
+use std::borrow::BorrowMut;
+use std::{path::PathBuf, sync::Arc, sync::Mutex};
+use structopt::StructOpt;
+use tide::{Body, Request, Response};
 
 #[derive(Clone)]
 pub struct State {
-    mint_client : Arc<MintClient>,
-    events : Arc<Mutex<Vec<ResBody>>>,
+    mint_client: Arc<MintClient>,
+    events: Arc<Mutex<Vec<ResBody>>>,
 }
 
 #[derive(StructOpt)]
@@ -21,7 +21,7 @@ struct Opts {
 }
 
 #[tokio::main]
-async fn main() -> tide::Result<()>{
+async fn main() -> tide::Result<()> {
     let opts: Opts = StructOpt::from_args();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
@@ -53,12 +53,12 @@ async fn info(req: Request<State>) -> tide::Result {
     let mint_client = &req.state().mint_client;
     let cfd = mint_client.fetch_active_issuances();
     //This will never fail since ResBody is always build with reliable constructors and cant be 'messed up' so unwrap is ok
-    let body=  Body::from_json(&ResBody::build_info(mint_client.coins(), cfd)).unwrap();
+    let body = Body::from_json(&ResBody::build_info(mint_client.coins(), cfd)).unwrap();
     Ok(body.into())
 }
 
 /// Endpoint: responds with [`ResBody::Pending`]
-async fn pending(req : Request<State>) -> tide::Result {
+async fn pending(req: Request<State>) -> tide::Result {
     let mint_client = &req.state().mint_client;
     let cfd = mint_client.fetch_active_issuances();
     //This will never fail since ResBody is always build with reliable constructors and cant be 'messed up' so unwrap is ok
@@ -67,24 +67,20 @@ async fn pending(req : Request<State>) -> tide::Result {
 }
 /// Endpoint: responds with [`ResBody::Spend`]
 async fn spend(mut req: Request<State>) -> tide::Result {
-    let value : u64 = match req.body_json().await {
+    let value: u64 = match req.body_json().await {
         Ok(i) => i,
         Err(e) => {
             let res = ResBody::build_event(format!("{:?}", e));
             //Will be always Ok so unwrap is ok
             let body = Body::from_json(&res).unwrap();
             return Ok(body.into());
-        },
+        }
     };
     let mint_client = &req.state().mint_client;
     let amount = Amount::from_sat(value);
     let res = match mint_client.select_and_spend_coins(amount) {
-        Ok(outgoing_coins) => {
-            ResBody::build_spend(serialize_coins(&outgoing_coins))
-        }
-        Err(e) => {
-            ResBody::build_event(format!("{:?}", e))
-        }
+        Ok(outgoing_coins) => ResBody::build_spend(serialize_coins(&outgoing_coins)),
+        Err(e) => ResBody::build_event(format!("{:?}", e)),
     };
     //Unwrap ok
     let body = Body::from_json(&res).unwrap();
@@ -92,15 +88,15 @@ async fn spend(mut req: Request<State>) -> tide::Result {
 }
 /// Endpoint: starts a re-issuance and responds with [`ResBody::Reissue`], and fetches in the background
 async fn reissue_validate(mut req: Request<State>) -> tide::Result {
-    let value : String = req.body_json().await?; //Approach B
+    let value: String = req.body_json().await?; //Approach B
     let mint_client = Arc::clone(&req.state().mint_client);
 
-    let coins : Coins<SpendableCoin> = parse_coins(&value);
+    let coins: Coins<SpendableCoin> = parse_coins(&value);
     let mut rng = rand::rngs::OsRng::new().unwrap();
     let out_point = mint_client.reissue(coins, &mut rng).await?;
-    let status = match mint_client.fetch_tx_outcome(out_point.txid, true).await{
+    let status = match mint_client.fetch_tx_outcome(out_point.txid, true).await {
         Err(e) => TransactionStatus::Error(e.to_string()),
-        Ok(s) => s
+        Ok(s) => s,
     };
     let body = Body::from_json(&ResBody::build_reissue(out_point, status))?;
 
@@ -112,20 +108,23 @@ async fn reissue_validate(mut req: Request<State>) -> tide::Result {
 }
 /// Endpoint: always responds with Status 200. The caller has to be aware that it can fail and might query /event afterwards.
 async fn reissue(mut req: Request<State>) -> tide::Result {
-    let value : String = req.body_json().await?;
+    let value: String = req.body_json().await?;
     let mint_client = Arc::clone(&req.state().mint_client);
     let events = Arc::clone(&req.state().events);
     tokio::spawn(async move {
-        let coins : Coins<SpendableCoin> = parse_coins(&value);
+        let coins: Coins<SpendableCoin> = parse_coins(&value);
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let out_point = match mint_client.reissue(coins, &mut rng).await {
             Ok(o) => o,
             Err(e) => {
-                events.lock().unwrap().push(ResBody::build_event(format!("{:?}", e)));
+                events
+                    .lock()
+                    .unwrap()
+                    .push(ResBody::build_event(format!("{:?}", e)));
                 return;
             }
         };
-        match mint_client.fetch_tx_outcome(out_point.txid, true).await{
+        match mint_client.fetch_tx_outcome(out_point.txid, true).await {
             Ok(_) => fetch(mint_client, Arc::clone(&events)).await,
             Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
         };
@@ -145,9 +144,11 @@ async fn events(req: Request<State>) -> tide::Result {
     Ok(res.into())
 }
 
-async fn fetch(mint_client : Arc<MintClient>, events : Arc<Mutex<Vec<ResBody>>>) {
+async fn fetch(mint_client: Arc<MintClient>, events: Arc<Mutex<Vec<ResBody>>>) {
     match mint_client.fetch_all_coins().await {
-        Ok(_) => (*events.lock().unwrap()).push(ResBody::build_event("succsessfull fetch".to_owned())),
+        Ok(_) => {
+            (*events.lock().unwrap()).push(ResBody::build_event("succsessfull fetch".to_owned()))
+        }
         Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
     }
 }
