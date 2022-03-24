@@ -8,7 +8,7 @@ use bitcoin::{Address, Transaction};
 use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
 use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
-use minimint::modules::ln::ContractOrOfferOutput;
+use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput};
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint::transaction as mint_tx;
@@ -19,6 +19,7 @@ use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
+use std::time::Duration;
 use thiserror::Error;
 
 const TIMELOCK: u64 = 100;
@@ -349,6 +350,35 @@ impl UserClient {
         self.context.db.apply_batch(batch).expect("DB error");
         Ok(contract_id)
     }
+
+    pub async fn wait_contract(
+        &self,
+        contract: ContractId,
+    ) -> Result<ContractAccount, ClientError> {
+        loop {
+            match self.ln_client().get_contract_account(contract).await {
+                Ok(contract) => return Ok(contract),
+                Err(LnClientError::ApiError(e)) => {
+                    if e.is_retryable_fetch_coins() {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    } else {
+                        return Err(ClientError::MintApiError(e));
+                    }
+                }
+                Err(e) => return Err(ClientError::LnClientError(e)),
+            }
+        }
+    }
+
+    pub async fn wait_contract_timeout(
+        &self,
+        contract: ContractId,
+        timeout: Duration,
+    ) -> Result<ContractAccount, ClientError> {
+        tokio::time::timeout(timeout, self.wait_contract(contract))
+            .await
+            .map_err(|_| ClientError::WaitContractTimeout)?
+    }
 }
 
 #[derive(Error, Debug)]
@@ -363,6 +393,8 @@ pub enum ClientError {
     LnClientError(LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
+    #[error("Timed out while waiting for contract to be accepted")]
+    WaitContractTimeout,
 }
 
 impl From<ApiError> for ClientError {
