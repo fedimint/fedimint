@@ -1,3 +1,4 @@
+use crate::mint::{CoinFinalizationData, SpendableCoin};
 use minimint::modules::mint::CoinNonce;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
@@ -14,6 +15,8 @@ pub struct CoinKey {
 
 impl DatabaseKeyPrefixConst for CoinKey {
     const DB_PREFIX: u8 = DB_PREFIX_COIN;
+    type Key = Self;
+    type Value = SpendableCoin;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -21,6 +24,8 @@ pub struct CoinKeyPrefix;
 
 impl DatabaseKeyPrefixConst for CoinKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_COIN;
+    type Key = CoinKey;
+    type Value = SpendableCoin;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -28,6 +33,8 @@ pub struct OutputFinalizationKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKey {
     const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
+    type Key = Self;
+    type Value = CoinFinalizationData;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -35,4 +42,6 @@ pub struct OutputFinalizationKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
+    type Key = OutputFinalizationKey;
+    type Value = CoinFinalizationData;
 }

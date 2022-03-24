@@ -233,6 +233,8 @@ fn set_block_height(db: &mut dyn Database, block_height: u32) {
 
     impl minimint_api::db::DatabaseKeyPrefixConst for RoundConsensusKey {
         const DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
+        type Key = Self;
+        type Value = RoundConsensus;
     }
 
     #[derive(Debug, Encodable, Decodable)]

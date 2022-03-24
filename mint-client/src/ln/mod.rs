@@ -100,9 +100,7 @@ impl<'c> LnClient<'c> {
         // TODO: unify block height type
         self.context
             .db
-            .find_by_prefix::<_, OutgoingPaymentKey, OutgoingContractData>(
-                &OutgoingPaymentKeyPrefix,
-            )
+            .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
                 if outgoing_data.contract_account.contract.timelock as u64 <= block_height {

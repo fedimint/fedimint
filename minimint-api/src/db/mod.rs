@@ -12,6 +12,8 @@ pub mod sled_impl;
 
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
+    type Key: DatabaseKey;
+    type Value: DatabaseValue;
 }
 
 pub trait DatabaseKeyPrefix: Debug {
@@ -58,28 +60,30 @@ where
 }
 
 impl<'a> dyn Database + 'a {
-    pub fn insert_entry<K, V>(&self, key: &K, value: &V) -> Result<Option<V>, DatabaseError>
+    pub fn insert_entry<K>(
+        &self,
+        key: &K,
+        value: &K::Value,
+    ) -> Result<Option<K::Value>, DatabaseError>
     where
-        K: DatabaseKey,
-        V: DatabaseValue,
+        K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         match self.raw_insert_entry(&key.to_bytes(), value.to_bytes())? {
             Some(old_val_bytes) => {
                 trace!(
                     "insert_entry: Decoding {} from bytes {:?}",
-                    std::any::type_name::<V>(),
+                    std::any::type_name::<K::Value>(),
                     old_val_bytes
                 );
-                Ok(Some(V::from_bytes(&old_val_bytes)?))
+                Ok(Some(K::Value::from_bytes(&old_val_bytes)?))
             }
             None => Ok(None),
         }
     }
 
-    pub fn get_value<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    pub fn get_value<K>(&self, key: &K) -> Result<Option<K::Value>, DatabaseError>
     where
-        K: DatabaseKey,
-        V: DatabaseValue,
+        K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         let key_bytes = key.to_bytes();
         let value_bytes = match self.raw_get_value(&key_bytes)? {
@@ -89,16 +93,15 @@ impl<'a> dyn Database + 'a {
 
         trace!(
             "get_value: Decoding {} from bytes {:?}",
-            std::any::type_name::<V>(),
+            std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(V::from_bytes(&value_bytes)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes)?))
     }
 
-    pub fn remove_entry<K, V>(&self, key: &K) -> Result<Option<V>, DatabaseError>
+    pub fn remove_entry<K>(&self, key: &K) -> Result<Option<K::Value>, DatabaseError>
     where
-        K: DatabaseKey,
-        V: DatabaseValue,
+        K: DatabaseKey + DatabaseKeyPrefixConst,
     {
         let key_bytes = key.to_bytes();
         let value_bytes = match self.raw_remove_entry(&key_bytes)? {
@@ -108,17 +111,15 @@ impl<'a> dyn Database + 'a {
 
         trace!(
             "remove_entry: Decoding {} from bytes {:?}",
-            std::any::type_name::<V>(),
+            std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(V::from_bytes(&value_bytes)?))
+        Ok(Some(K::Value::from_bytes(&value_bytes)?))
     }
 
-    pub fn find_by_prefix<KP, K, V>(&self, key_prefix: &KP) -> DbIter<K, V>
+    pub fn find_by_prefix<KP>(&self, key_prefix: &KP) -> DbIter<KP::Key, KP::Value>
     where
-        KP: DatabaseKeyPrefix,
-        K: DatabaseKey,
-        V: DatabaseValue,
+        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
         let prefix_bytes = key_prefix.to_bytes();
         DbIter {
@@ -265,6 +266,8 @@ mod tests {
 
     impl DatabaseKeyPrefixConst for TestKey {
         const DB_PREFIX: u8 = 0x42;
+        type Key = Self;
+        type Value = TestVal;
     }
 
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
@@ -282,19 +285,19 @@ mod tests {
 
         assert_eq!(db.get_value(&TestKey(42)).unwrap(), Some(TestVal(1337)));
         assert_eq!(db.get_value(&TestKey(123)).unwrap(), Some(TestVal(456)));
-        assert_eq!(db.get_value::<_, TestVal>(&TestKey(43)).unwrap(), None);
+        assert_eq!(db.get_value(&TestKey(43)).unwrap(), None);
 
         db.insert_entry(&TestKey(42), &TestVal(3301)).unwrap();
         assert_eq!(db.get_value(&TestKey(42)).unwrap(), Some(TestVal(3301)));
 
-        let removed = db.remove_entry::<_, TestVal>(&TestKey(42)).unwrap();
+        let removed = db.remove_entry(&TestKey(42)).unwrap();
         assert_eq!(removed, Some(TestVal(3301)));
-        assert_eq!(db.get_value::<_, TestVal>(&TestKey(42)).unwrap(), None);
+        assert_eq!(db.get_value(&TestKey(42)).unwrap(), None);
 
         assert!(db
             .insert_entry(&TestKey(42), &TestVal(0))
             .unwrap()
             .is_none());
-        assert!(db.get_value::<_, TestVal>(&TestKey(42)).is_ok());
+        assert!(db.get_value(&TestKey(42)).is_ok());
     }
 }

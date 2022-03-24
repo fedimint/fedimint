@@ -58,7 +58,7 @@ impl<'c> MintClient<'c> {
     pub fn coins(&self) -> Coins<SpendableCoin> {
         self.context
             .db
-            .find_by_prefix::<_, CoinKey, SpendableCoin>(&CoinKeyPrefix)
+            .find_by_prefix(&CoinKeyPrefix)
             .map(|res| {
                 let (key, spendable_coin) = res.expect("DB error");
                 (key.amount, spendable_coin)
@@ -178,7 +178,7 @@ impl<'c> MintClient<'c> {
         let issuance = self
             .context
             .db
-            .get_value::<_, CoinFinalizationData>(&OutputFinalizationKey(outpoint))
+            .get_value(&OutputFinalizationKey(outpoint))
             .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
                 CoinFinalizationError::UnknownIssuance,
@@ -214,9 +214,7 @@ impl<'c> MintClient<'c> {
     pub fn list_active_issuances(&self) -> Vec<OutPoint> {
         self.context
             .db
-            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
-                &OutputFinalizationKeyPrefix,
-            )
+            .find_by_prefix(&OutputFinalizationKeyPrefix)
             .map(|res| res.expect("DB error").0 .0)
             .collect()
     }
@@ -226,9 +224,7 @@ impl<'c> MintClient<'c> {
         let active_issuances = self
             .context
             .db
-            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
-                &OutputFinalizationKeyPrefix,
-            )
+            .find_by_prefix(&OutputFinalizationKeyPrefix)
             .collect::<std::result::Result<Vec<_>, _>>()
             .expect("DB error");
 

@@ -165,7 +165,7 @@ impl GatewayClient {
     pub fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
-            .find_by_prefix::<_, OutgoingPaymentKey, _>(&db::OutgoingPaymentKeyPrefix)
+            .find_by_prefix(&db::OutgoingPaymentKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
     }
@@ -175,7 +175,7 @@ impl GatewayClient {
         // FIXME: implement abort by gateway to give funds back to user prematurely
         self.context
             .db
-            .remove_entry::<_, OutgoingContractAccount>(&db::OutgoingPaymentKey(contract_id))
+            .remove_entry(&db::OutgoingPaymentKey(contract_id))
             .expect("DB error");
     }
 
@@ -239,9 +239,7 @@ impl GatewayClient {
     pub fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
         self.context
             .db
-            .find_by_prefix::<_, OutgoingPaymentClaimKey, Transaction>(
-                &OutgoingPaymentClaimKeyPrefix,
-            )
+            .find_by_prefix(&OutgoingPaymentClaimKeyPrefix)
             .map(|res| res.expect("DB error").0 .0)
             .collect()
     }
@@ -297,7 +295,7 @@ impl GatewayClient {
                     // have to worry about that.
                     self.context
                         .db
-                        .remove_entry::<_, Transaction>(&OutgoingPaymentClaimKey(contract_id))
+                        .remove_entry(&OutgoingPaymentClaimKey(contract_id))
                         .expect("DB error");
                     return;
                 },
@@ -372,7 +370,9 @@ impl From<ApiError> for GatewayClientError {
 }
 
 mod db {
+    use crate::ln::outgoing::OutgoingContractAccount;
     use minimint::modules::ln::contracts::ContractId;
+    use minimint::transaction::Transaction;
     use minimint_api::db::DatabaseKeyPrefixConst;
     use minimint_api::encoding::{Decodable, Encodable};
 
@@ -384,6 +384,8 @@ mod db {
 
     impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
         const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+        type Key = Self;
+        type Value = OutgoingContractAccount;
     }
 
     #[derive(Debug, Encodable, Decodable)]
@@ -391,6 +393,8 @@ mod db {
 
     impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
         const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+        type Key = OutgoingPaymentKey;
+        type Value = OutgoingContractAccount;
     }
 
     #[derive(Debug, Encodable, Decodable)]
@@ -398,6 +402,8 @@ mod db {
 
     impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
         const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+        type Key = Self;
+        type Value = Transaction;
     }
 
     #[derive(Debug, Encodable, Decodable)]
@@ -405,6 +411,8 @@ mod db {
 
     impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
         const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+        type Key = OutgoingPaymentClaimKey;
+        type Value = Transaction;
     }
 }
 
