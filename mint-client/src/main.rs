@@ -147,8 +147,10 @@ async fn main() {
                 .await
                 .expect("Not enough coins");
 
-            // FIXME:don't use sleep, find out what to actually wait for
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            client
+                .wait_contract_timeout(contract_id, Duration::from_secs(5))
+                .await
+                .expect("Contract wasn't accepted in time");
 
             info!(
                 "Funded outgoing contract {}, notifying gateway",
