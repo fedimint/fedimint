@@ -14,7 +14,6 @@ pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
 }
 
-// FIXME: rework API using encoding traits
 pub trait DatabaseKeyPrefix: Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }
