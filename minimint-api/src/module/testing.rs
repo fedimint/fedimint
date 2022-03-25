@@ -68,7 +68,8 @@ where
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         let results = self.members.iter().map(|(_, member, _)| {
-            let InputMeta { amount, puk_keys } = member.validate_input(&fake_ic, input)?;
+            let cache = member.build_verification_cache(std::iter::once(input));
+            let InputMeta { amount, puk_keys } = member.validate_input(&fake_ic, &cache, input)?;
             Ok(TestInputMeta {
                 amount,
                 keys: puk_keys.collect(),
@@ -113,9 +114,10 @@ where
                 .begin_consensus_epoch(batch.transaction(), consensus.clone(), &mut rng)
                 .await;
 
+            let cache = member.build_verification_cache(inputs.iter());
             for input in inputs {
                 member
-                    .apply_input(&fake_ic, batch.transaction(), input)
+                    .apply_input(&fake_ic, batch.transaction(), input, &cache)
                     .expect("Faulty input");
             }
 

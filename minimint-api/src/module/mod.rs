@@ -45,6 +45,7 @@ pub trait FederationModule: Sized {
     type TxOutput;
     type TxOutputOutcome;
     type ConsensusItem;
+    type VerificationCache;
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal<'a>(
@@ -63,6 +64,15 @@ pub trait FederationModule: Sized {
         rng: impl RngCore + CryptoRng + 'a,
     );
 
+    /// Some modules may have slow to verify inputs that would block transaction processing. If the
+    /// slow part of verification can be modeled as a pure function not involving any system state
+    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
+    /// constructing such lookup tables.
+    fn build_verification_cache<'a>(
+        &'a self,
+        inputs: impl Iterator<Item = &'a Self::TxInput>,
+    ) -> Self::VerificationCache;
+
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
@@ -70,6 +80,7 @@ pub trait FederationModule: Sized {
     fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        verification_cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error>;
 
@@ -85,6 +96,7 @@ pub trait FederationModule: Sized {
         interconnect: &'a dyn ModuleInterconect,
         batch: BatchTx<'a>,
         input: &'b Self::TxInput,
+        verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error>;
 
     /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This

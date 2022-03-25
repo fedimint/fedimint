@@ -84,6 +84,7 @@ impl FederationModule for Mint {
     type TxOutput = Coins<BlindToken>;
     type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
+    type VerificationCache = ();
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -118,9 +119,16 @@ impl FederationModule for Mint {
         batch.commit();
     }
 
+    fn build_verification_cache<'a>(
+        &'a self,
+        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+    ) -> Self::VerificationCache {
+    }
+
     fn validate_input<'a>(
         &self,
         _interconnect: &dyn ModuleInterconect,
+        _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         input.iter().try_for_each(|(amount, coin)| {
@@ -156,8 +164,9 @@ impl FederationModule for Mint {
         interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
+        cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(interconnect, input)?;
+        let meta = self.validate_input(interconnect, cache, input)?;
 
         batch.append_from_iter(
             input

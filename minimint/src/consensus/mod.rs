@@ -59,6 +59,13 @@ pub struct AcceptedTransaction {
     transaction: Transaction,
 }
 
+#[derive(Debug)]
+struct VerificationCaches {
+    mint: <Mint as FederationModule>::VerificationCache,
+    wallet: <Wallet as FederationModule>::VerificationCache,
+    ln: <LightningModule as FederationModule>::VerificationCache,
+}
+
 impl<R> FediMintConsensus<R>
 where
     R: RngCore + CryptoRng,
@@ -75,18 +82,26 @@ where
         let mut pub_keys = Vec::new();
         for input in &transaction.inputs {
             let meta = match input {
-                Input::Mint(coins) => self
-                    .mint
-                    .validate_input(&self.build_interconnect(), coins)
-                    .map_err(TransactionSubmissionError::InputCoinError)?,
-                Input::Wallet(peg_in) => self
-                    .wallet
-                    .validate_input(&self.build_interconnect(), peg_in)
-                    .map_err(TransactionSubmissionError::InputPegIn)?,
-                Input::LN(input) => self
-                    .ln
-                    .validate_input(&self.build_interconnect(), input)
-                    .map_err(TransactionSubmissionError::ContractInputError)?,
+                Input::Mint(coins) => {
+                    let cache = self.mint.build_verification_cache(std::iter::once(coins));
+                    self.mint
+                        .validate_input(&self.build_interconnect(), &cache, coins)
+                        .map_err(TransactionSubmissionError::InputCoinError)?
+                }
+                Input::Wallet(peg_in) => {
+                    let cache = self
+                        .wallet
+                        .build_verification_cache(std::iter::once(peg_in));
+                    self.wallet
+                        .validate_input(&self.build_interconnect(), &cache, peg_in)
+                        .map_err(TransactionSubmissionError::InputPegIn)?
+                }
+                Input::LN(input) => {
+                    let cache = self.ln.build_verification_cache(std::iter::once(input));
+                    self.ln
+                        .validate_input(&self.build_interconnect(), &cache, input)
+                        .map_err(TransactionSubmissionError::ContractInputError)?
+                }
             };
             pub_keys.push(meta.puk_keys);
         }
@@ -162,6 +177,8 @@ where
             .filter_conflicts(|(_, tx)| tx)
             .collect::<Vec<_>>();
 
+        let caches = self.build_verification_caches(filtered_transactions.iter().map(|(_, tx)| tx));
+
         // TODO: implement own parallel execution to avoid allocations and get rid of rayon
         let par_db_batches = filtered_transactions
             .into_par_iter()
@@ -176,7 +193,8 @@ where
                     batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()))
                 });
                 // TODO: use borrowed transaction
-                match self.process_transaction(db_batch.transaction(), transaction.clone()) {
+                match self.process_transaction(db_batch.transaction(), transaction.clone(), &caches)
+                {
                     Ok(()) => {
                         db_batch.autocommit(|batch_tx| {
                             batch_tx.append_insert(
@@ -236,6 +254,7 @@ where
         &self,
         mut batch: BatchTx,
         transaction: Transaction,
+        caches: &VerificationCaches,
     ) -> Result<(), TransactionSubmissionError> {
         transaction.validate_funding(&self.cfg.fee_consensus)?;
 
@@ -246,15 +265,30 @@ where
             let meta = match input {
                 Input::Mint(coins) => self
                     .mint
-                    .apply_input(&self.build_interconnect(), batch.subtransaction(), coins)
+                    .apply_input(
+                        &self.build_interconnect(),
+                        batch.subtransaction(),
+                        coins,
+                        &caches.mint,
+                    )
                     .map_err(TransactionSubmissionError::InputCoinError)?,
                 Input::Wallet(peg_in) => self
                     .wallet
-                    .apply_input(&self.build_interconnect(), batch.subtransaction(), peg_in)
+                    .apply_input(
+                        &self.build_interconnect(),
+                        batch.subtransaction(),
+                        peg_in,
+                        &caches.wallet,
+                    )
                     .map_err(TransactionSubmissionError::InputPegIn)?,
                 Input::LN(input) => self
                     .ln
-                    .apply_input(&self.build_interconnect(), batch.subtransaction(), input)
+                    .apply_input(
+                        &self.build_interconnect(),
+                        batch.subtransaction(),
+                        input,
+                        &caches.ln,
+                    )
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
@@ -341,6 +375,46 @@ where
             })
         } else {
             None
+        }
+    }
+
+    fn build_verification_caches<'a>(
+        &self,
+        transactions: impl Iterator<Item = &'a Transaction> + Clone,
+    ) -> VerificationCaches {
+        let mint_input_iter = transactions
+            .clone()
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| match input {
+                Input::Mint(input) => Some(input),
+                Input::Wallet(_) => None,
+                Input::LN(_) => None,
+            });
+        let mint_cache = self.mint.build_verification_cache(mint_input_iter);
+
+        let wallet_input_iter = transactions
+            .clone()
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| match input {
+                Input::Mint(_) => None,
+                Input::Wallet(input) => Some(input),
+                Input::LN(_) => None,
+            });
+        let wallet_cache = self.wallet.build_verification_cache(wallet_input_iter);
+
+        let ln_input_iter = transactions
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| match input {
+                Input::Mint(_) => None,
+                Input::Wallet(_) => None,
+                Input::LN(input) => Some(input),
+            });
+        let ln_cache = self.ln.build_verification_cache(ln_input_iter);
+
+        VerificationCaches {
+            mint: mint_cache,
+            wallet: wallet_cache,
+            ln: ln_cache,
         }
     }
 
