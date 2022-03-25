@@ -1,4 +1,4 @@
-use crate::CoinNonce;
+use crate::{CoinNonce, PartialSigResponse, SigResponse};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{OutPoint, PeerId};
@@ -13,6 +13,8 @@ pub struct NonceKey(pub CoinNonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
     const DB_PREFIX: u8 = DB_PREFIX_COIN_NONCE;
+    type Key = Self;
+    type Value = ();
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -22,6 +24,8 @@ pub struct ProposedPartialSignatureKey {
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
     const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    type Key = Self;
+    type Value = PartialSigResponse;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -29,6 +33,8 @@ pub struct ProposedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    type Key = ProposedPartialSignatureKey;
+    type Value = PartialSigResponse;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -39,6 +45,8 @@ pub struct ReceivedPartialSignatureKey {
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {
     const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    type Key = Self;
+    type Value = PartialSigResponse;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -48,6 +56,8 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    type Key = ReceivedPartialSignatureKey;
+    type Value = PartialSigResponse;
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -55,6 +65,8 @@ pub struct ReceivedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    type Key = ReceivedPartialSignatureKey;
+    type Value = PartialSigResponse;
 }
 
 /// Transaction id and output index identifying an output outcome
@@ -63,4 +75,6 @@ pub struct OutputOutcomeKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputOutcomeKey {
     const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_OUTCOME;
+    type Key = Self;
+    type Value = SigResponse;
 }

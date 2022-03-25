@@ -69,7 +69,7 @@ impl<'c> WalletClient<'c> {
                 debug!("Output script: {}", out.script_pubkey);
                 self.context
                     .db
-                    .get_value::<_, [u8; 32]>(&PegInKey {
+                    .get_value(&PegInKey {
                         peg_in_script: out.script_pubkey.clone(),
                     })
                     .expect("DB error")

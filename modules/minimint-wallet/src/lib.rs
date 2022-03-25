@@ -31,7 +31,7 @@ use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{Message, Signature};
+use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::Duration;
@@ -179,7 +179,7 @@ impl FederationModule for Wallet {
         });
 
         self.db
-            .find_by_prefix::<_, PegOutTxSignatureCI, Vec<Signature>>(&PegOutTxSignatureCIPrefix)
+            .find_by_prefix(&PegOutTxSignatureCIPrefix)
             .map(|res| {
                 let (key, val) = res.expect("FB error");
                 WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
@@ -255,7 +255,7 @@ impl FederationModule for Wallet {
 
         if self
             .db
-            .get_value::<_, SpendableUTXO>(&UTXOKey(input.outpoint()))
+            .get_value(&UTXOKey(input.outpoint()))
             .expect("DB error")
             .is_some()
         {
@@ -478,7 +478,7 @@ impl Wallet {
     ) -> Result<(), ProcessPegOutSigError> {
         let mut psbt = self
             .db
-            .get_value::<_, PartiallySignedTransaction>(&UnsignedTransactionKey(signature.txid))
+            .get_value(&UnsignedTransactionKey(signature.txid))
             .expect("DB error")
             .ok_or(ProcessPegOutSigError::UnknownTransaction(signature.txid))?;
 
@@ -642,9 +642,7 @@ impl Wallet {
     }
 
     pub fn current_round_consensus(&self) -> Option<RoundConsensus> {
-        self.db
-            .get_value::<_, RoundConsensus>(&RoundConsensusKey)
-            .expect("DB error")
+        self.db.get_value(&RoundConsensusKey).expect("DB error")
     }
 
     pub fn consensus_height(&self) -> Option<u32> {
@@ -684,9 +682,7 @@ impl Wallet {
 
             let pending_transactions = self
                 .db
-                .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(
-                    &PendingTransactionPrefixKey,
-                )
+                .find_by_prefix(&PendingTransactionPrefixKey)
                 .map(|res| {
                     let (key, transaction) = res.expect("DB error");
                     (key.0, transaction)
@@ -737,14 +733,14 @@ impl Wallet {
 
     fn block_is_known(&self, block_hash: BlockHash) -> bool {
         self.db
-            .get_value::<_, ()>(&BlockHashKey(block_hash))
+            .get_value(&BlockHashKey(block_hash))
             .expect("DB error")
             .is_some()
     }
 
     pub fn pending_peg_outs(&self) -> Vec<(OutPoint, PendingPegOut)> {
         self.db
-            .find_by_prefix::<_, PendingPegOutKey, PendingPegOut>(&PendingPegOutPrefixKey)
+            .find_by_prefix(&PendingPegOutPrefixKey)
             .map_ok(|(key, peg_out)| (key.0, peg_out))
             .collect::<Result<_, _>>()
             .expect("DB error")
@@ -769,7 +765,7 @@ impl Wallet {
 
     fn available_utxos(&self) -> Vec<(UTXOKey, SpendableUTXO)> {
         self.db
-            .find_by_prefix::<_, UTXOKey, SpendableUTXO>(&UTXOPrefixKey)
+            .find_by_prefix(&UTXOPrefixKey)
             .collect::<Result<_, _>>()
             .expect("DB error")
     }
@@ -1066,9 +1062,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 async fn broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
     loop {
         let pending_tx = db
-            .find_by_prefix::<_, PendingTransactionKey, PendingTransaction>(
-                &PendingTransactionPrefixKey,
-            )
+            .find_by_prefix(&PendingTransactionPrefixKey)
             .collect::<Result<Vec<_>, _>>()
             .expect("DB error");
 

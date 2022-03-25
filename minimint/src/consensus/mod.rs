@@ -52,7 +52,7 @@ where
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-struct AcceptedTransaction {
+pub struct AcceptedTransaction {
     epoch: u64,
     transaction: Transaction,
 }
@@ -208,7 +208,7 @@ where
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
         self.db
-            .find_by_prefix::<_, ProposedTransactionKey, _>(&ProposedTransactionKeyPrefix)
+            .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
                 ConsensusItem::Transaction(value)
@@ -293,7 +293,7 @@ where
     ) -> Option<crate::outcome::TransactionStatus> {
         let accepted: Option<AcceptedTransaction> = self
             .db
-            .get_value::<_, AcceptedTransaction>(&AcceptedTransactionKey(txid))
+            .get_value(&AcceptedTransactionKey(txid))
             .expect("DB error");
 
         if let Some(accepted_tx) = accepted {

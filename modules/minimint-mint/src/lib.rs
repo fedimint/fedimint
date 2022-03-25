@@ -88,9 +88,7 @@ impl FederationModule for Mint {
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
         self.db
-            .find_by_prefix::<_, ProposedPartialSignatureKey, PartialSigResponse>(
-                &ProposedPartialSignaturesKeyPrefix,
-            )
+            .find_by_prefix(&ProposedPartialSignaturesKeyPrefix)
             .map(|res| {
                 let (key, partial_signature) = res.expect("DB error");
                 PartiallySignedRequest {
@@ -131,7 +129,7 @@ impl FederationModule for Mint {
 
             if self
                 .db
-                .get_value::<_, ()>(&NonceKey(coin.0.clone()))
+                .get_value(&NonceKey(coin.0.clone()))
                 .expect("DB error")
                 .is_some()
             {
@@ -213,9 +211,7 @@ impl FederationModule for Mint {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
             .db
-            .find_by_prefix::<_, ReceivedPartialSignatureKey, PartialSigResponse>(
-                &ReceivedPartialSignaturesKeyPrefix,
-            )
+            .find_by_prefix(&ReceivedPartialSignaturesKeyPrefix)
             .map(|entry_res| {
                 let (key, partial_sig) = entry_res.expect("DB error");
                 (key.request_id, (key.peer_id, partial_sig))
@@ -275,18 +271,16 @@ impl FederationModule for Mint {
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         let we_proposed = self
             .db
-            .get_value::<_, PartialSigResponse>(&ProposedPartialSignatureKey {
+            .get_value(&ProposedPartialSignatureKey {
                 request_id: out_point,
             })
             .expect("DB error")
             .is_some();
         let was_consensus_outcome = self
             .db
-            .find_by_prefix::<_, ReceivedPartialSignatureKey, PartialSigResponse>(
-                &ReceivedPartialSignatureKeyOutputPrefix {
-                    request_id: out_point,
-                },
-            )
+            .find_by_prefix(&ReceivedPartialSignatureKeyOutputPrefix {
+                request_id: out_point,
+            })
             .any(|res| res.is_ok());
 
         let final_sig = self
@@ -487,7 +481,7 @@ impl Mint {
     ) {
         if self
             .db
-            .get_value::<_, SigResponse>(&OutputOutcomeKey(output_id))
+            .get_value(&OutputOutcomeKey(output_id))
             .expect("DB error")
             .is_some()
         {

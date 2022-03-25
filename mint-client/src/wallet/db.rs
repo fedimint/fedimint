@@ -11,6 +11,8 @@ pub struct PegInKey {
 
 impl DatabaseKeyPrefixConst for PegInKey {
     const DB_PREFIX: u8 = DB_PREFIX_PEG_IN;
+    type Key = Self;
+    type Value = [u8; 32]; // TODO: introduce newtype
 }
 
 #[derive(Debug, Clone)]
@@ -18,4 +20,6 @@ pub struct PegInPrefixKey;
 
 impl DatabaseKeyPrefixConst for PegInPrefixKey {
     const DB_PREFIX: u8 = DB_PREFIX_PEG_IN;
+    type Key = PegInKey;
+    type Value = [u8; 32];
 }
