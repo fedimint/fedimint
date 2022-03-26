@@ -18,7 +18,6 @@ use minimint_ln::{LightningModule, LightningModuleError};
 use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
 use rand::{CryptoRng, RngCore};
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -154,76 +153,80 @@ where
             .flat_map(|(peer, cis)| cis.into_iter().map(move |ci| (peer, ci)))
             .unzip_consensus_item();
 
-        let mut db_batch = DbBatch::new();
-        self.wallet
-            .begin_consensus_epoch(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
-            .await;
-        self.mint
-            .begin_consensus_epoch(db_batch.transaction(), mint_cis, self.rng_gen.get_rng())
-            .await;
-        self.ln
-            .begin_consensus_epoch(db_batch.transaction(), ln_cis, self.rng_gen.get_rng())
-            .await;
-        self.db.apply_batch(db_batch).expect("DB error");
+        // Begin consensus epoch
+        {
+            let mut db_batch = DbBatch::new();
+            self.wallet
+                .begin_consensus_epoch(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
+                .await;
+            self.mint
+                .begin_consensus_epoch(db_batch.transaction(), mint_cis, self.rng_gen.get_rng())
+                .await;
+            self.ln
+                .begin_consensus_epoch(db_batch.transaction(), ln_cis, self.rng_gen.get_rng())
+                .await;
+            self.db.apply_batch(db_batch).expect("DB error");
+        }
 
-        // Since the changes to the database will happen all at once we won't be able to handle
-        // conflicts between consensus items in one batch there. Thus we need to make sure that
-        // all items in a batch are consistent/deterministically filter out inconsistent ones.
-        // There are two item types that need checking:
-        //  * peg-ins that each peg-in tx is only used to issue coins once
-        //  * coin spends to avoid double spends in one batch
-        let filtered_transactions = transaction_cis
-            .into_iter()
-            .filter_conflicts(|(_, tx)| tx)
-            .collect::<Vec<_>>();
+        // Process transactions
+        {
+            // Since the changes to the database will happen all at once we won't be able to handle
+            // conflicts between consensus items in one batch there. Thus we need to make sure that
+            // all items in a batch are consistent/deterministically filter out inconsistent ones.
+            // There are two item types that need checking:
+            //  * peg-ins that each peg-in tx is only used to issue coins once
+            //  * coin spends to avoid double spends in one batch
+            let filtered_transactions = transaction_cis
+                .into_iter()
+                .filter_conflicts(|(_, tx)| tx)
+                .collect::<Vec<_>>();
 
-        let caches = self.build_verification_caches(filtered_transactions.iter().map(|(_, tx)| tx));
+            let mut db_batch = DbBatch::new();
+            let caches =
+                self.build_verification_caches(filtered_transactions.iter().map(|(_, tx)| tx));
+            for (peer, transaction) in filtered_transactions {
+                let mut batch_tx = db_batch.transaction();
 
-        // TODO: implement own parallel execution to avoid allocations and get rid of rayon
-        let par_db_batches = filtered_transactions
-            .into_par_iter()
-            .map(|(peer, transaction)| {
                 trace!(
                     "Processing transaction {:?} from peer {}",
                     transaction,
                     peer
                 );
-                let mut db_batch = DbBatch::new();
-                db_batch.autocommit(|batch_tx| {
-                    batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()))
-                });
+                batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()));
+
                 // TODO: use borrowed transaction
-                match self.process_transaction(db_batch.transaction(), transaction.clone(), &caches)
-                {
+                match self.process_transaction(
+                    batch_tx.subtransaction(),
+                    transaction.clone(),
+                    &caches,
+                ) {
                     Ok(()) => {
-                        db_batch.autocommit(|batch_tx| {
-                            batch_tx.append_insert(
-                                AcceptedTransactionKey(transaction.tx_hash()),
-                                AcceptedTransaction { epoch, transaction },
-                            );
-                        });
+                        batch_tx.append_insert(
+                            AcceptedTransactionKey(transaction.tx_hash()),
+                            AcceptedTransaction { epoch, transaction },
+                        );
                     }
                     Err(e) => {
                         // TODO: log error for user
                         warn!("Transaction proposed by peer {} failed: {}", peer, e);
                     }
                 }
+                batch_tx.commit();
+            }
+            self.db.apply_batch(db_batch).expect("DB error");
+        }
 
-                db_batch
-            })
-            .collect::<Vec<_>>();
-        let mut db_batch = DbBatch::new();
-        db_batch.autocommit(|tx| tx.append_from_accumulators(par_db_batches.into_iter()));
-        self.db.apply_batch(db_batch).expect("DB error");
-
-        let mut db_batch = DbBatch::new();
-        self.wallet
-            .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
-            .await;
-        self.mint
-            .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
-            .await;
-        self.db.apply_batch(db_batch).expect("DB error");
+        // End consensus epoch
+        {
+            let mut db_batch = DbBatch::new();
+            self.wallet
+                .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+                .await;
+            self.mint
+                .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+                .await;
+            self.db.apply_batch(db_batch).expect("DB error");
+        }
     }
 
     pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
