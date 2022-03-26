@@ -91,7 +91,9 @@ where
         &mut self,
         inputs: &[M::TxInput],
         outputs: &[(OutPoint, M::TxOutput)],
-    ) {
+    ) where
+        <M as FederationModule>::TxInput: Send + Sync,
+    {
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 

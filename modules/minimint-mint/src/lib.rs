@@ -13,7 +13,7 @@ use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
@@ -77,6 +77,11 @@ pub struct CoinNonce(pub secp256k1_zkp::schnorrsig::PublicKey);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindToken(pub tbs::BlindedMessage);
 
+#[derive(Debug)]
+pub struct VerificationCache {
+    valid_coins: HashMap<Coin, Amount>,
+}
+
 #[async_trait(?Send)]
 impl FederationModule for Mint {
     type Error = MintError;
@@ -84,7 +89,7 @@ impl FederationModule for Mint {
     type TxOutput = Coins<BlindToken>;
     type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
-    type VerificationCache = ();
+    type VerificationCache = VerificationCache;
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -121,23 +126,41 @@ impl FederationModule for Mint {
 
     fn build_verification_cache<'a>(
         &'a self,
-        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+        inputs: impl Iterator<Item = &'a Self::TxInput> + Send,
     ) -> Self::VerificationCache {
+        // We build a lookup table for checking the validity of all coins for certain amounts. This
+        // calculation can happen massively in parallel since verification is a pure function and
+        // thus has no side effects.
+        let valid_coins = inputs
+            .flat_map(|inputs| inputs.iter())
+            .par_bridge()
+            .filter_map(|(amount, coin)| {
+                let amount_key = self.pub_key.get(&amount)?;
+                if coin.verify(*amount_key) {
+                    Some((coin.clone(), amount))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        VerificationCache { valid_coins }
     }
 
     fn validate_input<'a>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        _cache: &Self::VerificationCache,
+        cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         input.iter().try_for_each(|(amount, coin)| {
-            if !coin.verify(
-                *self
-                    .pub_key
-                    .get(&amount)
-                    .ok_or(MintError::InvalidAmountTier(amount))?,
-            ) {
+            let coin_valid = cache
+                .valid_coins
+                .get(coin) // We validated the coin
+                .map(|coint_amount| *coint_amount == amount) // It has the right amount tier
+                .unwrap_or(false); // If we didn't validate the coin return false
+
+            if !coin_valid {
                 return Err(MintError::InvalidSignature);
             }
 

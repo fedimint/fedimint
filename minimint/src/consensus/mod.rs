@@ -380,7 +380,7 @@ where
 
     fn build_verification_caches<'a>(
         &self,
-        transactions: impl Iterator<Item = &'a Transaction> + Clone,
+        transactions: impl Iterator<Item = &'a Transaction> + Clone + Send,
     ) -> VerificationCaches {
         let mint_input_iter = transactions
             .clone()

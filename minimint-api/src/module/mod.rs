@@ -41,7 +41,7 @@ pub struct ApiEndpoint<M> {
 #[async_trait(?Send)]
 pub trait FederationModule: Sized {
     type Error;
-    type TxInput;
+    type TxInput: Send + Sync;
     type TxOutput;
     type TxOutputOutcome;
     type ConsensusItem;
@@ -70,7 +70,7 @@ pub trait FederationModule: Sized {
     /// constructing such lookup tables.
     fn build_verification_cache<'a>(
         &'a self,
-        inputs: impl Iterator<Item = &'a Self::TxInput>,
+        inputs: impl Iterator<Item = &'a Self::TxInput> + Send,
     ) -> Self::VerificationCache;
 
     /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
