@@ -13,27 +13,34 @@ jobs:
           toolchain: stable
           default: true
           components: clippy, rustfmt
-      - uses: actions-rs/cargo@v1
+      - uses: Swatinem/rust-cache@v1
+      - name: Print toolchain version
+        uses: actions-rs/cargo@v1
         with:
           command: version
-      - uses: actions-rs/cargo@v1
+      - name: Build everything
+        uses: actions-rs/cargo@v1
         with:
           command: build
           args: --workspace
-      - uses: actions-rs/cargo@v1
+      - name: Run unit tests
+        uses: actions-rs/cargo@v1
         with:
           command: test
           args: --workspace
-      - uses: actions-rs/cargo@v1
+      - name: Build docs
+        uses: actions-rs/cargo@v1
         with:
           command: doc
-      - name: Doc warnings
+      - name: Check docs for warnings
         run: "[ $(cargo doc 2>&1 | grep -v 'output filename collision' | grep warning | wc -l) == 0 ]"
-      - uses: actions-rs/cargo@v1
+      - name: Lint code with clippy
+        uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --workspace -- -D warnings
-      - uses: actions-rs/cargo@v1
+      - name: Lint code with rustfmt
+        uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
@@ -46,6 +53,7 @@ jobs:
         with:
           toolchain: stable
           default: true
+      - uses: Swatinem/rust-cache@v1
       - name: Install jq
         run: sudo apt-get install -y jq
       - name: Install bitcoin
