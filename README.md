@@ -10,12 +10,14 @@ You first need to generate some config. All scripts assume config to be located 
 
 ```shell
 mkdir -p cfg
-cargo run --bin configgen cfg <num_nodes> 5000 6000 <tier1> <tier2> …
+cargo run --bin configgen cfg <num_nodes> <federation_ports> <api_ports> <tier1> <tier2> …
 ```
 
-`<num_nodes>` is the amount of nodes the federation shall consist of. It should be >=4 (I always test with 5) and not too big as the cryptography of the BFT protocol is rather intense and you should ideally have 1 core per node. The numbers `5000` and `6000` specify the beginning of the port range the inner-federation sockets and API sockets bind to. The remaining arguments will be interpreted as amount tiers in msat.
-
-This will both create all the `server-n.json` config files and one `client.json`. If you want to play with multiple clients you should create one subdirectory per client and copy the `client.json` into each.
+The placeholders can be filled in as follows:
+* **`<num_nodes>`:** number of nodes to generate config for. Should be >= 4 and not too big as the cryptography of the BFT protocol is rather intense and you should ideally have 1 core per node.
+* **`<federation_ports>`:** base port for federation internal connections. If it is set to 5000 for example and there are 4 nodes they will use ports 5000, 5001, 5002 and 5003.
+* **`<api_ports>`:** base port for the federation node API server which user clients connect to. If it is set to 6000 for example and there are 4 nodes they will use ports 6000, 6001, 6002 and 6003.
+* **`<tier1> … <tier n>`:** E-cash token denominations/amount tiers in milli sat. There are different token denominations to increase efficiency so that instead of issuing 10 1sat tokens 1 10sat token can be issued. Generally powers of a base are a decent choice, e.g. powers of 10: 1 10 100 1000 10000 100000 1000000 10000000 100000000 1000000000 
 
 ### Running the mints
 A script for running all mints and a regtest `bitcoind` at once is provided at `scripts/startfed.sh`. Run it as follows:
