@@ -250,13 +250,16 @@ impl<'c> MintClient<'c> {
         Ok(tx_ids)
     }
 
-    pub fn get_active_issuances(&self) -> Vec<(OutputFinalizationKey, CoinFinalizationData)> {
-        self.db
-            .find_by_prefix::<_, OutputFinalizationKey, CoinFinalizationData>(
-                &OutputFinalizationKeyPrefix,
-            )
+    pub fn get_active_issuances(&self) -> Vec<CoinFinalizationData> {
+        let active = self
+            .context
+            .db
+            .find_by_prefix(&OutputFinalizationKeyPrefix)
             .collect::<std::result::Result<Vec<_>, _>>()
-            .expect("DB error")
+            .expect("DB error");
+        //will probably be removed
+        let active = active.iter().map(|tup| tup.1.clone()).collect();
+        active
     }
 }
 
