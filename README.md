@@ -26,13 +26,23 @@ The placeholders can be filled in as follows:
 * **`<api_ports>`:** base port for the federation node API server which user clients connect to. If it is set to 6000 for example and there are 4 nodes they will use ports 6000, 6001, 6002 and 6003.
 * **`<tier1> … <tier n>`:** E-cash token denominations/amount tiers in milli sat. There are different token denominations to increase efficiency so that instead of issuing 10 1sat tokens 1 10sat token can be issued. Generally powers of a base are a decent choice, e.g. powers of 10: 1 10 100 1000 10000 100000 1000000 10000000 100000000 1000000000 
 
+An example with concrete parameters could look as follows:
+```shell
+cargo run --bin configgen cfg 4 5000 6000 1 10 100 1000 10000 100000 1000000 10000000 100000000 1000000000
+```
+
 This will both create all the `server-n.json` config files and one `federation_client.json`. The server configs are already complete and can be used to run the nodes. The client config on the other hand needs to be amended with some information about a lightning gateway it can use. For that we run
 
 ```shell
 cargo run --bin gw_configgen -- cfg <ln_rpc>
 ```
 
-The **`<ln_rpc>`** placeholder should be replaced with the absolute path to a c-lightning `lightning_rpc` socket, typically located at `/home/<user>/.lightning/regtest/lightning` for regtest nodes. If you do not intend to use the LN feature this path does not have to be correct and you will not even have to start the gateway. But for the client to start we need to add at least a dummy gateway.
+The **`<ln_rpc>`** placeholder should be replaced with the absolute path to a c-lightning `lightning-rpc` socket, typically located at `/home/<user>/.lightning/regtest/lightning-rpc` for regtest nodes. If you do not intend to use the LN feature this path does not have to be correct and you will not even have to start the gateway. But for the client to start we need to add at least a dummy gateway.
+
+An example with concrete parameters could look as follows:
+```shell
+cargo run --bin gw_configgen -- cfg /home/user/.lightning/regtest/lightning-rpc
+```
 
 `gw_configgen` will both generate the final `client.json` for clients as well as `gateway.json` which will be used by the Lightning gateway.
 
