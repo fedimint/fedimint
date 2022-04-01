@@ -29,6 +29,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
@@ -470,6 +471,14 @@ impl FederationModule for LightningModule {
         self.db
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        "ln"
+    }
+
+    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
+        &[]
     }
 }
 

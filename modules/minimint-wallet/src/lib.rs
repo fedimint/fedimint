@@ -27,6 +27,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
@@ -412,6 +413,14 @@ impl FederationModule for Wallet {
     fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         // TODO: return BTC tx id once included in peg-out tx
         Some(())
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        "wallet"
+    }
+
+    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
+        &[]
     }
 }
 

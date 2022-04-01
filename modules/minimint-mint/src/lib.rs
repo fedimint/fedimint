@@ -9,6 +9,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -295,6 +296,14 @@ impl FederationModule for Mint {
         } else {
             None
         }
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        "mint"
+    }
+
+    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
+        &[]
     }
 }
 
