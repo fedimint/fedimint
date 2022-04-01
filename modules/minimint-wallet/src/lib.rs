@@ -27,6 +27,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::http;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
@@ -420,7 +421,18 @@ impl FederationModule for Wallet {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[]
+        &[ApiEndpoint {
+            path_spec: "/block_height",
+            params: &[],
+            method: http::Method::Get,
+            handler: |module, _params, _val| {
+                let block_height = module.consensus_height().unwrap_or(0);
+
+                debug!("Sending consensus block height {}", block_height);
+                let body = http::Body::from_json(&block_height).expect("encoding error");
+                Ok(body.into())
+            },
+        }]
     }
 }
 

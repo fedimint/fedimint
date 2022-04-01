@@ -104,7 +104,7 @@ impl FederationApi for HttpFederationApi {
     }
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
-        self.get("/block_height").await
+        self.get("/wallet/block_height").await
     }
 }
 

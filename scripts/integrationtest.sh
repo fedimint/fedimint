@@ -87,7 +87,7 @@ function await_block_sync() {
   EXPECTED_BLOCK_HEIGHT="$(( $($BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $CONFIRMATION_TIME ))"
   for ((ID=0; ID<4; ID++)); do
     MINT_API_URL="http://127.0.0.1:500$ID"
-    until [ $(curl $MINT_API_URL/block_height) == $EXPECTED_BLOCK_HEIGHT ]; do
+    until [ $(curl $MINT_API_URL/wallet/block_height) == $EXPECTED_BLOCK_HEIGHT ]; do
       sleep $POLL_INTERVAL
     done
   done
