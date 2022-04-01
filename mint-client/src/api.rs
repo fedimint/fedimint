@@ -100,7 +100,7 @@ impl FederationApi for HttpFederationApi {
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
-        self.get(&format!("/account/{}", contract)).await
+        self.get(&format!("/ln/account/{}", contract)).await
     }
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {

@@ -29,7 +29,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::module::ApiEndpoint;
+use minimint_api::module::{http, ApiEndpoint};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
@@ -478,7 +478,29 @@ impl FederationModule for LightningModule {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[]
+        &[ApiEndpoint {
+            path_spec: "/account/:contract_id",
+            params: &["contract_id"],
+            method: http::Method::Get,
+            handler: |module, params, _body| {
+                let contract_id: ContractId = match params
+                    .get("contract_id")
+                    .expect("Contract id not supplied")
+                    .parse()
+                {
+                    Ok(id) => id,
+                    Err(_) => return Ok(http::Response::new(400)),
+                };
+
+                let contract_account = module
+                    .get_contract_account(contract_id)
+                    .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
+
+                debug!("Sending contract account info for {}", contract_id);
+                let body = http::Body::from_json(&contract_account).expect("encoding error");
+                Ok(body.into())
+            },
+        }]
     }
 }
 
