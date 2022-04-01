@@ -1,11 +1,11 @@
 use crate::config::ServerConfig;
 use crate::consensus::FediMintConsensus;
 use crate::transaction::Transaction;
-use minimint_api::TransactionId;
+use minimint_api::{FederationModule, TransactionId};
 use minimint_ln::contracts::ContractId;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use tide::{Body, Request, Response};
+use tide::{Body, Request, Response, Server};
 use tracing::{debug, trace};
 
 #[derive(Clone)]
@@ -20,17 +20,61 @@ impl std::fmt::Debug for State {
 }
 
 pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand::rngs::OsRng>>) {
-    let state = State { fedimint };
+    let state = State {
+        fedimint: fedimint.clone(),
+    };
     let mut server = tide::with_state(state);
     server.at("/transaction").put(submit_transaction);
     server.at("/transaction/:txid").get(fetch_outcome);
     server.at("/offers").get(list_offers);
     server.at("/account/:contract_id").get(get_contract_account);
     server.at("/block_height").get(get_consensus_block_height);
+
+    attach_module_endpoints(&mut server, &fedimint.wallet);
+    attach_module_endpoints(&mut server, &fedimint.mint);
+    attach_module_endpoints(&mut server, &fedimint.ln);
+
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
         .await
         .expect("Could not start API server");
+}
+
+fn attach_module_endpoints<M>(server: &mut Server<State>, module: &M)
+where
+    M: FederationModule + 'static,
+    for<'a> &'a M: From<&'a FediMintConsensus<rand::rngs::OsRng>>,
+{
+    for endpoint in module.api_endpoints() {
+        // Check that params are actually defined in path spec so that there will be no errors at
+        // runtime.
+        for param in endpoint.params {
+            assert!(
+                endpoint.path_spec.contains(&format!(":{}", param)),
+                "Module defined API endpoint with faulty path spec"
+            );
+        }
+
+        let path = format!("/{}{}", module.api_base_name(), endpoint.path_spec);
+        server
+            .at(&path)
+            .method(endpoint.method, move |mut req: Request<State>| async move {
+                debug!("Received request for module API endpoint {}", req.url());
+                let data: serde_json::Value = req.body_json().await.unwrap_or_default();
+                let params = endpoint
+                    .params
+                    .iter()
+                    .map(|param| {
+                        let value = req
+                            .param(param)
+                            .expect("We previously checked the param exists in the path spec");
+                        (*param, value)
+                    })
+                    .collect();
+                let module: &M = req.state().fedimint.as_ref().into();
+                (endpoint.handler)(module, params, data)
+            });
+    }
 }
 
 async fn submit_transaction(mut req: Request<State>) -> tide::Result {

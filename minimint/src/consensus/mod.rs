@@ -343,6 +343,24 @@ where
     }
 }
 
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Wallet {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.wallet
+    }
+}
+
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Mint {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.mint
+    }
+}
+
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a LightningModule {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.ln
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
