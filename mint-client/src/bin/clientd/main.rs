@@ -1,19 +1,21 @@
 use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
+use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
 use mint_client::clients::user::{PendingRes, ResBody};
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use std::borrow::BorrowMut;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
 use tide::{Body, Request, Response};
-use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
 pub struct State {
     client: Arc<UserClient>,
+    events: Arc<Mutex<Vec<ResBody>>>,
 }
 
 #[derive(StructOpt)]
@@ -41,6 +43,7 @@ async fn main() -> tide::Result<()> {
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
     let state = State {
         client: Arc::new(client),
+        events: Arc::new(Mutex::new(Vec::new())),
     };
     let mut app = tide::with_state(state);
 
@@ -65,13 +68,18 @@ async fn info(req: Request<State>) -> tide::Result {
 async fn spend(mut req: Request<State>) -> tide::Result {
     let value: u64 = match req.body_json().await {
         Ok(i) => i,
-        Err(_) => panic!("error reading body"),
+        Err(e) => {
+            let res = ResBody::build_event(format!("{:?}", e));
+            //Will be always Ok so unwrap is ok
+            let body = Body::from_json(&res).unwrap();
+            return Ok(body.into());
+        }
     };
     let client = &req.state().client;
     let amount = Amount::from_sat(value);
     let res = match client.select_and_spend_coins(amount) {
         Ok(outgoing_coins) => ResBody::build_spend(outgoing_coins),
-        Err(_) => panic!("error in spend"),
+        Err(e) => ResBody::build_event(format!("{:?}", e)),
     };
     //Unwrap ok
     let body = Body::from_json(&res).unwrap();
@@ -81,32 +89,40 @@ async fn spend(mut req: Request<State>) -> tide::Result {
 async fn reissue(mut req: Request<State>) -> tide::Result {
     let coins: Coins<SpendableCoin> = req.body_json().await?;
     let client = Arc::clone(&req.state().client);
+    let events = Arc::clone(&req.state().events);
     tokio::spawn(async move {
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let out_point = match client.reissue(coins, &mut rng).await {
             Ok(o) => o,
-            Err(_) => panic!("error in reissue"),
+            Err(e) => {
+                events
+                    .lock()
+                    .unwrap()
+                    .push(ResBody::build_event(format!("{:?}", e)));
+                return;
+            }
         };
         match client.fetch_tx_outcome(out_point.txid, true).await {
-            Ok(_) => fetch(client).await,
-            Err(_) => panic!("error in reissue while fetching outcome"),
+            Ok(_) => fetch(client, Arc::clone(&events)).await,
+            Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
         };
     });
     Ok(Response::new(200))
 }
 /// Endpoint: starts a re-issuance and responds with [`ResBody::Reissue`], and fetches in the background
 async fn reissue_validate(mut req: Request<State>) -> tide::Result {
-    let coins: Coins<SpendableCoin> = req.body_json().await?; //Approach B
+    let coins: Coins<SpendableCoin> = req.body_json().await?;
     let client = Arc::clone(&req.state().client);
     let mut rng = rand::rngs::OsRng::new().unwrap();
     let out_point = client.reissue(coins, &mut rng).await?;
     let status = match client.fetch_tx_outcome(out_point.txid, true).await {
-        Err(_) => panic!("error while fetching outcome"),
+        Err(e) => TransactionStatus::Error(e.to_string()),
         Ok(s) => s,
     };
     let body = Body::from_json(&ResBody::build_reissue(out_point, status))?;
+    let events = Arc::clone(&req.state().events);
     tokio::spawn(async move {
-        fetch(client).await;
+        fetch(client, events).await;
     });
     Ok(body.into())
 }
@@ -118,15 +134,21 @@ async fn pending(req: Request<State>) -> tide::Result {
     let body = Body::from_json(&PendingRes::build_pending(cfd)).unwrap();
     Ok(body.into())
 }
-async fn events(_req: Request<State>) -> tide::Result {
-    let mut res = Response::new(200);
-    res.set_body(String::from("events"));
-    Ok(res)
+/// Endpoint: responds with [`ResBody::EventDump`]
+async fn events(req: Request<State>) -> tide::Result {
+    let events_ptr = Arc::clone(&req.state().events);
+    let mut events_guard = events_ptr.lock().unwrap();
+    let events = events_guard.borrow_mut();
+    let res = Body::from_json(&ResBody::build_event_dump(events)).unwrap();
+    Ok(res.into())
 }
 
-async fn fetch(client: Arc<UserClient>) {
+///Uses the [`UserClient`] to fetch the newly issued or reissued coins
+async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<ResBody>>>) {
     match client.fetch_all_coins().await {
-        Ok(_) => info!("succsessfull fetch"),
-        Err(_) => info!("error in fetch"),
+        Ok(_) => {
+            (*events.lock().unwrap()).push(ResBody::build_event("succsessfull fetch".to_owned()))
+        }
+        Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
     }
 }

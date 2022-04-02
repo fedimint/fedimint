@@ -21,7 +21,7 @@ use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 const TIMELOCK: u64 = 100;
@@ -527,6 +527,19 @@ impl ResBody {
     /// Builds the [`ResBody::Reissue`] variant.
     pub fn build_reissue(out_point: OutPoint, status: TransactionStatus) -> Self {
         ResBody::Reissue { out_point, status }
+    }
+    /// Builds the [`ResBody::Event`] variant, by taking the event message and adding a timestamp
+    pub fn build_event(msg: String) -> Self {
+        let time = SystemTime::now();
+        let d = time.duration_since(UNIX_EPOCH).unwrap();
+        let time = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
+        ResBody::Event { time, msg }
+    }
+    /// Builds the [`ResBody::EventDump`] variant. The supplied event stack will be cleared.
+    pub fn build_event_dump(events: &mut Vec<ResBody>) -> Self {
+        let e = events.clone();
+        events.clear();
+        ResBody::EventDump { events: e }
     }
 }
 // <- clientd
