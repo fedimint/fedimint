@@ -28,6 +28,7 @@ use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::module::http;
+use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
@@ -248,7 +249,11 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
-    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
+    fn validate_input<'a>(
+        &self,
+        _interconnect: &dyn ModuleInterconect,
+        input: &'a Self::TxInput,
+    ) -> Result<InputMeta<'a>, Self::Error> {
         if !self.block_is_known(input.proof_block()) {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()));
         }
@@ -272,10 +277,11 @@ impl FederationModule for Wallet {
 
     fn apply_input<'a, 'b>(
         &'a self,
+        interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(input)?;
+        let meta = self.validate_input(interconnect, input)?;
         debug!("Claiming peg-in {} worth {}", input.outpoint(), meta.amount);
 
         batch.append_insert_new(

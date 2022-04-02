@@ -9,6 +9,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
@@ -117,7 +118,11 @@ impl FederationModule for Mint {
         batch.commit();
     }
 
-    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
+    fn validate_input<'a>(
+        &self,
+        _interconnect: &dyn ModuleInterconect,
+        input: &'a Self::TxInput,
+    ) -> Result<InputMeta<'a>, Self::Error> {
         input.iter().try_for_each(|(amount, coin)| {
             if !coin.verify(
                 *self
@@ -148,10 +153,11 @@ impl FederationModule for Mint {
 
     fn apply_input<'a, 'b>(
         &'a self,
+        interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(input)?;
+        let meta = self.validate_input(interconnect, input)?;
 
         batch.append_from_iter(
             input

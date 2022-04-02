@@ -1,5 +1,4 @@
 use bitcoin_hashes::Hash as BitcoinHash;
-use minimint_api::db::Database;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
 use minimint_ln::config::LightningModuleClientConfig;
@@ -13,7 +12,6 @@ use minimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
 };
-use std::fmt::Debug;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -106,7 +104,7 @@ async fn test_outgoing() {
     };
 
     // Test case 1: before timeout
-    fed.patch_dbs(|db| set_block_height(db, 0));
+    fed.set_block_height(0);
 
     // Error: Missing preimage
     let account_input_no_witness = ContractInput {
@@ -127,7 +125,7 @@ async fn test_outgoing() {
     assert_eq!(meta.keys, vec![gw_pk]);
 
     // Test case 2: after timeout
-    fed.patch_dbs(|db| set_block_height(db, 42));
+    fed.set_block_height(42);
     let meta = fed.verify_input(&account_input_no_witness).unwrap();
     assert_eq!(meta.keys, vec![user_pk]);
 
@@ -220,37 +218,4 @@ async fn test_incoming() {
     assert_eq!(meta.keys, vec![user_pk]);
 
     // TODO: test faulty encrypted preimage
-}
-
-/// Hack to set consensus height of wallet module which is being used by the LN module too for now.
-fn set_block_height(db: &mut dyn Database, block_height: u32) {
-    use minimint_api::encoding::{Decodable, Encodable};
-
-    const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
-
-    #[derive(Clone, Debug, Encodable, Decodable)]
-    pub struct RoundConsensusKey;
-
-    impl minimint_api::db::DatabaseKeyPrefixConst for RoundConsensusKey {
-        const DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
-        type Key = Self;
-        type Value = RoundConsensus;
-    }
-
-    #[derive(Debug, Encodable, Decodable)]
-    pub struct RoundConsensus {
-        block_height: u32,
-        fee_rate: u64,
-        randomness_beacon: [u8; 32],
-    }
-
-    db.insert_entry(
-        &RoundConsensusKey,
-        &RoundConsensus {
-            block_height,
-            fee_rate: 0,
-            randomness_beacon: [0; 32],
-        },
-    )
-    .unwrap();
 }

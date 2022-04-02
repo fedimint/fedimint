@@ -1,3 +1,4 @@
+pub mod interconnect;
 pub mod testing;
 
 use crate::db::batch::BatchTx;
@@ -8,6 +9,7 @@ use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::schnorrsig;
 use std::collections::HashMap;
 
+use crate::module::interconnect::ModuleInterconect;
 pub use http_types as http;
 
 pub struct InputMeta<'a> {
@@ -65,7 +67,11 @@ pub trait FederationModule: Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error>;
+    fn validate_input<'a>(
+        &self,
+        interconnect: &dyn ModuleInterconect,
+        input: &'a Self::TxInput,
+    ) -> Result<InputMeta<'a>, Self::Error>;
 
     /// Try to spend a transaction input. On success all necessary updates will be part of the
     /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
@@ -76,6 +82,7 @@ pub trait FederationModule: Sized {
     /// processed.
     fn apply_input<'a, 'b>(
         &'a self,
+        interconnect: &'a dyn ModuleInterconect,
         batch: BatchTx<'a>,
         input: &'b Self::TxInput,
     ) -> Result<InputMeta<'b>, Self::Error>;

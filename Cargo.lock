@@ -1754,6 +1754,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin_hashes",
+ "futures",
  "itertools",
  "lightning 0.0.103",
  "lightning-invoice 0.10.0",

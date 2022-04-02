@@ -29,6 +29,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::{http, ApiEndpoint};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
@@ -182,7 +183,11 @@ impl FederationModule for LightningModule {
         batch.commit();
     }
 
-    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
+    fn validate_input<'a>(
+        &self,
+        interconnect: &dyn ModuleInterconect,
+        input: &'a Self::TxInput,
+    ) -> Result<InputMeta<'a>, Self::Error> {
         let account: ContractAccount = self
             .get_contract_account(input.crontract_id)
             .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
@@ -196,7 +201,7 @@ impl FederationModule for LightningModule {
 
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock > self.block_height() {
+                if outgoing.timelock > block_height(interconnect) {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -239,10 +244,11 @@ impl FederationModule for LightningModule {
 
     fn apply_input<'a, 'b>(
         &'a self,
+        interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(input)?;
+        let meta = self.validate_input(interconnect, input)?;
 
         let account_db_key = ContractKey(input.crontract_id);
         let mut contract_account = self
@@ -533,33 +539,6 @@ impl LightningModule {
             .verify_decryption_share(&share.0, &message.0)
     }
 
-    fn block_height(&self) -> u32 {
-        // FIXME: duplicate round consensus logic or define proper interface
-        const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
-
-        #[derive(Clone, Debug, Encodable, Decodable)]
-        pub struct RoundConsensusKey;
-
-        impl minimint_api::db::DatabaseKeyPrefixConst for RoundConsensusKey {
-            const DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
-            type Key = Self;
-            type Value = RoundConsensus;
-        }
-
-        #[derive(Debug, Encodable, Decodable)]
-        pub struct RoundConsensus {
-            block_height: u32,
-            fee_rate: u64,
-            randomness_beacon: [u8; 32],
-        }
-
-        self.db
-            .get_value(&RoundConsensusKey)
-            .expect("DB error")
-            .map(|rc| rc.block_height)
-            .unwrap_or(0)
-    }
-
     pub fn get_offers(&self) -> Vec<IncomingContractOffer> {
         self.db
             .find_by_prefix(&OfferKeyPrefix)
@@ -572,6 +551,23 @@ impl LightningModule {
             .get_value(&ContractKey(contract_id))
             .expect("DB error")
     }
+}
+
+fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
+    // This is a future because we are normally reading from a network socket. But for internal
+    // calls the data is available instantly in one go, so we can just block on it.
+    futures::executor::block_on(
+        interconnect
+            .call(
+                "wallet",
+                "/block_height".to_owned(),
+                http::Method::Get,
+                Default::default(),
+            )
+            .expect("Wallet module not present or malfunctioning!")
+            .body_json(),
+    )
+    .expect("Malformed block height response from wallet module!")
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

@@ -2,13 +2,18 @@ use crate::config::GenerateConfig;
 use crate::db::batch::DbBatch;
 use crate::db::mem_impl::MemDatabase;
 use crate::db::Database;
+use crate::module::http;
+use crate::module::interconnect::ModuleInterconect;
 use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use std::fmt::Debug;
 use std::future::Future;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, MemDatabase)>,
     client_cfg: CC,
+    block_height: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,12 +56,19 @@ where
         FakeFed {
             members,
             client_cfg,
+            block_height: Arc::new(AtomicU64::new(0)),
         }
     }
 
+    pub fn set_block_height(&self, bh: u64) {
+        self.block_height.store(bh, Ordering::Relaxed);
+    }
+
     pub fn verify_input(&self, input: &M::TxInput) -> Result<TestInputMeta, M::Error> {
+        let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
+
         let results = self.members.iter().map(|(_, member, _)| {
-            let InputMeta { amount, puk_keys } = member.validate_input(input)?;
+            let InputMeta { amount, puk_keys } = member.validate_input(&fake_ic, input)?;
             Ok(TestInputMeta {
                 amount,
                 keys: puk_keys.collect(),
@@ -80,6 +92,7 @@ where
         outputs: &[(OutPoint, M::TxOutput)],
     ) {
         let mut rng = rand::rngs::OsRng::new().unwrap();
+        let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         // TODO: only include some of the proposals for realism
         let mut consensus = vec![];
@@ -102,7 +115,7 @@ where
 
             for input in inputs {
                 member
-                    .apply_input(batch.transaction(), input)
+                    .apply_input(&fake_ic, batch.transaction(), input)
                     .expect("Faulty input");
             }
 
@@ -171,4 +184,42 @@ where
         assert_eq!(first, item);
     }
     first
+}
+
+struct FakeInterconnect(
+    Box<
+        dyn Fn(
+            &'static str,
+            String,
+            http_types::Method,
+            serde_json::Value,
+        ) -> http_types::Result<http_types::Response>,
+    >,
+);
+
+impl FakeInterconnect {
+    fn new_block_height_responder(bh: Arc<AtomicU64>) -> FakeInterconnect {
+        FakeInterconnect(Box::new(move |module, path, method, _data| {
+            assert_eq!(module, "wallet");
+            assert_eq!(path, "/block_height");
+            assert_eq!(method, http::Method::Get);
+
+            let height = bh.load(Ordering::Relaxed);
+            Ok(http::Body::from_json(&height)
+                .expect("Error encoding fake block height")
+                .into())
+        }))
+    }
+}
+
+impl ModuleInterconect for FakeInterconnect {
+    fn call(
+        &self,
+        module: &'static str,
+        path: String,
+        method: http::Method,
+        data: serde_json::Value,
+    ) -> http::Result<http::Response> {
+        (self.0)(module, path, method, data)
+    }
 }
