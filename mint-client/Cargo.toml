@@ -28,6 +28,7 @@ sha3 = "0.9.1"
 sled = "0.34.6"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
+tide = "0.16.0"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
