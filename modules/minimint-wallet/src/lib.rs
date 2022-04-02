@@ -27,6 +27,9 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::http;
+use minimint_api::module::interconnect::ModuleInterconect;
+use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
@@ -246,7 +249,11 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
-    fn validate_input<'a>(&self, input: &'a Self::TxInput) -> Result<InputMeta<'a>, Self::Error> {
+    fn validate_input<'a>(
+        &self,
+        _interconnect: &dyn ModuleInterconect,
+        input: &'a Self::TxInput,
+    ) -> Result<InputMeta<'a>, Self::Error> {
         if !self.block_is_known(input.proof_block()) {
             return Err(WalletError::UnknownPegInProofBlock(input.proof_block()));
         }
@@ -270,10 +277,11 @@ impl FederationModule for Wallet {
 
     fn apply_input<'a, 'b>(
         &'a self,
+        interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(input)?;
+        let meta = self.validate_input(interconnect, input)?;
         debug!("Claiming peg-in {} worth {}", input.outpoint(), meta.amount);
 
         batch.append_insert_new(
@@ -412,6 +420,25 @@ impl FederationModule for Wallet {
     fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         // TODO: return BTC tx id once included in peg-out tx
         Some(())
+    }
+
+    fn api_base_name(&self) -> &'static str {
+        "wallet"
+    }
+
+    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
+        &[ApiEndpoint {
+            path_spec: "/block_height",
+            params: &[],
+            method: http::Method::Get,
+            handler: |module, _params, _val| {
+                let block_height = module.consensus_height().unwrap_or(0);
+
+                debug!("Sending consensus block height {}", block_height);
+                let body = http::Body::from_json(&block_height).expect("encoding error");
+                Ok(body.into())
+            },
+        }]
     }
 }
 

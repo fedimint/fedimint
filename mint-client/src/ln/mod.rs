@@ -147,15 +147,12 @@ mod tests {
     use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
     use minimint::modules::ln::ContractOrOfferOutput;
     use minimint::modules::ln::{ContractAccount, LightningModule};
-    use minimint::modules::wallet::db::RoundConsensusKey;
-    use minimint::modules::wallet::{Feerate, RoundConsensus};
     use minimint::outcome::{OutputOutcome, TransactionStatus};
     use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
-    use std::ops::DerefMut;
     use std::sync::Arc;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
@@ -229,22 +226,6 @@ mod tests {
         (fed, client_context)
     }
 
-    /// We first fake a certain block height. This is an ugly hack due to how the consensus value
-    /// from the wallet is currently used by the ln module.
-    fn set_block_height(fed: &mut Fed, height: u64) {
-        fed.patch_dbs(|db| {
-            db.insert_entry(
-                &RoundConsensusKey,
-                &RoundConsensus {
-                    block_height: height as u32,
-                    fee_rate: Feerate { sats_per_kvb: 0 },
-                    randomness_beacon: [0; 32],
-                },
-            )
-            .unwrap();
-        });
-    }
-
     #[tokio::test]
     async fn test_outgoing() {
         let mut rng = rand::thread_rng();
@@ -255,7 +236,7 @@ mod tests {
             context: client_context.borrow_with_module_config(|x| x),
         };
 
-        set_block_height(fed.lock().await.deref_mut(), 1);
+        fed.lock().await.set_block_height(1);
 
         let out_point = OutPoint {
             txid: Default::default(),
@@ -322,7 +303,7 @@ mod tests {
         assert_eq!(contract_acc.amount, expected_amount);
 
         // We need to compensate for the wallet's confirmation target
-        set_block_height(fed.lock().await.deref_mut(), (timelock - 1) as u64);
+        fed.lock().await.set_block_height((timelock - 1) as u64);
 
         assert!(client
             .refundable_outgoing_contracts((timelock - 1) as u64)
@@ -335,7 +316,7 @@ mod tests {
         assert!(fed.lock().await.verify_input(&refund_input).is_err());
 
         // We need to compensate for the wallet's confirmation target
-        set_block_height(fed.lock().await.deref_mut(), (timelock) as u64);
+        fed.lock().await.set_block_height(timelock as u64);
 
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
         let refund_pk = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, refund_key);

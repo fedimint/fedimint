@@ -1,7 +1,9 @@
 mod conflictfilter;
+mod interconnect;
 
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
+use crate::consensus::interconnect::FediMintInterconnect;
 use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
@@ -75,15 +77,15 @@ where
             let meta = match input {
                 Input::Mint(coins) => self
                     .mint
-                    .validate_input(coins)
+                    .validate_input(&self.build_interconnect(), coins)
                     .map_err(TransactionSubmissionError::InputCoinError)?,
                 Input::Wallet(peg_in) => self
                     .wallet
-                    .validate_input(peg_in)
+                    .validate_input(&self.build_interconnect(), peg_in)
                     .map_err(TransactionSubmissionError::InputPegIn)?,
                 Input::LN(input) => self
                     .ln
-                    .validate_input(input)
+                    .validate_input(&self.build_interconnect(), input)
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
@@ -244,15 +246,15 @@ where
             let meta = match input {
                 Input::Mint(coins) => self
                     .mint
-                    .apply_input(batch.subtransaction(), coins)
+                    .apply_input(&self.build_interconnect(), batch.subtransaction(), coins)
                     .map_err(TransactionSubmissionError::InputCoinError)?,
                 Input::Wallet(peg_in) => self
                     .wallet
-                    .apply_input(batch.subtransaction(), peg_in)
+                    .apply_input(&self.build_interconnect(), batch.subtransaction(), peg_in)
                     .map_err(TransactionSubmissionError::InputPegIn)?,
                 Input::LN(input) => self
                     .ln
-                    .apply_input(batch.subtransaction(), input)
+                    .apply_input(&self.build_interconnect(), batch.subtransaction(), input)
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
@@ -340,6 +342,28 @@ where
         } else {
             None
         }
+    }
+
+    fn build_interconnect(&self) -> FediMintInterconnect<R> {
+        FediMintInterconnect { fedimint: self }
+    }
+}
+
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Wallet {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.wallet
+    }
+}
+
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Mint {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.mint
+    }
+}
+
+impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a LightningModule {
+    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+        &fed.ln
     }
 }
 
