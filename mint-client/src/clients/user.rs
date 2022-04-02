@@ -11,6 +11,7 @@ use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
 use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput};
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
+use minimint::outcome::TransactionStatus;
 use minimint::transaction as mint_tx;
 use minimint::transaction::{Output, TransactionItem};
 use minimint_api::db::batch::DbBatch;
@@ -19,6 +20,7 @@ use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -379,6 +381,29 @@ impl UserClient {
             .await
             .map_err(|_| ClientError::WaitContractTimeout)?
     }
+
+    /// Fetches the TransactionStatus for a txid
+    /// Polling should *only* be set to true if it is anticipated that the txid is valid but has not yet been processed
+    pub async fn fetch_tx_outcome(
+        &self,
+        tx: TransactionId,
+        polling: bool,
+    ) -> Result<TransactionStatus, ClientError> {
+        //did not choose to use the MintClientError is_retryable logic because the 404 error should normaly
+        //not be retryable just in this specific case...
+        let status;
+        loop {
+            match self.context.api.fetch_tx_outcome(tx).await {
+                Ok(s) => {
+                    status = s;
+                    break;
+                }
+                Err(_e) if polling => tokio::time::sleep(Duration::from_secs(1)).await,
+                Err(e) => return Err(ClientError::MintApiError(e)),
+            }
+        }
+        Ok(status)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -420,3 +445,54 @@ impl From<LnClientError> for ClientError {
         ClientError::LnClientError(e)
     }
 }
+
+// -> clientd
+/// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
+#[derive(Serialize, Deserialize, Clone)]
+pub enum ResBody {
+    ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Infoi.quantity * Infoi.tier) with i = 0 - n
+    Info { coins: Vec<CoinsByTier> },
+    /// Holds the serialized [`Coins<SpendableCoin>`]
+    Spend { token: Coins<SpendableCoin> },
+    /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]
+    Reissue {
+        out_point: OutPoint,
+        status: TransactionStatus,
+    },
+    /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
+    EventDump { events: Vec<ResBody> },
+    /// Represents an event which occurred. Might be an Error or Non-Error
+    Event { time: u64, msg: String },
+    /// Represents an empty response
+    Empty,
+}
+/// Holds quantity of coins per tier
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CoinsByTier {
+    tier: u64,
+    quantity: usize,
+}
+
+impl ResBody {
+    /// Builds the [`ResBody::Info`] variant.
+    pub fn build_info(coins: Coins<SpendableCoin>) -> Self {
+        let info_coins: Vec<CoinsByTier> = coins
+            .coins
+            .iter()
+            .map(|(tier, c)| CoinsByTier {
+                quantity: c.len(),
+                tier: tier.milli_sat,
+            })
+            .collect();
+        ResBody::Info { coins: info_coins }
+    }
+    /// Builds the [`ResBody::Spend`] variant.
+    pub fn build_spend(token: Coins<SpendableCoin>) -> Self {
+        ResBody::Spend { token }
+    }
+    /// Builds the [`ResBody::Reissue`] variant.
+    pub fn build_reissue(out_point: OutPoint, status: TransactionStatus) -> Self {
+        ResBody::Reissue { out_point, status }
+    }
+}
+// <- clientd

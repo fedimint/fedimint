@@ -1,8 +1,25 @@
-use tide::{Request, Response};
+use minimint::config::load_from_file;
+use minimint::modules::mint::tiered::coins::Coins;
+use minimint_api::Amount;
+use mint_client::clients::user::ResBody;
+use mint_client::mint::SpendableCoin;
+use mint_client::{ClientAndGatewayConfig, UserClient};
+use std::path::PathBuf;
+use std::sync::Arc;
+use structopt::StructOpt;
+use tide::{Body, Request, Response};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
-pub struct State();
+pub struct State {
+    client: Arc<UserClient>,
+}
+
+#[derive(StructOpt)]
+struct Options {
+    workdir: PathBuf,
+}
 
 #[tokio::main]
 async fn main() -> tide::Result<()> {
@@ -12,8 +29,19 @@ async fn main() -> tide::Result<()> {
         )
         .with_writer(std::io::stderr)
         .init();
+    let opts: Options = StructOpt::from_args();
+    let cfg_path = opts.workdir.join("client.json");
+    let db_path = opts.workdir.join("client.db");
+    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
+    let db = sled::open(&db_path)
+        .unwrap()
+        .open_tree("mint-client")
+        .unwrap();
 
-    let state = State();
+    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let state = State {
+        client: Arc::new(client),
+    };
     let mut app = tide::with_state(state);
 
     app.at("/info").post(info);
@@ -25,25 +53,59 @@ async fn main() -> tide::Result<()> {
     app.listen("127.0.0.1:8080").await?;
     Ok(())
 }
-async fn info(_req: Request<State>) -> tide::Result {
-    let mut res = Response::new(200);
-    res.set_body(String::from("info"));
-    Ok(res)
+/// Endpoint: responds with [`ResBody::Info`]
+async fn info(req: Request<State>) -> tide::Result {
+    let client = &req.state().client;
+    //This will never fail since ResBody is always build with reliable constructors and cant be 'messed up' so unwrap is ok
+    let body = Body::from_json(&ResBody::build_info(client.coins())).unwrap();
+    Ok(body.into())
 }
-async fn spend(_req: Request<State>) -> tide::Result {
-    let mut res = Response::new(200);
-    res.set_body(String::from("spend"));
-    Ok(res)
+/// Endpoint: responds with [`ResBody::Spend`], when reissue-ing use everything in the raw json after "token"
+async fn spend(mut req: Request<State>) -> tide::Result {
+    let value: u64 = match req.body_json().await {
+        Ok(i) => i,
+        Err(_) => panic!("error reading body"),
+    };
+    let client = &req.state().client;
+    let amount = Amount::from_sat(value);
+    let res = match client.select_and_spend_coins(amount) {
+        Ok(outgoing_coins) => ResBody::build_spend(outgoing_coins),
+        Err(_) => panic!("error in spend"),
+    };
+    //Unwrap ok
+    let body = Body::from_json(&res).unwrap();
+    Ok(body.into())
 }
-async fn reissue(_req: Request<State>) -> tide::Result {
-    let mut res = Response::new(200);
-    res.set_body(String::from("reissue"));
-    Ok(res)
+async fn reissue(mut req: Request<State>) -> tide::Result {
+    let coins: Coins<SpendableCoin> = req.body_json().await?;
+    let client = Arc::clone(&req.state().client);
+    tokio::spawn(async move {
+        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let out_point = match client.reissue(coins, &mut rng).await {
+            Ok(o) => o,
+            Err(_) => panic!("error in reissue"),
+        };
+        match client.fetch_tx_outcome(out_point.txid, true).await {
+            Ok(_) => fetch(client).await,
+            Err(_) => panic!("error in reissue while fetching outcome"),
+        };
+    });
+    Ok(Response::new(200))
 }
-async fn reissue_validate(_req: Request<State>) -> tide::Result {
-    let mut res = Response::new(200);
-    res.set_body(String::from("reissue_validate"));
-    Ok(res)
+async fn reissue_validate(mut req: Request<State>) -> tide::Result {
+    let coins: Coins<SpendableCoin> = req.body_json().await?; //Approach B
+    let client = Arc::clone(&req.state().client);
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let out_point = client.reissue(coins, &mut rng).await?;
+    let status = match client.fetch_tx_outcome(out_point.txid, true).await {
+        Err(_) => panic!("error while fetching outcome"),
+        Ok(s) => s,
+    };
+    let body = Body::from_json(&ResBody::build_reissue(out_point, status))?;
+    tokio::spawn(async move {
+        fetch(client).await;
+    });
+    Ok(body.into())
 }
 async fn pending(_req: Request<State>) -> tide::Result {
     let mut res = Response::new(200);
@@ -54,4 +116,11 @@ async fn events(_req: Request<State>) -> tide::Result {
     let mut res = Response::new(200);
     res.set_body(String::from("events"));
     Ok(res)
+}
+
+async fn fetch(client: Arc<UserClient>) {
+    match client.fetch_all_coins().await {
+        Ok(_) => info!("succsessfull fetch"),
+        Err(_) => info!("error in fetch"),
+    }
 }
