@@ -1,7 +1,7 @@
 use crate::api::{ApiError, FederationApi};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::{LnClient, LnClientError};
-use crate::mint::{MintClient, MintClientError, SpendableCoin};
+use crate::mint::{CoinFinalizationData, MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
 use bitcoin::{Address, Transaction};
@@ -404,6 +404,11 @@ impl UserClient {
         }
         Ok(status)
     }
+
+    pub fn fetch_active_issuances(&self) -> Vec<CoinFinalizationData> {
+        let coins: Vec<CoinFinalizationData> = self.mint_client().get_active_issuances().to_vec();
+        coins
+    }
 }
 
 #[derive(Error, Debug)]
@@ -451,7 +456,11 @@ impl From<LnClientError> for ClientError {
 #[derive(Serialize, Deserialize, Clone)]
 pub enum ResBody {
     ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Infoi.quantity * Infoi.tier) with i = 0 - n
-    Info { coins: Vec<CoinsByTier> },
+    /// Also contains the [`PendingRes`] variant.
+    Info {
+        coins: Vec<CoinsByTier>,
+        pending: PendingRes,
+    },
     /// Holds the serialized [`Coins<SpendableCoin>`]
     Spend { token: Coins<SpendableCoin> },
     /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]
@@ -466,6 +475,28 @@ pub enum ResBody {
     /// Represents an empty response
     Empty,
 }
+
+/// Active issuances : Not yet (bey the federation) signed BUT accepted coins
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PendingRes {
+    //TODO: Also return Vec<TransactionId> (?)
+    transactions: usize,
+    acc_qty_coins: usize,
+    acc_val_amount: Amount,
+}
+
+impl PendingRes {
+    pub fn build_pending(all_pending: Vec<CoinFinalizationData>) -> Self {
+        let acc_qty_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
+        let acc_val_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
+        PendingRes {
+            transactions: all_pending.len(),
+            acc_qty_coins,
+            acc_val_amount,
+        }
+    }
+}
+
 /// Holds quantity of coins per tier
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CoinsByTier {
@@ -475,7 +506,7 @@ pub struct CoinsByTier {
 
 impl ResBody {
     /// Builds the [`ResBody::Info`] variant.
-    pub fn build_info(coins: Coins<SpendableCoin>) -> Self {
+    pub fn build_info(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
         let info_coins: Vec<CoinsByTier> = coins
             .coins
             .iter()
@@ -484,7 +515,10 @@ impl ResBody {
                 tier: tier.milli_sat,
             })
             .collect();
-        ResBody::Info { coins: info_coins }
+        ResBody::Info {
+            coins: info_coins,
+            pending: PendingRes::build_pending(cfd),
+        }
     }
     /// Builds the [`ResBody::Spend`] variant.
     pub fn build_spend(token: Coins<SpendableCoin>) -> Self {
