@@ -37,7 +37,7 @@ This will both create all the `server-n.json` config files and one `federation_c
 cargo run --bin gw_configgen -- cfg <ln_rpc>
 ```
 
-The **`<ln_rpc>`** placeholder should be replaced with the absolute path to a c-lightning `lightning-rpc` socket, typically located at `/home/<user>/.lightning/regtest/lightning-rpc` for regtest nodes. If you do not intend to use the LN feature this path does not have to be correct and you will not even have to start the gateway. But for the client to start we need to add at least a dummy gateway.
+The **`<ln_rpc>`** placeholder should be replaced with the absolute path to a c-lightning `lightning-rpc` socket, typically located at `/home/<user>/.lightning/regtest/lightning-rpc` for regtest nodes. If you do not intend to use the LN feature this path does not have to be correct and you will not even have to start the gateway. **But for the client to start we need to add at least a dummy gateway**.
 
 An example with concrete parameters could look as follows:
 ```shell
@@ -45,7 +45,14 @@ cargo run --bin gw_configgen -- cfg /home/user/.lightning/regtest/lightning-rpc
 ```
 
 `gw_configgen` will both generate the final `client.json` for clients as well as `gateway.json` which will be used by the Lightning gateway.
-
+If you have c-lighning installed you can already create two directories for the lightning nodes to use the gateway later
+```shell
+mkdir -p ln1 ln2
+```
+Run the client config and set `ln1` as the gateway
+```shell
+cargo run --bin gw_configgen -- cfg "ln1/regtest/lightning-rpc"
+```
 ### Running the mints
 A script for running all mints and a regtest `bitcoind` at once is provided at `scripts/startfed.sh`. Run it as follows:
 
@@ -56,7 +63,33 @@ bash scripts/startfed.sh <num_nodes> 0
 The `0` in the end specifies how many nodes to leave out. E.g. changing it to one would skip the first node. This is useful to run a single node with a debugger attached.
 
 Log output can be adjusted using the `RUST_LOG` environment variable and is set to `info` by default. Logging can be adjusted per module, see the [`env_logger` documentation](https://docs.rs/env_logger/0.8.4/env_logger/#enabling-logging) for details.
-
+###Setting up a channel from LN1 to LN2
+If you want to pay invoices later, the node (ln1) you've set as a gateway needs to have a channel to the payee node :
+```shell
+#start both nodes
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln1 --addr=127.0.0.1:9000
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln2 --addr=127.0.0.1:9001
+```
+Send your gateway node some funds :
+```shell
+#get an address from ln1
+lightning-cli --network regtest --lightning-dir=ln1 newaddr
+#send bitcoin to that address
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <ADDRESS>
+#make sure to mine enough blocks
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
+```
+Now you can open a channel :
+```shell
+#first you have to get the pub key of ln2 ("id" in json)
+lightning-cli --network regtest --lightning-dir=ln2 getinfo
+#now you can connect ln1 to ln2
+lightning-cli --network regtest --lightning-dir=ln1 connect <ID>@127.0.0.1:9001
+#after that you should mine some blocks again
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
+```
 ### Using the client
 First you need to make sure that your regtest `bitcoind` has some coins that are mature. For that you can generate a few hundred blocks to your own wallet:
 
@@ -111,7 +144,21 @@ minimint $ cargo run --bin mint-client --release -- cfg fetch
      Running `target/release/mint-client cfg fetch`
 Jun 15 15:02:06.264  INFO mint_client: Fetched coins from issuance 47d8f08710423c1e300854ecb6463ca6185e4b3890bbbb90fd1ff70c72e1ed18
 ```
-
+To pay a lightning invoice the `ln_gateway` must run :
+```shell
+cargo run --bin ln_gateway --release cfg
+```
+To get an invoice you can use ln2 :
+```shell
+#make sure your client holds coins for that amount tier. 100000msat = 100sat. For now the client is not able to spend with change
+lightning-cli --network regtest --lightning-dir=ln2 invoice 100000 test test 1m
+```
+To pay the invoice : 
+```shell
+cargo run --bin mint-client --release -- cfg ln-pay
+#to check if the invoice got paid successfully you can use ln2
+lightning-cli --network regtest --lightning-dir=ln2 waitinvoice test
+```
 There also exist some other, more experimental commands that can be explored using the `--help` flag:
 
 ```
