@@ -2,19 +2,24 @@ use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
-use mint_client::clients::user::{PendingRes, ResBody};
+use mint_client::clients::user::{InvoiceReq, PendingRes, ResBody};
+use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use reqwest::StatusCode;
 use std::borrow::BorrowMut;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use structopt::StructOpt;
 use tide::{Body, Request, Response};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
 pub struct State {
     client: Arc<UserClient>,
+    gateway: Arc<LightningGateway>,
     events: Arc<Mutex<Vec<ResBody>>>,
 }
 
@@ -43,6 +48,7 @@ async fn main() -> tide::Result<()> {
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
     let state = State {
         client: Arc::new(client),
+        gateway: Arc::new(cfg.gateway.clone()),
         events: Arc::new(Mutex::new(Vec::new())),
     };
     let mut app = tide::with_state(state);
@@ -50,6 +56,7 @@ async fn main() -> tide::Result<()> {
     app.at("/info").post(info);
     app.at("/pegin_address").post(pegin_address);
     app.at("/spend").post(spend);
+    app.at("/lnpay").post(ln_pay);
     app.at("/reissue").post(reissue);
     app.at("/reissue_validate").post(reissue_validate);
     app.at("/pending").post(pending);
@@ -98,6 +105,31 @@ async fn spend(mut req: Request<State>) -> tide::Result {
     //Unwrap ok
     let body = Body::from_json(&res).unwrap();
     Ok(body.into())
+}
+///Endpoint: responds with the [`ResBody::Event`] variant when successful
+async fn ln_pay(mut req: Request<State>) -> tide::Result {
+    //TODO: Utilize Errors appropriately (put NotEnoughCoins on EventStack or return directly ?)
+    let client = Arc::clone(&req.state().client);
+    let gateway = Arc::clone(&req.state().gateway);
+    let invoice: InvoiceReq = req.body_json().await?;
+    match pay_invoice(invoice.bolt11, client, gateway).await {
+        Ok(res) => match res.status() {
+            StatusCode::OK => {
+                let res = ResBody::build_event("succsessfull ln-payment".to_string());
+                let body = Body::from_json(&res).unwrap();
+                Ok(body.into())
+            }
+            _ => {
+                let res = ResBody::build_event("LN-Payment failed".to_string());
+                let error = tide::Error::from_debug(res);
+                Err(error) // this dosen't do anything might as well use '?' everywhere since the client only gets 500 error anyway
+            }
+        },
+        Err(e) => {
+            let error = tide::Error::from_debug(e);
+            Err(error) //same here
+        }
+    }
 }
 /// Endpoint: always responds with Status 200. The caller has to be aware that it can fail and might query /event afterwards.
 async fn reissue(mut req: Request<State>) -> tide::Result {
@@ -165,4 +197,33 @@ async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<ResBody>>>) {
         }
         Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
     }
+}
+///Uses the [`UserClient`] to send a Request to the lightning gateway ([`LightningGateway`])
+async fn pay_invoice(
+    bolt11: lightning_invoice::Invoice,
+    client: Arc<UserClient>,
+    gateway: Arc<LightningGateway>,
+) -> tide::Result<reqwest::Response> {
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let http = reqwest::Client::new();
+
+    let contract_id = client
+        .fund_outgoing_ln_contract(&*gateway, bolt11, &mut rng)
+        .await?;
+
+    client
+        .wait_contract_timeout(contract_id, Duration::from_secs(5))
+        .await?;
+
+    info!(
+        "Funded outgoing contract {}, notifying gateway",
+        contract_id
+    );
+
+    Ok(http
+        .post(&format!("{}/pay_invoice", &*gateway.api))
+        .json(&contract_id)
+        .timeout(Duration::from_secs(15))
+        .send()
+        .await?)
 }

@@ -452,8 +452,9 @@ impl From<LnClientError> for ClientError {
 }
 
 // -> clientd
+
 /// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ResBody {
     ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Infoi.quantity * Infoi.tier) with i = 0 - n
     /// Also contains the [`PendingRes`] variant.
@@ -479,7 +480,7 @@ pub enum ResBody {
 }
 
 /// Active issuances : Not yet (bey the federation) signed BUT accepted coins
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PendingRes {
     //TODO: Also return Vec<TransactionId> (?)
     transactions: usize,
@@ -500,10 +501,16 @@ impl PendingRes {
 }
 
 /// Holds quantity of coins per tier
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoinsByTier {
     tier: u64,
     quantity: usize,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct InvoiceReq {
+    #[serde(with = "minimint::modules::ln::serde_invoice")]
+    pub bolt11: lightning_invoice::Invoice,
 }
 
 impl ResBody {

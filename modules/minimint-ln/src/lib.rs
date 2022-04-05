@@ -11,6 +11,7 @@
 pub mod config;
 pub mod contracts;
 mod db;
+pub mod serde_invoice;
 
 use crate::config::LightningModuleConfig;
 use crate::contracts::incoming::{
