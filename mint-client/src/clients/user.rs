@@ -461,6 +461,8 @@ pub enum ResBody {
         coins: Vec<CoinsByTier>,
         pending: PendingRes,
     },
+    ///Holds a new address for the client to use for peg-in
+    PegInAddress { pegin_address: bitcoin::Address },
     /// Holds the serialized [`Coins<SpendableCoin>`]
     Spend { token: Coins<SpendableCoin> },
     /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]

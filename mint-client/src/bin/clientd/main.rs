@@ -48,6 +48,7 @@ async fn main() -> tide::Result<()> {
     let mut app = tide::with_state(state);
 
     app.at("/info").post(info);
+    app.at("/pegin_address").post(pegin_address);
     app.at("/spend").post(spend);
     app.at("/reissue").post(reissue);
     app.at("/reissue_validate").post(reissue_validate);
@@ -62,6 +63,19 @@ async fn info(req: Request<State>) -> tide::Result {
     let cfd = client.fetch_active_issuances();
     //This will never fail since ResBody is always build with reliable constructors and cant be 'messed up' so unwrap is ok
     let body = Body::from_json(&ResBody::build_info(client.coins(), cfd)).unwrap();
+    Ok(body.into())
+}
+/// Endpoint: responds with a [`bitcoin::util::address`], which can be used to peg-in funds to receive e-cash
+async fn pegin_address(req: Request<State>) -> tide::Result {
+    let client = Arc::clone(&req.state().client);
+    let mut rng = rand::rngs::OsRng::new()?; //probably just put that in state later
+    let address = client.get_new_pegin_address(&mut rng);
+    // I think it's unnecessary to build a new ResBody variant but I don't know maybe it's bad practice because of inconsistency ?
+    //unwrap always ok
+    let body = Body::from_json(&ResBody::PegInAddress {
+        pegin_address: address,
+    })
+    .unwrap();
     Ok(body.into())
 }
 /// Endpoint: responds with [`ResBody::Spend`], when reissue-ing use everything in the raw json after "token"
