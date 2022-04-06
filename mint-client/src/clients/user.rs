@@ -454,6 +454,12 @@ impl From<LnClientError> for ClientError {
 }
 
 // -> clientd
+///Holds either a Success or an Error variant and will be send as a response to the client (note: this means all [`ClientError`] will be send as [`tide::Result`] Ok
+/// only other errors will cause the server to respond with [`tide::Result`] Err)
+pub enum Event {
+    Success(APIResponse),
+    Error(APIResponse), //TODO: define Error APIResponse variant, implement a build method and use it in the endpoints
+}
 /// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum APIResponse {
@@ -463,19 +469,32 @@ pub enum APIResponse {
         coins: Vec<CoinsByTier>,
         pending: PendingRes,
     },
+    //this will be changed anyway needed quick fix in rebase
+    Pending {
+        pending: PendingRes,
+    },
     ///Holds a new address for the client to use for peg-in
-    PegInAddress { pegin_address: bitcoin::Address },
+    PegInAddress {
+        pegin_address: bitcoin::Address,
+    },
     /// Holds the serialized [`Coins<SpendableCoin>`]
-    Spend { token: Coins<SpendableCoin> },
+    Spend {
+        token: Coins<SpendableCoin>,
+    },
     /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]
     Reissue {
         out_point: OutPoint,
         status: TransactionStatus,
     },
     /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
-    EventDump { events: Vec<APIResponse> },
+    EventDump {
+        events: Vec<APIResponse>,
+    },
     /// Represents an event which occurred. Might be an Error or Non-Error
-    Event { time: u64, msg: String },
+    Event {
+        time: u64,
+        msg: String,
+    },
     /// Represents an empty response
     Empty,
 }
@@ -580,6 +599,18 @@ impl APIResponse {
         let e = events.clone();
         events.clear();
         APIResponse::EventDump { events: e }
+    }
+}
+
+impl From<Event> for tide::Response {
+    fn from(event: Event) -> Self {
+        // is there a better way of doing this ?
+        let body = tide::Body::from_json(&match event {
+            Event::Success(res) => res,
+            Event::Error(res) => res,
+        })
+        .expect("Can not fail, if the event got build it can be Serialized");
+        body.into()
     }
 }
 // <- clientd
