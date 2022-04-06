@@ -23,7 +23,6 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::fmt::Formatter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -455,38 +454,9 @@ impl From<LnClientError> for ClientError {
 }
 
 // -> clientd
-pub struct WrappedInvoice(pub lightning_invoice::Invoice);
-struct InvoiceVisitor {}
-
-impl<'de> serde::de::Visitor<'de> for InvoiceVisitor {
-    type Value = WrappedInvoice;
-
-    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-        formatter.write_str("Could not deserialize Invoice")
-    }
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
-        match v.parse::<lightning_invoice::Invoice>() {
-            Ok(bolt11) => Ok(WrappedInvoice(bolt11)),
-            Err(e) => Err(serde::de::Error::custom(e.to_string())),
-        }
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for WrappedInvoice {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        deserializer.deserialize_str(InvoiceVisitor {})
-    }
-}
-
 /// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum ResBody {
+pub enum APIResponse {
     ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Infoi.quantity * Infoi.tier) with i = 0 - n
     /// Also contains the [`PendingRes`] variant.
     Info {
@@ -503,7 +473,7 @@ pub enum ResBody {
         status: TransactionStatus,
     },
     /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
-    EventDump { events: Vec<ResBody> },
+    EventDump { events: Vec<APIResponse> },
     /// Represents an event which occurred. Might be an Error or Non-Error
     Event { time: u64, msg: String },
     /// Represents an empty response
@@ -556,7 +526,6 @@ pub struct PegOutReq {
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
 }
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct InvoiceReq {
     #[serde(with = "minimint::modules::ln::serde_invoice")]
@@ -575,8 +544,8 @@ fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
 }
-impl ResBody {
-    /// Builds the [`ResBody::Info`] variant.
+impl APIResponse {
+    /// Builds the [`APIResponse::Info`] variant.
     pub fn build_info(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
         let info_coins: Vec<CoinsByTier> = coins
             .coins
@@ -586,31 +555,31 @@ impl ResBody {
                 tier: tier.milli_sat,
             })
             .collect();
-        ResBody::Info {
+        APIResponse::Info {
             coins: info_coins,
             pending: PendingRes::build_pending(cfd),
         }
     }
-    /// Builds the [`ResBody::Spend`] variant.
+    /// Builds the [`APIResponse::Spend`] variant.
     pub fn build_spend(token: Coins<SpendableCoin>) -> Self {
-        ResBody::Spend { token }
+        APIResponse::Spend { token }
     }
-    /// Builds the [`ResBody::Reissue`] variant.
+    /// Builds the [`APIResponse::Reissue`] variant.
     pub fn build_reissue(out_point: OutPoint, status: TransactionStatus) -> Self {
-        ResBody::Reissue { out_point, status }
+        APIResponse::Reissue { out_point, status }
     }
-    /// Builds the [`ResBody::Event`] variant, by taking the event message and adding a timestamp
+    /// Builds the [`APIResponse::Event`] variant, by taking the event message and adding a timestamp
     pub fn build_event(msg: String) -> Self {
         let time = SystemTime::now();
         let d = time.duration_since(UNIX_EPOCH).unwrap();
         let time = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
-        ResBody::Event { time, msg }
+        APIResponse::Event { time, msg }
     }
-    /// Builds the [`ResBody::EventDump`] variant. The supplied event stack will be cleared.
-    pub fn build_event_dump(events: &mut Vec<ResBody>) -> Self {
+    /// Builds the [`APIResponse::EventDump`] variant. The supplied event stack will be cleared.
+    pub fn build_event_dump(events: &mut Vec<APIResponse>) -> Self {
         let e = events.clone();
         events.clear();
-        ResBody::EventDump { events: e }
+        APIResponse::EventDump { events: e }
     }
 }
 // <- clientd

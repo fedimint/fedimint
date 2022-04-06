@@ -4,7 +4,7 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 
 use minimint_api::Amount;
-use mint_client::clients::user::{InvoiceReq, PegInReq, PegOutReq, PendingRes, ResBody};
+use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq, PendingRes};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
@@ -23,7 +23,7 @@ use tracing_subscriber::EnvFilter;
 pub struct State {
     client: Arc<UserClient>,
     gateway: Arc<LightningGateway>,
-    events: Arc<Mutex<Vec<ResBody>>>,
+    events: Arc<Mutex<Vec<APIResponse>>>,
 }
 
 #[derive(StructOpt)]
@@ -69,12 +69,12 @@ async fn main() -> tide::Result<()> {
     app.listen("127.0.0.1:8081").await?;
     Ok(())
 }
-/// Endpoint: responds with [`ResBody::Info`]
+/// Endpoint: responds with [`APIResponse::Info`]
 async fn info(req: Request<State>) -> tide::Result {
     let client = &req.state().client;
     let cfd = client.fetch_active_issuances();
-    //This will never fail since ResBody is always build with reliable constructors and cant be 'messed up' so unwrap is ok
-    let body = Body::from_json(&ResBody::build_info(client.coins(), cfd)).unwrap();
+    //This will never fail since APIResponse is always build with reliable constructors and cant be 'messed up' so unwrap is ok
+    let body = Body::from_json(&APIResponse::build_info(client.coins(), cfd)).unwrap();
     Ok(body.into())
 }
 /// Endpoint: responds with a [`bitcoin::util::address`], which can be used to peg-in funds to receive e-cash
@@ -82,9 +82,9 @@ async fn pegin_address(req: Request<State>) -> tide::Result {
     let client = Arc::clone(&req.state().client);
     let mut rng = rand::rngs::OsRng::new()?; //probably just put that in state later
     let address = client.get_new_pegin_address(&mut rng);
-    // I think it's unnecessary to build a new ResBody variant but I don't know maybe it's bad practice because of inconsistency ?
+    // I think it's unnecessary to build a new APIResponse variant but I don't know maybe it's bad practice because of inconsistency ?
     //unwrap always ok
-    let body = Body::from_json(&ResBody::PegInAddress {
+    let body = Body::from_json(&APIResponse::PegInAddress {
         pegin_address: address,
     })
     .unwrap();
@@ -118,12 +118,12 @@ async fn pegout(mut req: Request<State>) -> tide::Result {
     let body = Body::from_json(&id.to_hex())?;
     Ok(body.into())
 }
-/// Endpoint: responds with [`ResBody::Spend`], when reissue-ing use everything in the raw json after "token"
+/// Endpoint: responds with [`APIResponse::Spend`], when reissue-ing use everything in the raw json after "token"
 async fn spend(mut req: Request<State>) -> tide::Result {
     let value: u64 = match req.body_json().await {
         Ok(i) => i,
         Err(e) => {
-            let res = ResBody::build_event(format!("{:?}", e));
+            let res = APIResponse::build_event(format!("{:?}", e));
             //Will be always Ok so unwrap is ok
             let body = Body::from_json(&res).unwrap();
             return Ok(body.into());
@@ -132,14 +132,14 @@ async fn spend(mut req: Request<State>) -> tide::Result {
     let client = &req.state().client;
     let amount = Amount::from_sat(value);
     let res = match client.select_and_spend_coins(amount) {
-        Ok(outgoing_coins) => ResBody::build_spend(outgoing_coins),
-        Err(e) => ResBody::build_event(format!("{:?}", e)),
+        Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
+        Err(e) => APIResponse::build_event(format!("{:?}", e)),
     };
     //Unwrap ok
     let body = Body::from_json(&res).unwrap();
     Ok(body.into())
 }
-///Endpoint: responds with the [`ResBody::Event`] variant when successful
+///Endpoint: responds with the [`APIResponse::Event`] variant when successful
 async fn ln_pay(mut req: Request<State>) -> tide::Result {
     //TODO: Utilize Errors appropriately (put NotEnoughCoins on EventStack or return directly ?)
     let client = Arc::clone(&req.state().client);
@@ -148,12 +148,12 @@ async fn ln_pay(mut req: Request<State>) -> tide::Result {
     match pay_invoice(invoice.bolt11, client, gateway).await {
         Ok(res) => match res.status() {
             StatusCode::OK => {
-                let res = ResBody::build_event("succsessfull ln-payment".to_string());
+                let res = APIResponse::build_event("succsessfull ln-payment".to_string());
                 let body = Body::from_json(&res).unwrap();
                 Ok(body.into())
             }
             _ => {
-                let res = ResBody::build_event("LN-Payment failed".to_string());
+                let res = APIResponse::build_event("LN-Payment failed".to_string());
                 let error = tide::Error::from_debug(res);
                 Err(error) // this dosen't do anything might as well use '?' everywhere since the client only gets 500 error anyway
             }
@@ -177,18 +177,18 @@ async fn reissue(mut req: Request<State>) -> tide::Result {
                 events
                     .lock()
                     .unwrap()
-                    .push(ResBody::build_event(format!("{:?}", e)));
+                    .push(APIResponse::build_event(format!("{:?}", e)));
                 return;
             }
         };
         match client.fetch_tx_outcome(out_point.txid, true).await {
             Ok(_) => fetch(client, Arc::clone(&events)).await,
-            Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
+            Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
         };
     });
     Ok(Response::new(200))
 }
-/// Endpoint: starts a re-issuance and responds with [`ResBody::Reissue`], and fetches in the background
+/// Endpoint: starts a re-issuance and responds with [`APIResponse::Reissue`], and fetches in the background
 async fn reissue_validate(mut req: Request<State>) -> tide::Result {
     let coins: Coins<SpendableCoin> = req.body_json().await?;
     let client = Arc::clone(&req.state().client);
@@ -198,7 +198,7 @@ async fn reissue_validate(mut req: Request<State>) -> tide::Result {
         Err(e) => TransactionStatus::Error(e.to_string()),
         Ok(s) => s,
     };
-    let body = Body::from_json(&ResBody::build_reissue(out_point, status))?;
+    let body = Body::from_json(&APIResponse::build_reissue(out_point, status))?;
     let events = Arc::clone(&req.state().events);
     tokio::spawn(async move {
         fetch(client, events).await;
@@ -213,22 +213,21 @@ async fn pending(req: Request<State>) -> tide::Result {
     let body = Body::from_json(&PendingRes::build_pending(cfd)).unwrap();
     Ok(body.into())
 }
-/// Endpoint: responds with [`ResBody::EventDump`]
+/// Endpoint: responds with [`APIResponse::EventDump`]
 async fn events(req: Request<State>) -> tide::Result {
     let events_ptr = Arc::clone(&req.state().events);
     let mut events_guard = events_ptr.lock().unwrap();
     let events = events_guard.borrow_mut();
-    let res = Body::from_json(&ResBody::build_event_dump(events)).unwrap();
+    let res = Body::from_json(&APIResponse::build_event_dump(events)).unwrap();
     Ok(res.into())
 }
 
 ///Uses the [`UserClient`] to fetch the newly issued or reissued coins
-async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<ResBody>>>) {
+async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<APIResponse>>>) {
     match client.fetch_all_coins().await {
-        Ok(_) => {
-            (*events.lock().unwrap()).push(ResBody::build_event("succsessfull fetch".to_owned()))
-        }
-        Err(e) => (*events.lock().unwrap()).push(ResBody::build_event(format!("{:?}", e))),
+        Ok(_) => (*events.lock().unwrap())
+            .push(APIResponse::build_event("succsessfull fetch".to_owned())),
+        Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
     }
 }
 ///Uses the [`UserClient`] to send a Request to the lightning gateway ([`LightningGateway`])
