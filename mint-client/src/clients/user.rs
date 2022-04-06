@@ -477,6 +477,10 @@ pub enum APIResponse {
     PegInAddress {
         pegin_address: bitcoin::Address,
     },
+    ///Holds a [`minimint_api::TransactionId`] from a successful PegIn or PegOut
+    PegIO {
+        txid: TransactionId,
+    },
     /// Holds the serialized [`Coins<SpendableCoin>`]
     Spend {
         token: Coins<SpendableCoin>,

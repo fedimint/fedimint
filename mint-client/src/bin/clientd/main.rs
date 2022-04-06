@@ -80,14 +80,10 @@ async fn info(req: Request<State>) -> tide::Result {
 async fn pegin_address(req: Request<State>) -> tide::Result {
     let client = Arc::clone(&req.state().client);
     let mut rng = rand::rngs::OsRng::new()?; //probably just put that in state later
-    let address = client.get_new_pegin_address(&mut rng);
-    // I think it's unnecessary to build a new APIResponse variant but I don't know maybe it's bad practice because of inconsistency ?
-    //unwrap always ok
-    let body = Body::from_json(&APIResponse::PegInAddress {
-        pegin_address: address,
-    })
-    .unwrap();
-    Ok(body.into())
+    let event = Event::Success(APIResponse::PegInAddress {
+        pegin_address: client.get_new_pegin_address(&mut rng),
+    });
+    Ok(event.into())
 }
 ///Endpoint: responds on a successful pegin with a [`minimint_api::TransactionId`] and fetches the e-cash in the background
 async fn pegin(mut req: Request<State>) -> tide::Result {
@@ -102,8 +98,8 @@ async fn pegin(mut req: Request<State>) -> tide::Result {
     tokio::spawn(async move {
         fetch(client, events).await;
     });
-    let body = Body::from_json(&id.to_hex())?;
-    Ok(body.into())
+    let event = Event::Success(APIResponse::PegIO { txid: id });
+    Ok(event.into())
 }
 ///Endpoint: responds with a [`minimint_api::TransactionId`] on a successful pegout
 async fn pegout(mut req: Request<State>) -> tide::Result {
@@ -114,8 +110,8 @@ async fn pegout(mut req: Request<State>) -> tide::Result {
         .peg_out(pegout.amount, pegout.address, &mut rng)
         .await
         .unwrap();
-    let body = Body::from_json(&id.to_hex())?;
-    Ok(body.into())
+    let event = Event::Success(APIResponse::PegIO { txid: id });
+    Ok(event.into())
 }
 /// Endpoint: responds with [`APIResponse::Spend`], when reissue-ing use everything in the raw json after "token"
 async fn spend(mut req: Request<State>) -> tide::Result {
