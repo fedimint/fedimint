@@ -4,7 +4,7 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 
 use minimint_api::Amount;
-use mint_client::clients::user::{InvoiceReq, PegInReq, PendingRes, ResBody};
+use mint_client::clients::user::{InvoiceReq, PegInReq, PegOutReq, PendingRes, ResBody};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
@@ -59,6 +59,7 @@ async fn main() -> tide::Result<()> {
     app.at("/info").post(info);
     app.at("/pegin_address").post(pegin_address);
     app.at("pegin").post(pegin);
+    app.at("pegout").post(pegout);
     app.at("/spend").post(spend);
     app.at("/lnpay").post(ln_pay);
     app.at("/reissue").post(reissue);
@@ -102,6 +103,18 @@ async fn pegin(mut req: Request<State>) -> tide::Result {
     tokio::spawn(async move {
         fetch(client, events).await;
     });
+    let body = Body::from_json(&id.to_hex())?;
+    Ok(body.into())
+}
+///Endpoint: responds with a [`minimint_api::TransactionId`] on a successful pegout
+async fn pegout(mut req: Request<State>) -> tide::Result {
+    let mut rng = rand::rngs::OsRng::new()?; //probably just put that in state later or something like that
+    let client = Arc::clone(&req.state().client);
+    let pegout: PegOutReq = req.body_json().await?;
+    let id = client
+        .peg_out(pegout.amount, pegout.address, &mut rng)
+        .await
+        .unwrap();
     let body = Body::from_json(&id.to_hex())?;
     Ok(body.into())
 }

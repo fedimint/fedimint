@@ -23,6 +23,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::fmt::Formatter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -454,6 +455,34 @@ impl From<LnClientError> for ClientError {
 }
 
 // -> clientd
+pub struct WrappedInvoice(pub lightning_invoice::Invoice);
+struct InvoiceVisitor {}
+
+impl<'de> serde::de::Visitor<'de> for InvoiceVisitor {
+    type Value = WrappedInvoice;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("Could not deserialize Invoice")
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        match v.parse::<lightning_invoice::Invoice>() {
+            Ok(bolt11) => Ok(WrappedInvoice(bolt11)),
+            Err(e) => Err(serde::de::Error::custom(e.to_string())),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for WrappedInvoice {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_str(InvoiceVisitor {})
+    }
+}
 
 /// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -519,6 +548,13 @@ pub struct PegInReq {
 pub struct PegInReqRaw {
     pub txout_proof: String,
     pub transaction: String,
+}
+/// To Deserialize a peg-out request (amount in sat)
+#[derive(Deserialize, Clone, Debug)]
+pub struct PegOutReq {
+    pub address: bitcoin::Address,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
 }
 
 #[derive(Deserialize, Clone, Debug)]
