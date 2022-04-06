@@ -1,13 +1,16 @@
+use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
+
 use minimint_api::Amount;
-use mint_client::clients::user::{InvoiceReq, PendingRes, ResBody};
+use mint_client::clients::user::{InvoiceReq, PegInReq, PendingRes, ResBody};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use reqwest::StatusCode;
 use std::borrow::BorrowMut;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -55,6 +58,7 @@ async fn main() -> tide::Result<()> {
 
     app.at("/info").post(info);
     app.at("/pegin_address").post(pegin_address);
+    app.at("pegin").post(pegin);
     app.at("/spend").post(spend);
     app.at("/lnpay").post(ln_pay);
     app.at("/reissue").post(reissue);
@@ -83,6 +87,22 @@ async fn pegin_address(req: Request<State>) -> tide::Result {
         pegin_address: address,
     })
     .unwrap();
+    Ok(body.into())
+}
+///Endpoint: responds on a successful pegin with a [`minimint_api::TransactionId`] and fetches the e-cash in the background
+async fn pegin(mut req: Request<State>) -> tide::Result {
+    let client = Arc::clone(&req.state().client);
+    let events = Arc::clone(&req.state().events);
+    let mut rng = rand::rngs::OsRng::new()?; //probably just put that in state later or something like that
+    let pegin: PegInReq = req.body_json().await?;
+    let txout_proof = pegin.txout_proof;
+    let transaction = pegin.transaction;
+    let id = client.peg_in(txout_proof, transaction, &mut rng).await?; //inconsistent (use of '?') but my error handling doesn't make much sense anyway and will be redone
+    info!("Started peg-in {}, result will be fetched", id.to_hex());
+    tokio::spawn(async move {
+        fetch(client, events).await;
+    });
+    let body = Body::from_json(&id.to_hex())?;
     Ok(body.into())
 }
 /// Endpoint: responds with [`ResBody::Spend`], when reissue-ing use everything in the raw json after "token"

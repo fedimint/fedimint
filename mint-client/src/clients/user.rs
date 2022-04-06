@@ -16,11 +16,13 @@ use minimint::transaction as mint_tx;
 use minimint::transaction::{Output, TransactionItem};
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
+use minimint_api::encoding::Decodable;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -506,13 +508,37 @@ pub struct CoinsByTier {
     tier: u64,
     quantity: usize,
 }
+/// To Deserialize a peg-in request
+#[derive(Deserialize, Clone, Debug)]
+#[serde(from = "PegInReqRaw")]
+pub struct PegInReq {
+    pub txout_proof: TxOutProof,
+    pub transaction: Transaction,
+}
+#[derive(Deserialize, Clone, Debug)]
+pub struct PegInReqRaw {
+    pub txout_proof: String,
+    pub transaction: String,
+}
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct InvoiceReq {
     #[serde(with = "minimint::modules::ln::serde_invoice")]
     pub bolt11: lightning_invoice::Invoice,
 }
+impl From<PegInReqRaw> for PegInReq {
+    fn from(raw: PegInReqRaw) -> Self {
+        PegInReq {
+            txout_proof: from_hex(raw.txout_proof.as_str()).unwrap(),
+            transaction: from_hex(raw.transaction.as_str()).unwrap(),
+        }
+    }
+}
 
+fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
+    let bytes = hex::decode(s)?;
+    Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
+}
 impl ResBody {
     /// Builds the [`ResBody::Info`] variant.
     pub fn build_info(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
