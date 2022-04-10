@@ -11,8 +11,8 @@ bincode = "1"
 bitcoin_hashes = "0.10"
 futures = "0.3.21"
 itertools = "0.10.1"
-lightning = "0.0.103"
-lightning-invoice = "0.10"
+lightning = "0.0.106"
+lightning-invoice = "0.14.0"
 minimint-api = { path = "../../minimint-api" }
 secp256k1 = "0.20"
 serde = {version = "1.0.130", features = [ "derive" ] }
