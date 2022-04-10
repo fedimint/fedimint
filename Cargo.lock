@@ -1534,19 +1534,9 @@ checksum = "a60553f9a9e039a333b4e9b20573b9e9b9c0bb3a11e201ccc48ef4283456d673"
 
 [[package]]
 name = "lightning"
-version = "0.0.102"
+version = "0.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0679c22408337cb4a866a6c9d420b15b996cbc4018ae31a0223ad15699fb1aad"
-dependencies = [
- "bitcoin",
- "secp256k1",
-]
-
-[[package]]
-name = "lightning"
-version = "0.0.103"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f4cc6a6bc500226fe2716b8557fe66b57fd8d86348e4478b57de13a4dd6b8f0"
+checksum = "580647f97f8e6d138ad724027c8ca9b890b1001b05374c270bbee4c10309b641"
 dependencies = [
  "bitcoin",
  "secp256k1",
@@ -1554,26 +1544,13 @@ dependencies = [
 
 [[package]]
 name = "lightning-invoice"
-version = "0.10.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b060be861d272988bb4f97eb3e0e11729bf8833ffefb918e0a50375b9d5aac82"
+checksum = "f069b6eb46d7639d07977d14dc7d9a40d9d8bc5ac2b47f1924318fec13edd5c0"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
- "lightning 0.0.102",
- "num-traits",
- "secp256k1",
-]
-
-[[package]]
-name = "lightning-invoice"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f7cc25650f634e074b0b64a793ac535f7ad2ae418dd7f0ac88972832d2f22bc"
-dependencies = [
- "bech32",
- "bitcoin_hashes",
- "lightning 0.0.103",
+ "lightning",
  "num-traits",
  "secp256k1",
 ]
@@ -1587,7 +1564,7 @@ dependencies = [
  "clightningrpc",
  "futures",
  "hex",
- "lightning-invoice 0.11.0",
+ "lightning-invoice",
  "minimint",
  "minimint-api",
  "mint-client",
@@ -1756,8 +1733,8 @@ dependencies = [
  "bitcoin_hashes",
  "futures",
  "itertools",
- "lightning 0.0.103",
- "lightning-invoice 0.10.0",
+ "lightning",
+ "lightning-invoice",
  "minimint-api",
  "secp256k1",
  "serde",
@@ -1839,8 +1816,8 @@ dependencies = [
  "bitcoin_hashes",
  "futures",
  "hex",
- "lightning 0.0.103",
- "lightning-invoice 0.11.0",
+ "lightning",
+ "lightning-invoice",
  "minimint",
  "minimint-api",
  "miniscript",
