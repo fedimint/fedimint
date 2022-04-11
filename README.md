@@ -44,8 +44,7 @@ An example with concrete parameters could look as follows:
 cargo run --bin gw_configgen -- cfg /home/user/.lightning/regtest/lightning-rpc
 ```
 
-`gw_configgen` will both generate the final `client.json` for clients as well as `gateway.json` which will be used by the Lightning gateway.
-If you have c-lighning installed you can already create two directories for the lightning nodes to use the gateway later
+`gw_configgen` will both generate the final `client.json` for clients as well as `gateway.json` which will be used by the Lightning gateway. If you have c-lighning installed you can already create two directories for the lightning nodes to use the gateway later
 ```shell
 mkdir -p ln1 ln2
 ```
@@ -75,17 +74,18 @@ Send your gateway node some funds :
 #get an address from ln1
 lightning-cli --network regtest --lightning-dir=ln1 newaddr
 #send bitcoin to that address
-bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <ADDRESS>
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <ADDRESS> <AMOUNT>
 #make sure to mine enough blocks
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
 ```
 Now you can open a channel :
 ```shell
-#first you have to get the pub key of ln2 ("id" in json)
+#first you have to get the LN2_PUB_KEY ("id" in json)
 lightning-cli --network regtest --lightning-dir=ln2 getinfo
-#now you can connect ln1 to ln2
-lightning-cli --network regtest --lightning-dir=ln1 connect <ID>@127.0.0.1:9001
+#now you can connect LN1 to LN2
+lightning-cli --network regtest --lightning-dir=ln1 connect <LN2_PUB_KEY>@127.0.0.1:9001
+lightning-cli --network regtest --lightning-dir=ln1 fundchannel <LN2_PUB_KEY> 0.1btc
 #after that you should mine some blocks again
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
@@ -150,12 +150,12 @@ cargo run --bin ln_gateway --release cfg
 ```
 To get an invoice you can use ln2 :
 ```shell
-#make sure your client holds coins for that amount tier. 100000msat = 100sat. For now the client is not able to spend with change
-lightning-cli --network regtest --lightning-dir=ln2 invoice 100000 test test 1m
+#Make sure your peg-in created coins of small enough tiers. For now the client is not able to spend with change.
+lightning-cli --network regtest --lightning-dir=ln2 invoice 100000 test test 10m
 ```
 To pay the invoice : 
 ```shell
-cargo run --bin mint-client --release -- cfg ln-pay
+cargo run --bin mint-client --release -- cfg ln-pay <INVOICE>
 #to check if the invoice got paid successfully you can use ln2
 lightning-cli --network regtest --lightning-dir=ln2 waitinvoice test
 ```
