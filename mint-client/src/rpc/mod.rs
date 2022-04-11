@@ -31,7 +31,7 @@ pub struct Request {
     ///A Structured value that holds the parameter values to be used during the invocation of the method. This member MAY be omitted.
     pub params: Value,
     ///An identifier established by the Client that MUST contain a String, Number, or NULL value if included.
-    ///If it is not included it is assumed to be a notification. The value SHOULD normally not be Null [1] and Numbers SHOULD NOT contain fractional parts [2]
+    ///If it is not included it is assumed to be a notification. The value SHOULD normally not be Null and Numbers SHOULD NOT contain fractional parts
     pub id: Value,
 }
 ///JSON-RPC Response object
@@ -51,6 +51,24 @@ pub struct Response<'a> {
     ///It MUST be the same as the value of the id member in the Request Object.
     ///If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
     pub id: Value,
+}
+impl Response<'_> {
+    pub fn with_result(result: Value, id: Value) -> Self {
+        Response {
+            jsonrpc: JSON_RPC,
+            result,
+            error: Value::Null,
+            id,
+        }
+    }
+    pub fn with_error(error: Value, id: Value) -> Self {
+        Response {
+            jsonrpc: JSON_RPC,
+            result: Value::Null,
+            error,
+            id,
+        }
+    }
 }
 
 ///RPC-API Endpoint-Router
