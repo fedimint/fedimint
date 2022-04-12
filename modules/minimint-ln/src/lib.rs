@@ -126,6 +126,7 @@ impl FederationModule for LightningModule {
     type TxOutput = ContractOrOfferOutput;
     type TxOutputOutcome = OutputOutcome;
     type ConsensusItem = DecryptionShareCI;
+    type VerificationCache = ();
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -183,9 +184,16 @@ impl FederationModule for LightningModule {
         batch.commit();
     }
 
+    fn build_verification_cache<'a>(
+        &'a self,
+        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+    ) -> Self::VerificationCache {
+    }
+
     fn validate_input<'a>(
         &self,
         interconnect: &dyn ModuleInterconect,
+        _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         let account: ContractAccount = self
@@ -247,8 +255,9 @@ impl FederationModule for LightningModule {
         interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
+        cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(interconnect, input)?;
+        let meta = self.validate_input(interconnect, cache, input)?;
 
         let account_db_key = ContractKey(input.crontract_id);
         let mut contract_account = self

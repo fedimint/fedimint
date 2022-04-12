@@ -145,6 +145,7 @@ impl FederationModule for Wallet {
     // TODO: implement outcome
     type TxOutputOutcome = ();
     type ConsensusItem = WalletConsensusItem;
+    type VerificationCache = ();
 
     async fn consensus_proposal<'a>(
         &'a self,
@@ -249,9 +250,16 @@ impl FederationModule for Wallet {
         batch.commit();
     }
 
+    fn build_verification_cache<'a>(
+        &'a self,
+        _inputs: impl Iterator<Item = &'a Self::TxInput>,
+    ) -> Self::VerificationCache {
+    }
+
     fn validate_input<'a>(
         &self,
         _interconnect: &dyn ModuleInterconect,
+        _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         if !self.block_is_known(input.proof_block()) {
@@ -280,8 +288,9 @@ impl FederationModule for Wallet {
         interconnect: &'a dyn ModuleInterconect,
         mut batch: BatchTx<'a>,
         input: &'b Self::TxInput,
+        cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
-        let meta = self.validate_input(interconnect, input)?;
+        let meta = self.validate_input(interconnect, cache, input)?;
         debug!("Claiming peg-in {} worth {}", input.outpoint(), meta.amount);
 
         batch.append_insert_new(
