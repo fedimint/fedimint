@@ -3,7 +3,7 @@ use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
-use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq};
+use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq, PendingRes};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
 use mint_client::rpc::{Request, Response, Router, Shared};
@@ -48,6 +48,7 @@ async fn main() -> tide::Result<()> {
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
     let router = Router::new()
         .add_handler("info", info)
+        .add_handler("pending", pending)
         .add_handler("pegin_address", pegin_address)
         .add_handler("pegin", pegin)
         .add_handler("pegout", pegout)
@@ -93,6 +94,14 @@ async fn info(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
     let result = APIResponse::build_info(client.coins(), cfd);
     let result = serde_json::json!(&result);
     result
+}
+async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let client = &shared.client;
+    let cfd = client.fetch_active_issuances();
+    let res = serde_json::json!(&APIResponse::Pending {
+        pending: PendingRes::build_pending(cfd),
+    });
+    res
 }
 async fn pegin_address(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
     let client = Arc::clone(&shared.client);
