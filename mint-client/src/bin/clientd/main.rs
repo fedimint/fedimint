@@ -10,6 +10,7 @@ use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use reqwest::StatusCode;
 use serde::Deserialize;
+use std::borrow::BorrowMut;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -49,6 +50,7 @@ async fn main() -> tide::Result<()> {
     let router = Router::new()
         .add_handler("info", info)
         .add_handler("pending", pending)
+        .add_handler("events", events)
         .add_handler("pegin_address", pegin_address)
         .add_handler("pegin", pegin)
         .add_handler("pegout", pegout)
@@ -101,6 +103,13 @@ async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value
     let res = serde_json::json!(&APIResponse::Pending {
         pending: PendingRes::build_pending(cfd),
     });
+    res
+}
+async fn events(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let events_ptr = Arc::clone(&shared.events);
+    let mut events_guard = events_ptr.lock().unwrap();
+    let events = events_guard.borrow_mut();
+    let res = serde_json::json!(&APIResponse::build_event_dump(events));
     res
 }
 async fn pegin_address(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
