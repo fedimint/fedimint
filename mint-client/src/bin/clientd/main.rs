@@ -1,5 +1,6 @@
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
+use minimint_api::Amount;
 use mint_client::clients::user::{APIResponse, PegInReq, PegOutReq};
 use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
@@ -43,7 +44,8 @@ async fn main() -> tide::Result<()> {
         .add_handler("info", info)
         .add_handler("pegin_address", pegin_address)
         .add_handler("pegin", pegin)
-        .add_handler("pegout", pegout);
+        .add_handler("pegout", pegout)
+        .add_handler("spend", spend);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -120,6 +122,17 @@ async fn pegout(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::V
         .await
         .unwrap();
     let res = serde_json::json!(&APIResponse::PegIO { txid: id });
+    res
+}
+async fn spend(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let value: u64 = params.as_u64().unwrap();
+    let client = &shared.client;
+    let amount = Amount::from_sat(value);
+    let res = match client.select_and_spend_coins(amount) {
+        Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
+        Err(e) => APIResponse::build_event(format!("{:?}", e)), //This doesnt make sense right now but will be handled when RPC errors get implemented
+    };
+    let res = serde_json::json!(&res);
     res
 }
 //TODO: implement all other Endpoints
