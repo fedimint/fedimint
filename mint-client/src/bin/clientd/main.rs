@@ -1,8 +1,11 @@
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
+use minimint::modules::mint::tiered::coins::Coins;
+use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
 use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq};
 use mint_client::ln::gateway::LightningGateway;
+use mint_client::mint::SpendableCoin;
 use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use reqwest::StatusCode;
@@ -49,7 +52,9 @@ async fn main() -> tide::Result<()> {
         .add_handler("pegin", pegin)
         .add_handler("pegout", pegout)
         .add_handler("spend", spend)
-        .add_handler("lnpay", ln_pay);
+        .add_handler("lnpay", ln_pay)
+        .add_handler("reissue", reissue)
+        .add_handler("reissue_validate", reissue_validate);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -154,6 +159,46 @@ async fn ln_pay(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::V
     } else {
         panic!("errors will be handled");
     }
+}
+async fn reissue(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let coins: Coins<SpendableCoin> = Coins::deserialize(params).unwrap();
+    let client = Arc::clone(&shared.client);
+    let events = Arc::clone(&shared.events);
+    tokio::spawn(async move {
+        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let out_point = match client.reissue(coins, &mut rng).await {
+            Ok(o) => o,
+            Err(e) => {
+                events
+                    .lock()
+                    .unwrap()
+                    .push(APIResponse::build_event(format!("{:?}", e)));
+                return;
+            }
+        };
+        match client.fetch_tx_outcome(out_point.txid, true).await {
+            Ok(_) => fetch(client, Arc::clone(&events)).await,
+            Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
+        };
+    });
+    let res = serde_json::json!(&APIResponse::Empty);
+    res
+}
+async fn reissue_validate(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let coins: Coins<SpendableCoin> = Coins::deserialize(params).unwrap();
+    let client = Arc::clone(&shared.client);
+    let events = Arc::clone(&shared.events);
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let out_point = client.reissue(coins, &mut rng).await.unwrap();
+    let status = match client.fetch_tx_outcome(out_point.txid, true).await {
+        Err(e) => TransactionStatus::Error(e.to_string()),
+        Ok(s) => s,
+    };
+    let res = serde_json::json!(&APIResponse::build_reissue(out_point, status));
+    tokio::spawn(async move {
+        fetch(client, events).await;
+    });
+    res
 }
 //TODO: implement all other Endpoints
 //TODO: almost all unwraps will be handled
