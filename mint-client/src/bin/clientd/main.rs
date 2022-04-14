@@ -1,12 +1,15 @@
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
 use minimint_api::Amount;
-use mint_client::clients::user::{APIResponse, PegInReq, PegOutReq};
+use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq};
+use mint_client::ln::gateway::LightningGateway;
 use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use structopt::StructOpt;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -45,7 +48,8 @@ async fn main() -> tide::Result<()> {
         .add_handler("pegin_address", pegin_address)
         .add_handler("pegin", pegin)
         .add_handler("pegout", pegout)
-        .add_handler("spend", spend);
+        .add_handler("spend", spend)
+        .add_handler("lnpay", ln_pay);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -135,6 +139,22 @@ async fn spend(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Va
     let res = serde_json::json!(&res);
     res
 }
+async fn ln_pay(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let client = Arc::clone(&shared.client);
+    let gateway = Arc::clone(&shared.gateway);
+    let invoice: InvoiceReq = InvoiceReq::deserialize(params).unwrap();
+    if let Ok(res) = pay_invoice(invoice.bolt11, client, gateway).await {
+        match res.status() {
+            StatusCode::OK => {
+                let res = APIResponse::build_event("succsessfull ln-payment".to_string());
+                return serde_json::json!(&res);
+            }
+            _ => panic!("errors will be handled"),
+        }
+    } else {
+        panic!("errors will be handled");
+    }
+}
 //TODO: implement all other Endpoints
 //TODO: almost all unwraps will be handled
 
@@ -145,4 +165,33 @@ async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<APIResponse>>>) {
             .push(APIResponse::build_event("succsessfull fetch".to_owned())),
         Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
     }
+}
+
+async fn pay_invoice(
+    bolt11: lightning_invoice::Invoice,
+    client: Arc<UserClient>,
+    gateway: Arc<LightningGateway>,
+) -> tide::Result<reqwest::Response> {
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let http = reqwest::Client::new();
+
+    let contract_id = client
+        .fund_outgoing_ln_contract(&*gateway, bolt11, &mut rng)
+        .await?;
+
+    client
+        .wait_contract_timeout(contract_id, Duration::from_secs(5))
+        .await?;
+
+    info!(
+        "Funded outgoing contract {}, notifying gateway",
+        contract_id
+    );
+
+    Ok(http
+        .post(&format!("{}/pay_invoice", &*gateway.api))
+        .json(&contract_id)
+        .timeout(Duration::from_secs(15))
+        .send()
+        .await?)
 }
