@@ -1,6 +1,6 @@
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
-use mint_client::clients::user::{APIResponse, PegInReq};
+use mint_client::clients::user::{APIResponse, PegInReq, PegOutReq};
 use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use serde::Deserialize;
@@ -42,7 +42,8 @@ async fn main() -> tide::Result<()> {
     let router = Router::new()
         .add_handler("info", info)
         .add_handler("pegin_address", pegin_address)
-        .add_handler("pegin", pegin);
+        .add_handler("pegin", pegin)
+        .add_handler("pegout", pegout);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -107,6 +108,17 @@ async fn pegin(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Va
     tokio::spawn(async move {
         fetch(client, events).await;
     });
+    let res = serde_json::json!(&APIResponse::PegIO { txid: id });
+    res
+}
+async fn pegout(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let client = Arc::clone(&shared.client);
+    let pegout: PegOutReq = PegOutReq::deserialize(params).unwrap();
+    let id = client
+        .peg_out(pegout.amount, pegout.address, &mut rng)
+        .await
+        .unwrap();
     let res = serde_json::json!(&APIResponse::PegIO { txid: id });
     res
 }
