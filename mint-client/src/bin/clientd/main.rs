@@ -36,7 +36,9 @@ async fn main() -> tide::Result<()> {
         .unwrap();
 
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
-    let router = Router::new().add_handler("info", info);
+    let router = Router::new()
+        .add_handler("info", info)
+        .add_handler("pegin_address", pegin_address);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -73,6 +75,16 @@ async fn info(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
     let client = Arc::clone(&shared.client);
     let cfd = client.fetch_active_issuances();
     let result = APIResponse::build_info(client.coins(), cfd);
+    let result = serde_json::json!(&result);
+    result
+}
+async fn pegin_address(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let client = Arc::clone(&shared.client);
+    // Is it more costly to but rng in shared and always clone or like this ?
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let result = APIResponse::PegInAddress {
+        pegin_address: client.get_new_pegin_address(&mut rng),
+    };
     let result = serde_json::json!(&result);
     result
 }
