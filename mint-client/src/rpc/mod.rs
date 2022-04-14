@@ -95,9 +95,7 @@ impl Handler {
         P: Future<Output = HandlerResult> + Send + 'static,
     {
         Handler {
-            func: Box::new(move |params, shared| {
-                Box::pin(raw_func(params.clone(), shared.clone()))
-            }),
+            func: Box::new(move |params, shared| Box::pin(raw_func(params, shared))),
         }
     }
 
@@ -125,5 +123,11 @@ impl Router {
     }
     pub fn get(&self, name: &str) -> Option<&Handler> {
         self.handlers.get(name)
+    }
+}
+
+impl Default for Router {
+    fn default() -> Self {
+        Self::new()
     }
 }

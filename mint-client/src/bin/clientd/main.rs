@@ -60,7 +60,7 @@ async fn main() -> tide::Result<()> {
                 .call(req_body.params, shared)
                 .await;
             let response = Response::with_result(handler_res, req_body.id);
-            let body = tide::Body::from_json(&response).unwrap_or(tide::Body::empty());
+            let body = tide::Body::from_json(&response).unwrap_or_else(|_| tide::Body::empty());
             let mut res = tide::Response::new(200);
             res.set_body(body);
             Ok(res)
@@ -69,12 +69,11 @@ async fn main() -> tide::Result<()> {
     Ok(())
 }
 
-async fn info(_params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn info(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
     let client = Arc::clone(&shared.client);
     let cfd = client.fetch_active_issuances();
-    let event = APIResponse::build_info(client.coins(), cfd);
-    let result = serde_json::json!(&event);
+    let result = APIResponse::build_info(client.coins(), cfd);
+    let result = serde_json::json!(&result);
     result
 }
-
 //TODO: implement all other Endpoints

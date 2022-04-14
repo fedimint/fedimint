@@ -454,12 +454,6 @@ impl From<LnClientError> for ClientError {
 }
 
 // -> clientd
-///Holds either a Success or an Error variant and will be send as a response to the client (note: this means all [`ClientError`] will be send as [`tide::Result`] Ok
-/// only other errors will cause the server to respond with [`tide::Result`] Err)
-pub enum Event {
-    Success(APIResponse),
-    Error(APIResponse), //TODO: define Error APIResponse variant, implement a build method and use it in the endpoints
-}
 /// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum APIResponse {
@@ -603,18 +597,6 @@ impl APIResponse {
         let e = events.clone();
         events.clear();
         APIResponse::EventDump { events: e }
-    }
-}
-
-impl From<Event> for tide::Response {
-    fn from(event: Event) -> Self {
-        // is there a better way of doing this ?
-        let body = tide::Body::from_json(&match event {
-            Event::Success(res) => res,
-            Event::Error(res) => res,
-        })
-        .expect("Can not fail, if the event got build it can be Serialized");
-        body.into()
     }
 }
 // <- clientd
