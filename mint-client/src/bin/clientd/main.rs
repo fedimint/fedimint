@@ -1,10 +1,13 @@
+use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
-use mint_client::clients::user::APIResponse;
+use mint_client::clients::user::{APIResponse, PegInReq};
 use mint_client::rpc::{Request, Response, Router, Shared};
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use structopt::StructOpt;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
@@ -38,7 +41,8 @@ async fn main() -> tide::Result<()> {
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
     let router = Router::new()
         .add_handler("info", info)
-        .add_handler("pegin_address", pegin_address);
+        .add_handler("pegin_address", pegin_address)
+        .add_handler("pegin", pegin);
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
@@ -88,4 +92,32 @@ async fn pegin_address(_: serde_json::Value, shared: Arc<Shared>) -> serde_json:
     let result = serde_json::json!(&result);
     result
 }
+async fn pegin(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+    let client = Arc::clone(&shared.client);
+    let events = Arc::clone(&shared.events);
+    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let pegin: PegInReq = PegInReq::deserialize(params).unwrap();
+    let txout_proof = pegin.txout_proof;
+    let transaction = pegin.transaction;
+    let id = client
+        .peg_in(txout_proof, transaction, &mut rng)
+        .await
+        .unwrap();
+    info!("Started peg-in {}, result will be fetched", id.to_hex());
+    tokio::spawn(async move {
+        fetch(client, events).await;
+    });
+    let res = serde_json::json!(&APIResponse::PegIO { txid: id });
+    res
+}
 //TODO: implement all other Endpoints
+//TODO: almost all unwraps will be handled
+
+///Uses the [`UserClient`] to fetch the newly issued or reissued coins
+async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<APIResponse>>>) {
+    match client.fetch_all_coins().await {
+        Ok(_) => (*events.lock().unwrap())
+            .push(APIResponse::build_event("succsessfull fetch".to_owned())),
+        Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
+    }
+}
