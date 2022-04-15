@@ -139,12 +139,12 @@ pub fn standard_error(code: StandardError, data: Option<Value>) -> RpcError {
 }
 
 ///RPC-API Endpoint-Router
-#[derive(Clone)]
 pub struct Shared {
     pub client: Arc<UserClient>,
     pub gateway: Arc<LightningGateway>,
     pub events: Arc<Mutex<Vec<APIResponse>>>,
     pub rng: OsRng,
+    pub router: Arc<Router>,
 }
 
 type HandlerArgs = Value;

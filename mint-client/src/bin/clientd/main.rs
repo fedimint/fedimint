@@ -25,7 +25,6 @@ use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
 pub struct State {
-    router: Arc<Router>,
     shared: Arc<Shared>,
 }
 
@@ -68,18 +67,17 @@ async fn main() -> tide::Result<()> {
         gateway: Arc::new(cfg.gateway.clone()),
         events: Arc::new(Mutex::new(Vec::new())),
         rng,
+        router: Arc::new(router),
     };
     let state = State {
-        router: Arc::new(router),
         shared: Arc::new(shared),
     };
     let mut app = tide::with_state(state);
 
     app.at("/rpc")
         .post(|mut req: tide::Request<State>| async move {
-            //TODO: make shared/router more efficient/logical
-            let router = Arc::clone(&req.state().router);
             let shared = Arc::clone(&req.state().shared);
+            let router = shared.router.clone();
             let response = if let Ok(json) = req.body_json::<serde_json::Value>().await {
                 //Valid JSON
                 if let Ok(request_object) = Request::deserialize(json) {
