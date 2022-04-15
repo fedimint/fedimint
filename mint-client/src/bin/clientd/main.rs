@@ -220,7 +220,7 @@ async fn spend(
         )
     })?;
     let client = &shared.client;
-    let amount = Amount::from_sat(value);
+    let amount = Amount::from_msat(value);
     let res = match client.select_and_spend_coins(amount) {
         Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
         Err(e) => {
