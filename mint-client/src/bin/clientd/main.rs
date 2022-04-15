@@ -3,11 +3,16 @@ use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
-use mint_client::clients::user::{APIResponse, InvoiceReq, PegInReq, PegOutReq, PendingRes};
+use mint_client::clients::user::{
+    APIResponse, ClientError, InvoiceReq, PegInReq, PegOutReq, PendingRes,
+};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
-use mint_client::rpc::{Request, Response, Router, Shared};
+use mint_client::rpc::{
+    standard_error, Request, Response, Router, RpcError, Shared, StandardError, JSON_RPC,
+};
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use rand::rngs::OsRng;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::borrow::BorrowMut;
@@ -45,8 +50,8 @@ async fn main() -> tide::Result<()> {
         .unwrap()
         .open_tree("mint-client")
         .unwrap();
-
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let rng = rand::rngs::OsRng::new().unwrap();
     let router = Router::new()
         .add_handler("info", info)
         .add_handler("pending", pending)
@@ -62,6 +67,7 @@ async fn main() -> tide::Result<()> {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
         events: Arc::new(Mutex::new(Vec::new())),
+        rng,
     };
     let state = State {
         router: Arc::new(router),
@@ -74,13 +80,45 @@ async fn main() -> tide::Result<()> {
             //TODO: make shared/router more efficient/logical
             let router = Arc::clone(&req.state().router);
             let shared = Arc::clone(&req.state().shared);
-            let req_body: Request = req.body_json().await?;
-            let handler_res = router
-                .get(req_body.method.as_str())
-                .unwrap()
-                .call(req_body.params, shared)
-                .await;
-            let response = Response::with_result(handler_res, req_body.id);
+            let response = if let Ok(json) = req.body_json::<serde_json::Value>().await {
+                //Valid JSON
+                if let Ok(request_object) = Request::deserialize(json) {
+                    //Valid Request Object
+                    if  Some(String::from(JSON_RPC)) == request_object.jsonrpc {
+                        if let Some(handler) = router.get(request_object.method.as_str()) {
+                            //There is a handler (method)
+                            match handler.call(request_object.params, shared).await {
+                                Ok(handler_res) => {
+                                    //Success, response will be send to client
+                                    Response::with_result(handler_res, request_object.id)
+                                }
+                                Err(err) => {
+                                    //Either the params were wrong or there was an internal error
+                                    Response::with_error(err, Some(request_object.id))
+                                }
+                            }
+                        } else {
+                            //Method not found
+                            let err = standard_error(StandardError::MethodNotFound, None);
+                            Response::with_error(err, None)
+                        }
+                    } else{
+                        //Invalid JSON-RPC version
+                        let err = standard_error(StandardError::InvalidRequest, Some(
+                            serde_json::Value::String(String::from("please make sure your request follows the JSON-RPC 2.0 specification"))
+                        ));
+                        Response::with_error(err, None)
+                    }
+                } else {
+                    //Invalid Request Object
+                    let err = standard_error(StandardError::InvalidRequest, None);
+                    Response::with_error(err, None)
+                }
+            } else {
+                //Invalid JSON
+                let err = standard_error(StandardError::ParseError, None);
+                Response::with_error(err, None)
+            };
             let body = tide::Body::from_json(&response).unwrap_or_else(|_| tide::Body::empty());
             let mut res = tide::Response::new(200);
             res.set_body(body);
@@ -90,100 +128,155 @@ async fn main() -> tide::Result<()> {
     Ok(())
 }
 
-async fn info(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn info(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
     let cfd = client.fetch_active_issuances();
     let result = APIResponse::build_info(client.coins(), cfd);
     let result = serde_json::json!(&result);
-    result
+    Ok(result)
 }
-async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
     let client = &shared.client;
     let cfd = client.fetch_active_issuances();
-    let res = serde_json::json!(&APIResponse::Pending {
+    let result = serde_json::json!(&APIResponse::Pending {
         pending: PendingRes::build_pending(cfd),
     });
-    res
+    Ok(result)
 }
-async fn events(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn events(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
     let events_ptr = Arc::clone(&shared.events);
-    let mut events_guard = events_ptr.lock().unwrap();
+    let mut events_guard = events_ptr.lock().map_err(|e| {
+        standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let events = events_guard.borrow_mut();
-    let res = serde_json::json!(&APIResponse::build_event_dump(events));
-    res
+    let result = serde_json::json!(&APIResponse::build_event_dump(events));
+    Ok(result)
 }
-async fn pegin_address(_: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn pegin_address(
+    _: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
-    // Is it more costly to but rng in shared and always clone or like this ?
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let mut rng = shared.rng.clone();
     let result = APIResponse::PegInAddress {
         pegin_address: client.get_new_pegin_address(&mut rng),
     };
     let result = serde_json::json!(&result);
-    result
+    Ok(result)
 }
-async fn pegin(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn pegin(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
     let events = Arc::clone(&shared.events);
-    let mut rng = rand::rngs::OsRng::new().unwrap();
-    let pegin: PegInReq = PegInReq::deserialize(params).unwrap();
+    let mut rng = shared.rng.clone();
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let pegin: PegInReq = PegInReq::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InvalidParams,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let txout_proof = pegin.txout_proof;
     let transaction = pegin.transaction;
-    let id = client
-        .peg_in(txout_proof, transaction, &mut rng)
-        .await
-        .unwrap();
+    let id = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}, result will be fetched", id.to_hex());
     tokio::spawn(async move {
         fetch(client, events).await;
     });
-    let res = serde_json::json!(&APIResponse::PegIO { txid: id });
-    res
+    let result = serde_json::json!(&APIResponse::PegIO { txid: id });
+    Ok(result)
 }
-async fn pegout(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+async fn pegout(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
+    let mut rng = shared.rng.clone();
     let client = Arc::clone(&shared.client);
-    let pegout: PegOutReq = PegOutReq::deserialize(params).unwrap();
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let pegout: PegOutReq = PegOutReq::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InvalidParams,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let id = client
         .peg_out(pegout.amount, pegout.address, &mut rng)
-        .await
-        .unwrap();
-    let res = serde_json::json!(&APIResponse::PegIO { txid: id });
-    res
+        .await?;
+    let result = serde_json::json!(&APIResponse::PegIO { txid: id });
+    Ok(result)
 }
-async fn spend(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
-    let value: u64 = params.as_u64().unwrap();
+async fn spend(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let value: u64 = u64::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InvalidParams,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let client = &shared.client;
     let amount = Amount::from_sat(value);
     let res = match client.select_and_spend_coins(amount) {
         Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
-        Err(e) => APIResponse::build_event(format!("{:?}", e)), //This doesnt make sense right now but will be handled when RPC errors get implemented
+        Err(e) => {
+            return Err(ClientError::from(e).into());
+        }
     };
-    let res = serde_json::json!(&res);
-    res
+    let result = serde_json::json!(&res);
+    Ok(result)
 }
-async fn ln_pay(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
+async fn ln_pay(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
     let gateway = Arc::clone(&shared.gateway);
-    let invoice: InvoiceReq = InvoiceReq::deserialize(params).unwrap();
-    if let Ok(res) = pay_invoice(invoice.bolt11, client, gateway).await {
-        match res.status() {
-            StatusCode::OK => {
-                let res = APIResponse::build_event("succsessfull ln-payment".to_string());
-                return serde_json::json!(&res);
-            }
-            _ => panic!("errors will be handled"),
-        }
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let invoice: InvoiceReq = InvoiceReq::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
+    let rng = shared.rng.clone();
+    let res = pay_invoice(invoice.bolt11, client, gateway, rng).await?;
+
+    if let StatusCode::OK = res.status() {
+        let result = serde_json::json!(&APIResponse::build_event(
+            "succsessfull ln-payment".to_string(),
+        ));
+        Ok(result)
     } else {
-        panic!("errors will be handled");
+        Err(standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(String::from(
+                "Error: Payment failed !", //TODO: get a more useful error from the gateway
+            ))),
+        ))
     }
 }
-async fn reissue(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
-    let coins: Coins<SpendableCoin> = Coins::deserialize(params).unwrap();
+async fn reissue(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let coins: Coins<SpendableCoin> = Coins::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let client = Arc::clone(&shared.client);
     let events = Arc::clone(&shared.events);
     tokio::spawn(async move {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = shared.rng.clone();
         let out_point = match client.reissue(coins, &mut rng).await {
             Ok(o) => o,
             Err(e) => {
@@ -199,27 +292,34 @@ async fn reissue(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::
             Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
         };
     });
-    let res = serde_json::json!(&APIResponse::Empty);
-    res
+    Ok(serde_json::Value::Null)
 }
-async fn reissue_validate(params: serde_json::Value, shared: Arc<Shared>) -> serde_json::Value {
-    let coins: Coins<SpendableCoin> = Coins::deserialize(params).unwrap();
+async fn reissue_validate(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
+    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
+    let coins: Coins<SpendableCoin> = Coins::deserialize(params).map_err(|e| {
+        standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    })?;
     let client = Arc::clone(&shared.client);
     let events = Arc::clone(&shared.events);
-    let mut rng = rand::rngs::OsRng::new().unwrap();
-    let out_point = client.reissue(coins, &mut rng).await.unwrap();
+    let mut rng = shared.rng.clone();
+    let out_point = client.reissue(coins, &mut rng).await?;
+    //This has to be changed : endless loop possible (polling=true)
     let status = match client.fetch_tx_outcome(out_point.txid, true).await {
         Err(e) => TransactionStatus::Error(e.to_string()),
         Ok(s) => s,
     };
-    let res = serde_json::json!(&APIResponse::build_reissue(out_point, status));
+    let result = serde_json::json!(&APIResponse::build_reissue(out_point, status));
     tokio::spawn(async move {
         fetch(client, events).await;
     });
-    res
+    Ok(result)
 }
-//TODO: implement all other Endpoints
-//TODO: almost all unwraps will be handled
 
 ///Uses the [`UserClient`] to fetch the newly issued or reissued coins
 async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<APIResponse>>>) {
@@ -234,8 +334,8 @@ async fn pay_invoice(
     bolt11: lightning_invoice::Invoice,
     client: Arc<UserClient>,
     gateway: Arc<LightningGateway>,
-) -> tide::Result<reqwest::Response> {
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+    mut rng: OsRng,
+) -> Result<reqwest::Response, ClientError> {
     let http = reqwest::Client::new();
 
     let contract_id = client
@@ -251,10 +351,10 @@ async fn pay_invoice(
         contract_id
     );
 
-    Ok(http
-        .post(&format!("{}/pay_invoice", &*gateway.api))
+    http.post(&format!("{}/pay_invoice", &*gateway.api))
         .json(&contract_id)
         .timeout(Duration::from_secs(15))
         .send()
-        .await?)
+        .await
+        .map_err(|_| ClientError::FailSendInvoicePay) //TODO: get a more useful error from the gateway
 }

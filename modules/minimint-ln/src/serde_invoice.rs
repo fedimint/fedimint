@@ -1,3 +1,4 @@
+use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 
 #[allow(missing_docs)]
@@ -7,7 +8,7 @@ where
 {
     let bolt11 = String::deserialize(deserializer)?
         .parse::<lightning_invoice::Invoice>()
-        .unwrap();
+        .map_err(|e| D::Error::custom(format!("{:?}", e)))?;
 
     Ok(bolt11)
 }

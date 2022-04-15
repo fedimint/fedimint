@@ -427,6 +427,8 @@ pub enum ClientError {
     PegInAmountTooSmall,
     #[error("Timed out while waiting for contract to be accepted")]
     WaitContractTimeout,
+    #[error("Failed to send a pay-request to gateway api")]
+    FailSendInvoicePay,
 }
 
 impl From<ApiError> for ClientError {

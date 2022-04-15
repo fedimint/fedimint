@@ -7,17 +7,17 @@ The limited permissions granted above are perpetual and will not be revoked.
 
 This document and the information contained herein is provided "AS IS" and ALL WARRANTIES, EXPRESS OR IMPLIED are DISCLAIMED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
  */
-use crate::clients::user::APIResponse;
+use crate::clients::user::{APIResponse, ClientError};
 use crate::{LightningGateway, UserClient};
 use futures::future::BoxFuture;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
-#[allow(dead_code)]
-const JSON_RPC: &str = "2.0";
+pub const JSON_RPC: &str = "2.0";
 ///JSON-RPC Request object
 #[derive(Deserialize)]
 pub struct Request {
@@ -42,32 +42,99 @@ pub struct Response<'a> {
     ///This member is REQUIRED on success.
     ///This member MUST NOT exist if there was an error invoking the method.
     ///The value of this member is determined by the method invoked on the Server.
-    pub result: Value,
+    pub result: Option<Value>,
     ///This member is REQUIRED on error.
     ///This member MUST NOT exist if there was no error triggered during invocation.
     ///The value for this member MUST be an Object as defined in section 5.1.
-    pub error: Value, //TODO: Use a custom Error instead
+    pub error: Option<RpcError>,
     ///This member is REQUIRED.
     ///It MUST be the same as the value of the id member in the Request Object.
     ///If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
-    pub id: Value,
+    pub id: Option<Value>,
 }
 impl Response<'_> {
     pub fn with_result(result: Value, id: Value) -> Self {
         Response {
             jsonrpc: JSON_RPC,
-            result,
-            error: Value::Null,
+            result: Some(result),
+            error: None,
+            id: Some(id),
+        }
+    }
+    pub fn with_error(error: RpcError, id: Option<Value>) -> Self {
+        Response {
+            jsonrpc: JSON_RPC,
+            result: None,
+            error: Some(error),
             id,
         }
     }
-    pub fn with_error(error: Value, id: Value) -> Self {
-        Response {
-            jsonrpc: JSON_RPC,
-            result: Value::Null,
-            error,
-            id,
-        }
+}
+
+//I copied all error stuff from https://github.com/apoelstra/rust-jsonrpc/blob/master/src/error.rs
+#[derive(Debug)]
+pub enum StandardError {
+    /// Invalid JSON was received by the server.
+    /// An error occurred on the server while parsing the JSON text.
+    ParseError,
+    /// The JSON sent is not a valid Request object.
+    InvalidRequest,
+    /// The method does not exist / is not available.
+    MethodNotFound,
+    /// Invalid method parameter(s).
+    InvalidParams,
+    /// Internal JSON-RPC error.
+    InternalError,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+/// A JSONRPC error object
+pub struct RpcError {
+    /// The integer identifier of the error
+    pub code: i32,
+    /// A string describing the error
+    pub message: String, //TODO: look into String vs &str I think I can use &str here which would be better
+    /// Additional data specific to the error
+    pub data: Option<Value>,
+}
+
+impl From<ClientError> for RpcError {
+    fn from(e: ClientError) -> Self {
+        standard_error(
+            StandardError::InternalError,
+            Some(serde_json::Value::String(format!("{:?}", e))),
+        )
+    }
+}
+
+/// Create a standard error responses
+pub fn standard_error(code: StandardError, data: Option<Value>) -> RpcError {
+    match code {
+        StandardError::ParseError => RpcError {
+            code: -32700,
+            message: "Parse error".to_string(),
+            data,
+        },
+        StandardError::InvalidRequest => RpcError {
+            code: -32600,
+            message: "Invalid Request".to_string(),
+            data,
+        },
+        StandardError::MethodNotFound => RpcError {
+            code: -32601,
+            message: "Method not found".to_string(),
+            data,
+        },
+        StandardError::InvalidParams => RpcError {
+            code: -32602,
+            message: "Invalid params".to_string(),
+            data,
+        },
+        StandardError::InternalError => RpcError {
+            code: -32603,
+            message: "Internal error".to_string(),
+            data,
+        },
     }
 }
 
@@ -77,11 +144,12 @@ pub struct Shared {
     pub client: Arc<UserClient>,
     pub gateway: Arc<LightningGateway>,
     pub events: Arc<Mutex<Vec<APIResponse>>>,
+    pub rng: OsRng,
 }
 
 type HandlerArgs = Value;
 type Share = Arc<Shared>;
-type HandlerResult = Value;
+type HandlerResult = Result<Value, RpcError>;
 
 pub struct Handler {
     func: Box<
