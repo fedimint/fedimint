@@ -433,7 +433,7 @@ dependencies = [
 [[package]]
 name = "bitcoin_hashes"
 version = "0.10.0"
-source = "git+https://github.com/elsirion/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
+source = "git+https://github.com/fedimint/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
 dependencies = [
  "serde",
 ]
@@ -2511,7 +2511,7 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 [[package]]
 name = "secp256k1"
 version = "0.20.3"
-source = "git+https://github.com/elsirion/rust-secp256k1/?branch=minimint#37b9d77d98a497fddfb435df4f806b17276edb8d"
+source = "git+https://github.com/fedimint/rust-secp256k1/?branch=minimint#37b9d77d98a497fddfb435df4f806b17276edb8d"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.6.5",
@@ -2522,7 +2522,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-sys"
 version = "0.4.1"
-source = "git+https://github.com/elsirion/rust-secp256k1/?branch=minimint#37b9d77d98a497fddfb435df4f806b17276edb8d"
+source = "git+https://github.com/fedimint/rust-secp256k1/?branch=minimint#37b9d77d98a497fddfb435df4f806b17276edb8d"
 dependencies = [
  "cc",
 ]
@@ -2530,7 +2530,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp"
 version = "0.4.0"
-source = "git+https://github.com/elsirion/rust-secp256k1-zkp?branch=minimint#28a111ec67b8248bae4058f08813caceb5d90892"
+source = "git+https://github.com/elsirion/rust-secp256k1-zkp?branch=minimint#1c4d6e843333947804df1be20d7fe9bd636a1555"
 dependencies = [
  "rand 0.6.5",
  "secp256k1",
@@ -2541,7 +2541,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp-sys"
 version = "0.4.0"
-source = "git+https://github.com/elsirion/rust-secp256k1-zkp?branch=minimint#28a111ec67b8248bae4058f08813caceb5d90892"
+source = "git+https://github.com/elsirion/rust-secp256k1-zkp?branch=minimint#1c4d6e843333947804df1be20d7fe9bd636a1555"
 dependencies = [
  "cc",
  "secp256k1-sys",
