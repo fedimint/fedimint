@@ -841,7 +841,7 @@ impl<'a> StatelessWallet<'a> {
         let peg_out_amount = outputs
             .iter()
             .map(|peg_out| peg_out.amount)
-            .fold1(|a, b| a + b)
+            .reduce(|a, b| a + b)
             .expect("We always peg out to at least one address");
 
         // We then go on to calculate the base size of the transaction `total_weight` and the
