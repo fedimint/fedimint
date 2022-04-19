@@ -42,11 +42,8 @@ impl LnGateway {
         Self::new(federation_client, Box::new(ln_client)).await
     }
 
-    pub async fn new(
-        federation_client: GatewayClient,
-        ln_client: Box<dyn LnRpc + Sync + Send>,
-    ) -> LnGateway {
-        let ln_client: Arc<dyn LnRpc + Sync + Send> = ln_client.into();
+    pub async fn new(federation_client: GatewayClient, ln_client: Box<dyn LnRpc>) -> LnGateway {
+        let ln_client: Arc<dyn LnRpc> = ln_client.into();
         let mint_client = Arc::new(federation_client);
         let fetcher = tokio::spawn(background_fetch(mint_client.clone(), ln_client.clone()));
 
@@ -120,10 +117,7 @@ impl LnGateway {
 
 /// This function runs as a background process fetching issued token signatures and driving forward
 /// payments which were interrupted during execution.
-async fn background_fetch(
-    federation_client: Arc<GatewayClient>,
-    _ln_client: Arc<dyn LnRpc + Send + Sync>,
-) {
+async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc<dyn LnRpc>) {
     // TODO: also try to drive forward payments that were interrupted
     loop {
         let least_wait_until = Instant::now() + Duration::from_millis(100);
