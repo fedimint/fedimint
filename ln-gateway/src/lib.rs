@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::debug;
 use tracing::{error, warn};
@@ -33,7 +34,10 @@ impl LnGateway {
             ln_socket,
         } = cfg;
         let federation_client = GatewayClient::new(federation_client, db);
-        let ln_client = clightningrpc::LightningRPC::new(ln_socket);
+        let ln_client = cln_rpc::ClnRpc::new(ln_socket)
+            .await
+            .expect("connect to ln_socket");
+        let ln_client = Mutex::new(ln_client);
 
         Self::new(federation_client, Box::new(ln_client)).await
     }

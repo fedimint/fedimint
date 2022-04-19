@@ -1,6 +1,9 @@
+use std::convert::TryInto;
+
 use async_trait::async_trait;
-use clightningrpc::lightningrpc::PayOptions;
-use tracing::{debug, trace};
+use cln_rpc::model::requests::PayRequest;
+use tokio::sync::Mutex;
+use tracing::debug;
 
 #[async_trait]
 pub trait LnRpc: Send + Sync + 'static {
@@ -14,11 +17,10 @@ pub trait LnRpc: Send + Sync + 'static {
 }
 
 #[derive(Debug)]
-pub struct LightningError(i32);
+pub struct LightningError(Option<i32>);
 
-// TODO: switch to https://github.com/ElementsProject/lightning/pull/5010 once ready
 #[async_trait]
-impl LnRpc for clightningrpc::LightningRPC {
+impl LnRpc for Mutex<cln_rpc::ClnRpc> {
     async fn pay(
         &self,
         invoice: &str,
@@ -26,39 +28,40 @@ impl LnRpc for clightningrpc::LightningRPC {
         max_fee_percent: f64,
     ) -> Result<[u8; 32], LightningError> {
         debug!("Attempting to pay invoice {}", invoice);
-        let pay_result = tokio::task::block_in_place(|| {
-            self.pay(
-                invoice,
-                PayOptions {
-                    msatoshi: None,
-                    description: None,
-                    riskfactor: None,
-                    maxfeepercent: Some(max_fee_percent),
-                    exemptfee: None,
-                    retry_for: None,
-                    maxdelay: Some(max_delay),
-                },
-            )
-        });
+
+        let pay_result = self
+            .lock()
+            .await
+            .call(cln_rpc::Request::Pay(PayRequest {
+                bolt11: invoice.to_string(),
+                msatoshi: None,
+                label: None,
+                riskfactor: None,
+                maxfeepercent: Some(max_fee_percent),
+                retry_for: None,
+                maxdelay: Some(max_delay as u16),
+                exemptfee: None,
+                localofferid: None,
+                exclude: None,
+                maxfee: None,
+                description: None,
+            }))
+            .await;
+
         match pay_result {
-            Ok(pay_success) => {
+            Ok(cln_rpc::Response::Pay(pay_success)) => {
                 debug!("Successfully paid invoice {}", invoice);
-                let payment_preimage_str = pay_success.payment_preimage;
-                let mut payment_preimage = [0u8; 32];
-                hex::decode_to_slice(payment_preimage_str, &mut payment_preimage)
-                    .expect("c-lightning returned a malformed preimage");
-                Ok(payment_preimage)
+                Ok(pay_success.payment_preimage.to_vec().try_into().unwrap())
             }
-            Err(clightningrpc::Error::Rpc(clightningrpc::error::RpcError {
-                code,
-                message,
-                data,
-            })) => {
-                debug!("c-lightning pay returned error {}: {}", code, message);
-                trace!("error data: {:?}", data);
+            Ok(_) => unreachable!("unexpected response from C-lightning"),
+            Err(cln_rpc::RpcError { code, message }) => {
+                if let Some(code) = code {
+                    debug!("c-lightning pay returned error {}: {}", code, message);
+                } else {
+                    debug!("c-lightning pay returned error : {}", message);
+                }
                 Err(LightningError(code))
             }
-            Err(_) => panic!("C-Lightning had an unexpected error"),
         }
     }
 }
