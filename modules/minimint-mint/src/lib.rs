@@ -414,9 +414,9 @@ impl Mint {
             .iter()
             .map(|(idx, _)| *idx)
             .collect::<counter::Counter<_>>();
-        if let Some((peer, count)) = peer_contrib_counts.into_iter().find(|(_, cnt)| **cnt > 1) {
+        if let Some((peer, count)) = peer_contrib_counts.into_iter().find(|(_, cnt)| *cnt > 1) {
             return (
-                Err(CombineError::MultiplePeerContributions(*peer, *count)),
+                Err(CombineError::MultiplePeerContributions(peer, count)),
                 MintShareErrors(vec![]),
             );
         }
