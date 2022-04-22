@@ -7,7 +7,7 @@ The limited permissions granted above are perpetual and will not be revoked.
 
 This document and the information contained herein is provided "AS IS" and ALL WARRANTIES, EXPRESS OR IMPLIED are DISCLAIMED, INCLUDING BUT NOT LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
  */
-use crate::clients::user::{APIResponse, ClientError};
+use crate::clients::user::{ClientError, EventLog};
 use crate::{LightningGateway, UserClient};
 use futures::future::BoxFuture;
 use rand::rngs::OsRng;
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub const JSON_RPC: &str = "2.0";
 ///JSON-RPC Request object
@@ -142,9 +142,9 @@ pub fn standard_error(code: StandardError, data: Option<Value>) -> RpcError {
 pub struct Shared {
     pub client: Arc<UserClient>,
     pub gateway: Arc<LightningGateway>,
-    pub events: Arc<Mutex<Vec<APIResponse>>>,
     pub rng: OsRng,
     pub router: Arc<Router>,
+    pub events: Arc<EventLog>,
 }
 
 type HandlerArgs = Value;

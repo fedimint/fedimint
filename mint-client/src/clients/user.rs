@@ -22,7 +22,9 @@ use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::error::Error;
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -465,7 +467,6 @@ pub enum APIResponse {
         coins: Vec<CoinsByTier>,
         pending: PendingRes,
     },
-    //this will be changed anyway needed quick fix in rebase
     Pending {
         pending: PendingRes,
     },
@@ -487,13 +488,8 @@ pub enum APIResponse {
         status: TransactionStatus,
     },
     /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
-    EventDump {
-        events: Vec<APIResponse>,
-    },
-    /// Represents an event which occurred. Might be an Error or Non-Error
-    Event {
-        time: u64,
-        msg: String,
+    Events {
+        events: Vec<Event>,
     },
     /// Represents an empty response
     Empty,
@@ -517,6 +513,67 @@ impl PendingRes {
             acc_qty_coins,
             acc_val_amount,
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Event {
+    timestamp: u64,
+    data: String, //use something else than string ?
+}
+
+impl Event {
+    pub fn build_event(data: String) -> Self {
+        let time = SystemTime::now();
+        let d = time.duration_since(UNIX_EPOCH).unwrap();
+        let timestamp = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
+        Event { timestamp, data }
+    }
+}
+/// Stores events (the (un)successful result of some action initiated by a client which couldn't be sent back to him)
+/// If the capacity is reached events will be dropped from the back
+pub struct EventLog {
+    data: Mutex<VecDeque<Event>>,
+    capacity: usize,
+    //maturity: u64 could be used to drop events with timestamp > maturity <- idea
+}
+
+impl EventLog {
+    pub fn new(capacity: usize) -> Self {
+        EventLog {
+            data: Mutex::new(VecDeque::with_capacity(capacity)),
+            capacity,
+        }
+    }
+    pub fn add(&self, data: String) {
+        let mut events = self.data.lock().unwrap(); // don't know what to do here.. clientd should be restarted if this happens
+                                                    //Because Mutex only guarantees that only one thread at a time but not the (in order) correct one is pushing events
+                                                    //this guarantees that the timestamps will be sorted
+        let event = Event::build_event(data);
+
+        if let Some(ts) = events.back() {
+            if event.timestamp < ts.timestamp {
+                let len = events.len();
+                events.insert(len - 1, event)
+            } else {
+                events.push_back(event);
+            }
+        } else {
+            events.push_back(event);
+        }
+        //If the DeQueue gets too long drop the 'oldest' event
+        if events.len() > self.capacity {
+            events.pop_front();
+            events.shrink_to_fit();
+        }
+    }
+    pub fn get(&self, timestamp: u64) -> Vec<Event> {
+        let events = self.data.lock().unwrap();
+        events
+            .iter()
+            .filter(|e| e.timestamp >= timestamp)
+            .cloned()
+            .collect()
     }
 }
 
@@ -587,18 +644,9 @@ impl APIResponse {
     pub fn build_reissue(out_point: OutPoint, status: TransactionStatus) -> Self {
         APIResponse::Reissue { out_point, status }
     }
-    /// Builds the [`APIResponse::Event`] variant, by taking the event message and adding a timestamp
-    pub fn build_event(msg: String) -> Self {
-        let time = SystemTime::now();
-        let d = time.duration_since(UNIX_EPOCH).unwrap();
-        let time = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
-        APIResponse::Event { time, msg }
-    }
-    /// Builds the [`APIResponse::EventDump`] variant. The supplied event stack will be cleared.
-    pub fn build_event_dump(events: &mut Vec<APIResponse>) -> Self {
-        let e = events.clone();
-        events.clear();
-        APIResponse::EventDump { events: e }
+    /// Builds the [`APIResponse::Events`] variant.
+    pub fn build_events(events: Vec<Event>) -> Self {
+        APIResponse::Events { events }
     }
 }
 // <- clientd

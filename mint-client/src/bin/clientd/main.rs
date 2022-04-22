@@ -4,7 +4,7 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
 use mint_client::clients::user::{
-    APIResponse, ClientError, InvoiceReq, PegInReq, PegOutReq, PendingRes,
+    APIResponse, ClientError, Event, EventLog, InvoiceReq, PegInReq, PegOutReq, PendingRes,
 };
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
@@ -15,9 +15,8 @@ use mint_client::{ClientAndGatewayConfig, UserClient};
 use rand::rngs::OsRng;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use std::borrow::BorrowMut;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 use structopt::StructOpt;
 use tracing::info;
@@ -65,7 +64,7 @@ async fn main() -> tide::Result<()> {
     let shared = Shared {
         client: Arc::new(client),
         gateway: Arc::new(cfg.gateway.clone()),
-        events: Arc::new(Mutex::new(Vec::new())),
+        events: Arc::new(EventLog::new(21)),
         rng,
         router: Arc::new(router),
     };
@@ -141,16 +140,19 @@ async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json
     });
     Ok(result)
 }
-async fn events(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
-    let events_ptr = Arc::clone(&shared.events);
-    let mut events_guard = events_ptr.lock().map_err(|e| {
+async fn events(
+    params: serde_json::Value,
+    shared: Arc<Shared>,
+) -> Result<serde_json::Value, RpcError> {
+    let timestamp: u64 = u64::deserialize(params).map_err(|e| {
         standard_error(
-            StandardError::InternalError,
+            StandardError::InvalidParams,
             Some(serde_json::Value::String(format!("{:?}", e))),
         )
     })?;
-    let events = events_guard.borrow_mut();
-    let result = serde_json::json!(&APIResponse::build_event_dump(events));
+    let events = Arc::clone(&shared.events);
+    let events = events.get(timestamp);
+    let result = serde_json::json!(&APIResponse::build_events(events));
     Ok(result)
 }
 async fn pegin_address(
@@ -247,9 +249,7 @@ async fn ln_pay(
     let res = pay_invoice(invoice.bolt11, client, gateway, rng).await?;
 
     if let StatusCode::OK = res.status() {
-        let result = serde_json::json!(&APIResponse::build_event(
-            "succsessfull ln-payment".to_string(),
-        ));
+        let result = serde_json::json!(&Event::build_event("successful ln-payment".to_string(),));
         Ok(result)
     } else {
         Err(standard_error(
@@ -278,16 +278,13 @@ async fn reissue(
         let out_point = match client.reissue(coins, &mut rng).await {
             Ok(o) => o,
             Err(e) => {
-                events
-                    .lock()
-                    .unwrap()
-                    .push(APIResponse::build_event(format!("{:?}", e)));
+                events.add(format!("{:?}", e));
                 return;
             }
         };
         match client.fetch_tx_outcome(out_point.txid, true).await {
             Ok(_) => fetch(client, Arc::clone(&events)).await,
-            Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
+            Err(e) => events.add(format!("{:?}", e)),
         };
     });
     Ok(serde_json::Value::Null)
@@ -320,11 +317,10 @@ async fn reissue_validate(
 }
 
 ///Uses the [`UserClient`] to fetch the newly issued or reissued coins
-async fn fetch(client: Arc<UserClient>, events: Arc<Mutex<Vec<APIResponse>>>) {
+async fn fetch(client: Arc<UserClient>, events: Arc<EventLog>) {
     match client.fetch_all_coins().await {
-        Ok(_) => (*events.lock().unwrap())
-            .push(APIResponse::build_event("succsessfull fetch".to_owned())),
-        Err(e) => (*events.lock().unwrap()).push(APIResponse::build_event(format!("{:?}", e))),
+        Ok(_) => events.add("successfully fetched".to_string()),
+        Err(e) => events.add(format!("{:?}", e)),
     }
 }
 
