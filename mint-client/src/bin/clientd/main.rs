@@ -82,17 +82,31 @@ async fn main() -> tide::Result<()> {
                 if let Ok(request_object) = Request::deserialize(json) {
                     //Valid Request Object
                     if  Some(String::from(JSON_RPC)) == request_object.jsonrpc {
+                        //Valid JSON-2.0
                         if let Some(handler) = router.get(request_object.method.as_str()) {
                             //There is a handler (method)
-                            match handler.call(request_object.params, shared).await {
-                                Ok(handler_res) => {
-                                    //Success, response will be send to client
-                                    Response::with_result(handler_res, request_object.id)
+                            if let Some(id) = request_object.id {
+                                // not a notification
+                                match handler.call(request_object.params, shared).await {
+                                    Ok(handler_res) => {
+                                        //Success, response will be send to client
+                                        Response::with_result(handler_res, id)
+                                    }
+                                    Err(err) => {
+                                        //Either the params were wrong or there was an internal error
+                                        Response::with_error(err, Some(id))
+                                    }
                                 }
-                                Err(err) => {
-                                    //Either the params were wrong or there was an internal error
-                                    Response::with_error(err, Some(request_object.id))
-                                }
+                            } else {
+                                // a notification
+                                tokio::spawn(async move{
+                                    if let Some(handler) = router.get(request_object.method.as_str()) {
+                                        //There is a handler (method)
+                                        #[allow(unused_must_use)]
+                                        { handler.call(request_object.params, shared).await; }
+                                    }
+                                });
+                                return Ok(tide::Response::new(200));
                             }
                         } else {
                             //Method not found

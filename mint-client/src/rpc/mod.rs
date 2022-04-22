@@ -32,7 +32,7 @@ pub struct Request {
     pub params: Value,
     ///An identifier established by the Client that MUST contain a String, Number, or NULL value if included.
     ///If it is not included it is assumed to be a notification. The value SHOULD normally not be Null and Numbers SHOULD NOT contain fractional parts
-    pub id: Value,
+    pub id: Option<Value>,
 }
 ///JSON-RPC Response object
 #[derive(Serialize)]
