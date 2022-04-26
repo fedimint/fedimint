@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tokio::time::Instant;
 use tracing::debug;
 use tracing::{error, warn};
@@ -33,16 +34,16 @@ impl LnGateway {
             ln_socket,
         } = cfg;
         let federation_client = GatewayClient::new(federation_client, db);
-        let ln_client = clightningrpc::LightningRPC::new(ln_socket);
+        let ln_client = cln_rpc::ClnRpc::new(ln_socket)
+            .await
+            .expect("connect to ln_socket");
+        let ln_client = Mutex::new(ln_client);
 
         Self::new(federation_client, Box::new(ln_client)).await
     }
 
-    pub async fn new(
-        federation_client: GatewayClient,
-        ln_client: Box<dyn LnRpc + Sync + Send>,
-    ) -> LnGateway {
-        let ln_client: Arc<dyn LnRpc + Sync + Send> = ln_client.into();
+    pub async fn new(federation_client: GatewayClient, ln_client: Box<dyn LnRpc>) -> LnGateway {
+        let ln_client: Arc<dyn LnRpc> = ln_client.into();
         let mint_client = Arc::new(federation_client);
         let fetcher = tokio::spawn(background_fetch(mint_client.clone(), ln_client.clone()));
 
@@ -116,10 +117,7 @@ impl LnGateway {
 
 /// This function runs as a background process fetching issued token signatures and driving forward
 /// payments which were interrupted during execution.
-async fn background_fetch(
-    federation_client: Arc<GatewayClient>,
-    _ln_client: Arc<dyn LnRpc + Send + Sync>,
-) {
+async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc<dyn LnRpc>) {
     // TODO: also try to drive forward payments that were interrupted
     loop {
         let least_wait_until = Instant::now() + Duration::from_millis(100);

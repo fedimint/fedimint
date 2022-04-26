@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
 async-trait = "0.1.52"
-clightningrpc = { git = "https://github.com/elsirion/rust-clightning-rpc", rev = "28b0b062dfb7d758a3a0753c274febe4a7faa584" }
+cln-rpc = "0.1"
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.14.0"
