@@ -11,4 +11,9 @@ in naersk.buildPackage {
   };
   gitAllRefs = true;
   gitSubmodules = true;
+  buildInputs = [
+      pkgs.openssl
+      pkgs.pkg-config
+      pkgs.perl
+  ];
 }
