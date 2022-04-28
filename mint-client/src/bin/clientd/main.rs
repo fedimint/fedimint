@@ -16,7 +16,7 @@ use rand::rngs::OsRng;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use structopt::StructOpt;
 use tracing::info;
@@ -67,6 +67,7 @@ async fn main() -> tide::Result<()> {
         events: Arc::new(EventLog::new(21)),
         rng,
         router: Arc::new(router),
+        spend_lock: Arc::new(Mutex::new(())),
     };
     let state = State {
         shared: Arc::new(shared),
@@ -236,6 +237,8 @@ async fn spend(
         )
     })?;
     let client = &shared.client;
+    //just calling lock without binding it to a variable would do nothing because it would lock and then unlock immediately
+    let drop_when_finished = shared.spend_lock.lock();
     let amount = Amount::from_msat(value);
     let res = match client.select_and_spend_coins(amount) {
         Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
@@ -243,6 +246,7 @@ async fn spend(
             return Err(ClientError::from(e).into());
         }
     };
+    std::mem::drop(drop_when_finished);
     let result = serde_json::json!(&res);
     Ok(result)
 }

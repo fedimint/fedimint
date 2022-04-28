@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub const JSON_RPC: &str = "2.0";
 ///JSON-RPC Request object
@@ -145,6 +145,7 @@ pub struct Shared {
     pub rng: OsRng,
     pub router: Arc<Router>,
     pub events: Arc<EventLog>,
+    pub spend_lock: Arc<Mutex<()>>,
 }
 
 type HandlerArgs = Value;
