@@ -61,10 +61,13 @@ async fn main() -> tide::Result<()> {
         .add_handler("lnpay", ln_pay)
         .add_handler("reissue", reissue)
         .add_handler("reissue_validate", reissue_validate);
+    let sclient = Arc::new(client);
+    let sevents = Arc::new(EventLog::new(21));
+
     let shared = Shared {
-        client: Arc::new(client),
+        client: Arc::clone(&sclient),
         gateway: Arc::new(cfg.gateway.clone()),
-        events: Arc::new(EventLog::new(21)),
+        events: Arc::clone(&sevents),
         rng,
         router: Arc::new(router),
         spend_lock: Arc::new(Mutex::new(())),
@@ -136,6 +139,14 @@ async fn main() -> tide::Result<()> {
             res.set_body(body);
             Ok(res)
         });
+    tokio::spawn(async move {
+        loop {
+            if !&sclient.fetch_active_issuances().is_empty() {
+                fetch(Arc::clone(&sclient), Arc::clone(&sevents)).await;
+            }
+            //wait for some time ??
+        }
+    });
     app.listen("127.0.0.1:8081").await?;
     Ok(())
 }
@@ -187,7 +198,6 @@ async fn pegin(
     shared: Arc<Shared>,
 ) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
-    let events = Arc::clone(&shared.events);
     let mut rng = shared.rng.clone();
     //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
     let pegin: PegInReq = PegInReq::deserialize(params).map_err(|e| {
@@ -200,9 +210,6 @@ async fn pegin(
     let transaction = pegin.transaction;
     let id = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}, result will be fetched", id.to_hex());
-    tokio::spawn(async move {
-        fetch(client, events).await;
-    });
     let result = serde_json::json!(&APIResponse::PegIO { txid: id });
     Ok(result)
 }
@@ -300,10 +307,10 @@ async fn reissue(
                 return;
             }
         };
-        match client.fetch_tx_outcome(out_point.txid, true).await {
-            Ok(_) => fetch(client, Arc::clone(&events)).await,
-            Err(e) => events.add(format!("{:?}", e)),
-        };
+
+        if let Err(e) = client.fetch_tx_outcome(out_point.txid, true).await {
+            events.add(format!("{:?}", e));
+        }
     });
     Ok(serde_json::Value::Null)
 }
@@ -319,7 +326,6 @@ async fn reissue_validate(
         )
     })?;
     let client = Arc::clone(&shared.client);
-    let events = Arc::clone(&shared.events);
     let mut rng = shared.rng.clone();
     let out_point = client.reissue(coins, &mut rng).await?;
     //This has to be changed : endless loop possible (polling=true)
@@ -328,16 +334,13 @@ async fn reissue_validate(
         Ok(s) => s,
     };
     let result = serde_json::json!(&APIResponse::build_reissue(out_point, status));
-    tokio::spawn(async move {
-        fetch(client, events).await;
-    });
     Ok(result)
 }
 
 ///Uses the [`UserClient`] to fetch the newly issued or reissued coins
 async fn fetch(client: Arc<UserClient>, events: Arc<EventLog>) {
     match client.fetch_all_coins().await {
-        Ok(_) => events.add("successfully fetched".to_string()),
+        Ok(txids) => events.add(format!("successfully fetched: {:?}", txids)),
         Err(e) => events.add(format!("{:?}", e)),
     }
 }
