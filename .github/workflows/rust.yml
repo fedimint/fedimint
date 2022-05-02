@@ -71,5 +71,4 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Integration Tests with nix-shell
         run: nix-shell --command ./scripts/integrationtest.sh
-      - name: Running nix-build
-        run: nix-build default.nix
+
