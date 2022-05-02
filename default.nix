@@ -15,4 +15,10 @@ in naersk.buildPackage {
       pkgs.pkg-config
       pkgs.perl
   ];
+  shellHook =
+  ''
+    echo "Hello shell"
+    SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+    cp -r $out/target $SRC_DIR/target
+  '';
 }
