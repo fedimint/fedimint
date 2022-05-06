@@ -47,7 +47,8 @@ enum Command {
     /// Withdraw funds from the federation
     PegOut {
         address: Address,
-        amount: bitcoin::Amount,
+        #[structopt(parse(try_from_str = parse_bitcoin_amount))]
+        satoshis: bitcoin::Amount,
     },
 
     /// Pay a lightning invoice via a gateway
@@ -136,8 +137,8 @@ async fn main() {
                 info!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }
-        Command::PegOut { address, amount } => {
-            client.peg_out(amount, address, &mut rng).await.unwrap();
+        Command::PegOut { address, satoshis } => {
+            client.peg_out(satoshis, address, &mut rng).await.unwrap();
         }
         Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();
@@ -180,4 +181,10 @@ fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
 fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
+}
+
+fn parse_bitcoin_amount(
+    s: &str,
+) -> Result<bitcoin::Amount, bitcoin::util::amount::ParseAmountError> {
+    bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
 }

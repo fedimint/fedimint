@@ -117,7 +117,7 @@ $MINT_CLIENT fetch
 
 # peg out
 PEG_OUT_ADDR="$($BTC_CLIENT getnewaddress)"
-$MINT_CLIENT peg-out $PEG_OUT_ADDR "500 sat"
+$MINT_CLIENT peg-out $PEG_OUT_ADDR 500
 sleep 5 # wait for tx to be included
 mine_blocks 120
 await_block_sync
