@@ -84,29 +84,37 @@ impl<C> Coins<C> {
         }
     }
 }
+
 impl<C> Coins<C>
 where
     C: Clone,
 {
-    pub fn select_coins(&self, mut amount: Amount) -> Option<Coins<C>> {
+    /// Select coins with total amount of *at least* `amount`. If more than requested amount of coins
+    /// are returned it was because exact change couldn't be made, and the next smallest amount will be
+    /// returned.
+    ///
+    /// The caller can request change from the federation.
+    pub fn select_coins(&self, amount: Amount) -> Option<Coins<C>> {
+        if amount > self.amount() {
+            return None;
+        }
+
+        let mut remaining = self.amount();
+
         let coins = self
             .iter()
             .rev()
-            .filter_map(|(amt, coin)| {
-                if amount >= amt {
-                    amount -= amt;
-                    Some((amt, (*coin).clone()))
-                } else {
+            .filter_map(|(coin_amount, coin)| {
+                if amount <= remaining - coin_amount {
+                    remaining -= coin_amount;
                     None
+                } else {
+                    Some((coin_amount, (*coin).clone()))
                 }
             })
             .collect::<Coins<C>>();
 
-        if amount == Amount::ZERO {
-            Some(coins)
-        } else {
-            None
-        }
+        Some(coins)
     }
 }
 
@@ -242,5 +250,52 @@ where
             amount.expect("The multi zip must contain at least one iterator"),
             coins,
         ))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Coins;
+    use minimint_api::Amount;
+
+    #[test]
+    fn select_coins_returns_exact_amount() {
+        let starting = coins(vec![
+            (Amount::from_sat(1), 5),
+            (Amount::from_sat(5), 5),
+            (Amount::from_sat(20), 5),
+        ]);
+
+        assert_eq!(
+            starting.select_coins(Amount::from_sat(7)),
+            Some(coins(vec![
+                (Amount::from_sat(1), 2),
+                (Amount::from_sat(5), 1)
+            ]))
+        );
+    }
+
+    #[test]
+    fn select_coins_uses_smaller_denominations() {
+        let starting = coins(vec![(Amount::from_sat(5), 5), (Amount::from_sat(20), 5)]);
+
+        assert_eq!(
+            starting.select_coins(Amount::from_sat(7)),
+            Some(coins(vec![(Amount::from_sat(5), 2)]))
+        );
+    }
+
+    #[test]
+    fn select_coins_returns_none_if_amount_is_too_large() {
+        let starting = coins(vec![(Amount::from_sat(10), 1)]);
+
+        assert_eq!(starting.select_coins(Amount::from_sat(100)), None);
+    }
+
+    fn coins(coins: Vec<(Amount, usize)>) -> Coins<usize> {
+        coins
+            .into_iter()
+            .flat_map(|(amount, number)| vec![(amount, 0_usize); number])
+            .collect()
     }
 }

@@ -328,48 +328,48 @@ impl FederationTest {
     /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
     /// then fetches the coins for the user client.
     pub async fn mint_coins_for_user(&self, user: &UserTest, amount: Amount) {
-        let (finalization, coins) = user
-            .client
-            .mint_client()
-            .create_coin_output(amount, OsRng::new().unwrap());
+        let mut batch = DbBatch::new();
         let out_point = OutPoint {
             txid: Default::default(),
             out_idx: 0,
         };
-        for server in &self.servers {
-            let mut batch = DbBatch::new();
-            let mut batch_tx = batch.transaction();
-            let transaction = minimint::transaction::Transaction {
-                inputs: vec![],
-                outputs: vec![Output::Mint(coins.clone())],
-                signature: None,
-            };
 
-            batch_tx.append_insert(
-                minimint::db::AcceptedTransactionKey(out_point.txid),
-                minimint::consensus::AcceptedTransaction {
-                    epoch: 0,
-                    transaction,
-                },
-            );
-
-            batch_tx.commit();
-            server
-                .borrow_mut()
-                .consensus
-                .mint
-                .apply_output(batch.transaction(), &coins, out_point)
-                .unwrap();
-            server.borrow_mut().database.apply_batch(batch).unwrap();
-        }
-        let mut batch = DbBatch::new();
-        user.client.mint_client().save_coin_finalization_data(
+        user.client.mint_client().create_coin_output(
             batch.transaction(),
-            out_point,
-            finalization,
-        );
-        user.database.apply_batch(batch).unwrap();
+            amount,
+            OsRng::new().unwrap(),
+            |tokens| {
+                for server in &self.servers {
+                    let mut batch = DbBatch::new();
+                    let mut batch_tx = batch.transaction();
+                    let transaction = minimint::transaction::Transaction {
+                        inputs: vec![],
+                        outputs: vec![Output::Mint(tokens.clone())],
+                        signature: None,
+                    };
 
+                    batch_tx.append_insert(
+                        minimint::db::AcceptedTransactionKey(out_point.txid),
+                        minimint::consensus::AcceptedTransaction {
+                            epoch: 0,
+                            transaction,
+                        },
+                    );
+
+                    batch_tx.commit();
+                    server
+                        .borrow_mut()
+                        .consensus
+                        .mint
+                        .apply_output(batch.transaction(), &tokens, out_point)
+                        .unwrap();
+                    server.borrow_mut().database.apply_batch(batch).unwrap();
+                }
+                out_point
+            },
+        );
+
+        user.database.apply_batch(batch).unwrap();
         self.run_consensus_epochs(2).await;
         user.client.fetch_all_coins().await.unwrap();
     }
