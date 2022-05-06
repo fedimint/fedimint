@@ -112,7 +112,7 @@ async fn main() {
             info!(%id, "Started reissuance, please fetch the result later");
         }
         Command::Spend { amount } => {
-            match client.select_and_spend_coins(amount) {
+            match client.select_and_spend_coins(amount, rng).await {
                 Ok(outgoing_coins) => {
                     println!("{}", serialize_coins(&outgoing_coins));
                 }

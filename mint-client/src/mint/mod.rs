@@ -94,22 +94,6 @@ impl<'c> MintClient<'c> {
         Ok(coins)
     }
 
-    // TODO: implement input generation with change to avoid error on missing coin denominations
-    /// Select coins to fund a transaction with.
-    ///
-    /// **ATTENTION**: calling this function multiple times without committing the batch to the
-    /// database is not supported and will result in an accidental double spend.
-    pub fn create_coin_input(
-        &self,
-        mut batch: BatchTx,
-        amount: Amount,
-    ) -> Result<(Vec<KeyPair>, Coins<Coin>)> {
-        let coins = self.select_and_spend_coins(batch.subtransaction(), amount)?;
-        let (spend_keys, coins) = self.create_coin_input_from_coins(coins)?;
-        batch.commit();
-        Ok((spend_keys, coins))
-    }
-
     pub fn create_coin_input_from_coins(
         &self,
         coins: Coins<SpendableCoin>,
@@ -572,9 +556,10 @@ mod tests {
 
         // Spending works
         let mut batch = DbBatch::new();
-        let (spend_keys, input) = client
-            .create_coin_input(batch.transaction(), SPEND_AMOUNT)
+        let coins = client
+            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
+        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -600,9 +585,10 @@ mod tests {
 
         // We can exactly spend the remainder
         let mut batch = DbBatch::new();
-        let (spend_keys, input) = client
-            .create_coin_input(batch.transaction(), SPEND_AMOUNT)
+        let coins = client
+            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
+        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();

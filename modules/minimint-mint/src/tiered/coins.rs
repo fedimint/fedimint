@@ -84,29 +84,55 @@ impl<C> Coins<C> {
         }
     }
 }
+
+/// Select coins with total amount of *at least* `amount`. If more than requested amount of coins
+/// are returned it was because exact change couldn't be made.
+/// The caller can request change from the federation.
 impl<C> Coins<C>
 where
     C: Clone,
 {
-    pub fn select_coins(&self, mut amount: Amount) -> Option<Coins<C>> {
+    pub fn select_coins(&self, amount: Amount) -> Option<Coins<C>> {
+        // Try to select exact change
+        let mut selected = Amount::from_msat(0);
         let coins = self
             .iter()
             .rev()
-            .filter_map(|(amt, coin)| {
-                if amount >= amt {
-                    amount -= amt;
-                    Some((amt, (*coin).clone()))
+            .filter_map(|(coin_amount, coin)| {
+                if amount >= coin_amount + selected {
+                    selected += coin_amount;
+                    Some((coin_amount, (*coin).clone()))
                 } else {
                     None
                 }
             })
             .collect::<Coins<C>>();
 
-        if amount == Amount::ZERO {
-            Some(coins)
-        } else {
-            None
+        if selected == amount {
+            return Some(coins);
         }
+
+        // Try to select greater change
+        let mut selected = Amount::from_msat(0);
+        let coins = self
+            .iter()
+            .rev()
+            .filter_map(|(coin_amount, coin)| {
+                if amount > selected {
+                    selected += coin_amount;
+                    Some((coin_amount, (*coin).clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Coins<C>>();
+
+        if selected >= amount {
+            return Some(coins);
+        }
+
+        // Insufficient balance
+        None
     }
 }
 

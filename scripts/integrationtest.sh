@@ -128,7 +128,7 @@ RECEIVED=$($BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
 # outgoing lightning
-INVOICE="$($LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
+INVOICE="$($LN2 invoice 999999 test test | jq -r '.bolt11')"
 $MINT_CLIENT ln-pay $INVOICE
 INVOICE_RESULT="$($LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
