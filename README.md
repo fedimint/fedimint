@@ -89,7 +89,7 @@ lightning-cli --network regtest --lightning-dir=ln1 newaddr
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <ADDRESS> <AMOUNT>
 #make sure to mine enough blocks
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
-bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRESS>
 ```
 Now you can open a channel :
 ```shell
@@ -100,7 +100,7 @@ lightning-cli --network regtest --lightning-dir=ln1 connect <LN2_PUB_KEY>@127.0.
 lightning-cli --network regtest --lightning-dir=ln1 fundchannel <LN2_PUB_KEY> 0.1btc
 #after that you should mine some blocks again
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddress
-bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRES>
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 100 <ADDRESS>
 ```
 ### Using the client
 First you need to make sure that your regtest `bitcoind` has some coins that are mature. For that you can generate a few hundred blocks to your own wallet:
