@@ -14,6 +14,6 @@ for ((ID=$2; ID<SIZE; ID++)); do
   (target/release/server cfg/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
 done
 
-read -p "Press enter to stop processes"
+wait
 
 kill 0
