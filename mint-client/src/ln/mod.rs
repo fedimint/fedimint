@@ -19,6 +19,7 @@ use minimint::modules::ln::{
 use minimint_api::db::batch::BatchTx;
 use minimint_api::Amount;
 use rand::{CryptoRng, RngCore};
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 pub struct LnClient<'c> {
@@ -36,7 +37,9 @@ impl<'c> LnClient<'c> {
         gateway: &LightningGateway,
         timelock: u32,
         mut rng: impl RngCore + CryptoRng + 'a,
+        lock: Arc<Mutex<()>>,
     ) -> Result<ContractOrOfferOutput> {
+        let drop_when_finished = lock.lock();
         let contract_amount = {
             let invoice_amount_msat = invoice
                 .amount_milli_satoshis()
@@ -71,6 +74,7 @@ impl<'c> LnClient<'c> {
         batch.append_insert_new(OutgoingPaymentKey(contract.contract_id()), outgoing_payment);
 
         batch.commit();
+        std::mem::drop(drop_when_finished);
         Ok(ContractOrOfferOutput::Contract(ContractOutput {
             amount: contract_amount,
             contract: Contract::Outgoing(contract),
@@ -153,7 +157,7 @@ mod tests {
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
 
@@ -264,6 +268,7 @@ mod tests {
         let timelock = 42;
 
         let mut batch = DbBatch::new();
+        let lock = Arc::new(Mutex::new(()));
         let output = client
             .create_outgoing_output(
                 batch.transaction(),
@@ -271,6 +276,7 @@ mod tests {
                 &gateway,
                 timelock,
                 &mut rng,
+                lock,
             )
             .await
             .unwrap();

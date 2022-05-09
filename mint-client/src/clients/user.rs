@@ -24,7 +24,7 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::error::Error;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
@@ -300,6 +300,7 @@ impl UserClient {
         gateway: &LightningGateway,
         invoice: Invoice,
         mut rng: R,
+        lock: Arc<Mutex<()>>,
     ) -> Result<ContractId, ClientError> {
         let mut batch = DbBatch::new();
 
@@ -314,8 +315,10 @@ impl UserClient {
                 gateway,
                 absolute_timelock as u32,
                 &mut rng,
+                Arc::clone(&lock),
             )
             .await?;
+
         let contract_id = match &contract {
             ContractOrOfferOutput::Contract(c) => c.contract.contract_id(),
             ContractOrOfferOutput::Offer(_) => {
@@ -325,9 +328,11 @@ impl UserClient {
         let ln_output = Output::LN(contract);
 
         let amount = ln_output.amount();
-        let (coin_keys, coin_input) = self
-            .mint_client()
-            .create_coin_input(batch.transaction(), amount)?;
+        let (coin_keys, coin_input) = {
+            let _willbedropped = lock.lock();
+            self.mint_client()
+                .create_coin_input(batch.transaction(), amount)?
+        };
 
         let inputs = vec![mint_tx::Input::Mint(coin_input)];
         let outputs = vec![ln_output];

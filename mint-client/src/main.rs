@@ -11,6 +11,7 @@ use mint_client::{ClientAndGatewayConfig, UserClient};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -142,9 +143,8 @@ async fn main() {
         }
         Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();
-
             let contract_id = client
-                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
+                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng, Arc::new(Mutex::new(())))
                 .await
                 .expect("Not enough coins");
 

@@ -271,7 +271,14 @@ async fn ln_pay(
         )
     })?;
     let rng = shared.rng.clone();
-    let res = pay_invoice(invoice.bolt11, client, gateway, rng).await?;
+    let res = pay_invoice(
+        invoice.bolt11,
+        client,
+        gateway,
+        rng,
+        Arc::clone(&shared.spend_lock),
+    )
+    .await?;
 
     if let StatusCode::OK = res.status() {
         let result = serde_json::json!(&Event::build_event("successful ln-payment".to_string(),));
@@ -350,11 +357,12 @@ async fn pay_invoice(
     client: Arc<UserClient>,
     gateway: Arc<LightningGateway>,
     mut rng: OsRng,
+    lock: Arc<Mutex<()>>,
 ) -> Result<reqwest::Response, ClientError> {
     let http = reqwest::Client::new();
 
     let contract_id = client
-        .fund_outgoing_ln_contract(&*gateway, bolt11, &mut rng)
+        .fund_outgoing_ln_contract(&*gateway, bolt11, &mut rng, lock)
         .await?;
 
     client
