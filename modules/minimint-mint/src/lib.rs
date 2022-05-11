@@ -26,7 +26,7 @@ use thiserror::Error;
 use tiered::coins::Coins;
 use tiered::coins::TieredMultiZip;
 pub use tiered::keys::Keys;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
 
 pub mod config;
 
@@ -223,19 +223,13 @@ impl FederationModule for Mint {
     ) -> Result<Amount, Self::Error> {
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
-        let partial_sig = output
-            .clone()
-            .map(|amt, msg| -> Result<_, InvalidAmountTierError> {
-                let sec_key = self.sec_key.tier(&amt)?;
-                let blind_signature = sign_blinded_msg(msg.0, *sec_key);
-                Ok((msg.0, blind_signature))
-            })?;
+        let partial_sig = self.blind_sign(output.clone())?;
 
         batch.append_insert_new(
             ProposedPartialSignatureKey {
                 request_id: out_point,
             },
-            PartialSigResponse(partial_sig),
+            partial_sig,
         );
 
         batch.commit();
@@ -263,43 +257,44 @@ impl FederationModule for Mint {
             .filter_map(|(issuance_id, shares)| {
                 let mut batch = DbBatch::new();
                 let mut batch_tx = batch.transaction();
+                let (bsig, errors) = self.combine(shares.clone());
 
-                if shares.len() > self.threshold {
-                    debug!(
-                        "Trying to combine sig shares for issuance request {}",
-                        issuance_id
-                    );
-                    let (bsig, errors) = self.combine(shares.clone());
-                    // FIXME: validate shares before writing to DB to make combine infallible
-                    if !errors.0.is_empty() {
-                        warn!("Peer sent faulty share: {:?}", errors);
+                // FIXME: validate shares before writing to DB to make combine infallible
+                if !errors.0.is_empty() {
+                    warn!("Peer sent faulty share: {:?}", errors);
+                }
+
+                match bsig {
+                    Ok(blind_signature) => {
+                        debug!(
+                            "Successfully combined signature shares for issuance request {}",
+                            issuance_id
+                        );
+
+                        batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
+                            BatchItem::delete(ReceivedPartialSignatureKey {
+                                request_id: issuance_id,
+                                peer_id: peer,
+                            })
+                        }));
+
+                        batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
+                        batch_tx.commit();
+                        Some(batch)
                     }
-
-                    match bsig {
-                        Ok(blind_signature) => {
-                            debug!(
-                                "Successfully combined signature shares for issuance request {}",
-                                issuance_id
-                            );
-
-                            batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
-                                BatchItem::delete(ReceivedPartialSignatureKey {
-                                    request_id: issuance_id,
-                                    peer_id: peer,
-                                })
-                            }));
-
-                            batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
-                            batch_tx.commit();
-                            Some(batch)
-                        }
-                        Err(e) => {
-                            error!("Could not combine shares: {}", e);
-                            None
-                        }
+                    Err(CombineError::TooFewShares(got, need)) => {
+                        trace!(
+                            "Failed to combine signature shares of issuance {} (got {} of {} needed shares)",
+                            issuance_id,
+                            got,
+                            need
+                        );
+                        None
                     }
-                } else {
-                    None
+                    Err(e) => {
+                        error!("Could not combine shares: {}", e);
+                        None
+                    }
                 }
             })
             .collect::<Vec<_>>();
@@ -346,7 +341,7 @@ impl FederationModule for Mint {
 }
 
 impl Mint {
-    /// Constructs a new ming
+    /// Constructs a new mint
     ///
     /// # Panics
     /// * If there are no amount tiers
@@ -401,13 +396,32 @@ impl Mint {
             db,
         }
     }
-}
 
-impl Mint {
+    fn blind_sign(&self, output: Coins<BlindToken>) -> Result<PartialSigResponse, MintError> {
+        Ok(PartialSigResponse(output.map(
+            |amt, msg| -> Result<_, InvalidAmountTierError> {
+                let sec_key = self.sec_key.tier(&amt)?;
+                let blind_signature = sign_blinded_msg(msg.0, *sec_key);
+                Ok((msg.0, blind_signature))
+            },
+        )?))
+    }
+
     fn combine(
         &self,
         partial_sigs: Vec<(PeerId, PartialSigResponse)>,
     ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
+        // Terminate early if there are not enough shares
+        if partial_sigs.len() < self.threshold {
+            return (
+                Err(CombineError::TooFewShares(
+                    partial_sigs.len(),
+                    self.threshold,
+                )),
+                MintShareErrors(vec![]),
+            );
+        }
+
         // FIXME: decide on right boundary place for this invariant
         // Filter out duplicate contributions, they make share combinations fail
         let peer_contrib_counts = partial_sigs
@@ -624,6 +638,8 @@ pub enum PeerErrorType {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
 pub enum CombineError {
+    #[error("Too few shares to begin the combination: got {0} need {1}")]
+    TooFewShares(usize, usize),
     #[error(
         "Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid"
     )]
@@ -656,37 +672,45 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    // TODO: reactivate
-    /*
-    use crate::{CombineError, Mint, MintError, MintShareErrors, PeerErrorType};
-    use ::database::mem_impl::MemDatabase;
-    use minimint_api::{Amount, Coin, Coins, Keys, PartialSigResponse, SigResponse, SignRequest};
+    use crate::config::MintClientConfig;
+    use crate::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
+    use minimint_api::config::GenerateConfig;
+    use minimint_api::db::mem_impl::MemDatabase;
+    use minimint_api::{Amount, PeerId};
+    use rand::rngs::OsRng;
     use std::sync::Arc;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;
 
-    fn build_mints() -> (AggregatePublicKey, Vec<Mint>) {
-        let (pk, pks, sks) = tbs::dealer_keygen(THRESHOLD, MINTS);
+    fn build_configs() -> (Vec<MintConfig>, MintClientConfig) {
+        let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
+        let (mint_cfg, client_cfg) = MintConfig::trusted_dealer_gen(
+            &peers,
+            THRESHOLD,
+            &[Amount::from_sat(1)],
+            OsRng::new().unwrap(),
+        );
 
-        let mints = sks
+        (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)
+    }
+
+    fn build_mints() -> (AggregatePublicKey, Vec<Mint>) {
+        let (mint_cfg, client_cfg) = build_configs();
+        let mints = mint_cfg
             .into_iter()
-            .map(|sk| {
-                Mint::new(
-                    [(Amount::from_sat(1), sk)].iter().cloned().collect(),
-                    pks.iter()
-                        .map(|pk| Keys {
-                            keys: vec![(Amount::from_sat(1), *pk)].into_iter().collect(),
-                        })
-                        .collect(),
-                    THRESHOLD,
-                    Arc::new(MemDatabase::new()),
-                )
-            })
+            .map(|config| Mint::new(config, MINTS - THRESHOLD, Arc::new(MemDatabase::new())))
             .collect::<Vec<_>>();
 
-        (pk, mints)
+        let agg_pk = client_cfg
+            .tbs_pks
+            .keys
+            .get(&Amount::from_sat(1))
+            .unwrap()
+            .clone();
+
+        (agg_pk, mints)
     }
 
     #[test]
@@ -695,16 +719,18 @@ mod test {
 
         let nonce = Message::from_bytes(&b"test coin"[..]);
         let (bkey, bmsg) = blind_message(nonce);
-        let req = SignRequest(Coins {
-            coins: vec![(Amount::from_sat(1), vec![bmsg, bmsg])]
-                .into_iter()
-                .collect(),
-        });
+        let blind_tokens = Coins {
+            coins: vec![(
+                Amount::from_sat(1),
+                vec![BlindToken(bmsg), BlindToken(bmsg)],
+            )]
+            .into_iter()
+            .collect(),
+        };
 
         let psigs = mints
             .iter()
-            .map(move |m| m.issue(req.clone()).unwrap())
-            .enumerate()
+            .map(move |m| (m.key_id, m.blind_sign(blind_tokens.clone()).unwrap()))
             .collect::<Vec<_>>();
 
         let mint = &mut mints[0];
@@ -733,7 +759,13 @@ mod test {
 
         // Test too few sig shares
         let (bsig_res, errors) = mint.combine(psigs[..(MINTS - THRESHOLD - 1)].to_vec());
-        assert_eq!(bsig_res, Err(CombineError::TooFewValidShares(3, 3, 4)));
+        assert_eq!(
+            bsig_res,
+            Err(CombineError::TooFewShares(
+                MINTS - THRESHOLD - 1,
+                MINTS - THRESHOLD
+            ))
+        );
         assert!(errors.0.is_empty());
 
         // Test no own share
@@ -749,7 +781,10 @@ mod test {
                 .chain(std::iter::once(psigs[0].clone()))
                 .collect(),
         );
-        assert_eq!(bsig_res, Err(CombineError::MultiplePeerContributions(0, 2)));
+        assert_eq!(
+            bsig_res,
+            Err(CombineError::MultiplePeerContributions(PeerId::from(0), 2))
+        );
         assert!(errors.0.is_empty());
 
         // Test wrong length response
@@ -758,7 +793,7 @@ mod test {
                 .iter()
                 .cloned()
                 .map(|(peer, mut psigs)| {
-                    if peer == 1 {
+                    if peer == PeerId::from(1) {
                         psigs.0.coins.get_mut(&Amount::from_sat(1)).unwrap().pop();
                     }
                     (peer, psigs)
@@ -768,14 +803,14 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors
             .0
-            .contains(&(1, PeerErrorType::DifferentStructureSigShare)));
+            .contains(&(PeerId::from(1), PeerErrorType::DifferentStructureSigShare)));
 
         let (bsig_res, errors) = mint.combine(
             psigs
                 .iter()
                 .cloned()
                 .map(|(peer, mut psig)| {
-                    if peer == 2 {
+                    if peer == PeerId::from(2) {
                         psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].1 =
                             psigs[0].1 .0.coins[&Amount::from_sat(1)][0].1;
                     }
@@ -784,7 +819,9 @@ mod test {
                 .collect(),
         );
         assert!(bsig_res.is_ok());
-        assert!(errors.0.contains(&(2, PeerErrorType::InvalidSignature)));
+        assert!(errors
+            .0
+            .contains(&(PeerId::from(2), PeerErrorType::InvalidSignature)));
 
         let (_bk, bmsg) = blind_message(Message::from_bytes(b"test"));
         let (bsig_res, errors) = mint.combine(
@@ -792,7 +829,7 @@ mod test {
                 .iter()
                 .cloned()
                 .map(|(peer, mut psig)| {
-                    if peer == 3 {
+                    if peer == PeerId::from(3) {
                         psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].0 = bmsg;
                     }
                     (peer, psig)
@@ -800,54 +837,24 @@ mod test {
                 .collect(),
         );
         assert!(bsig_res.is_ok());
-        assert!(errors.0.contains(&(3, PeerErrorType::DifferentNonce)));
+        assert!(errors
+            .0
+            .contains(&(PeerId::from(3), PeerErrorType::DifferentNonce)));
     }
 
     #[test]
     #[should_panic(expected = "Own key not found among pub keys.")]
     fn test_new_panic_without_own_pub_key() {
-        let (_pk, pks, sks) = tbs::dealer_keygen(THRESHOLD, MINTS);
-        let db = MemDatabase::new();
+        let (mint_server_cfg1, _) = build_configs();
+        let (mint_server_cfg2, _) = build_configs();
 
         Mint::new(
-            vec![(Amount::from_sat(1), sks[0])].into_iter().collect(),
-            pks[1..]
-                .iter()
-                .map(|pk| Keys {
-                    keys: vec![(Amount::from_sat(1), *pk)].into_iter().collect(),
-                })
-                .collect(),
+            MintConfig {
+                tbs_sks: mint_server_cfg1[0].tbs_sks.clone(),
+                peer_tbs_pks: mint_server_cfg2[0].peer_tbs_pks.clone(),
+            },
             THRESHOLD,
-            Arc::new(db),
+            Arc::new(MemDatabase::new()),
         );
     }
-
-
-    // FIXME: possibly make this an error
-    #[test]
-    #[should_panic(expected = "index out of bounds: the len is 5 but the index is 42")]
-    fn test_combine_panic_with_unknown_mint_id() {
-        let (_pk, mints) = build_mints();
-
-        let nonce = Message::from_bytes(&b"test coin"[..]);
-        let (_bkey, bmsg) = blind_message(nonce);
-        let req = SignRequest(vec![(Amount::from_sat(1), bmsg)].into_iter().collect());
-
-        let psigs = mints
-            .iter()
-            .map(move |m| m.issue(req.clone()).unwrap())
-            .enumerate()
-            .map(
-                |(mint, sig)| {
-                    if mint == 2 {
-                        (42, sig)
-                    } else {
-                        (mint, sig)
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
-        let _ = mints[0].combine(psigs);
-    }
-     */
 }
