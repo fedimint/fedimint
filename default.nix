@@ -9,11 +9,16 @@ in naersk.buildPackage {
     url = "https://github.com/fedimint/minimint";
     ref = "master";
   };
-  gitAllRefs = true;
-  gitSubmodules = true;
+  copyTarget = true;
   buildInputs = [
       pkgs.openssl
       pkgs.pkg-config
       pkgs.perl
   ];
+  shellHook =
+  ''
+    echo "Hello shell"
+    SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+    cp -r $out/target $SRC_DIR/target
+  '';
 }
