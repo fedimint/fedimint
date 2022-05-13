@@ -1,15 +1,4 @@
-{ pkgs ? import <nixpkgs> {
-    overlays = [
-(import "${(fetchTarball "https://github.com/nix-community/fenix/archive/main.tar.gz")}/overlay.nix")
-      (self: super: {
-          rustc = super.fenix.latest.rustc;
-          cargo  = super.fenix.latest.cargo;
-          rust-src = super.fenix.latest.rust-src;
-      }
-        )
-    ];
-  }
-}:
+{ pkgs ? import <nixpkgs> {}}:
 
 pkgs.mkShell {
   packages = with pkgs; [
