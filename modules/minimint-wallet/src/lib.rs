@@ -38,7 +38,7 @@ use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 pub mod bitcoind;
 pub mod config;
@@ -201,7 +201,7 @@ impl FederationModule for Wallet {
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        trace!("Received consensus proposals {:?}", &consensus_items);
+        trace!(?consensus_items, "Received consensus proposals");
 
         // Separate round consensus items from signatures for peg-out tx. While signatures can be
         // processed separately, all round consensus items need to be available at once.
@@ -213,7 +213,7 @@ impl FederationModule for Wallet {
         // Apply signatures to peg-out tx
         for (peer, sig) in peg_out_signatures {
             if let Err(e) = self.process_peg_out_signature(batch.subtransaction(), peer, &sig) {
-                warn!("Error processing peer {}'s peg-out signature: {}", peer, e)
+                warn!(%peer, error = %e, "Error processing peg-out signature");
             };
         }
 
@@ -291,7 +291,7 @@ impl FederationModule for Wallet {
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
-        debug!("Claiming peg-in {} worth {}", input.outpoint(), meta.amount);
+        debug!(outpoint = %input.outpoint(), amount = %meta.amount, "Claiming peg-in");
 
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
@@ -326,8 +326,8 @@ impl FederationModule for Wallet {
     ) -> Result<minimint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
-            "Queuing peg-out of {} BTC to {}",
-            output.amount, output.recipient
+            amount = %output.amount, recipient = %output.recipient,
+            "Queuing peg-out",
         );
         batch.append_insert_new(
             PendingPegOutKey(out_point),
@@ -360,10 +360,9 @@ impl FederationModule for Wallet {
             .sum::<u32>();
 
         trace!(
-            "Pending peg outs: {}, urgency: {}, urgency threshold: {}",
-            pending_peg_outs.len(),
+            pending_peg_outs = pending_peg_outs.len(),
             urgency,
-            MIN_PEG_OUT_URGENCY
+            urgency_threshold = MIN_PEG_OUT_URGENCY,
         );
 
         // We only want to peg out if we have a real randomness beacon after the first consensus round
@@ -375,9 +374,9 @@ impl FederationModule for Wallet {
             let txid = psbt.global.unsigned_tx.txid();
 
             info!(
-                "Signing peg out tx {} containing {} peg outs",
-                txid,
-                peg_out_ids.len()
+                %txid,
+                peg_outs = peg_out_ids.len(),
+                "Signing peg out",
             );
             let sigs = psbt
                 .inputs
@@ -443,7 +442,7 @@ impl FederationModule for Wallet {
             handler: |module, _params, _val| {
                 let block_height = module.consensus_height().unwrap_or(0);
 
-                debug!("Sending consensus block height {}", block_height);
+                debug!(block_height, "Sending consensus");
                 let body = http::Body::from_json(&block_height).expect("encoding error");
                 Ok(body.into())
             },
@@ -593,8 +592,11 @@ impl Wallet {
 
         match miniscript::psbt::finalize(&mut psbt, &self.secp) {
             Ok(()) => {}
-            Err(e) => {
-                trace!("can't finalize peg-out tx {} yet: {}", signature.txid, e);
+            Err(error) => {
+                trace!(
+                    txid = %signature.txid,
+                    %error,
+                    "can't finalize peg-out yet");
 
                 // We want to save the new signature, so we need to overwrite the PSBT
                 batch.append_insert(UnsignedTransactionKey(signature.txid), psbt);
@@ -605,11 +607,11 @@ impl Wallet {
 
         let tx = match miniscript::psbt::extract(&psbt, &self.secp) {
             Ok(tx) => tx,
-            Err(e) => {
+            Err(error) => {
                 // FIXME: this should never happen AFAIK, but I'd like to avoid DOS bugs for now
                 error!(
-                    "This shouldn't happen: could not extract tx from finalized PSBT ({})",
-                    e
+                    %error,
+                    "This shouldn't happen: could not extract tx from finalized PSBT",
                 );
 
                 // Who knows what went wrong, we still want to save the received signature
@@ -619,8 +621,8 @@ impl Wallet {
             }
         };
 
-        debug!("Finalized peg-out tx: {}", tx.txid());
-        trace!("transaction = {:?}", tx);
+        debug!(txid = %tx.txid(), "Finalized peg-out");
+        trace!(transaction = ?tx);
 
         // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
         // extracted tx for periodic transmission and to accept the change into our wallet
@@ -689,21 +691,21 @@ impl Wallet {
         let old_height = self.consensus_height().unwrap_or(0);
         if new_height < old_height {
             info!(
-                "Nothing to sync, new height ({}) is lower than old height ({}), doing nothing.",
-                new_height, old_height
+                new_height,
+                old_height, "Nothing to sync, new height is lower than old height, doing nothing."
             );
             return;
         }
 
         if new_height == old_height {
-            debug!("Height didn't change, still at {}", old_height);
+            debug!(height = old_height, "Height didn't change");
             return;
         }
 
         info!(
-            "New consensus height {}, syncing up ({} blocks to go)",
             new_height,
-            new_height - old_height
+            block_to_go = new_height - old_height,
+            "New consensus height, syncing up",
         );
 
         batch.reserve((new_height - old_height) as usize + 1);
@@ -713,7 +715,7 @@ impl Wallet {
             }
 
             // TODO: use batching for mainnet syncing
-            trace!("Fetching block hash for block {}", height);
+            trace!(block = height, "Fetching block hash");
             let block_hash = self.btc_rpc.get_block_hash(height as u64).await; // TODO: use u64 for height everywhere
 
             let pending_transactions = self
@@ -905,14 +907,14 @@ impl<'a> StatelessWallet<'a> {
         };
 
         info!(
-            "Creating peg-out tx with {} inputs of value {} BTC, {} peg-outs of value {} paying {} BTC in fees (fee rate {}) and a change amount of {} BTC",
-            selected_utxos.len(),
-            total_selected_value.as_btc(),
-            outputs.len(),
-            peg_out_amount.as_btc(),
-            fees.as_btc(),
-            feerate.sats_per_kvb,
-            change.as_btc()
+            inputs = selected_utxos.len(),
+            input_value_btc = total_selected_value.as_btc(),
+            peg_outs = outputs.len(),
+            peg_out_value_btc = peg_out_amount.as_btc(),
+            fees_btc = fees.as_btc(),
+            fee_rate = feerate.sats_per_kvb,
+            change_btc = change.as_btc(),
+            "Creating peg-out tx",
         );
 
         let transaction = Transaction {
@@ -936,7 +938,7 @@ impl<'a> StatelessWallet<'a> {
                 })
                 .collect(),
         };
-        info!("Creating peg-out tx {}", transaction.txid());
+        info!(txid = %transaction.txid(), "Creating peg-out tx");
 
         // FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
         let psbt = PartiallySignedTransaction {
@@ -1095,6 +1097,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
     }
 }
 
+#[instrument(level = "debug", skip_all)]
 async fn broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
     loop {
         let pending_tx = db
@@ -1104,11 +1107,11 @@ async fn broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) 
 
         for (_, PendingTransaction { tx, .. }) in pending_tx {
             debug!(
-                "Broadcasting peg-out tx {} (weight {})",
-                tx.txid(),
-                tx.get_weight()
+                tx = %tx.txid(),
+                weight = tx.get_weight(),
+                "Broadcasting peg-out",
             );
-            trace!("Transaction: {:?}", tx);
+            trace!(transaction = ?tx);
             rpc.submit_transaction(tx).await;
         }
         tokio::time::sleep(Duration::from_secs(10)).await;
