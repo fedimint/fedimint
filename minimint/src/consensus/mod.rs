@@ -21,7 +21,7 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info_span, instrument, trace, warn};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
 pub enum ConsensusItem {
@@ -74,7 +74,7 @@ where
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
         let tx_hash = transaction.tx_hash();
-        debug!("Received mint transaction {}", tx_hash);
+        debug!(%tx_hash, "Received mint transaction");
 
         transaction.validate_funding(&self.cfg.fee_consensus)?;
 
@@ -138,9 +138,9 @@ where
         Ok(())
     }
 
+    #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
         let epoch = consensus_outcome.epoch;
-        info!("Processing output of epoch {}", epoch);
 
         let UnzipConsensusItem {
             transaction: transaction_cis,
@@ -187,31 +187,31 @@ where
             for (peer, transaction) in filtered_transactions {
                 let mut batch_tx = db_batch.transaction();
 
-                trace!(
-                    "Processing transaction {:?} from peer {}",
-                    transaction,
-                    peer
-                );
-                batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()));
+                let span = info_span!("Processing transaction", %peer);
+                // in_scope to make sure that no await is in the middle of the span
+                let _enter = span.in_scope(|| {
+                    trace!(?transaction);
+                    batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()));
 
-                // TODO: use borrowed transaction
-                match self.process_transaction(
-                    batch_tx.subtransaction(),
-                    transaction.clone(),
-                    &caches,
-                ) {
-                    Ok(()) => {
-                        batch_tx.append_insert(
-                            AcceptedTransactionKey(transaction.tx_hash()),
-                            AcceptedTransaction { epoch, transaction },
-                        );
+                    // TODO: use borrowed transaction
+                    match self.process_transaction(
+                        batch_tx.subtransaction(),
+                        transaction.clone(),
+                        &caches,
+                    ) {
+                        Ok(()) => {
+                            batch_tx.append_insert(
+                                AcceptedTransactionKey(transaction.tx_hash()),
+                                AcceptedTransaction { epoch, transaction },
+                            );
+                        }
+                        Err(error) => {
+                            // TODO: log error for user
+                            warn!(%error, "Transaction failed");
+                        }
                     }
-                    Err(e) => {
-                        // TODO: log error for user
-                        warn!("Transaction proposed by peer {} failed: {}", peer, e);
-                    }
-                }
-                batch_tx.commit();
+                    batch_tx.commit();
+                });
             }
             self.db.apply_batch(db_batch).expect("DB error");
         }

@@ -122,9 +122,9 @@ pub async fn run_minimint(cfg: ServerConfig) {
         let we_contributed = outcome.contributions.contains_key(&cfg.identity);
 
         debug!(
-            "Processing consensus outcome from epoch {} with {} items",
-            outcome.epoch,
-            outcome.contributions.values().flatten().count()
+            epoch = outcome.epoch,
+            items_count = outcome.contributions.values().flatten().count(),
+            "Processing consensus outcome",
         );
         mint_consensus.process_consensus_outcome(outcome).await;
 
@@ -170,11 +170,11 @@ async fn hbbft(
             .expect("This is always refilled");
 
         debug!(
-            "Proposing a contribution with {} consensus items for epoch {}",
-            contribution.len(),
-            hb.epoch()
+            consesus_items_len = contribution.len(),
+            epoch = hb.epoch(),
+            "Proposing a contribution",
         );
-        trace!("Contribution: {:?}", contribution);
+        trace!(?contribution);
         let mut initial_step = Some(
             hb.propose(&contribution, &mut rng)
                 .expect("Failed to process HBBFT input"),
@@ -191,19 +191,19 @@ async fn hbbft(
                 Some(step) => step,
                 None => {
                     let (peer, peer_msg) = connections.receive().await;
-                    trace!("Received message from {}", peer);
+                    trace!(%peer, "Received message");
                     hb.handle_message(&peer, peer_msg)
                         .expect("Failed to process HBBFT input")
                 }
             };
 
             for msg in messages {
-                trace!("sending message to {:?}", msg.target);
+                trace!(target = ?msg.target, "sending message");
                 connections.send(msg.target, msg.message).await;
             }
 
             if !fault_log.is_empty() {
-                warn!("Faults: {:?}", fault_log);
+                warn!(?fault_log);
             }
 
             if !output.is_empty() {
@@ -213,7 +213,7 @@ async fn hbbft(
         };
 
         for batch in outcome {
-            debug!("Exchanging consensus outcome of epoch {}", batch.epoch);
+            debug!(epoch = batch.epoch, "Exchanging consensus outcome");
             // Old consensus contributions are overwritten on case of multiple batches arriving
             // at once. The new contribution should be used to avoid redundantly included items.
             outcome_sender.send(batch).await.expect("other thread died");
