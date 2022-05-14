@@ -37,7 +37,7 @@ use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, info_span, instrument, trace, warn};
 
 /// The lightning module implements an account system. It does not have the privacy guarantees of
 /// the e-cash mint module but instead allows for smart contracting. There exist three contract
@@ -149,6 +149,8 @@ impl FederationModule for LightningModule {
     ) {
         batch.append_from_iter(consensus_items.into_iter().filter_map(
             |(peer, decryption_share)| {
+                let span = info_span!("process decryption share", %peer);
+                let _guard = span.enter();
                 let contract: ContractAccount = self
                     .get_contract_account(decryption_share.contract_id)
                     .or_else(|| {
@@ -158,10 +160,7 @@ impl FederationModule for LightningModule {
                 let incoming_contract = match contract.contract {
                     FundedContract::Incoming(incoming) => incoming.contract,
                     _ => {
-                        warn!(
-                            "Received decryption share fot non-incoming contract from {}",
-                            peer
-                        );
+                        warn!("Received decryption share fot non-incoming contract");
                         return None;
                     }
                 };
@@ -171,7 +170,7 @@ impl FederationModule for LightningModule {
                     &decryption_share.share,
                     &incoming_contract.encrypted_preimage,
                 ) {
-                    warn!("Received invalid decryption share from {}", peer);
+                    warn!("Received invalid decryption share");
                     return None;
                 }
 
@@ -370,6 +369,7 @@ impl FederationModule for LightningModule {
         Ok(amount)
     }
 
+    #[instrument(skip_all)]
     async fn end_consensus_epoch<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
@@ -386,16 +386,18 @@ impl FederationModule for LightningModule {
             .into_group_map();
 
         for (contract_id, shares) in preimage_decraption_shares {
+            let span = info_span!("decrypt_preimage", %contract_id);
+            let _gaurd = span.enter();
+
             if shares.len() < self.cfg.threshold {
                 trace!(
-                    "Too few decryption shares for contract {} ({} of min {})",
-                    contract_id,
-                    shares.len(),
-                    self.cfg.threshold
+                    shares = %shares.len(),
+                    shares_needed = %self.cfg.threshold,
+                    "Too few decryption shares"
                 );
                 continue;
             }
-            debug!("Beginning to decrypt preimage of contract {}", contract_id);
+            debug!("Beginning to decrypt preimage");
 
             let contract = self
                 .get_contract_account(contract_id)
@@ -425,7 +427,7 @@ impl FederationModule for LightningModule {
                 Ok(preimage) => preimage,
                 Err(_) => {
                     // TODO: check if that can happen even though shares are verified before
-                    error!("Failed to decrypt preimage for {}", incoming_contract.hash);
+                    error!(contract_hash = %incoming_contract.hash, "Failed to decrypt preimage");
                     continue;
                 }
             };
@@ -441,10 +443,7 @@ impl FederationModule for LightningModule {
             } else {
                 DecryptedPreimage::Invalid
             };
-            debug!(
-                "Decrypted preimage of contract {}: {:?}",
-                contract_id, decrypted_preimage
-            );
+            debug!(?decrypted_preimage);
 
             // TODO: maybe define update helper fn
             // Update contract
@@ -459,7 +458,7 @@ impl FederationModule for LightningModule {
                 _ => unreachable!("previously checked that it's an incoming contrac"),
             };
             incoming.contract.decrypted_preimage = decrypted_preimage.clone();
-            trace!("Updating contract account: {:?}", contract_account);
+            trace!(?contract_account, "Updating contract account");
             batch.append_insert(contract_db_key, contract_account);
 
             // Update output outcome
@@ -512,7 +511,7 @@ impl FederationModule for LightningModule {
                         .get_contract_account(contract_id)
                         .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
 
-                    debug!("Sending contract account info for {}", contract_id);
+                    debug!(%contract_id, "Sending contract account info");
                     let body = http::Body::from_json(&contract_account).expect("encoding error");
                     Ok(body.into())
                 },
