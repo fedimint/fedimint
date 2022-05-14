@@ -7,8 +7,8 @@ use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tokio::task::{spawn, JoinHandle};
-use tracing::{debug, info, trace, warn};
+use tokio::task::spawn;
+use tracing::{debug, info, instrument, trace, warn};
 
 use config::ServerConfig;
 use consensus::ConsensusOutcome;
@@ -80,14 +80,13 @@ pub async fn run_minimint(cfg: ServerConfig) {
     let (proposal_sender, proposal_receiver) = channel::<Vec<ConsensusItem>>(1);
 
     info!("Spawning consensus with first proposal");
-    spawn_hbbft(
+    spawn(hbbft(
         outcome_sender,
         proposal_receiver,
         cfg.clone(),
         mint_consensus.get_consensus_proposal().await,
         rand::rngs::OsRng::new().unwrap(),
-    )
-    .await;
+    ));
 
     // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
     debug!("Generating second proposal");
@@ -139,90 +138,88 @@ pub async fn run_minimint(cfg: ServerConfig) {
     }
 }
 
-async fn spawn_hbbft(
+#[instrument(skip_all)]
+async fn hbbft(
     outcome_sender: Sender<ConsensusOutcome>,
     mut proposal_receiver: Receiver<Vec<ConsensusItem>>,
     cfg: ServerConfig,
     initial_cis: Vec<ConsensusItem>,
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
-) -> JoinHandle<()> {
-    spawn(async move {
-        let mut connections = Connections::connect_to_all(&cfg).await;
+) {
+    let mut connections = Connections::connect_to_all(&cfg).await;
 
-        let net_info = NetworkInfo::new(
-            cfg.identity,
-            cfg.hbbft_sks.inner().clone(),
-            cfg.hbbft_pk_set.clone(),
-            cfg.hbbft_sk.inner().clone(),
-            cfg.peers
-                .iter()
-                .map(|(id, peer)| (*id, peer.hbbft_pk))
-                .collect(),
+    let net_info = NetworkInfo::new(
+        cfg.identity,
+        cfg.hbbft_sks.inner().clone(),
+        cfg.hbbft_pk_set.clone(),
+        cfg.hbbft_sk.inner().clone(),
+        cfg.peers
+            .iter()
+            .map(|(id, peer)| (*id, peer.hbbft_pk))
+            .collect(),
+    );
+
+    let mut hb: HoneyBadger<Vec<ConsensusItem>, _> =
+        HoneyBadger::builder(Arc::new(net_info)).build();
+    info!("Created Honey Badger instance");
+
+    let mut next_consensus_items = Some(initial_cis);
+    loop {
+        let contribution = next_consensus_items
+            .take()
+            .expect("This is always refilled");
+
+        debug!(
+            "Proposing a contribution with {} consensus items for epoch {}",
+            contribution.len(),
+            hb.epoch()
+        );
+        trace!("Contribution: {:?}", contribution);
+        let mut initial_step = Some(
+            hb.propose(&contribution, &mut rng)
+                .expect("Failed to process HBBFT input"),
         );
 
-        let mut hb: HoneyBadger<Vec<ConsensusItem>, _> =
-            HoneyBadger::builder(Arc::new(net_info)).build();
-        info!("Created Honey Badger instance");
-
-        let mut next_consensus_items = Some(initial_cis);
-        loop {
-            let contribution = next_consensus_items
-                .take()
-                .expect("This is always refilled");
-
-            debug!(
-                "Proposing a contribution with {} consensus items for epoch {}",
-                contribution.len(),
-                hb.epoch()
-            );
-            trace!("Contribution: {:?}", contribution);
-            let mut initial_step = Some(
-                hb.propose(&contribution, &mut rng)
-                    .expect("Failed to process HBBFT input"),
-            );
-
-            let outcome = 'inner: loop {
-                // We either want to handle the initial step or generate a new one by receiving a
-                // message from a peer
-                let Step {
-                    output,
-                    fault_log,
-                    messages,
-                } = match initial_step.take() {
-                    Some(step) => step,
-                    None => {
-                        let (peer, peer_msg) = connections.receive().await;
-                        trace!("Received message from {}", peer);
-                        hb.handle_message(&peer, peer_msg)
-                            .expect("Failed to process HBBFT input")
-                    }
-                };
-
-                for msg in messages {
-                    trace!("sending message to {:?}", msg.target);
-                    connections.send(msg.target, msg.message).await;
-                }
-
-                if !fault_log.is_empty() {
-                    warn!("Faults: {:?}", fault_log);
-                }
-
-                if !output.is_empty() {
-                    trace!("Processed step had an output, handing it off");
-                    break 'inner output;
+        let outcome = 'inner: loop {
+            // We either want to handle the initial step or generate a new one by receiving a
+            // message from a peer
+            let Step {
+                output,
+                fault_log,
+                messages,
+            } = match initial_step.take() {
+                Some(step) => step,
+                None => {
+                    let (peer, peer_msg) = connections.receive().await;
+                    trace!("Received message from {}", peer);
+                    hb.handle_message(&peer, peer_msg)
+                        .expect("Failed to process HBBFT input")
                 }
             };
 
-            for batch in outcome {
-                debug!("Exchanging consensus outcome of epoch {}", batch.epoch);
-                // Old consensus contributions are overwritten on case of multiple batches arriving
-                // at once. The new contribution should be used to avoid redundantly included items.
-                outcome_sender.send(batch).await.expect("other thread died");
-                next_consensus_items =
-                    Some(proposal_receiver.recv().await.expect("other thread died"));
+            for msg in messages {
+                trace!("sending message to {:?}", msg.target);
+                connections.send(msg.target, msg.message).await;
             }
+
+            if !fault_log.is_empty() {
+                warn!("Faults: {:?}", fault_log);
+            }
+
+            if !output.is_empty() {
+                trace!("Processed step had an output, handing it off");
+                break 'inner output;
+            }
+        };
+
+        for batch in outcome {
+            debug!("Exchanging consensus outcome of epoch {}", batch.epoch);
+            // Old consensus contributions are overwritten on case of multiple batches arriving
+            // at once. The new contribution should be used to avoid redundantly included items.
+            outcome_sender.send(batch).await.expect("other thread died");
+            next_consensus_items = Some(proposal_receiver.recv().await.expect("other thread died"));
         }
-    })
+    }
 }
 
 struct CloneRngGen<T: RngCore + CryptoRng + Clone + Send>(Mutex<T>);
