@@ -272,10 +272,10 @@ impl CoinFinalizationData {
                 .unzip();
 
         debug!(
-            "Generated issuance request for {} ({} coins, tiers {:?})",
-            amount,
-            requests.coin_count(),
-            requests.coins.keys().collect::<Vec<_>>()
+            %amount,
+            coins = %requests.coin_count(),
+            tiers = ?requests.coins.keys().collect::<Vec<_>>(),
+            "Generated issuance request"
         );
 
         let sig_req = SignRequest(blinded_nonces);

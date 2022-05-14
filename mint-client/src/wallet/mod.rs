@@ -41,7 +41,7 @@ impl<'c> WalletClient<'c> {
             .peg_in_descriptor
             .tweak(&peg_in_pub_key, self.context.secp)
             .script_pubkey();
-        debug!("Peg-in script: {}", script);
+        debug!(?script);
         let address = Address::from_script(&script, self.context.config.network)
             .expect("Script from descriptor should have an address");
 
@@ -66,7 +66,7 @@ impl<'c> WalletClient<'c> {
             .iter()
             .enumerate()
             .find_map(|(idx, out)| {
-                debug!("Output script: {}", out.script_pubkey);
+                debug!(output_script = ?out.script_pubkey);
                 self.context
                     .db
                     .get_value(&PegInKey {
