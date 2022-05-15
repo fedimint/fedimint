@@ -76,12 +76,12 @@ pub async fn run_minimint(cfg: ServerConfig) {
 
     spawn(net::api::run_server(cfg.clone(), mint_consensus.clone()));
 
-    let (output_sender, mut output_receiver) = channel::<ConsensusOutcome>(1);
+    let (outcome_sender, mut outcome_receiver) = channel::<ConsensusOutcome>(1);
     let (proposal_sender, proposal_receiver) = channel::<Vec<ConsensusItem>>(1);
 
     info!("Spawning consensus with first proposal");
     spawn_hbbft(
-        output_sender,
+        outcome_sender,
         proposal_receiver,
         cfg.clone(),
         mint_consensus.get_consensus_proposal().await,
@@ -99,7 +99,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
         // duplicates. Yet we can not remove them from the database entirely because we might crash
         // while processing the outcome.
         let outcome = {
-            let outcome = output_receiver.recv().await.expect("other thread died");
+            let outcome = outcome_receiver.recv().await.expect("other thread died");
             let outcome_filter_set = outcome
                 .contributions
                 .values()
