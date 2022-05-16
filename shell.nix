@@ -22,6 +22,7 @@ pkgs.mkShell {
     bitcoin
     clightning
     jq
+    procps
   ];
 
   RUST_SRC_PATH = "${pkgs.rust-src}/lib/rustlib/src/rust/library";
