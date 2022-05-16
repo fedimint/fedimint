@@ -54,8 +54,6 @@ jobs:
           toolchain: stable
           default: true
       - uses: Swatinem/rust-cache@v1
-      - name: Install jq
-        run: sudo apt-get install -y jq
       - uses: actions/checkout@v2.4.0
       - uses: cachix/install-nix-action@v15
         with:
