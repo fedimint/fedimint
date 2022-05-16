@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["call_internal",""]],"struct":[["FediMintInterconnect",""]]});

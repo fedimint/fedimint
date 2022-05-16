@@ -1,0 +1,1 @@
+initSidebarItems({"trait":[["Contract","An object that can be used as a ricardian contract to tweak a key"],["Tweakable","A key or object containing keys that may be tweaked for pay-to-contract constructions"]]});

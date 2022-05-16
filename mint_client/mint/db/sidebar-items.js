@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["DB_PREFIX_COIN",""],["DB_PREFIX_OUTPUT_FINALIZATION_DATA",""]],"struct":[["CoinKey",""],["CoinKeyPrefix",""],["OutputFinalizationKey",""],["OutputFinalizationKeyPrefix",""]]});

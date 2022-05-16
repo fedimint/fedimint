@@ -1,0 +1,82 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/minimint-ln/src/contracts/outgoing.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>outgoing.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
+    <noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../minimint_ln/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
+        </a><h2 class="location"></h2>
+    </nav>
+    <nav class="sidebar"><a class="sidebar-logo" href="../../../minimint_ln/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
+        </a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../../minimint_ln/index.html"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+                                <a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../wheel.svg"></a></div>
+                        </div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
+<span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
+<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
+
+<span class="doccomment">/// Specialized smart contract for outgoing payments.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// A user locks up funds that can be claimed by a lightning gateway if it pays the invoice and</span>
+<span class="doccomment">/// thus receives the preimage to the payment hash and can thereby prove the payment. If the gateway</span>
+<span class="doccomment">/// is not able to do so before the timelock expires the user can claim back the funds.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContract</span> {
+    <span class="doccomment">/// Hash that can be used to spend the output before the timelock expires</span>
+    <span class="kw">pub</span> <span class="ident">hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
+    <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the timelock expires</span>
+    <span class="kw">pub</span> <span class="ident">gateway_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+    <span class="doccomment">/// Block height at which the money will be spendable by the pubkey</span>
+    <span class="kw">pub</span> <span class="ident">timelock</span>: <span class="ident">u32</span>,
+    <span class="doccomment">/// Public key of the user that can claim the money back after the timelock expires</span>
+    <span class="kw">pub</span> <span class="ident">user_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+    <span class="comment">// FIXME: use pruned, privacy friendly version without description etc.</span>
+    <span class="doccomment">/// Invoice containing metadata on how to obtain the preimage</span>
+    <span class="kw">pub</span> <span class="ident">invoice</span>: <span class="ident">String</span>,
+}
+
+<span class="doccomment">/// Preimage in the context of [`OutgoingContract`]s</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Preimage</span>(<span class="kw">pub</span> [<span class="ident">u8</span>; <span class="number">32</span>]);
+
+<span class="kw">impl</span> <span class="ident">IdentifyableContract</span> <span class="kw">for</span> <span class="ident">OutgoingContract</span> {
+    <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> <span class="op">=</span> <span class="ident">ContractId::engine</span>();
+        <span class="ident">Encodable::consensus_encode</span>(<span class="self">self</span>, <span class="kw-2">&amp;mut</span> <span class="ident">engine</span>).<span class="ident">expect</span>(<span class="string">&quot;Hashing never fails&quot;</span>);
+        <span class="ident">ContractId::from_engine</span>(<span class="ident">engine</span>)
+    }
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (42e1761c7 2022-05-15)" ></div>
+</body></html>

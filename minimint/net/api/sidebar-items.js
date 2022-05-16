@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["attach_module_endpoints",""],["fetch_outcome",""],["run_server",""],["submit_transaction",""]],"struct":[["State",""]]});
