@@ -5,7 +5,7 @@ use minimint_api::{FederationModule, TransactionId};
 use std::fmt::Formatter;
 use std::sync::Arc;
 use tide::{Body, Request, Response, Server};
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
 #[derive(Clone)]
 struct State {
@@ -55,7 +55,7 @@ where
         server
             .at(&path)
             .method(endpoint.method, move |mut req: Request<State>| async move {
-                debug!("Received request for module API endpoint {}", req.url());
+                debug!(endpoint = %req.url(), "Module endpoint request");
                 let data: serde_json::Value = req.body_json().await.unwrap_or_default();
                 let params = endpoint
                     .params
@@ -73,8 +73,9 @@ where
     }
 }
 
+#[instrument(skip_all)]
 async fn submit_transaction(mut req: Request<State>) -> tide::Result {
-    trace!("Received API request {:?}", req);
+    trace!(?req, "Received API request");
     let transaction: Transaction = req.body_json().await?;
     let tx_id = transaction.tx_hash();
     debug!("Sending peg-in request to consensus");
@@ -88,13 +89,14 @@ async fn submit_transaction(mut req: Request<State>) -> tide::Result {
     Ok(body.into())
 }
 
+#[instrument(skip_all)]
 async fn fetch_outcome(req: Request<State>) -> tide::Result {
     let tx_hash: TransactionId = match req.param("txid").expect("Request id not supplied").parse() {
         Ok(id) => id,
         Err(_) => return Ok(Response::new(400)),
     };
 
-    debug!("Got req for transaction state {}", tx_hash);
+    debug!(transaction = %tx_hash, "Recieved request");
 
     let tx_status = req
         .state()
@@ -102,7 +104,7 @@ async fn fetch_outcome(req: Request<State>) -> tide::Result {
         .transaction_status(tx_hash)
         .ok_or_else(|| tide::Error::from_str(404, "Not found"))?;
 
-    debug!("Sending outcome of transaction {}", tx_hash);
+    debug!(transaction = %tx_hash, "Sending outcome");
     let body = Body::from_json(&tx_status).expect("encoding error");
     Ok(body.into())
 }

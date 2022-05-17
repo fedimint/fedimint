@@ -261,14 +261,14 @@ impl FederationModule for Mint {
 
                 // FIXME: validate shares before writing to DB to make combine infallible
                 if !errors.0.is_empty() {
-                    warn!("Peer sent faulty share: {:?}", errors);
+                    warn!(?errors, "Peer sent faulty share");
                 }
 
                 match bsig {
                     Ok(blind_signature) => {
                         debug!(
-                            "Successfully combined signature shares for issuance request {}",
-                            issuance_id
+                            %issuance_id,
+                            "Successfully combined signature shares",
                         );
 
                         batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
@@ -284,15 +284,15 @@ impl FederationModule for Mint {
                     }
                     Err(CombineError::TooFewShares(got, need)) => {
                         trace!(
-                            "Failed to combine signature shares of issuance {} (got {} of {} needed shares)",
-                            issuance_id,
+                            %issuance_id,
                             got,
-                            need
+                            need,
+                            "Failed to combine signature shares: not enough shares",
                         );
                         None
                     }
-                    Err(e) => {
-                        error!("Could not combine shares: {}", e);
+                    Err(error) => {
+                        error!(%error, "Could not combine shares");
                         None
                     }
                 }
@@ -455,8 +455,8 @@ impl Mint {
             .filter(|(peer, sigs)| {
                 if !sigs.0.structural_eq(&our_contribution.0) {
                     warn!(
-                        "Peer {} proposed a sig share of wrong structure (different than ours)",
-                        peer,
+                        %peer,
+                        "Peer proposed a sig share of wrong structure (different than ours)",
                     );
                     peer_errors.push((*peer, PeerErrorType::DifferentStructureSigShare));
                     false
@@ -547,15 +547,16 @@ impl Mint {
             .is_some()
         {
             debug!(
-                "Received sig share for finalized issuance {}, ignoring",
-                output_id
+                issuance = %output_id,
+                "Received sig share for finalized issuance, ignoring",
             );
             return;
         }
 
         debug!(
-            "Received sig share from peer {} for issuance {}",
-            peer, output_id
+            %peer,
+            issuance = %output_id,
+            "Received sig share"
         );
         batch.append_insert_new(
             ReceivedPartialSignatureKey {

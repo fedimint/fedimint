@@ -17,7 +17,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::time::sleep;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, instrument, trace};
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
@@ -28,6 +28,7 @@ impl<T: 'static> Connections<T>
 where
     T: Serialize + DeserializeOwned + Unpin + Send,
 {
+    #[instrument(skip_all)]
     pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
         info!("Starting mint {}", cfg.identity);
         let listener = spawn(Self::await_peers(
@@ -77,12 +78,13 @@ where
         Connections { connections: peers }
     }
 
+    #[instrument]
     async fn await_peers(port: u16, num_awaited: u16) -> Result<Vec<TcpStream>, std::io::Error> {
         let listener = TcpListener::bind(("127.0.0.1", port))
             .await
             .expect("Couldn't bind to port.");
 
-        debug!("Listening for incoming connections on port {}", port);
+        debug!("Listening for incoming connections");
 
         let peers = (0..num_awaited).map(|_| listener.accept());
         let connections = try_join_all(peers)
@@ -111,7 +113,7 @@ where
             .expect("Stream closed unexpectedly")
             .expect("Error receiving peer message");
 
-        trace!("Received msg from peer {}", id);
+        trace!(peer = %id, "Received msg");
 
         (id, msg)
     }
@@ -125,7 +127,7 @@ where
     type Id = PeerId;
 
     async fn send(&mut self, target: Target<Self::Id>, msg: T) {
-        trace!("Sending message to {:?}", target);
+        trace!(?target, "Sending message to");
         match target {
             Target::All => {
                 for peer in self.connections.values_mut() {

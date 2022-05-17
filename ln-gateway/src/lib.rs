@@ -12,7 +12,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
-use tracing::debug;
+use tracing::{debug, instrument};
 use tracing::{error, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -54,12 +54,13 @@ impl LnGateway {
         }
     }
 
+    #[instrument(skip_all, fields(%contract_id))]
     pub async fn pay_invoice(
         &self,
         contract_id: ContractId,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(), LnGatewayError> {
-        debug!("Fetching contract {}", contract_id);
+        debug!("Fetching contract");
         let contract_account = self
             .federation_client
             .fetch_outgoing_contract(contract_id)
@@ -71,8 +72,8 @@ impl LnGateway {
             .await?;
 
         debug!(
-            "Fetched and validated contract account: {:?}",
-            contract_account
+            account = ?contract_account,
+            "Fetched and validated contract account"
         );
 
         self.federation_client
@@ -88,10 +89,7 @@ impl LnGateway {
             .await
         {
             Ok(preimage) => {
-                debug!(
-                    "Successfully paid LN invoice, received preimage {:?}",
-                    preimage
-                );
+                debug!(?preimage, "Successfully paid LN invoice");
                 preimage
             }
             Err(e) => {
@@ -117,6 +115,7 @@ impl LnGateway {
 
 /// This function runs as a background process fetching issued token signatures and driving forward
 /// payments which were interrupted during execution.
+#[instrument(skip_all)]
 async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc<dyn LnRpc>) {
     // TODO: also try to drive forward payments that were interrupted
     loop {
@@ -129,7 +128,7 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
                 let federation_client = federation_client.clone();
                 async move {
                     if let Err(e) = federation_client.fetch_coins(out_point).await {
-                        error!("Fetching coins failed: {:?}", e);
+                        error!(error = ?e, "Fetching coins failed");
                     }
                 }
             })

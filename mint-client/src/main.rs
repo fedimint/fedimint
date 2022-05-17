@@ -102,14 +102,14 @@ async fn main() {
                 .await
                 .unwrap();
             info!(
-                "Started peg-in {}, please fetch the result later",
-                id.to_hex()
+                id = %id.to_hex(),
+                "Started peg-in, please fetch the result later",
             );
         }
         Command::Reissue { coins } => {
-            info!("Starting reissuance transaction for {}", coins.amount());
+            info!(coins = %coins.amount(), "Starting reissuance transaction");
             let id = client.reissue(coins, &mut rng).await.unwrap();
-            info!("Started reissuance {}, please fetch the result later", id);
+            info!(%id, "Started reissuance, please fetch the result later");
         }
         Command::Spend { amount } => {
             match client.select_and_spend_coins(amount) {
@@ -117,13 +117,13 @@ async fn main() {
                     println!("{}", serialize_coins(&outgoing_coins));
                 }
                 Err(e) => {
-                    error!("Error: {:?}", e);
+                    error!(error = ?e);
                 }
             };
         }
         Command::Fetch => {
             for id in client.fetch_all_coins().await.unwrap() {
-                info!("Fetched coins from issuance {}", id.to_hex());
+                info!(issuance = %id.to_hex(), "Fetched coins");
             }
         }
         Command::Info => {
@@ -154,8 +154,8 @@ async fn main() {
                 .expect("Contract wasn't accepted in time");
 
             info!(
-                "Funded outgoing contract {}, notifying gateway",
-                contract_id
+                %contract_id,
+                "Funded outgoing contract, notifying gateway",
             );
 
             http.post(&format!("{}/pay_invoice", cfg.gateway.api))

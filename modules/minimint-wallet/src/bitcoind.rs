@@ -84,8 +84,9 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        if let Err(e) = tokio::task::block_in_place(|| self.send_raw_transaction(&transaction)) {
-            warn!("Submitting transaction failed: {:?}", e);
+        if let Err(error) = tokio::task::block_in_place(|| self.send_raw_transaction(&transaction))
+        {
+            warn!(?error, "Submitting transaction failed");
         }
     }
 }

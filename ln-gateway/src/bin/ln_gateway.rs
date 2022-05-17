@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
 use tide::Response;
-use tracing::{debug, warn};
+use tracing::{debug, instrument};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
@@ -18,21 +18,18 @@ struct Opts {
     workdir: PathBuf,
 }
 
+#[instrument(skip_all, err)]
 async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
-    debug!("Gateway received outgoing pay request");
     let rng = rand::rngs::OsRng::new().unwrap();
     let contract: ContractId = req.body_json().await?;
     let State { ref gateway } = req.state();
 
-    debug!("Received request to pay invoice of contract {}", contract);
+    debug!(%contract, "Received request to pay invoice");
 
     gateway
         .pay_invoice(contract, rng)
         .await
-        .map_err(|e| {
-            warn!("{:?}", e);
-            tide::Error::from_debug(e)
-        })
+        .map_err(tide::Error::from_debug)
         .map(|()| Response::new(200))
 }
 
