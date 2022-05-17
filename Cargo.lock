@@ -621,6 +621,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cln-plugin"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2043841c090a404cb81b145c8ad3c66bae122ba722387fc322b93c157d596433"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cln-rpc",
+ "futures",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.6.9",
+]
+
+[[package]]
 name = "cln-rpc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1580,6 +1598,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "async-trait",
+ "cln-plugin",
  "cln-rpc",
  "futures",
  "hex",
@@ -3269,6 +3288,17 @@ dependencies = [
  "proc-macro2 1.0.37",
  "quote 1.0.18",
  "syn 1.0.91",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.8",
+ "tokio",
 ]
 
 [[package]]

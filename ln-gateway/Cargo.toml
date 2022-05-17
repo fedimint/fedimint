@@ -9,6 +9,7 @@ edition = "2018"
 async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
 async-trait = "0.1.52"
 cln-rpc = "0.1"
+cln-plugin = "0.1.0"
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.14.0"
