@@ -165,7 +165,6 @@
 <span id="158">158</span>
 <span id="159">159</span>
 <span id="160">160</span>
-<span id="161">161</span>
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">ln</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln</span>::{<span class="ident">LightningError</span>, <span class="ident">LnRpc</span>};
@@ -180,7 +179,7 @@
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
 <span class="kw">use</span> <span class="ident">tokio::sync::Mutex</span>;
 <span class="kw">use</span> <span class="ident">tokio::time::Instant</span>;
-<span class="kw">use</span> <span class="ident">tracing::debug</span>;
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">warn</span>};
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
@@ -222,12 +221,13 @@
         }
     }
 
+    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="op">%</span><span class="ident">contract_id</span>))]</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
         <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
-        <span class="macro">debug!</span>(<span class="string">&quot;Fetching contract {}&quot;</span>, <span class="ident">contract_id</span>);
+        <span class="macro">debug!</span>(<span class="string">&quot;Fetching contract&quot;</span>);
         <span class="kw">let</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">fetch_outgoing_contract</span>(<span class="ident">contract_id</span>)
@@ -239,8 +239,8 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
-            <span class="string">&quot;Fetched and validated contract account: {:?}&quot;</span>,
-            <span class="ident">contract_account</span>
+            <span class="ident">account</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">contract_account</span>,
+            <span class="string">&quot;Fetched and validated contract account&quot;</span>
         );
 
         <span class="self">self</span>.<span class="ident">federation_client</span>
@@ -256,10 +256,7 @@
             .<span class="kw">await</span>
         {
             <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>) =&gt; {
-                <span class="macro">debug!</span>(
-                    <span class="string">&quot;Successfully paid LN invoice, received preimage {:?}&quot;</span>,
-                    <span class="ident">preimage</span>
-                );
+                <span class="macro">debug!</span>(<span class="question-mark">?</span><span class="ident">preimage</span>, <span class="string">&quot;Successfully paid LN invoice&quot;</span>);
                 <span class="ident">preimage</span>
             }
             <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; {
@@ -285,6 +282,7 @@
 
 <span class="doccomment">/// This function runs as a background process fetching issued token signatures and driving forward</span>
 <span class="doccomment">/// payments which were interrupted during execution.</span>
+<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
 <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">background_fetch</span>(<span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>, <span class="ident">_ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>) {
     <span class="comment">// TODO: also try to drive forward payments that were interrupted</span>
     <span class="kw">loop</span> {
@@ -297,7 +295,7 @@
                 <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">federation_client</span>.<span class="ident">clone</span>();
                 <span class="kw">async</span> <span class="kw">move</span> {
                     <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">federation_client</span>.<span class="ident">fetch_coins</span>(<span class="ident">out_point</span>).<span class="kw">await</span> {
-                        <span class="macro">error!</span>(<span class="string">&quot;Fetching coins failed: {:?}&quot;</span>, <span class="ident">e</span>);
+                        <span class="macro">error!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>);
                     }
                 }
             })

@@ -69,9 +69,6 @@
 <span id="62">62</span>
 <span id="63">63</span>
 <span id="64">64</span>
-<span id="65">65</span>
-<span id="66">66</span>
-<span id="67">67</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">ln_gateway</span>::{<span class="ident">LnGateway</span>, <span class="ident">LnGatewayConfig</span>};
 <span class="kw">use</span> <span class="ident">minimint::config::load_from_file</span>;
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
@@ -79,7 +76,7 @@
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 <span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 <span class="kw">use</span> <span class="ident">tide::Response</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">warn</span>};
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 <span class="kw">use</span> <span class="ident">tracing_subscriber::EnvFilter</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
@@ -92,21 +89,18 @@
     <span class="ident">workdir</span>: <span class="ident">PathBuf</span>,
 }
 
+<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
 <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(<span class="kw-2">mut</span> <span class="ident">req</span>: <span class="ident">tide::Request</span><span class="op">&lt;</span><span class="ident">State</span><span class="op">&gt;</span>) -&gt; <span class="ident">tide::Result</span> {
-    <span class="macro">debug!</span>(<span class="string">&quot;Gateway received outgoing pay request&quot;</span>);
     <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
     <span class="kw">let</span> <span class="ident">contract</span>: <span class="ident">ContractId</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">body_json</span>().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">State</span> { <span class="kw-2">ref</span> <span class="ident">gateway</span> } <span class="op">=</span> <span class="ident">req</span>.<span class="ident">state</span>();
 
-    <span class="macro">debug!</span>(<span class="string">&quot;Received request to pay invoice of contract {}&quot;</span>, <span class="ident">contract</span>);
+    <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
     <span class="ident">gateway</span>
         .<span class="ident">pay_invoice</span>(<span class="ident">contract</span>, <span class="ident">rng</span>)
         .<span class="kw">await</span>
-        .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
-            <span class="macro">warn!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>);
-            <span class="ident">tide::Error::from_debug</span>(<span class="ident">e</span>)
-        })
+        .<span class="ident">map_err</span>(<span class="ident">tide::Error::from_debug</span>)
         .<span class="ident">map</span>(<span class="op">|</span>()<span class="op">|</span> <span class="ident">Response::new</span>(<span class="number">200</span>))
 }
 

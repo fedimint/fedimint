@@ -900,10 +900,10 @@
                 .<span class="ident">unzip</span>();
 
         <span class="macro">debug!</span>(
-            <span class="string">&quot;Generated issuance request for {} ({} coins, tiers {:?})&quot;</span>,
-            <span class="ident">amount</span>,
-            <span class="ident">requests</span>.<span class="ident">coin_count</span>(),
-            <span class="ident">requests</span>.<span class="ident">coins</span>.<span class="ident">keys</span>().<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+            <span class="op">%</span><span class="ident">amount</span>,
+            <span class="ident">coins</span> <span class="op">=</span> <span class="op">%</span><span class="ident">requests</span>.<span class="ident">coin_count</span>(),
+            <span class="ident">tiers</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">requests</span>.<span class="ident">coins</span>.<span class="ident">keys</span>().<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
+            <span class="string">&quot;Generated issuance request&quot;</span>
         );
 
         <span class="kw">let</span> <span class="ident">sig_req</span> <span class="op">=</span> <span class="ident">SignRequest</span>(<span class="ident">blinded_nonces</span>);

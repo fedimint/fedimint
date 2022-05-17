@@ -227,6 +227,7 @@
 <span id="220">220</span>
 <span id="221">221</span>
 <span id="222">222</span>
+<span id="223">223</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::Feerate</span>;
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Block</span>, <span class="ident">BlockHash</span>, <span class="ident">Network</span>, <span class="ident">Transaction</span>};
@@ -313,8 +314,9 @@
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">transaction</span>: <span class="ident">Transaction</span>) {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">tokio::task::block_in_place</span>(<span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">send_raw_transaction</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>)) {
-            <span class="macro">warn!</span>(<span class="string">&quot;Submitting transaction failed: {:?}&quot;</span>, <span class="ident">e</span>);
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) <span class="op">=</span> <span class="ident">tokio::task::block_in_place</span>(<span class="op">|</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">send_raw_transaction</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>))
+        {
+            <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">error</span>, <span class="string">&quot;Submitting transaction failed&quot;</span>);
         }
     }
 }

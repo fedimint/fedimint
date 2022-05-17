@@ -238,9 +238,6 @@
 <span id="231">231</span>
 <span id="232">232</span>
 <span id="233">233</span>
-<span id="234">234</span>
-<span id="235">235</span>
-<span id="236">236</span>
 </pre><pre class="rust"><code><span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">minimint_api</span>;
 
 <span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
@@ -250,8 +247,8 @@
 <span class="kw">use</span> <span class="ident">hbbft</span>::{<span class="ident">Epoched</span>, <span class="ident">NetworkInfo</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">tokio::sync::mpsc</span>::{<span class="ident">channel</span>, <span class="ident">Receiver</span>, <span class="ident">Sender</span>};
-<span class="kw">use</span> <span class="ident">tokio::task</span>::{<span class="ident">spawn</span>, <span class="ident">JoinHandle</span>};
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
+<span class="kw">use</span> <span class="ident">tokio::task::spawn</span>;
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
 <span class="kw">use</span> <span class="ident">config::ServerConfig</span>;
 <span class="kw">use</span> <span class="ident">consensus::ConsensusOutcome</span>;
@@ -323,14 +320,13 @@
     <span class="kw">let</span> (<span class="ident">proposal_sender</span>, <span class="ident">proposal_receiver</span>) <span class="op">=</span> <span class="ident">channel</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="number">1</span>);
 
     <span class="macro">info!</span>(<span class="string">&quot;Spawning consensus with first proposal&quot;</span>);
-    <span class="ident">spawn_hbbft</span>(
+    <span class="ident">spawn</span>(<span class="ident">hbbft</span>(
         <span class="ident">outcome_sender</span>,
         <span class="ident">proposal_receiver</span>,
         <span class="ident">cfg</span>.<span class="ident">clone</span>(),
         <span class="ident">mint_consensus</span>.<span class="ident">get_consensus_proposal</span>().<span class="kw">await</span>,
         <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>(),
-    )
-    .<span class="kw">await</span>;
+    ));
 
     <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases</span>
     <span class="macro">debug!</span>(<span class="string">&quot;Generating second proposal&quot;</span>);
@@ -366,9 +362,9 @@
         <span class="kw">let</span> <span class="ident">we_contributed</span> <span class="op">=</span> <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">contains_key</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">identity</span>);
 
         <span class="macro">debug!</span>(
-            <span class="string">&quot;Processing consensus outcome from epoch {} with {} items&quot;</span>,
-            <span class="ident">outcome</span>.<span class="ident">epoch</span>,
-            <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">values</span>().<span class="ident">flatten</span>().<span class="ident">count</span>()
+            <span class="ident">epoch</span> <span class="op">=</span> <span class="ident">outcome</span>.<span class="ident">epoch</span>,
+            <span class="ident">items_count</span> <span class="op">=</span> <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">values</span>().<span class="ident">flatten</span>().<span class="ident">count</span>(),
+            <span class="string">&quot;Processing consensus outcome&quot;</span>,
         );
         <span class="ident">mint_consensus</span>.<span class="ident">process_consensus_outcome</span>(<span class="ident">outcome</span>).<span class="kw">await</span>;
 
@@ -382,90 +378,88 @@
     }
 }
 
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">spawn_hbbft</span>(
+<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">hbbft</span>(
     <span class="ident">outcome_sender</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">ConsensusOutcome</span><span class="op">&gt;</span>,
     <span class="kw-2">mut</span> <span class="ident">proposal_receiver</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">cfg</span>: <span class="ident">ServerConfig</span>,
     <span class="ident">initial_cis</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>,
     <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
-) -&gt; <span class="ident">JoinHandle</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-    <span class="ident">spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">connections</span> <span class="op">=</span> <span class="ident">Connections::connect_to_all</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>).<span class="kw">await</span>;
+) {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">connections</span> <span class="op">=</span> <span class="ident">Connections::connect_to_all</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>).<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">net_info</span> <span class="op">=</span> <span class="ident">NetworkInfo::new</span>(
-            <span class="ident">cfg</span>.<span class="ident">identity</span>,
-            <span class="ident">cfg</span>.<span class="ident">hbbft_sks</span>.<span class="ident">inner</span>().<span class="ident">clone</span>(),
-            <span class="ident">cfg</span>.<span class="ident">hbbft_pk_set</span>.<span class="ident">clone</span>(),
-            <span class="ident">cfg</span>.<span class="ident">hbbft_sk</span>.<span class="ident">inner</span>().<span class="ident">clone</span>(),
-            <span class="ident">cfg</span>.<span class="ident">peers</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">peer</span>)<span class="op">|</span> (<span class="kw-2">*</span><span class="ident">id</span>, <span class="ident">peer</span>.<span class="ident">hbbft_pk</span>))
-                .<span class="ident">collect</span>(),
+    <span class="kw">let</span> <span class="ident">net_info</span> <span class="op">=</span> <span class="ident">NetworkInfo::new</span>(
+        <span class="ident">cfg</span>.<span class="ident">identity</span>,
+        <span class="ident">cfg</span>.<span class="ident">hbbft_sks</span>.<span class="ident">inner</span>().<span class="ident">clone</span>(),
+        <span class="ident">cfg</span>.<span class="ident">hbbft_pk_set</span>.<span class="ident">clone</span>(),
+        <span class="ident">cfg</span>.<span class="ident">hbbft_sk</span>.<span class="ident">inner</span>().<span class="ident">clone</span>(),
+        <span class="ident">cfg</span>.<span class="ident">peers</span>
+            .<span class="ident">iter</span>()
+            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">peer</span>)<span class="op">|</span> (<span class="kw-2">*</span><span class="ident">id</span>, <span class="ident">peer</span>.<span class="ident">hbbft_pk</span>))
+            .<span class="ident">collect</span>(),
+    );
+
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hb</span>: <span class="ident">HoneyBadger</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span>
+        <span class="ident">HoneyBadger::builder</span>(<span class="ident">Arc::new</span>(<span class="ident">net_info</span>)).<span class="ident">build</span>();
+    <span class="macro">info!</span>(<span class="string">&quot;Created Honey Badger instance&quot;</span>);
+
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">next_consensus_items</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">initial_cis</span>);
+    <span class="kw">loop</span> {
+        <span class="kw">let</span> <span class="ident">contribution</span> <span class="op">=</span> <span class="ident">next_consensus_items</span>
+            .<span class="ident">take</span>()
+            .<span class="ident">expect</span>(<span class="string">&quot;This is always refilled&quot;</span>);
+
+        <span class="macro">debug!</span>(
+            <span class="ident">consesus_items_len</span> <span class="op">=</span> <span class="ident">contribution</span>.<span class="ident">len</span>(),
+            <span class="ident">epoch</span> <span class="op">=</span> <span class="ident">hb</span>.<span class="ident">epoch</span>(),
+            <span class="string">&quot;Proposing a contribution&quot;</span>,
+        );
+        <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">contribution</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">initial_step</span> <span class="op">=</span> <span class="prelude-val">Some</span>(
+            <span class="ident">hb</span>.<span class="ident">propose</span>(<span class="kw-2">&amp;</span><span class="ident">contribution</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+                .<span class="ident">expect</span>(<span class="string">&quot;Failed to process HBBFT input&quot;</span>),
         );
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hb</span>: <span class="ident">HoneyBadger</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span>
-            <span class="ident">HoneyBadger::builder</span>(<span class="ident">Arc::new</span>(<span class="ident">net_info</span>)).<span class="ident">build</span>();
-        <span class="macro">info!</span>(<span class="string">&quot;Created Honey Badger instance&quot;</span>);
-
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">next_consensus_items</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">initial_cis</span>);
-        <span class="kw">loop</span> {
-            <span class="kw">let</span> <span class="ident">contribution</span> <span class="op">=</span> <span class="ident">next_consensus_items</span>
-                .<span class="ident">take</span>()
-                .<span class="ident">expect</span>(<span class="string">&quot;This is always refilled&quot;</span>);
-
-            <span class="macro">debug!</span>(
-                <span class="string">&quot;Proposing a contribution with {} consensus items for epoch {}&quot;</span>,
-                <span class="ident">contribution</span>.<span class="ident">len</span>(),
-                <span class="ident">hb</span>.<span class="ident">epoch</span>()
-            );
-            <span class="macro">trace!</span>(<span class="string">&quot;Contribution: {:?}&quot;</span>, <span class="ident">contribution</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">initial_step</span> <span class="op">=</span> <span class="prelude-val">Some</span>(
-                <span class="ident">hb</span>.<span class="ident">propose</span>(<span class="kw-2">&amp;</span><span class="ident">contribution</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-                    .<span class="ident">expect</span>(<span class="string">&quot;Failed to process HBBFT input&quot;</span>),
-            );
-
-            <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="lifetime">&#39;inner</span>: <span class="kw">loop</span> {
-                <span class="comment">// We either want to handle the initial step or generate a new one by receiving a</span>
-                <span class="comment">// message from a peer</span>
-                <span class="kw">let</span> <span class="ident">Step</span> {
-                    <span class="ident">output</span>,
-                    <span class="ident">fault_log</span>,
-                    <span class="ident">messages</span>,
-                } <span class="op">=</span> <span class="kw">match</span> <span class="ident">initial_step</span>.<span class="ident">take</span>() {
-                    <span class="prelude-val">Some</span>(<span class="ident">step</span>) =&gt; <span class="ident">step</span>,
-                    <span class="prelude-val">None</span> =&gt; {
-                        <span class="kw">let</span> (<span class="ident">peer</span>, <span class="ident">peer_msg</span>) <span class="op">=</span> <span class="ident">connections</span>.<span class="ident">receive</span>().<span class="kw">await</span>;
-                        <span class="macro">trace!</span>(<span class="string">&quot;Received message from {}&quot;</span>, <span class="ident">peer</span>);
-                        <span class="ident">hb</span>.<span class="ident">handle_message</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">peer_msg</span>)
-                            .<span class="ident">expect</span>(<span class="string">&quot;Failed to process HBBFT input&quot;</span>)
-                    }
-                };
-
-                <span class="kw">for</span> <span class="ident">msg</span> <span class="kw">in</span> <span class="ident">messages</span> {
-                    <span class="macro">trace!</span>(<span class="string">&quot;sending message to {:?}&quot;</span>, <span class="ident">msg</span>.<span class="ident">target</span>);
-                    <span class="ident">connections</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">target</span>, <span class="ident">msg</span>.<span class="ident">message</span>).<span class="kw">await</span>;
-                }
-
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">fault_log</span>.<span class="ident">is_empty</span>() {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Faults: {:?}&quot;</span>, <span class="ident">fault_log</span>);
-                }
-
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">output</span>.<span class="ident">is_empty</span>() {
-                    <span class="macro">trace!</span>(<span class="string">&quot;Processed step had an output, handing it off&quot;</span>);
-                    <span class="kw">break</span> <span class="lifetime">&#39;inner</span> <span class="ident">output</span>;
+        <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="lifetime">&#39;inner</span>: <span class="kw">loop</span> {
+            <span class="comment">// We either want to handle the initial step or generate a new one by receiving a</span>
+            <span class="comment">// message from a peer</span>
+            <span class="kw">let</span> <span class="ident">Step</span> {
+                <span class="ident">output</span>,
+                <span class="ident">fault_log</span>,
+                <span class="ident">messages</span>,
+            } <span class="op">=</span> <span class="kw">match</span> <span class="ident">initial_step</span>.<span class="ident">take</span>() {
+                <span class="prelude-val">Some</span>(<span class="ident">step</span>) =&gt; <span class="ident">step</span>,
+                <span class="prelude-val">None</span> =&gt; {
+                    <span class="kw">let</span> (<span class="ident">peer</span>, <span class="ident">peer_msg</span>) <span class="op">=</span> <span class="ident">connections</span>.<span class="ident">receive</span>().<span class="kw">await</span>;
+                    <span class="macro">trace!</span>(<span class="op">%</span><span class="ident">peer</span>, <span class="string">&quot;Received message&quot;</span>);
+                    <span class="ident">hb</span>.<span class="ident">handle_message</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">peer_msg</span>)
+                        .<span class="ident">expect</span>(<span class="string">&quot;Failed to process HBBFT input&quot;</span>)
                 }
             };
 
-            <span class="kw">for</span> <span class="ident">batch</span> <span class="kw">in</span> <span class="ident">outcome</span> {
-                <span class="macro">debug!</span>(<span class="string">&quot;Exchanging consensus outcome of epoch {}&quot;</span>, <span class="ident">batch</span>.<span class="ident">epoch</span>);
-                <span class="comment">// Old consensus contributions are overwritten on case of multiple batches arriving</span>
-                <span class="comment">// at once. The new contribution should be used to avoid redundantly included items.</span>
-                <span class="ident">outcome_sender</span>.<span class="ident">send</span>(<span class="ident">batch</span>).<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;other thread died&quot;</span>);
-                <span class="ident">next_consensus_items</span> <span class="op">=</span>
-                    <span class="prelude-val">Some</span>(<span class="ident">proposal_receiver</span>.<span class="ident">recv</span>().<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;other thread died&quot;</span>));
+            <span class="kw">for</span> <span class="ident">msg</span> <span class="kw">in</span> <span class="ident">messages</span> {
+                <span class="macro">trace!</span>(<span class="ident">target</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">target</span>, <span class="string">&quot;sending message&quot;</span>);
+                <span class="ident">connections</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">target</span>, <span class="ident">msg</span>.<span class="ident">message</span>).<span class="kw">await</span>;
             }
+
+            <span class="kw">if</span> <span class="op">!</span><span class="ident">fault_log</span>.<span class="ident">is_empty</span>() {
+                <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">fault_log</span>);
+            }
+
+            <span class="kw">if</span> <span class="op">!</span><span class="ident">output</span>.<span class="ident">is_empty</span>() {
+                <span class="macro">trace!</span>(<span class="string">&quot;Processed step had an output, handing it off&quot;</span>);
+                <span class="kw">break</span> <span class="lifetime">&#39;inner</span> <span class="ident">output</span>;
+            }
+        };
+
+        <span class="kw">for</span> <span class="ident">batch</span> <span class="kw">in</span> <span class="ident">outcome</span> {
+            <span class="macro">debug!</span>(<span class="ident">epoch</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">epoch</span>, <span class="string">&quot;Exchanging consensus outcome&quot;</span>);
+            <span class="comment">// Old consensus contributions are overwritten on case of multiple batches arriving</span>
+            <span class="comment">// at once. The new contribution should be used to avoid redundantly included items.</span>
+            <span class="ident">outcome_sender</span>.<span class="ident">send</span>(<span class="ident">batch</span>).<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;other thread died&quot;</span>);
+            <span class="ident">next_consensus_items</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">proposal_receiver</span>.<span class="ident">recv</span>().<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;other thread died&quot;</span>));
         }
-    })
+    }
 }
 
 <span class="kw">struct</span> <span class="ident">CloneRngGen</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Send</span><span class="op">&gt;</span>(<span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>);
