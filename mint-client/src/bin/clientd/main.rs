@@ -79,27 +79,40 @@ async fn main() -> tide::Result<()> {
 
     app.at("/rpc")
         .post(|mut req: tide::Request<State>| async move {
-            let shared = Arc::clone(&req.state().shared);
-            let router = shared.router.clone();
-            let response = if let Ok(json) = req.body_json::<serde_json::Value>().await {
-                //Valid JSON
-                if let Ok(request_object) = Request::deserialize(json) {
-                    //Valid Request Object
-                    if  Some(String::from(JSON_RPC)) == request_object.jsonrpc {
-                        //Valid JSON-2.0
-                        if let Some(handler) = router.get(request_object.method.as_str()) {
-                            //There is a handler (method)
+            let mut response: Vec<Response> = Vec::new();
+            /*
+            This looks a bit silly but for example: request -> response and NOT request [response] but [request, notification] SHOULD -> [response]
+             */
+            let mut was_batch = false;
+            if let Ok(req_obj) = req.body_json::<serde_json::Value>().await {
+                let batch = req_obj.as_array().cloned().unwrap_or_else(||vec![req_obj]);
+                was_batch = batch.len() > 1;
+                for json in batch {
+                    let shared = Arc::clone(&req.state().shared);
+                    let router = shared.router.clone();
+
+                    if let Ok(request_object) = Request::deserialize(json) {
+                        //Valid Request Object
+                        if  Some(String::from(JSON_RPC)) == request_object.jsonrpc {
+                            //Valid JSON-2.0
                             if let Some(id) = request_object.id {
                                 // not a notification
-                                match handler.call(request_object.params, shared).await {
-                                    Ok(handler_res) => {
-                                        //Success, response will be send to client
-                                        Response::with_result(handler_res, id)
+                                if let Some(handler) = router.get(request_object.method.as_str()) {
+                                    //There is a handler (method)
+                                    match handler.call(request_object.params, Arc::clone(&shared)).await {
+                                        Ok(handler_res) => {
+                                            //Success, response will be send to client
+                                            response.push(Response::with_result(handler_res, id));
+                                        }
+                                        Err(err) => {
+                                            //Either the params were wrong or there was an internal error
+                                            response.push(Response::with_error(err, Some(id)));
+                                        }
                                     }
-                                    Err(err) => {
-                                        //Either the params were wrong or there was an internal error
-                                        Response::with_error(err, Some(id))
-                                    }
+                                } else {
+                                    //Method not found
+                                    let err = standard_error(StandardError::MethodNotFound, None);
+                                    response.push(Response::with_error(err, None));
                                 }
                             } else {
                                 // a notification
@@ -107,34 +120,34 @@ async fn main() -> tide::Result<()> {
                                     if let Some(handler) = router.get(request_object.method.as_str()) {
                                         //There is a handler (method)
                                         #[allow(unused_must_use)]
-                                        { handler.call(request_object.params, shared).await; }
+                                        { handler.call(request_object.params, Arc::clone(&shared)).await; }
                                     }
                                 });
-                                return Ok(tide::Response::new(200));
+                                continue;
                             }
-                        } else {
-                            //Method not found
-                            let err = standard_error(StandardError::MethodNotFound, None);
-                            Response::with_error(err, None)
+                        } else{
+                            //Invalid JSON-RPC version
+                            let err = standard_error(StandardError::InvalidRequest, Some(
+                                serde_json::Value::String(String::from("please make sure your request follows the JSON-RPC 2.0 specification"))
+                            ));
+                            response.push(Response::with_error(err, None));
                         }
-                    } else{
-                        //Invalid JSON-RPC version
-                        let err = standard_error(StandardError::InvalidRequest, Some(
-                            serde_json::Value::String(String::from("please make sure your request follows the JSON-RPC 2.0 specification"))
-                        ));
-                        Response::with_error(err, None)
+                    } else {
+                        //Invalid Request Object
+                        let err = standard_error(StandardError::InvalidRequest, None);
+                        response.push(Response::with_error(err, None))
                     }
-                } else {
-                    //Invalid Request Object
-                    let err = standard_error(StandardError::InvalidRequest, None);
-                    Response::with_error(err, None)
                 }
             } else {
                 //Invalid JSON
                 let err = standard_error(StandardError::ParseError, None);
-                Response::with_error(err, None)
+                response.push(Response::with_error(err, None))
             };
-            let body = tide::Body::from_json(&response).unwrap_or_else(|_| tide::Body::empty());
+            let body = if !was_batch {
+                tide::Body::from_json(&response.pop()).unwrap_or_else(|_| tide::Body::empty())
+            } else {
+                tide::Body::from_json(&response).unwrap_or_else(|_| tide::Body::empty())
+            };
             let mut res = tide::Response::new(200);
             res.set_body(body);
             Ok(res)
