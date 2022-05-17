@@ -49,12 +49,6 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
 }
 
 async fn run_gateway(workdir: PathBuf) -> tide::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
-
     let cfg_path = workdir.join("gateway.json");
     let db_path = workdir.join("gateway.db");
     let cfg: LnGatewayConfig = load_from_file(&cfg_path);
@@ -78,6 +72,11 @@ async fn run_gateway(workdir: PathBuf) -> tide::Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
     if let Some(plugin) = Builder::new((), tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "minimint-cfg",
