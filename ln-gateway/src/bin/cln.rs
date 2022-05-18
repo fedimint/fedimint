@@ -15,22 +15,23 @@ async fn htlc_accepted_handler(
     _p: Plugin<()>,
     v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    info!("htlc accepted: {}", v);
+    // TODO: actually do something here ...
+    info!("htlc_accepted observed");
 
-    return Ok(json!({
-        "result": "continue"
-    }));
-
-    // TODO: buy this from federation
-    let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
+    // return Ok(json!({
+    //     "result": "continue"
+    // }));
 
     // If the preimage matches, complete the payment
     // Check that the amount is matches
     // You've lost ecash tokens, but gained lightning btc
-    // Ok(json!({
-    //   "result": "resolve",
-    //   "payment_key": preimage,
-    // }))
+
+    // TODO: buy this from federation
+    let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
+    Ok(json!({
+      "result": "resolve",
+      "payment_key": preimage,
+    }))
 
     // Otherwise,
     // 1) Fail the payment on lightning
@@ -63,7 +64,7 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
 async fn run_gateway(workdir: PathBuf) -> tide::Result<()> {
     // Give core-lightning some time to startup RPC socket (ln socket wasn't there ...)
     // FIXME: is there a better way?
-    tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
 
     let cfg_path = workdir.join("gateway.json");
     let db_path = workdir.join("gateway.db");

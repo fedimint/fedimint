@@ -4,7 +4,7 @@ use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, ClientAndGatewayConfig, OwnedClientContext};
-use bitcoin::{Address, Transaction};
+use bitcoin::{Address, PrivateKey, Transaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
 use lightning::routing::network_graph::RoutingFees;
@@ -21,7 +21,7 @@ use minimint_api::db::Database;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::{All, Secp256k1};
+use secp256k1_zkp::{All, PublicKey, Secp256k1, SecretKey};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -395,12 +395,19 @@ impl UserClient {
         mut rng: R,
     ) -> Result<Invoice, ClientError> {
         // TODO: do somehting with this private key ...
-        let (secret_key, public_key) = self.context.secp.generate_schnorrsig_keypair(&mut rng);
-        let raw_payment_secret = public_key.serialize();
+        // let (secret_key, public_key) = self.context.secp.generate_schnorrsig_keypair(&mut rng);
+        // let raw_payment_secret = public_key.serialize();
+
+        // Hard-coding for now
+        let raw_payment_secret = [0; 32];
+
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
         // Final route to the user's contract inside the federation
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
+        // let node_secret_key = SecretKey::from_slice(&[1; 31]).expect("couldn't create private key");
+        // let node_public_key = PublicKey::from_secret_key(&self.context.secp, &node_secret_key);
+
         log::info!("ephemeral node pubkey: {:?}", node_public_key);
         // How to route to gateway
         log::info!(
