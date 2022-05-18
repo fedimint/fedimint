@@ -58,12 +58,15 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">ln_gateway::LnGatewayConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint::config::load_from_file</span>;
 <span class="kw">use</span> <span class="ident">mint_client::clients::gateway::GatewayClientConfig</span>;
 <span class="kw">use</span> <span class="ident">mint_client::ln::gateway::LightningGateway</span>;
 <span class="kw">use</span> <span class="ident">mint_client::ClientAndGatewayConfig</span>;
 <span class="kw">use</span> <span class="ident">rand::thread_rng</span>;
+<span class="kw">use</span> <span class="ident">secp256k1::PublicKey</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 <span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 
@@ -71,6 +74,7 @@
 <span class="kw">struct</span> <span class="ident">Opts</span> {
     <span class="ident">workdir</span>: <span class="ident">PathBuf</span>,
     <span class="ident">ln_rpc_path</span>: <span class="ident">PathBuf</span>,
+    <span class="ident">ln_node_pub_key</span>: <span class="ident">PublicKey</span>,
 }
 
 <span class="kw">fn</span> <span class="ident">main</span>() {
@@ -81,7 +85,7 @@
 
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">thread_rng</span>();
     <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1::Secp256k1::new</span>();
-    <span class="kw">let</span> (<span class="ident">_sk_ln</span>, <span class="ident">pk_ln</span>) <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">generate_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+
     <span class="kw">let</span> (<span class="ident">sk_fed</span>, <span class="ident">pk_fed</span>) <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">generate_schnorrsig_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
 
     <span class="kw">let</span> <span class="ident">gateway_cfg</span> <span class="op">=</span> <span class="ident">LnGatewayConfig</span> {
@@ -101,7 +105,7 @@
         <span class="ident">client</span>: <span class="ident">federation_client_cfg</span>,
         <span class="ident">gateway</span>: <span class="ident">LightningGateway</span> {
             <span class="ident">mint_pub_key</span>: <span class="ident">pk_fed</span>,
-            <span class="ident">node_pub_key</span>: <span class="ident">pk_ln</span>,
+            <span class="ident">node_pub_key</span>: <span class="ident">opts</span>.<span class="ident">ln_node_pub_key</span>,
             <span class="ident">api</span>: <span class="string">&quot;http://127.0.0.1:8080&quot;</span>.<span class="ident">to_string</span>(),
         },
     };
