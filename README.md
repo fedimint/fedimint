@@ -28,7 +28,6 @@ In the following we will set up all three.
 You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can generate the necessary configuration files as follows:
 
 ```shell
-mkdir -p cfg
 cargo run --bin configgen cfg <num_nodes> <federation_ports> <api_ports> <tier1> <tier2> …
 ```
 
