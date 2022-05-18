@@ -60,9 +60,14 @@ cargo run --bin gw_configgen -- cfg /home/user/.lightning/regtest/lightning-rpc
 ```shell
 mkdir -p ln1 ln2
 ```
-Run the client config and set `ln1` as the gateway
+Run the client config and set `ln1` as the gateway. If you don't want to use Minimint with Lightning, you can skip the first command and hard-code a fake pubkey (e.g. `030160715ddbe8d4cd68e00fc910d6dac161fcfa457bfef4fd8bb93350cc2966aa`).
 ```shell
-cargo run --bin gw_configgen -- cfg "ln1/regtest/lightning-rpc"
+$ lightning-cli --network regtest --lightning-dir=ln1 getinfo
+{
+    "id": <pubkey>,
+    ...
+}
+$ cargo run --bin gw_configgen -- cfg "ln1/regtest/lightning-rpc" <pubkey>
 ```
 ### Running the mints
 A script for running all mints and a regtest `bitcoind` at once is provided at `scripts/startfed.sh`. Run it as follows:
