@@ -91,8 +91,9 @@ async fn main() {
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
     let client = UserClient::new(cfg, Box::new(db), Default::default());
+
     // FIXME: ClientAndGatewayConfig can't be cloned and couldn't figure out how to access it via
-    // client.gateway or something because of the weird "context" stuff
+    // client.gateway because of the weird "context" stuff. So just re-initializing from file ...
     let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
 
     match opts.command {

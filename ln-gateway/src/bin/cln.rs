@@ -6,36 +6,27 @@ use minimint::config::load_from_file;
 use minimint::modules::ln::contracts::ContractId;
 use std::{path::PathBuf, sync::Arc};
 use tide::Response;
-use tokio;
-// use tracing::{debug, info, warn};
-use log::{debug, info, warn};
-use tracing_subscriber::EnvFilter;
+
+use log::{debug, warn};
+// use tracing::{debug, warn};
+// use tracing_subscriber::EnvFilter;
 
 async fn htlc_accepted_handler(
     _p: Plugin<()>,
-    v: serde_json::Value,
+    _v: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    // TODO: actually do something here ...
-    info!("htlc_accepted observed");
+    debug!("htlc_accepted observed");
 
-    // return Ok(json!({
-    //     "result": "continue"
-    // }));
-
+    // TODO: buy this from federation
     // If the preimage matches, complete the payment
     // Check that the amount is matches
     // You've lost ecash tokens, but gained lightning btc
-
-    // TODO: buy this from federation
     let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
+
     Ok(json!({
       "result": "resolve",
       "payment_key": preimage,
     }))
-
-    // Otherwise,
-    // 1) Fail the payment on lightning
-    // 2) Claw back your funds
 }
 
 #[derive(Clone)]
@@ -112,7 +103,7 @@ async fn main() -> Result<(), Error> {
                 if &workdir == "default-done-use" {
                     panic!("minimint-cfg option missing")
                 } else {
-                    PathBuf::from(workdir.clone())
+                    PathBuf::from(workdir)
                 }
             }
             _ => unreachable!(),
