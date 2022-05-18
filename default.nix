@@ -18,7 +18,7 @@ in naersk.buildPackage {
   shellHook =
   ''
     echo "Hello shell"
-    SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+    SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
     cp -r $out/target $SRC_DIR/target
   '';
 }
