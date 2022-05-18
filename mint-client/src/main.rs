@@ -92,10 +92,6 @@ async fn main() {
 
     let client = UserClient::new(cfg, Box::new(db), Default::default());
 
-    // FIXME: ClientAndGatewayConfig can't be cloned and couldn't figure out how to access it via
-    // client.gateway because of the weird "context" stuff. So just re-initializing from file ...
-    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
-
     match opts.command {
         Command::PegInAddress => {
             println!("{}", client.get_new_pegin_address(&mut rng))
@@ -151,7 +147,7 @@ async fn main() {
             let http = reqwest::Client::new();
 
             let contract_id = client
-                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
+                .fund_outgoing_ln_contract(bolt11, &mut rng)
                 .await
                 .expect("Not enough coins");
 
@@ -165,7 +161,7 @@ async fn main() {
                 "Funded outgoing contract, notifying gateway",
             );
 
-            http.post(&format!("{}/pay_invoice", &cfg.gateway.api))
+            http.post(&format!("{}/pay_invoice", &client.gateway_api()))
                 .json(&contract_id)
                 .timeout(Duration::from_secs(15))
                 .send()

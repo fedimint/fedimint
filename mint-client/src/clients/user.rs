@@ -18,6 +18,7 @@ use minimint::transaction as mint_tx;
 use minimint::transaction::{Output, TransactionItem};
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
+use minimint_api::module::http::Request;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
@@ -85,6 +86,11 @@ impl UserClient {
                 .borrow_with_module_config(|cfg| &cfg.client.wallet),
             fee_consensus: self.context.config.client.fee_consensus.clone(), // TODO: remove or put into context
         }
+    }
+
+    // FIXME: we probably want a "gateway client"
+    pub fn gateway_api(&self) -> String {
+        self.context.config.gateway.api.clone()
     }
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
@@ -300,7 +306,6 @@ impl UserClient {
 
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
-        gateway: &LightningGateway,
         invoice: Invoice,
         mut rng: R,
     ) -> Result<ContractId, ClientError> {
@@ -314,7 +319,7 @@ impl UserClient {
             .create_outgoing_output(
                 batch.transaction(),
                 invoice,
-                gateway,
+                &self.context.config.gateway,
                 absolute_timelock as u32,
                 &mut rng,
             )
