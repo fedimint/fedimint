@@ -34,24 +34,12 @@ cd $SRC_DIR
 cargo build --release
 BIN_DIR="$SRC_DIR/target/release"
 
-# Generate federation, gateway and client config
-$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
-$BIN_DIR/gw_configgen -- $CFG_DIR "$LN1_DIR/regtest/lightning-rpc"
-
 # Start bitcoind and wait for it to become ready
 bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$BTC_DIR &
 BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
 done
-
-# Initialize wallet and get ourselves some money
-$BTC_CLIENT createwallet main
-function mine_blocks() {
-    PEG_IN_ADDR="$($BTC_CLIENT getnewaddress)"
-    $BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
-}
-mine_blocks 120
 
 # Start lightning nodes
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
@@ -64,6 +52,19 @@ until [ -e $LN2_DIR/regtest/lightning-rpc ]; do
 done
 LN1="lightning-cli --network regtest --lightning-dir=$LN1_DIR"
 LN2="lightning-cli --network regtest --lightning-dir=$LN2_DIR"
+
+# Generate federation, gateway and client config
+$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
+LN1_PUB_KEY="$($LN1 getinfo | jq -r '.id')"
+$BIN_DIR/gw_configgen -- $CFG_DIR "$LN1_DIR/regtest/lightning-rpc" $LN1_PUB_KEY
+
+# Initialize wallet and get ourselves some money
+$BTC_CLIENT createwallet main
+function mine_blocks() {
+    PEG_IN_ADDR="$($BTC_CLIENT getnewaddress)"
+    $BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR
+}
+mine_blocks 120
 
 # Open channel
 LN_ADDR="$($LN1 newaddr | jq -r '.bech32')"
