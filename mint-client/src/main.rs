@@ -54,6 +54,9 @@ enum Command {
     /// Pay a lightning invoice via a gateway
     LnPay { bolt11: lightning_invoice::Invoice },
 
+    /// Create a lightning invoice to receive payment via gateway
+    LnInvoice { amount: Amount },
+
     /// Fetch (re-)issued coins and finalize issuance process
     Fetch,
 
@@ -87,7 +90,10 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let client = UserClient::new(cfg, Box::new(db), Default::default());
+    // FIXME: ClientAndGatewayConfig can't be cloned and couldn't figure out how to access it via
+    // client.gateway or something because of the weird "context" stuff
+    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
 
     match opts.command {
         Command::PegInAddress => {
@@ -158,12 +164,19 @@ async fn main() {
                 "Funded outgoing contract, notifying gateway",
             );
 
-            http.post(&format!("{}/pay_invoice", cfg.gateway.api))
+            http.post(&format!("{}/pay_invoice", &cfg.gateway.api))
                 .json(&contract_id)
                 .timeout(Duration::from_secs(15))
                 .send()
                 .await
                 .unwrap();
+        }
+
+        Command::LnInvoice { amount } => {
+            let invoice = client
+                .create_invoice(amount, &mut rng)
+                .expect("couldn't create invoice");
+            print!("{}", invoice);
         }
     }
 }

@@ -12,8 +12,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
-use tracing::{debug, instrument};
-use tracing::{error, warn};
+use tracing::{debug, error, instrument, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LnGatewayConfig {

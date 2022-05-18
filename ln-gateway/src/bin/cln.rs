@@ -7,7 +7,8 @@ use minimint::modules::ln::contracts::ContractId;
 use std::{path::PathBuf, sync::Arc};
 use tide::Response;
 use tokio;
-use tracing::{debug, info, warn};
+// use tracing::{debug, info, warn};
+use log::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 
 async fn htlc_accepted_handler(
@@ -16,13 +17,24 @@ async fn htlc_accepted_handler(
 ) -> Result<serde_json::Value, Error> {
     info!("htlc accepted: {}", v);
 
+    return Ok(json!({
+        "result": "continue"
+    }));
+
     // TODO: buy this from federation
     let preimage = "0000000000000000000000000000000000000000000000000000000000000000";
 
-    Ok(json!({
-      "result": "resolve",
-      "payment_key": preimage,
-    }))
+    // If the preimage matches, complete the payment
+    // Check that the amount is matches
+    // You've lost ecash tokens, but gained lightning btc
+    // Ok(json!({
+    //   "result": "resolve",
+    //   "payment_key": preimage,
+    // }))
+
+    // Otherwise,
+    // 1) Fail the payment on lightning
+    // 2) Claw back your funds
 }
 
 #[derive(Clone)]
@@ -49,6 +61,10 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
 }
 
 async fn run_gateway(workdir: PathBuf) -> tide::Result<()> {
+    // Give core-lightning some time to startup RPC socket (ln socket wasn't there ...)
+    // FIXME: is there a better way?
+    tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+
     let cfg_path = workdir.join("gateway.json");
     let db_path = workdir.join("gateway.db");
     let cfg: LnGatewayConfig = load_from_file(&cfg_path);
@@ -72,11 +88,12 @@ async fn run_gateway(workdir: PathBuf) -> tide::Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .init();
+    // FIXME: kept getting `Error: attempted to set a logger after the logging system was already initialized`
+    // tracing_subscriber::fmt()
+    //     .with_env_filter(
+    //         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+    //     )
+    //     .init();
     if let Some(plugin) = Builder::new((), tokio::io::stdin(), tokio::io::stdout())
         .option(options::ConfigOption::new(
             "minimint-cfg",

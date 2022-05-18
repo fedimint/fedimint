@@ -31,3 +31,6 @@ thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+
+# FIXME: kept getting `Error: attempted to set a logger after the logging system was already initialized`
+log = "0.4.17"

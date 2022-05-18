@@ -3,10 +3,13 @@ use crate::ln::gateway::LightningGateway;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
-use crate::{api, OwnedClientContext};
+use crate::{api, ClientAndGatewayConfig, OwnedClientContext};
 use bitcoin::{Address, Transaction};
-use lightning_invoice::Invoice;
-use minimint::config::ClientConfig;
+use bitcoin_hashes::Hash;
+use lightning::ln::PaymentSecret;
+use lightning::routing::network_graph::RoutingFees;
+use lightning::routing::router::{RouteHint, RouteHintHop};
+use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
 use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
 use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput};
 use minimint::modules::mint::tiered::coins::Coins;
@@ -25,13 +28,14 @@ use thiserror::Error;
 const TIMELOCK: u64 = 100;
 
 pub struct UserClient {
-    context: OwnedClientContext<ClientConfig>,
+    context: OwnedClientContext<ClientAndGatewayConfig>,
 }
 
 impl UserClient {
-    pub fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
+    pub fn new(cfg: ClientAndGatewayConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
         let api = api::HttpFederationApi::new(
-            cfg.api_endpoints
+            cfg.client
+                .api_endpoints
                 .iter()
                 .enumerate()
                 .map(|(id, url)| {
@@ -45,7 +49,7 @@ impl UserClient {
     }
 
     pub fn new_with_api(
-        config: ClientConfig,
+        config: ClientAndGatewayConfig,
         db: Box<dyn Database>,
         api: Box<dyn FederationApi>,
         secp: Secp256k1<All>,
@@ -62,20 +66,24 @@ impl UserClient {
 
     fn ln_client(&self) -> LnClient {
         LnClient {
-            context: self.context.borrow_with_module_config(|cfg| &cfg.ln),
+            context: self.context.borrow_with_module_config(|cfg| &cfg.client.ln),
         }
     }
 
     fn mint_client(&self) -> MintClient {
         MintClient {
-            context: self.context.borrow_with_module_config(|cfg| &cfg.mint),
+            context: self
+                .context
+                .borrow_with_module_config(|cfg| &cfg.client.mint),
         }
     }
 
     fn wallet_client(&self) -> WalletClient {
         WalletClient {
-            context: self.context.borrow_with_module_config(|cfg| &cfg.wallet),
-            fee_consensus: self.context.config.fee_consensus.clone(), // TODO: remove or put into context
+            context: self
+                .context
+                .borrow_with_module_config(|cfg| &cfg.client.wallet),
+            fee_consensus: self.context.config.client.fee_consensus.clone(), // TODO: remove or put into context
         }
     }
 
@@ -92,7 +100,7 @@ impl UserClient {
             .create_pegin_input(txout_proof, btc_transaction)?;
 
         let amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(self.context.config.fee_consensus.fee_peg_in_abs);
+            .saturating_sub(self.context.config.client.fee_consensus.fee_peg_in_abs);
         if amount == Amount::ZERO {
             return Err(ClientError::PegInAmountTooSmall);
         }
@@ -208,7 +216,8 @@ impl UserClient {
     ) -> Result<TransactionId, ClientError> {
         let mut batch = DbBatch::new();
 
-        let funding_amount = Amount::from(amt) + self.context.config.fee_consensus.fee_peg_out_abs;
+        let funding_amount =
+            Amount::from(amt) + self.context.config.client.fee_consensus.fee_peg_out_abs;
         let (coin_keys, coin_input) = self
             .mint_client()
             .create_coin_input(batch.transaction(), funding_amount)?;
@@ -379,6 +388,52 @@ impl UserClient {
             .await
             .map_err(|_| ClientError::WaitContractTimeout)?
     }
+
+    pub fn create_invoice<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        mut rng: R,
+    ) -> Result<Invoice, ClientError> {
+        // TODO: do somehting with this private key ...
+        let (secret_key, public_key) = self.context.secp.generate_schnorrsig_keypair(&mut rng);
+        let raw_payment_secret = public_key.serialize();
+        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
+        let payment_secret = PaymentSecret(raw_payment_secret);
+        // Final route to the user's contract inside the federation
+        let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
+        log::info!("ephemeral node pubkey: {:?}", node_public_key);
+        // How to route to gateway
+        log::info!(
+            "real node pubkey: {:?}",
+            self.context.config.gateway.node_pub_key
+        );
+        let gateway_route_hint = RouteHint(vec![RouteHintHop {
+            src_node_id: self.context.config.gateway.node_pub_key,
+            short_channel_id: 8,
+            fees: RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
+            cltv_expiry_delta: (8 << 4) | 1,
+            htlc_minimum_msat: None,
+            htlc_maximum_msat: None,
+        }]);
+        let invoice = InvoiceBuilder::new(Currency::Regtest)
+            .amount_milli_satoshis(amount.milli_sat)
+            .description("description".into())
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .current_timestamp()
+            .min_final_cltv_expiry(144)
+            .payee_pub_key(node_public_key)
+            .private_route(gateway_route_hint)
+            .build_signed(|hash| self.context.secp.sign_recoverable(hash, &node_secret_key))?;
+
+        // TODO: submit ContractOrOfferOutput::Offer to federation to offer payment_secret for sale
+        // TODO: wait for gateway to execute contract?
+
+        Ok(invoice)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -395,6 +450,8 @@ pub enum ClientError {
     PegInAmountTooSmall,
     #[error("Timed out while waiting for contract to be accepted")]
     WaitContractTimeout,
+    #[error("Failed to create lightning invoice: {0}")]
+    InvoiceError(CreationError),
 }
 
 impl From<ApiError> for ClientError {
@@ -418,5 +475,11 @@ impl From<MintClientError> for ClientError {
 impl From<LnClientError> for ClientError {
     fn from(e: LnClientError) -> Self {
         ClientError::LnClientError(e)
+    }
+}
+
+impl From<CreationError> for ClientError {
+    fn from(e: CreationError) -> Self {
+        ClientError::InvoiceError(e)
     }
 }
