@@ -4,6 +4,7 @@ use mint_client::clients::gateway::GatewayClientConfig;
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::ClientAndGatewayConfig;
 use rand::thread_rng;
+use secp256k1::PublicKey;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -11,6 +12,7 @@ use structopt::StructOpt;
 struct Opts {
     workdir: PathBuf,
     ln_rpc_path: PathBuf,
+    ln_node_pub_key: PublicKey,
 }
 
 fn main() {
@@ -21,7 +23,7 @@ fn main() {
 
     let mut rng = thread_rng();
     let ctx = secp256k1::Secp256k1::new();
-    let (_sk_ln, pk_ln) = ctx.generate_keypair(&mut rng);
+
     let (sk_fed, pk_fed) = ctx.generate_schnorrsig_keypair(&mut rng);
 
     let gateway_cfg = LnGatewayConfig {
@@ -41,7 +43,7 @@ fn main() {
         client: federation_client_cfg,
         gateway: LightningGateway {
             mint_pub_key: pk_fed,
-            node_pub_key: pk_ln,
+            node_pub_key: opts.ln_node_pub_key,
             api: "http://127.0.0.1:8080".to_string(),
         },
     };
