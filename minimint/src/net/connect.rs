@@ -1,34 +1,30 @@
-use std::collections::HashMap;
-use std::time::Duration;
-
+use crate::config::ServerConfig;
+use crate::net::framed::TcpBidiFramed;
+use crate::net::PeerConnections;
 use async_trait::async_trait;
 use futures::future::select_all;
 use futures::future::try_join_all;
 use futures::StreamExt;
 use futures::{FutureExt, SinkExt};
 use hbbft::Target;
-use minimint_api::task::sleep;
+use minimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tokio::time::sleep;
 use tracing::{debug, info, instrument, trace, warn};
-
-use minimint_api::PeerId;
-
-use crate::config::ServerConfig;
-use crate::net::framed::Framed;
-use crate::net::PeerConnections;
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
-    connections: HashMap<PeerId, Framed<Compat<TcpStream>, T>>,
+    connections: HashMap<PeerId, TcpBidiFramed<T>>,
 }
 
 impl<T: 'static> Connections<T>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send,
+    T: std::fmt::Debug + Serialize + DeserializeOwned + Unpin + Send,
 {
     #[instrument(skip_all)]
     pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
@@ -42,7 +38,7 @@ where
 
         let out_conns = try_join_all(cfg.peers.iter().filter_map(|(id, peer)| {
             if cfg.identity < *id {
-                info!("Connecting to mint {}", id);
+                info!("Connecting to mint {} at 127.0.0.1:{}", id, peer.hbbft_port);
                 Some(Self::connect_to_peer(peer.hbbft_port, *id, 10))
             } else {
                 None
@@ -70,7 +66,7 @@ where
             .await
             .expect("Error during peer handshakes")
             .into_iter()
-            .map(|(id, stream)| (id, Framed::new(stream.compat())))
+            .map(|(id, stream)| (id, TcpBidiFramed::new_from_tcp(stream)))
             .collect::<HashMap<_, _>>();
 
         info!("Successfully connected to all peers");
@@ -119,7 +115,7 @@ where
         }
     }
 
-    async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> Option<T> {
+    async fn receive_from_peer(id: PeerId, peer: &mut TcpBidiFramed<T>) -> Option<T> {
         let msg = peer.next().await?.ok()?;
 
         trace!(peer = %id, "Received msg");
@@ -131,7 +127,7 @@ where
 #[async_trait]
 impl<T> PeerConnections<T> for Connections<T>
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
+    T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
     type Id = PeerId;
 
@@ -140,15 +136,15 @@ where
         match target {
             Target::All => {
                 for peer in self.connections.values_mut() {
-                    if peer.send(&msg).await.is_err() {
-                        warn!("Failed to send message to peer");
+                    if let Err(e) = peer.send(msg.clone()).await {
+                        warn!("Failed to send message to peer: {}", e);
                     }
                 }
             }
             Target::Node(peer_id) => {
                 if let Some(peer) = self.connections.get_mut(&peer_id) {
-                    if peer.send(&msg).await.is_err() {
-                        warn!("Failed to send message to peer");
+                    if let Err(e) = peer.send(msg.clone()).await {
+                        warn!("Failed to send message to peer: {}", e);
                     }
                 }
             }
