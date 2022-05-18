@@ -24,6 +24,9 @@ fn main() {
     } = StructOpt::from_args();
     let mut rng = OsRng::new().unwrap();
 
+    // Recursively create config directory if it doesn't exist
+    std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
+
     let peers = (0..nodes).map(PeerId::from).collect::<Vec<_>>();
     let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
