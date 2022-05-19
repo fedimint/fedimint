@@ -90,7 +90,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg, Box::new(db), Default::default());
+    let client = UserClient::new(cfg.clone(), Box::new(db), Default::default());
 
     match opts.command {
         Command::PegInAddress => {
@@ -161,7 +161,7 @@ async fn main() {
                 "Funded outgoing contract, notifying gateway",
             );
 
-            http.post(&format!("{}/pay_invoice", &client.gateway_api()))
+            http.post(&format!("{}/pay_invoice", &cfg.gateway.api))
                 .json(&contract_id)
                 .timeout(Duration::from_secs(15))
                 .send()
