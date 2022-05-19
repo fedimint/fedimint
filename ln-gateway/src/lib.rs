@@ -128,7 +128,7 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
                 let federation_client = federation_client.clone();
                 async move {
                     if let Err(e) = federation_client.fetch_coins(out_point).await {
-                        error!(error = ?e, "Fetching coins failed");
+                        error!(error = %e, "Fetching coins failed");
                     }
                 }
             })
