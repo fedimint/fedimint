@@ -36,9 +36,9 @@ pub struct Request {
 }
 ///JSON-RPC Response object
 #[derive(Serialize)]
-pub struct Response<'a> {
+pub struct Response {
     ///A String specifying the version of the JSON-RPC protocol. MUST be exactly "2.0".
-    pub jsonrpc: &'a str,
+    pub jsonrpc: String,
     ///This member is REQUIRED on success.
     ///This member MUST NOT exist if there was an error invoking the method.
     ///The value of this member is determined by the method invoked on the Server.
@@ -52,10 +52,10 @@ pub struct Response<'a> {
     ///If there was an error in detecting the id in the Request object (e.g. Parse error/Invalid Request), it MUST be Null.
     pub id: Option<Value>,
 }
-impl Response<'_> {
+impl Response {
     pub fn with_result(result: Value, id: Value) -> Self {
         Response {
-            jsonrpc: JSON_RPC,
+            jsonrpc: JSON_RPC.to_string(),
             result: Some(result),
             error: None,
             id: Some(id),
@@ -63,7 +63,7 @@ impl Response<'_> {
     }
     pub fn with_error(error: RpcError, id: Option<Value>) -> Self {
         Response {
-            jsonrpc: JSON_RPC,
+            jsonrpc: JSON_RPC.to_string(),
             result: None,
             error: Some(error),
             id,
