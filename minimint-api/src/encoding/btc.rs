@@ -86,7 +86,7 @@ mod tests {
     use std::io::Cursor;
     use std::str::FromStr;
 
-    #[test]
+    #[test_log::test]
     fn sha256_roundtrip() {
         let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
         let mut encoded = Vec::new();
@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(hash, hash_decoded);
     }
 
-    #[test]
+    #[test_log::test]
     fn address_roundtrip() {
         let addresses = [
             "bc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps59h4z5",

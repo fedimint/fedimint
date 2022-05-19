@@ -60,13 +60,13 @@ mod tests {
     use super::super::tests::test_roundtrip;
     use tbs::{BlindedMessage, BlindingKey};
 
-    #[test]
+    #[test_log::test]
     fn test_message_macro() {
         let bmsg = BlindedMessage(tbs::MessagePoint::generator());
         test_roundtrip(bmsg);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_bkey() {
         let bkey = BlindingKey::random();
         test_roundtrip(bkey);

@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(cursor.position(), len as u64);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_derive_struct() {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         struct TestStruct {
@@ -296,7 +296,7 @@ mod tests {
         test_roundtrip_expected(reference, &bytes);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_derive_tuple_struct() {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         struct TestStruct(Vec<u8>, u32);
@@ -307,7 +307,7 @@ mod tests {
         test_roundtrip_expected(reference, &bytes);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_derive_enum() {
         #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
         enum TestEnum {

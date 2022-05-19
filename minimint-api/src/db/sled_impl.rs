@@ -89,7 +89,7 @@ impl From<sled::Error> for DatabaseError {
 mod tests {
     use std::sync::Arc;
 
-    #[test]
+    #[test_log::test]
     fn test_basic_rw() {
         let path = tempdir::TempDir::new("fcb-sled-test").unwrap();
         let db = sled::open(path).unwrap();

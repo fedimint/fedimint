@@ -284,7 +284,7 @@ mod tests {
     use minimint_api::encoding::Decodable;
     use std::io::Cursor;
 
-    #[test]
+    #[test_log::test]
     fn test_txoutproof_happy_path() {
         let txoutproof_hex = "0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
         0000045e274cbfff8fe34e6df61079ae8c8cf5af6d53ff158488e26df5a072363693be15a6760482a0c1731b169\

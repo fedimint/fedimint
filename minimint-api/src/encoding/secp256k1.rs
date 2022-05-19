@@ -74,7 +74,7 @@ mod tests {
     use secp256k1_zkp::hashes::Hash as BitcoinHash;
     use secp256k1_zkp::Message;
 
-    #[test]
+    #[test_log::test]
     fn test_ecdsa_sig() {
         let ctx = secp256k1_zkp::Secp256k1::new();
         let (sk, _pk) = ctx.generate_keypair(&mut rand::thread_rng());
@@ -86,7 +86,7 @@ mod tests {
         test_roundtrip(sig);
     }
 
-    #[test]
+    #[test_log::test]
     fn test_schnorr_pub_key() {
         let ctx = secp256k1_zkp::global::SECP256K1;
         let mut rng = rand::rngs::OsRng::new().unwrap();

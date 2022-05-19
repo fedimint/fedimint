@@ -1214,7 +1214,7 @@ mod tests {
 
     use super::Feerate;
 
-    #[test]
+    #[test_log::test]
     fn sign_tx() {
         const CHANGE_TWEAK: [u8; 32] = [42u8; 32];
 

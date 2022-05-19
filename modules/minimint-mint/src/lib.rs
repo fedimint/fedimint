@@ -714,7 +714,7 @@ mod test {
         (agg_pk, mints)
     }
 
-    #[test]
+    #[test_log::test]
     fn test_issuance() {
         let (pk, mut mints) = build_mints();
 
@@ -843,7 +843,7 @@ mod test {
             .contains(&(PeerId::from(3), PeerErrorType::DifferentNonce)));
     }
 
-    #[test]
+    #[test_log::test]
     #[should_panic(expected = "Own key not found among pub keys.")]
     fn test_new_panic_without_own_pub_key() {
         let (mint_server_cfg1, _) = build_configs();

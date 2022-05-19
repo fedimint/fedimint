@@ -107,7 +107,7 @@ mod tests {
     use super::MemDatabase;
     use std::sync::Arc;
 
-    #[test]
+    #[test_log::test]
     fn test_basic_rw() {
         let mem_db = MemDatabase::new();
         crate::db::tests::test_db_impl(Arc::new(mem_db));
