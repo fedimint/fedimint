@@ -19,6 +19,8 @@ minimint-api = { path = "../minimint-api" }
 minimint-core = { path = "../minimint-core" }
 minimint-derive = { path = "../minimint-derive" }
 minimint-wallet = { path = "../modules/minimint-wallet", features = ["native"] }
+opentelemetry = "0.17.0"
+opentelemetry-jaeger = "0.16.0"
 rand = "0.6.5"
 rayon = "1.5.0"
 secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [ "global-context", "bitcoin_hashes" ] }
@@ -32,4 +34,5 @@ tide = "0.16.0"
 tokio = { version = "1.0.1", features = ["full"] }
 tokio-util = { version = "0.6.0", features = [ "compat" ] }
 tracing ="0.1.22"
+tracing-opentelemetry = "0.17.2"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
