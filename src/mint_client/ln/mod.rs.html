@@ -567,7 +567,7 @@
         (<span class="ident">fed</span>, <span class="ident">client_context</span>)
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_outgoing</span>() {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::thread_rng</span>();
         <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::Secp256k1::new</span>();

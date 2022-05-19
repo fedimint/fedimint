@@ -1155,7 +1155,7 @@
         <span class="ident">client_db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">create_output</span>() {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
         <span class="kw">let</span> (<span class="ident">fed</span>, <span class="ident">client_context</span>) <span class="op">=</span> <span class="ident">new_mint_and_client</span>().<span class="kw">await</span>;
@@ -1177,7 +1177,7 @@
         <span class="macro">assert_eq!</span>(<span class="ident">client</span>.<span class="ident">coins</span>().<span class="ident">amount</span>(), <span class="ident">ISSUE_AMOUNT</span>)
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">create_input</span>() {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::Secp256k1::new</span>();

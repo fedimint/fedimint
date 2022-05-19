@@ -541,7 +541,7 @@
         (<span class="ident">fed</span>, <span class="ident">client</span>, <span class="ident">btc_rpc_controller</span>)
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">create_output</span>() {
         <span class="kw">let</span> (<span class="ident">fed</span>, <span class="ident">client_context</span>, <span class="ident">btc_rpc</span>) <span class="op">=</span> <span class="ident">new_mint_and_client</span>().<span class="kw">await</span>;
         <span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">WalletClient</span> {

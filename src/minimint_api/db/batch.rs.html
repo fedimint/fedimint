@@ -496,7 +496,7 @@
 <span class="kw">mod</span> <span class="ident">test</span> {
     <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::Accumulator</span>;
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_transaction</span>() {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">acc</span> <span class="op">=</span> <span class="ident">Accumulator</span>::<span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span><span class="ident">::new</span>();
         {

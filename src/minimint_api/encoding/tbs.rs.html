@@ -141,13 +141,13 @@
     <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip</span>;
     <span class="kw">use</span> <span class="ident">tbs</span>::{<span class="ident">BlindedMessage</span>, <span class="ident">BlindingKey</span>};
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_message_macro</span>() {
         <span class="kw">let</span> <span class="ident">bmsg</span> <span class="op">=</span> <span class="ident">BlindedMessage</span>(<span class="ident">tbs::MessagePoint::generator</span>());
         <span class="ident">test_roundtrip</span>(<span class="ident">bmsg</span>);
     }
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_bkey</span>() {
         <span class="kw">let</span> <span class="ident">bkey</span> <span class="op">=</span> <span class="ident">BlindingKey::random</span>();
         <span class="ident">test_roundtrip</span>(<span class="ident">bkey</span>);
