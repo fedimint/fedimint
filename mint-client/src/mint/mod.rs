@@ -527,7 +527,7 @@ mod tests {
         client_db.apply_batch(batch).unwrap();
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn create_output() {
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let (fed, client_context) = new_mint_and_client().await;
@@ -549,7 +549,7 @@ mod tests {
         assert_eq!(client.coins().amount(), ISSUE_AMOUNT)
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn create_input() {
         let mut rng = rand::rngs::OsRng::new().unwrap();
         let ctx = secp256k1_zkp::Secp256k1::new();

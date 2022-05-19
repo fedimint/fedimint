@@ -227,7 +227,7 @@ impl<'a> AccumulatorTx<'a, BatchItem> {
 mod test {
     use super::Accumulator;
 
-    #[test]
+    #[test_log::test]
     fn test_transaction() {
         let mut acc = Accumulator::<u8>::new();
         {

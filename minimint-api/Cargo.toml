@@ -30,3 +30,5 @@ getrandom = { version = "0.2.0", features = [ "js" ] }
 
 [dev-dependencies]
 tempdir = "0.3.7"
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }

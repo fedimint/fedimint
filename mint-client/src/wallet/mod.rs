@@ -228,7 +228,7 @@ mod tests {
         (fed, client, btc_rpc_controller)
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn create_output() {
         let (fed, client_context, btc_rpc) = new_mint_and_client().await;
         let client = WalletClient {

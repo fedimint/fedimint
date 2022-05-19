@@ -226,7 +226,7 @@ mod tests {
         (fed, client_context)
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn test_outgoing() {
         let mut rng = rand::thread_rng();
         let ctx = secp256k1_zkp::Secp256k1::new();

@@ -23,3 +23,4 @@ tracing = "0.1.29"
 [dev-dependencies]
 tokio = {version = "1.14.0", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }

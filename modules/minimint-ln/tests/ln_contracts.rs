@@ -14,7 +14,7 @@ use minimint_ln::{
 };
 use std::sync::Arc;
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_account() {
     let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
 
@@ -60,7 +60,7 @@ async fn test_account() {
     assert!(fed.verify_input(&account_input).is_err());
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_outgoing() {
     let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
 
@@ -132,7 +132,7 @@ async fn test_outgoing() {
     fed.consensus_round(&[account_input_no_witness], &[]).await;
 }
 
-#[tokio::test]
+#[test_log::test(tokio::test)]
 async fn test_incoming() {
     let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
 
