@@ -166,13 +166,16 @@ pub fn sign_blinded_msg(msg: BlindedMessage, sks: SecretKeyShare) -> BlindedSign
 pub fn combine_valid_shares<I>(sig_shares: I, threshold: usize) -> BlindedSignature
 where
     I: IntoIterator<Item = (usize, BlindedSignatureShare)>,
-    I::IntoIter: Clone,
+    I::IntoIter: Clone + ExactSizeIterator,
 {
     let points = sig_shares.into_iter().take(threshold).map(|(idx, share)| {
         let x = Scalar::from((idx as u64) + 1);
         let y = share.0.into();
         (x, y)
     });
+    if points.len() < threshold {
+        panic!("Not enough signature shares");
+    }
     let bsig: G1Projective = poly::interpolate_zero(points);
     BlindedSignature(bsig.to_affine())
 }
@@ -264,5 +267,25 @@ mod tests {
         let bsig = combine_valid_shares(shuffle_sigs, threshold);
         let sig = unblind_signature(bkey, bsig);
         assert!(verify(msg, sig, pk));
+    }
+
+    #[test]
+    #[should_panic(expected = "Not enough signature shares")]
+    fn test_insufficient_shares() {
+        let msg = Message::from_bytes(b"Hello World!");
+        let threshold = 5;
+
+        let (_, bmsg) = blind_message(msg);
+
+        let (_, _pks, sks) = dealer_keygen(threshold, 4);
+
+        let sigs = sks
+            .iter()
+            .enumerate()
+            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, *sk)))
+            .collect::<Vec<_>>();
+
+        // Combining an insufficient number of signature shares should panic
+        combine_valid_shares(sigs.clone().into_iter(), threshold);
     }
 }
