@@ -607,9 +607,9 @@ pub struct PegOutReq {
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
 }
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct InvoiceReq {
-    #[serde(with = "minimint::modules::ln::serde_invoice")]
+    #[serde(with = "crate::ln::serde_invoice")]
     pub bolt11: lightning_invoice::Invoice,
 }
 impl From<PegInReqRaw> for PegInReq {
