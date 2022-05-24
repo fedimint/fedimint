@@ -263,10 +263,6 @@
 <span id="256">256</span>
 <span id="257">257</span>
 <span id="258">258</span>
-<span id="259">259</span>
-<span id="260">260</span>
-<span id="261">261</span>
-<span id="262">262</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">DatabaseKeyPrefix</span>, <span class="ident">SerializableDatabaseValue</span>};
 
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">DbBatch</span> <span class="op">=</span> <span class="ident">Accumulator</span><span class="op">&lt;</span><span class="ident">BatchItem</span><span class="op">&gt;</span>;
@@ -383,13 +379,9 @@
     <span class="doccomment">///  * Committing a sub-transaction makes its changes part of the parent transaction. Note that</span>
     <span class="doccomment">///    the parent transaction may still be aborted leading to the removal of sub-transaction</span>
     <span class="doccomment">///    items.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">subtransaction</span><span class="op">&lt;</span><span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="kw-2">mut</span> <span class="self">self</span>) -&gt; <span class="ident">AccumulatorTx</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">T</span><span class="op">&gt;</span>
-    <span class="kw">where</span>
-        <span class="lifetime">&#39;a</span>: <span class="lifetime">&#39;b</span>,
-        <span class="lifetime">&#39;b</span>: <span class="lifetime">&#39;c</span>,
-    {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">subtransaction</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="ident">AccumulatorTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span>, <span class="ident">T</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">checkpoint</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">len</span>();
-        <span class="ident">AccumulatorTx</span>::<span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">T</span><span class="op">&gt;</span> {
+        <span class="ident">AccumulatorTx</span> {
             <span class="ident">batch</span>: <span class="self">self</span>.<span class="ident">batch</span>,
             <span class="ident">checkpoint</span>,
         }
@@ -530,5 +522,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (9257f5aad 2022-05-21)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
 </body></html>
