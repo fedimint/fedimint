@@ -53,13 +53,17 @@ done
 LN1="lightning-cli --network regtest --lightning-dir=$LN1_DIR"
 LN2="lightning-cli --network regtest --lightning-dir=$LN2_DIR"
 
+# Run the Rust integration tests against the real Bitcoin / Lightning services
+export MINIMINT_TEST_REAL=1
+export MINIMINT_TEST_DIR=$TMP_DIR
+cargo test -p minimint -- --test-threads=1
+
 # Generate federation, gateway and client config
 $BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
 LN1_PUB_KEY="$($LN1 getinfo | jq -r '.id')"
 $BIN_DIR/gw_configgen -- $CFG_DIR "$LN1_DIR/regtest/lightning-rpc" $LN1_PUB_KEY
 
 # Initialize wallet and get ourselves some money
-$BTC_CLIENT createwallet main
 function mine_blocks() {
     PEG_IN_ADDR="$($BTC_CLIENT getnewaddress)"
     $BTC_CLIENT generatetoaddress $1 $PEG_IN_ADDR

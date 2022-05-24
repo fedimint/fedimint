@@ -26,11 +26,13 @@ async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
 
     debug!(%contract, "Received request to pay invoice");
 
-    gateway
+    let result = gateway
         .pay_invoice(contract, rng)
         .await
         .map_err(tide::Error::from_debug)
-        .map(|()| Response::new(200))
+        .map(|()| Response::new(200));
+    gateway.await_contract_claimed(contract).await;
+    result
 }
 
 #[tokio::main]

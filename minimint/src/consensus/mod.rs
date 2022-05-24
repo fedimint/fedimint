@@ -54,8 +54,8 @@ where
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct AcceptedTransaction {
-    epoch: u64,
-    transaction: Transaction,
+    pub epoch: u64,
+    pub transaction: Transaction,
 }
 
 #[derive(Debug)]

@@ -114,13 +114,9 @@ impl<'a, T> AccumulatorTx<'a, T> {
     ///  * Committing a sub-transaction makes its changes part of the parent transaction. Note that
     ///    the parent transaction may still be aborted leading to the removal of sub-transaction
     ///    items.
-    pub fn subtransaction<'b, 'c>(&'b mut self) -> AccumulatorTx<'c, T>
-    where
-        'a: 'b,
-        'b: 'c,
-    {
+    pub fn subtransaction(&mut self) -> AccumulatorTx<'_, T> {
         let checkpoint = self.batch.buffer.len();
-        AccumulatorTx::<'c, T> {
+        AccumulatorTx {
             batch: self.batch,
             checkpoint,
         }

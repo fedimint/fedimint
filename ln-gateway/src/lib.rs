@@ -1,4 +1,4 @@
-mod ln;
+pub mod ln;
 
 use crate::ln::{LightningError, LnRpc};
 use minimint::modules::ln::contracts::ContractId;
@@ -39,16 +39,21 @@ impl LnGateway {
             .expect("connect to ln_socket");
         let ln_client = Mutex::new(ln_client);
 
-        Self::new(federation_client, Box::new(ln_client)).await
+        Self::new(Arc::new(federation_client), Box::new(ln_client)).await
     }
 
-    pub async fn new(federation_client: GatewayClient, ln_client: Box<dyn LnRpc>) -> LnGateway {
+    pub async fn new(
+        federation_client: Arc<GatewayClient>,
+        ln_client: Box<dyn LnRpc>,
+    ) -> LnGateway {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
-        let mint_client = Arc::new(federation_client);
-        let fetcher = tokio::spawn(background_fetch(mint_client.clone(), ln_client.clone()));
+        let fetcher = tokio::spawn(background_fetch(
+            federation_client.clone(),
+            ln_client.clone(),
+        ));
 
         LnGateway {
-            federation_client: mint_client,
+            federation_client,
             ln_client,
             fetcher,
         }
@@ -104,12 +109,15 @@ impl LnGateway {
         self.federation_client
             .claim_outgoing_contract(contract_id, preimage, rng)
             .await?;
+
+        Ok(())
+    }
+
+    pub async fn await_contract_claimed(&self, contract_id: ContractId) {
         self.federation_client
             .await_claimed_outgoing_accepted(contract_id)
             .await;
         debug!("Claim transaction accepted");
-
-        Ok(())
     }
 }
 

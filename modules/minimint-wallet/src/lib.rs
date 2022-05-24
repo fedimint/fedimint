@@ -66,15 +66,15 @@ pub enum WalletConsensusItem {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RoundConsensusItem {
-    block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
-    fee_rate: Feerate,
-    randomness: [u8; 32],
+    pub block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
+    pub fee_rate: Feerate,
+    pub randomness: [u8; 32],
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PegOutSignatureItem {
-    txid: Txid,
-    signature: Vec<secp256k1::Signature>,
+    pub txid: Txid,
+    pub signature: Vec<secp256k1::Signature>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -451,19 +451,16 @@ impl FederationModule for Wallet {
 }
 
 impl Wallet {
-    pub async fn new(cfg: WalletConfig, db: Arc<dyn Database>) -> Result<Wallet, WalletError> {
-        let gen_cfg = cfg.clone();
-        let bitcoind_rpc_gen = move || -> Box<dyn BitcoindRpc> {
+    pub fn bitcoind(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
+        move || -> Box<dyn BitcoindRpc> {
             Box::new(
                 bitcoincore_rpc::Client::new(
-                    &gen_cfg.btc_rpc_address,
-                    Auth::UserPass(gen_cfg.btc_rpc_user.clone(), gen_cfg.btc_rpc_pass.clone()),
+                    &cfg.btc_rpc_address,
+                    Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
                 )
                 .expect("Could not connect to bitcoind"),
             )
-        };
-
-        Self::new_with_bitcoind(cfg, db, bitcoind_rpc_gen).await
+        }
     }
 
     // TODO: work around bitcoind_gen being a closure, maybe make clonable?
@@ -475,7 +472,7 @@ impl Wallet {
         let broadcaster_bitcoind_rpc = bitcoind_gen();
         let broadcaster_db = db.clone();
         tokio::spawn(async move {
-            broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).await;
+            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).await;
         });
 
         let bitcoind_rpc = bitcoind_gen();
@@ -667,7 +664,7 @@ impl Wallet {
 
         if median_proposal >= consensus_height {
             debug!("Setting consensus block height to {}", median_proposal);
-            self.sync_up_to_consensus_heigh(batch, median_proposal)
+            self.sync_up_to_consensus_height(batch, median_proposal)
                 .await;
         } else {
             panic!(
@@ -687,7 +684,7 @@ impl Wallet {
         self.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    async fn sync_up_to_consensus_heigh(&self, mut batch: BatchTx<'_>, new_height: u32) {
+    async fn sync_up_to_consensus_height(&self, mut batch: BatchTx<'_>, new_height: u32) {
         let old_height = self.consensus_height().unwrap_or(0);
         if new_height < old_height {
             info!(
@@ -1098,23 +1095,27 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-async fn broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
+pub async fn run_broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
     loop {
-        let pending_tx = db
-            .find_by_prefix(&PendingTransactionPrefixKey)
-            .collect::<Result<Vec<_>, _>>()
-            .expect("DB error");
-
-        for (_, PendingTransaction { tx, .. }) in pending_tx {
-            debug!(
-                tx = %tx.txid(),
-                weight = tx.get_weight(),
-                "Broadcasting peg-out",
-            );
-            trace!(transaction = ?tx);
-            rpc.submit_transaction(tx).await;
-        }
+        broadcast_pending_tx(&db, rpc.as_ref()).await;
         tokio::time::sleep(Duration::from_secs(10)).await;
+    }
+}
+
+pub async fn broadcast_pending_tx(db: &Arc<dyn Database>, rpc: &dyn BitcoindRpc) {
+    let pending_tx = db
+        .find_by_prefix(&PendingTransactionPrefixKey)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("DB error");
+
+    for (_, PendingTransaction { tx, .. }) in pending_tx {
+        debug!(
+            tx = %tx.txid(),
+            weight = tx.get_weight(),
+            "Broadcasting peg-out",
+        );
+        trace!(transaction = ?tx);
+        rpc.submit_transaction(tx).await;
     }
 }
 
