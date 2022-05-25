@@ -1,4 +1,4 @@
-mod api;
+pub mod api;
 pub mod clients;
 pub mod ln;
 pub mod mint;

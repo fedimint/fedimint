@@ -17,7 +17,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::time::sleep;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
@@ -36,14 +36,12 @@ where
             cfg.get_incoming_count(),
         ));
 
-        sleep(Duration::from_millis(5000)).await;
-
         debug!("Beginning to connect to peers");
 
         let out_conns = try_join_all(cfg.peers.iter().filter_map(|(id, peer)| {
             if cfg.identity < *id {
                 info!("Connecting to mint {}", id);
-                Some(Self::connect_to_peer(peer.hbbft_port, *id))
+                Some(Self::connect_to_peer(peer.hbbft_port, *id, 10))
             } else {
                 None
             }
@@ -97,13 +95,21 @@ where
         Ok(connections)
     }
 
-    async fn connect_to_peer(port: u16, peer: PeerId) -> Result<TcpStream, std::io::Error> {
+    async fn connect_to_peer(
+        port: u16,
+        peer: PeerId,
+        retries: u32,
+    ) -> Result<TcpStream, std::io::Error> {
         debug!("Connecting to peer {}", peer);
-        let res = TcpStream::connect(("127.0.0.1", port)).await;
-        if res.is_err() {
-            error!("Could not connect to peer {}", peer);
+        let mut counter = 0;
+        loop {
+            let res = TcpStream::connect(("127.0.0.1", port)).await;
+            if res.is_ok() || counter >= retries {
+                return res;
+            }
+            counter += 1;
+            sleep(Duration::from_millis(500)).await;
         }
-        res
     }
 
     async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> (PeerId, T) {

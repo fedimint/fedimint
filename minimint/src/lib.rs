@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use hbbft::honey_badger::{HoneyBadger, Step};
 use hbbft::{Epoched, NetworkInfo};
+use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::spawn;
@@ -15,6 +16,8 @@ use consensus::ConsensusOutcome;
 use minimint_api::db::Database;
 use minimint_api::PeerId;
 use minimint_ln::LightningModule;
+use minimint_wallet::bitcoind::BitcoindRpc;
+use minimint_wallet::Wallet;
 
 use crate::consensus::{ConsensusItem, FediMintConsensus};
 use crate::net::connect::Connections;
@@ -44,8 +47,52 @@ pub mod modules {
     pub use minimint_wallet as wallet;
 }
 
+pub struct MinimintServer {
+    pub outcome_sender: Sender<ConsensusOutcome>,
+    pub proposal_receiver: Receiver<Vec<ConsensusItem>>,
+    pub outcome_receiver: Receiver<ConsensusOutcome>,
+    pub proposal_sender: Sender<Vec<ConsensusItem>>,
+    pub mint_consensus: Arc<FediMintConsensus<OsRng>>,
+    pub cfg: ServerConfig,
+}
+
 /// Start all the components of the mint and plug them together
 pub async fn run_minimint(cfg: ServerConfig) {
+    let MinimintServer {
+        outcome_sender,
+        proposal_receiver,
+        outcome_receiver,
+        proposal_sender,
+        mint_consensus,
+        cfg,
+    } = minimint_server(cfg).await;
+    let initial_cis = mint_consensus.get_consensus_proposal().await;
+
+    spawn(net::api::run_server(cfg.clone(), mint_consensus.clone()));
+    spawn(hbbft(
+        outcome_sender,
+        proposal_receiver,
+        cfg.clone(),
+        initial_cis,
+        OsRng::new().unwrap(),
+    ));
+    run_consensus(&mint_consensus, outcome_receiver, proposal_sender, cfg).await;
+}
+
+pub async fn minimint_server(cfg: ServerConfig) -> MinimintServer {
+    minimint_server_with(
+        cfg.clone(),
+        Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap()),
+        Wallet::bitcoind(cfg.wallet.clone()),
+    )
+    .await
+}
+
+pub async fn minimint_server_with(
+    cfg: ServerConfig,
+    database: Arc<dyn Database>,
+    bitcoind: impl Fn() -> Box<dyn BitcoindRpc>,
+) -> MinimintServer {
     assert_eq!(
         cfg.peers.keys().max().copied().map(|id| id.to_usize()),
         Some(cfg.peers.len() - 1)
@@ -54,19 +101,16 @@ pub async fn run_minimint(cfg: ServerConfig) {
 
     let threshold = cfg.peers.len() - cfg.max_faulty();
 
-    let database: Arc<dyn Database> =
-        Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap());
-
     let mint = minimint_mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
 
-    let wallet = minimint_wallet::Wallet::new(cfg.wallet.clone(), database.clone())
+    let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
         .await
         .expect("Couldn't create wallet");
 
     let ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
     let mint_consensus = Arc::new(FediMintConsensus {
-        rng_gen: Box::new(CloneRngGen(Mutex::new(rand::rngs::OsRng::new().unwrap()))), //FIXME
+        rng_gen: Box::new(CloneRngGen(Mutex::new(OsRng::new().unwrap()))), //FIXME
         cfg: cfg.clone(),
         mint,
         wallet,
@@ -74,72 +118,88 @@ pub async fn run_minimint(cfg: ServerConfig) {
         db: database,
     });
 
-    spawn(net::api::run_server(cfg.clone(), mint_consensus.clone()));
-
-    let (outcome_sender, mut outcome_receiver) = channel::<ConsensusOutcome>(1);
+    let (outcome_sender, outcome_receiver) = channel::<ConsensusOutcome>(1);
     let (proposal_sender, proposal_receiver) = channel::<Vec<ConsensusItem>>(1);
 
-    info!("Spawning consensus with first proposal");
-    spawn(hbbft(
+    MinimintServer {
         outcome_sender,
         proposal_receiver,
-        cfg.clone(),
-        mint_consensus.get_consensus_proposal().await,
-        rand::rngs::OsRng::new().unwrap(),
-    ));
+        outcome_receiver,
+        proposal_sender,
+        mint_consensus,
+        cfg: cfg.clone(),
+    }
+}
 
+pub async fn run_consensus(
+    mint_consensus: &Arc<FediMintConsensus<OsRng>>,
+    mut outcome_receiver: Receiver<ConsensusOutcome>,
+    proposal_sender: Sender<Vec<ConsensusItem>>,
+    cfg: ServerConfig,
+) {
     // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
     debug!("Generating second proposal");
-    let mut proposal = Some(mint_consensus.get_consensus_proposal().await);
     loop {
-        debug!("Ready to exchange proposal for consensus outcome");
+        run_consensus_epoch(
+            mint_consensus,
+            outcome_receiver.recv().await.expect("other thread died"),
+            &proposal_sender,
+            &cfg,
+            2000,
+        )
+        .await;
+    }
+}
 
-        // We filter out the already agreed on consensus items from our proposal to avoid proposing
-        // duplicates. Yet we can not remove them from the database entirely because we might crash
-        // while processing the outcome.
-        let outcome = {
-            let outcome = outcome_receiver.recv().await.expect("other thread died");
-            let outcome_filter_set = outcome
-                .contributions
-                .values()
-                .flatten()
-                .filter(|ci| !matches!(ci, ConsensusItem::Wallet(_)))
-                .collect::<HashSet<_>>();
+pub async fn run_consensus_epoch(
+    mint_consensus: &Arc<FediMintConsensus<OsRng>>,
+    outcome: ConsensusOutcome,
+    proposal_sender: &Sender<Vec<ConsensusItem>>,
+    cfg: &ServerConfig,
+    sleep_delay: u64,
+) {
+    let mut proposal = Some(mint_consensus.get_consensus_proposal().await);
+    debug!("Ready to exchange proposal for consensus outcome");
 
-            let full_proposal = proposal.take().expect("Is always refilled");
-            let filtered_proposal = full_proposal
-                .into_iter()
-                .filter(|ci| !outcome_filter_set.contains(ci))
-                .collect::<Vec<ConsensusItem>>();
-            proposal_sender
-                .send(filtered_proposal)
-                .await
-                .expect("other thread died");
+    // We filter out the already agreed on consensus items from our proposal to avoid proposing
+    // duplicates. Yet we can not remove them from the database entirely because we might crash
+    // while processing the outcome.
+    let outcome_filter_set = outcome
+        .contributions
+        .values()
+        .flatten()
+        .filter(|ci| !matches!(ci, ConsensusItem::Wallet(_)))
+        .collect::<HashSet<_>>();
 
-            outcome
-        };
+    let full_proposal = proposal.take().expect("Is always refilled");
+    let filtered_proposal = full_proposal
+        .into_iter()
+        .filter(|ci| !outcome_filter_set.contains(ci))
+        .collect::<Vec<ConsensusItem>>();
 
-        let we_contributed = outcome.contributions.contains_key(&cfg.identity);
+    proposal_sender
+        .send(filtered_proposal)
+        .await
+        .expect("other thread died");
 
-        debug!(
-            epoch = outcome.epoch,
-            items_count = outcome.contributions.values().flatten().count(),
-            "Processing consensus outcome",
-        );
-        mint_consensus.process_consensus_outcome(outcome).await;
+    let we_contributed = outcome.contributions.contains_key(&cfg.identity);
 
-        if we_contributed {
-            // TODO: define latency target for consensus rounds and monitor it
-            // give others a chance to catch up
-            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-        }
+    debug!(
+        epoch = outcome.epoch,
+        items_count = outcome.contributions.values().flatten().count(),
+        "Processing consensus outcome",
+    );
+    mint_consensus.process_consensus_outcome(outcome).await;
 
-        proposal = Some(mint_consensus.get_consensus_proposal().await);
+    if we_contributed {
+        // TODO: define latency target for consensus rounds and monitor it
+        // give others a chance to catch up
+        tokio::time::sleep(tokio::time::Duration::from_millis(sleep_delay)).await;
     }
 }
 
 #[instrument(skip_all)]
-async fn hbbft(
+pub async fn hbbft(
     outcome_sender: Sender<ConsensusOutcome>,
     mut proposal_receiver: Receiver<Vec<ConsensusItem>>,
     cfg: ServerConfig,

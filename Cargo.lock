@@ -108,6 +108,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "async-attributes"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -618,6 +624,17 @@ dependencies = [
  "textwrap",
  "unicode-width",
  "vec_map",
+]
+
+[[package]]
+name = "clightningrpc"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98ae583d1efb5a0cb21d77ef53f872f104c872b5e05cc150b277d15afe13e974"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -1681,18 +1698,26 @@ checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 name = "minimint"
 version = "0.1.0"
 dependencies = [
+ "assert_matches",
  "async-trait",
  "bincode",
  "bitcoin",
+ "bitcoincore-rpc",
+ "clightningrpc",
+ "cln-rpc",
  "futures",
  "hbbft",
  "hex",
  "itertools",
+ "lightning",
+ "lightning-invoice",
+ "ln-gateway",
  "minimint-api",
  "minimint-derive",
  "minimint-ln",
  "minimint-mint",
  "minimint-wallet",
+ "mint-client",
  "rand 0.6.5",
  "rayon",
  "secp256k1-zkp",

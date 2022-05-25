@@ -66,7 +66,7 @@ impl UserClient {
         }
     }
 
-    fn mint_client(&self) -> MintClient {
+    pub fn mint_client(&self) -> MintClient {
         MintClient {
             context: self.context.borrow_with_module_config(|cfg| &cfg.mint),
         }

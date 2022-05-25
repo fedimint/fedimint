@@ -28,8 +28,8 @@ pub struct PegInProof {
 
 #[derive(Clone, Debug)]
 pub struct TxOutProof {
-    block_header: BlockHeader,
-    merkle_proof: PartialMerkleTree,
+    pub block_header: BlockHeader,
+    pub merkle_proof: PartialMerkleTree,
 }
 
 impl TxOutProof {

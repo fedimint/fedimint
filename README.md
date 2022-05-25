@@ -7,13 +7,19 @@
 If you want to learn more about the general idea go to [fedimint.org](https://fedimint.org/), beyond a high level explanation you can also find links to talks and blog posts at the bottom of the page.
 
 There exist three main communication channels for the project at the moment:
-* [FediMint telegram group:](https://t.me/fedimint) High level ideas, questions, cryptography discussions, etc., nothing code related though (to keep it low noise).
-* [MiniMint dev telegram group:](https://t.me/+uiO1s8gPIBE2YTU0) code related discussions that aren't a good fit for an issue, getting started, if you have weird compiler errors etc.
+* [FediMint telegram group](https://t.me/fedimint) - high level ideas, questions, cryptography discussions, etc., nothing code related though (to keep it low noise).
+* [MiniMint dev telegram group](https://t.me/+uiO1s8gPIBE2YTU0) - code related discussions that aren't a good fit for an issue, getting started, if you have weird compiler errors etc.
 * GitHub Issues: Things to fix, planned features, longer term architectural choices, etc. (something you want to remember in a week that would be lost in the noise on telegram)
 
 PRs fixing TODOs or issues are always welcome, it might be a good idea though to discuss more involved changes in an issue first to make sure the chosen approach fits into the bigger picture. Smaller PRs to fix typos, broken links etc. are also very welcome.
 
-To get started with the code base have a look at the next section. Happy hacking!
+To get started with development have a look at the:
+* [Architecture](docs/architecture.md) - high-level description of the codebase and design
+* [Integration tests](minimint/tests/TESTING.md) - instructions on how to write and run the integration tests
+* `scripts/final-checks.sh` - checks to run locally before opening a PR
+* `scripts/integrationtest.sh` - tests that will run automatically after a PR is opened
+
+Happy hacking!
 
 ## Running MiniMint locally
 

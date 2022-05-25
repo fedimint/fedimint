@@ -46,8 +46,8 @@ pub struct Mint {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PartiallySignedRequest {
-    out_point: OutPoint,
-    partial_signature: PartialSigResponse,
+    pub out_point: OutPoint,
+    pub partial_signature: PartialSigResponse,
 }
 
 /// Request to blind sign a certain amount of coins
