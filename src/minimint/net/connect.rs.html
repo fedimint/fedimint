@@ -163,6 +163,12 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed::Framed</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::PeerConnections</span>;
@@ -182,7 +188,7 @@
 <span class="kw">use</span> <span class="ident">tokio::spawn</span>;
 <span class="kw">use</span> <span class="ident">tokio::time::sleep</span>;
 <span class="kw">use</span> <span class="ident">tokio_util::compat</span>::{<span class="ident">Compat</span>, <span class="ident">TokioAsyncReadCompatExt</span>};
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>};
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>};
 
 <span class="comment">// FIXME: make connections dynamically managed</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Connections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
@@ -201,14 +207,12 @@
             <span class="ident">cfg</span>.<span class="ident">get_incoming_count</span>(),
         ));
 
-        <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">5000</span>)).<span class="kw">await</span>;
-
         <span class="macro">debug!</span>(<span class="string">&quot;Beginning to connect to peers&quot;</span>);
 
         <span class="kw">let</span> <span class="ident">out_conns</span> <span class="op">=</span> <span class="ident">try_join_all</span>(<span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">iter</span>().<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">peer</span>)<span class="op">|</span> {
             <span class="kw">if</span> <span class="ident">cfg</span>.<span class="ident">identity</span> <span class="op">&lt;</span> <span class="kw-2">*</span><span class="ident">id</span> {
                 <span class="macro">info!</span>(<span class="string">&quot;Connecting to mint {}&quot;</span>, <span class="ident">id</span>);
-                <span class="prelude-val">Some</span>(<span class="ident"><span class="self">Self</span>::connect_to_peer</span>(<span class="ident">peer</span>.<span class="ident">hbbft_port</span>, <span class="kw-2">*</span><span class="ident">id</span>))
+                <span class="prelude-val">Some</span>(<span class="ident"><span class="self">Self</span>::connect_to_peer</span>(<span class="ident">peer</span>.<span class="ident">hbbft_port</span>, <span class="kw-2">*</span><span class="ident">id</span>, <span class="number">10</span>))
             } <span class="kw">else</span> {
                 <span class="prelude-val">None</span>
             }
@@ -262,13 +266,21 @@
         <span class="prelude-val">Ok</span>(<span class="ident">connections</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_to_peer</span>(<span class="ident">port</span>: <span class="ident">u16</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TcpStream</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_to_peer</span>(
+        <span class="ident">port</span>: <span class="ident">u16</span>,
+        <span class="ident">peer</span>: <span class="ident">PeerId</span>,
+        <span class="ident">retries</span>: <span class="ident">u32</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TcpStream</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
         <span class="macro">debug!</span>(<span class="string">&quot;Connecting to peer {}&quot;</span>, <span class="ident">peer</span>);
-        <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">TcpStream::connect</span>((<span class="string">&quot;127.0.0.1&quot;</span>, <span class="ident">port</span>)).<span class="kw">await</span>;
-        <span class="kw">if</span> <span class="ident">res</span>.<span class="ident">is_err</span>() {
-            <span class="macro">error!</span>(<span class="string">&quot;Could not connect to peer {}&quot;</span>, <span class="ident">peer</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">counter</span> <span class="op">=</span> <span class="number">0</span>;
+        <span class="kw">loop</span> {
+            <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">TcpStream::connect</span>((<span class="string">&quot;127.0.0.1&quot;</span>, <span class="ident">port</span>)).<span class="kw">await</span>;
+            <span class="kw">if</span> <span class="ident">res</span>.<span class="ident">is_ok</span>() <span class="op">|</span><span class="op">|</span> <span class="ident">counter</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">retries</span> {
+                <span class="kw">return</span> <span class="ident">res</span>;
+            }
+            <span class="ident">counter</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+            <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">500</span>)).<span class="kw">await</span>;
         }
-        <span class="ident">res</span>
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive_from_peer</span>(<span class="ident">id</span>: <span class="ident">PeerId</span>, <span class="ident">peer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Framed</span><span class="op">&lt;</span><span class="ident">Compat</span><span class="op">&lt;</span><span class="ident">TcpStream</span><span class="op">&gt;</span>, <span class="ident">T</span><span class="op">&gt;</span>) -&gt; (<span class="ident">PeerId</span>, <span class="ident">T</span>) {
@@ -322,5 +334,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>

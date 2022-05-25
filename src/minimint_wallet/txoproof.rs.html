@@ -354,8 +354,8 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TxOutProof</span> {
-    <span class="ident">block_header</span>: <span class="ident">BlockHeader</span>,
-    <span class="ident">merkle_proof</span>: <span class="ident">PartialMerkleTree</span>,
+    <span class="kw">pub</span> <span class="ident">block_header</span>: <span class="ident">BlockHeader</span>,
+    <span class="kw">pub</span> <span class="ident">merkle_proof</span>: <span class="ident">PartialMerkleTree</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">TxOutProof</span> {
@@ -644,5 +644,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>

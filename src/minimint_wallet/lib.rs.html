@@ -1284,6 +1284,7 @@
 <span id="1277">1277</span>
 <span id="1278">1278</span>
 <span id="1279">1279</span>
+<span id="1280">1280</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
 <span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
 <span class="kw">use</span> <span class="ident">std::hash::Hasher</span>;
@@ -1352,15 +1353,15 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RoundConsensusItem</span> {
-    <span class="ident">block_height</span>: <span class="ident">u32</span>, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic</span>
-    <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
-    <span class="ident">randomness</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
+    <span class="kw">pub</span> <span class="ident">block_height</span>: <span class="ident">u32</span>, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic</span>
+    <span class="kw">pub</span> <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
+    <span class="kw">pub</span> <span class="ident">randomness</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutSignatureItem</span> {
-    <span class="ident">txid</span>: <span class="ident">Txid</span>,
-    <span class="ident">signature</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1::Signature</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">txid</span>: <span class="ident">Txid</span>,
+    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1::Signature</span><span class="op">&gt;</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -1737,19 +1738,16 @@
 }
 
 <span class="kw">impl</span> <span class="ident">Wallet</span> {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">WalletConfig</span>, <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Wallet</span>, <span class="ident">WalletError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">gen_cfg</span> <span class="op">=</span> <span class="ident">cfg</span>.<span class="ident">clone</span>();
-        <span class="kw">let</span> <span class="ident">bitcoind_rpc_gen</span> <span class="op">=</span> <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> -&gt; <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">bitcoind</span>(<span class="ident">cfg</span>: <span class="ident">WalletConfig</span>) -&gt; <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span> {
+        <span class="kw">move</span> <span class="op">|</span><span class="op">|</span> -&gt; <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span> {
             <span class="ident">Box::new</span>(
                 <span class="ident">bitcoincore_rpc::Client::new</span>(
-                    <span class="kw-2">&amp;</span><span class="ident">gen_cfg</span>.<span class="ident">btc_rpc_address</span>,
-                    <span class="ident">Auth::UserPass</span>(<span class="ident">gen_cfg</span>.<span class="ident">btc_rpc_user</span>.<span class="ident">clone</span>(), <span class="ident">gen_cfg</span>.<span class="ident">btc_rpc_pass</span>.<span class="ident">clone</span>()),
+                    <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">btc_rpc_address</span>,
+                    <span class="ident">Auth::UserPass</span>(<span class="ident">cfg</span>.<span class="ident">btc_rpc_user</span>.<span class="ident">clone</span>(), <span class="ident">cfg</span>.<span class="ident">btc_rpc_pass</span>.<span class="ident">clone</span>()),
                 )
                 .<span class="ident">expect</span>(<span class="string">&quot;Could not connect to bitcoind&quot;</span>),
             )
-        };
-
-        <span class="ident"><span class="self">Self</span>::new_with_bitcoind</span>(<span class="ident">cfg</span>, <span class="ident">db</span>, <span class="ident">bitcoind_rpc_gen</span>).<span class="kw">await</span>
+        }
     }
 
     <span class="comment">// TODO: work around bitcoind_gen being a closure, maybe make clonable?</span>
@@ -1761,7 +1759,7 @@
         <span class="kw">let</span> <span class="ident">broadcaster_bitcoind_rpc</span> <span class="op">=</span> <span class="ident">bitcoind_gen</span>();
         <span class="kw">let</span> <span class="ident">broadcaster_db</span> <span class="op">=</span> <span class="ident">db</span>.<span class="ident">clone</span>();
         <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-            <span class="ident">broadcast_pending_tx</span>(<span class="ident">broadcaster_db</span>, <span class="ident">broadcaster_bitcoind_rpc</span>).<span class="kw">await</span>;
+            <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">broadcaster_db</span>, <span class="ident">broadcaster_bitcoind_rpc</span>).<span class="kw">await</span>;
         });
 
         <span class="kw">let</span> <span class="ident">bitcoind_rpc</span> <span class="op">=</span> <span class="ident">bitcoind_gen</span>();
@@ -2384,23 +2382,27 @@
 }
 
 <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">level</span> <span class="op">=</span> <span class="string">&quot;debug&quot;</span>, <span class="ident">skip_all</span>)]</span>
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">rpc</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span>) {
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">rpc</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span>) {
     <span class="kw">loop</span> {
-        <span class="kw">let</span> <span class="ident">pending_tx</span> <span class="op">=</span> <span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-
-        <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">PendingTransaction</span> { <span class="ident">tx</span>, .. }) <span class="kw">in</span> <span class="ident">pending_tx</span> {
-            <span class="macro">debug!</span>(
-                <span class="ident">tx</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx</span>.<span class="ident">txid</span>(),
-                <span class="ident">weight</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">get_weight</span>(),
-                <span class="string">&quot;Broadcasting peg-out&quot;</span>,
-            );
-            <span class="macro">trace!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">tx</span>);
-            <span class="ident">rpc</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span>;
-        }
+        <span class="ident">broadcast_pending_tx</span>(<span class="kw-2">&amp;</span><span class="ident">db</span>, <span class="ident">rpc</span>.<span class="ident">as_ref</span>()).<span class="kw">await</span>;
         <span class="ident">tokio::time::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">10</span>)).<span class="kw">await</span>;
+    }
+}
+
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">rpc</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>) {
+    <span class="kw">let</span> <span class="ident">pending_tx</span> <span class="op">=</span> <span class="ident">db</span>
+        .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
+        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+        .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+
+    <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">PendingTransaction</span> { <span class="ident">tx</span>, .. }) <span class="kw">in</span> <span class="ident">pending_tx</span> {
+        <span class="macro">debug!</span>(
+            <span class="ident">tx</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx</span>.<span class="ident">txid</span>(),
+            <span class="ident">weight</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">get_weight</span>(),
+            <span class="string">&quot;Broadcasting peg-out&quot;</span>,
+        );
+        <span class="macro">trace!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">tx</span>);
+        <span class="ident">rpc</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span>;
     }
 }
 
@@ -2564,5 +2566,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>

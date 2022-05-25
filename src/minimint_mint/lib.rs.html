@@ -914,8 +914,8 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PartiallySignedRequest</span> {
-    <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    <span class="ident">partial_signature</span>: <span class="ident">PartialSigResponse</span>,
+    <span class="kw">pub</span> <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
+    <span class="kw">pub</span> <span class="ident">partial_signature</span>: <span class="ident">PartialSigResponse</span>,
 }
 
 <span class="doccomment">/// Request to blind sign a certain amount of coins</span>
@@ -1728,5 +1728,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>

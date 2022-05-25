@@ -165,7 +165,15 @@
 <span id="158">158</span>
 <span id="159">159</span>
 <span id="160">160</span>
-</pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">ln</span>;
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln</span>::{<span class="ident">LightningError</span>, <span class="ident">LnRpc</span>};
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
@@ -206,16 +214,21 @@
             .<span class="ident">expect</span>(<span class="string">&quot;connect to ln_socket&quot;</span>);
         <span class="kw">let</span> <span class="ident">ln_client</span> <span class="op">=</span> <span class="ident">Mutex::new</span>(<span class="ident">ln_client</span>);
 
-        <span class="ident"><span class="self">Self</span>::new</span>(<span class="ident">federation_client</span>, <span class="ident">Box::new</span>(<span class="ident">ln_client</span>)).<span class="kw">await</span>
+        <span class="ident"><span class="self">Self</span>::new</span>(<span class="ident">Arc::new</span>(<span class="ident">federation_client</span>), <span class="ident">Box::new</span>(<span class="ident">ln_client</span>)).<span class="kw">await</span>
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">federation_client</span>: <span class="ident">GatewayClient</span>, <span class="ident">ln_client</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>) -&gt; <span class="ident">LnGateway</span> {
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(
+        <span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>,
+        <span class="ident">ln_client</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>,
+    ) -&gt; <span class="ident">LnGateway</span> {
         <span class="kw">let</span> <span class="ident">ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ln_client</span>.<span class="ident">into</span>();
-        <span class="kw">let</span> <span class="ident">mint_client</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">federation_client</span>);
-        <span class="kw">let</span> <span class="ident">fetcher</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident">background_fetch</span>(<span class="ident">mint_client</span>.<span class="ident">clone</span>(), <span class="ident">ln_client</span>.<span class="ident">clone</span>()));
+        <span class="kw">let</span> <span class="ident">fetcher</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident">background_fetch</span>(
+            <span class="ident">federation_client</span>.<span class="ident">clone</span>(),
+            <span class="ident">ln_client</span>.<span class="ident">clone</span>(),
+        ));
 
         <span class="ident">LnGateway</span> {
-            <span class="ident">federation_client</span>: <span class="ident">mint_client</span>,
+            <span class="ident">federation_client</span>,
             <span class="ident">ln_client</span>,
             <span class="ident">fetcher</span>,
         }
@@ -271,12 +284,15 @@
         <span class="self">self</span>.<span class="ident">federation_client</span>
             .<span class="ident">claim_outgoing_contract</span>(<span class="ident">contract_id</span>, <span class="ident">preimage</span>, <span class="ident">rng</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_contract_claimed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) {
         <span class="self">self</span>.<span class="ident">federation_client</span>
             .<span class="ident">await_claimed_outgoing_accepted</span>(<span class="ident">contract_id</span>)
             .<span class="kw">await</span>;
         <span class="macro">debug!</span>(<span class="string">&quot;Claim transaction accepted&quot;</span>);
-
-        <span class="prelude-val">Ok</span>(())
     }
 }
 
@@ -326,5 +342,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>

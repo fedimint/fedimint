@@ -495,7 +495,7 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">mint_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MintClient</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">mint_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MintClient</span> {
         <span class="ident">MintClient</span> {
             <span class="ident">context</span>: <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">borrow_with_module_config</span>(<span class="op">|</span><span class="ident">cfg</span><span class="op">|</span> <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">mint</span>),
         }
@@ -850,5 +850,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ee160f2f5 2022-05-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (76761db59 2022-05-24)" ></div>
 </body></html>
