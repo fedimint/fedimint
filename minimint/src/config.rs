@@ -1,4 +1,5 @@
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
+use clap::Parser;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
 use minimint_api::PeerId;
@@ -10,9 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
 }

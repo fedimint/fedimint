@@ -1,3 +1,4 @@
+use clap::Parser;
 use ln_gateway::LnGatewayConfig;
 use minimint::config::load_from_file;
 use mint_client::clients::gateway::GatewayClientConfig;
@@ -6,9 +7,8 @@ use mint_client::ClientAndGatewayConfig;
 use rand::thread_rng;
 use secp256k1::PublicKey;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Opts {
     workdir: PathBuf,
     ln_rpc_path: PathBuf,
@@ -16,7 +16,7 @@ struct Opts {
 }
 
 fn main() {
-    let opts: Opts = StructOpt::from_args();
+    let opts = Opts::parse();
     let federation_client_cfg_path = opts.workdir.join("federation_client.json");
     let federation_client_cfg: minimint::config::ClientConfig =
         load_from_file(&federation_client_cfg_path);
