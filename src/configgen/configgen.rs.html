@@ -64,14 +64,14 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint::config</span>::{<span class="ident">ServerConfig</span>, <span class="ident">ServerConfigParams</span>};
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">clap::Parser</span>;
+<span class="kw">use</span> <span class="ident">minimint::config</span>::{<span class="ident">ServerConfig</span>, <span class="ident">ServerConfigParams</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">PeerId</span>};
 <span class="kw">use</span> <span class="ident">rand::rngs::OsRng</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
-<span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">StructOpt</span>)]</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
 <span class="kw">struct</span> <span class="ident">Options</span> {
     <span class="ident">cfg_path</span>: <span class="ident">PathBuf</span>,
     <span class="ident">nodes</span>: <span class="ident">u16</span>,
@@ -87,7 +87,7 @@
         <span class="ident">hbbft_base_port</span>,
         <span class="ident">api_base_port</span>,
         <span class="ident">amount_tiers</span>,
-    } <span class="op">=</span> <span class="ident">StructOpt::from_args</span>();
+    } <span class="op">=</span> <span class="ident">Options::parse</span>();
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>();
 
     <span class="comment">// Recursively create config directory if it doesn&#39;t exist</span>

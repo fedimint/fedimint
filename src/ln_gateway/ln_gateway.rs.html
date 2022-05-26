@@ -71,12 +71,12 @@
 <span id="64">64</span>
 <span id="65">65</span>
 <span id="66">66</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">ln_gateway</span>::{<span class="ident">LnGateway</span>, <span class="ident">LnGatewayConfig</span>};
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">clap::Parser</span>;
+<span class="kw">use</span> <span class="ident">ln_gateway</span>::{<span class="ident">LnGateway</span>, <span class="ident">LnGatewayConfig</span>};
 <span class="kw">use</span> <span class="ident">minimint::config::load_from_file</span>;
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-<span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 <span class="kw">use</span> <span class="ident">tide::Response</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 <span class="kw">use</span> <span class="ident">tracing_subscriber::EnvFilter</span>;
@@ -86,7 +86,7 @@
     <span class="ident">gateway</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">LnGateway</span><span class="op">&gt;</span>,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">StructOpt</span>)]</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
 <span class="kw">struct</span> <span class="ident">Opts</span> {
     <span class="ident">workdir</span>: <span class="ident">PathBuf</span>,
 }
@@ -116,7 +116,7 @@
         )
         .<span class="ident">init</span>();
 
-    <span class="kw">let</span> <span class="ident">opts</span>: <span class="ident">Opts</span> <span class="op">=</span> <span class="ident">StructOpt::from_args</span>();
+    <span class="kw">let</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Opts::parse</span>();
     <span class="kw">let</span> <span class="ident">cfg_path</span> <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">workdir</span>.<span class="ident">join</span>(<span class="string">&quot;gateway.json&quot;</span>);
     <span class="kw">let</span> <span class="ident">db_path</span> <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">workdir</span>.<span class="ident">join</span>(<span class="string">&quot;gateway.db&quot;</span>);
     <span class="kw">let</span> <span class="ident">cfg</span>: <span class="ident">LnGatewayConfig</span> <span class="op">=</span> <span class="ident">load_from_file</span>(<span class="kw-2">&amp;</span><span class="ident">cfg_path</span>);

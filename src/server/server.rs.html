@@ -23,9 +23,9 @@
 <span id="16">16</span>
 <span id="17">17</span>
 <span id="18">18</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint::config</span>::{<span class="ident">load_from_file</span>, <span class="ident">ServerConfig</span>, <span class="ident">ServerOpts</span>};
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">clap::Parser</span>;
+<span class="kw">use</span> <span class="ident">minimint::config</span>::{<span class="ident">load_from_file</span>, <span class="ident">ServerConfig</span>, <span class="ident">ServerOpts</span>};
 <span class="kw">use</span> <span class="ident">minimint::run_minimint</span>;
-<span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 <span class="kw">use</span> <span class="ident">tracing_subscriber::EnvFilter</span>;
 
 <span class="attribute">#[<span class="ident">tokio::main</span>]</span>
@@ -36,7 +36,7 @@
         )
         .<span class="ident">init</span>();
 
-    <span class="kw">let</span> <span class="ident">opts</span>: <span class="ident">ServerOpts</span> <span class="op">=</span> <span class="ident">StructOpt::from_args</span>();
+    <span class="kw">let</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">ServerOpts::parse</span>();
     <span class="kw">let</span> <span class="ident">cfg</span>: <span class="ident">ServerConfig</span> <span class="op">=</span> <span class="ident">load_from_file</span>(<span class="kw-2">&amp;</span><span class="ident">opts</span>.<span class="ident">cfg_path</span>);
 
     <span class="ident">run_minimint</span>(<span class="ident">cfg</span>).<span class="kw">await</span>;

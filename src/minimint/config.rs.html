@@ -215,6 +215,7 @@
 <span id="208">208</span>
 <span id="209">209</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin::secp256k1::rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
+<span class="kw">use</span> <span class="ident">clap::Parser</span>;
 <span class="kw">use</span> <span class="ident">hbbft::crypto::serde_impl::SerdeSecret</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
@@ -226,9 +227,8 @@
 <span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
 <span class="kw">use</span> <span class="ident">std::path::Path</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
-<span class="kw">use</span> <span class="ident">structopt::StructOpt</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">StructOpt</span>)]</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ServerOpts</span> {
     <span class="kw">pub</span> <span class="ident">cfg_path</span>: <span class="ident">PathBuf</span>,
 }
