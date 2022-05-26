@@ -1,15 +1,15 @@
+use clap::Parser;
 use serde::Serialize;
-use structopt::StructOpt;
 use tbs::dealer_keygen;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Args {
     number: usize,
     threshold: usize,
 }
 
 fn main() {
-    let args: Args = StructOpt::from_args();
+    let args = Args::parse();
 
     let (pk, pks, sks) = dealer_keygen(args.threshold, args.number);
 

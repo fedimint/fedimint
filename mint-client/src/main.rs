@@ -1,5 +1,6 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
+use clap::Parser;
 use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::wallet::txoproof::TxOutProof;
@@ -11,33 +12,32 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
-use structopt::StructOpt;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Options {
     workdir: PathBuf,
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
     /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
     PegIn {
-        #[structopt(parse(try_from_str = from_hex))]
+        #[clap(parse(try_from_str = from_hex))]
         txout_proof: TxOutProof,
-        #[structopt(parse(try_from_str = from_hex))]
+        #[clap(parse(try_from_str = from_hex))]
         transaction: Transaction,
     },
 
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
-        #[structopt(parse(from_str = parse_coins))]
+        #[clap(parse(from_str = parse_coins))]
         coins: Coins<SpendableCoin>,
     },
 
@@ -47,7 +47,7 @@ enum Command {
     /// Withdraw funds from the federation
     PegOut {
         address: Address,
-        #[structopt(parse(try_from_str = parse_bitcoin_amount))]
+        #[clap(parse(try_from_str = parse_bitcoin_amount))]
         satoshis: bitcoin::Amount,
     },
 
@@ -76,7 +76,7 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    let opts: Options = StructOpt::from_args();
+    let opts = Options::parse();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
@@ -178,7 +178,7 @@ fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
     base64::encode(&bytes)
 }
 
-fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
+fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error + Send + Sync>> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
 }

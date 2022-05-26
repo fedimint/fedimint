@@ -1,9 +1,9 @@
+use clap::Parser;
 use ln_gateway::{LnGateway, LnGatewayConfig};
 use minimint::config::load_from_file;
 use minimint::modules::ln::contracts::ContractId;
 use std::path::PathBuf;
 use std::sync::Arc;
-use structopt::StructOpt;
 use tide::Response;
 use tracing::{debug, instrument};
 use tracing_subscriber::EnvFilter;
@@ -13,7 +13,7 @@ pub struct State {
     gateway: Arc<LnGateway>,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Opts {
     workdir: PathBuf,
 }
@@ -43,7 +43,7 @@ async fn main() -> tide::Result<()> {
         )
         .init();
 
-    let opts: Opts = StructOpt::from_args();
+    let opts = Opts::parse();
     let cfg_path = opts.workdir.join("gateway.json");
     let db_path = opts.workdir.join("gateway.db");
     let cfg: LnGatewayConfig = load_from_file(&cfg_path);

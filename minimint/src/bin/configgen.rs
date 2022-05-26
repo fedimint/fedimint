@@ -1,11 +1,11 @@
+use clap::Parser;
 use minimint::config::{ServerConfig, ServerConfigParams};
 use minimint_api::config::GenerateConfig;
 use minimint_api::{Amount, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Options {
     cfg_path: PathBuf,
     nodes: u16,
@@ -21,7 +21,7 @@ fn main() {
         hbbft_base_port,
         api_base_port,
         amount_tiers,
-    } = StructOpt::from_args();
+    } = Options::parse();
     let mut rng = OsRng::new().unwrap();
 
     // Recursively create config directory if it doesn't exist
