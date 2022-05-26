@@ -1,16 +1,17 @@
+mod router;
+
+use crate::router::{Router, Shared};
+
 use bitcoin_hashes::hex::ToHex;
 use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
 use minimint_api::Amount;
-use mint_client::clients::user::{
-    APIResponse, ClientError, Event, EventLog, InvoiceReq, PegInReq, PegOutReq, PendingRes,
-};
+use mint_client::clients::user::ClientError;
+use mint_client::jsonrpc::error::{standard_error, RpcError, StandardError};
+use mint_client::jsonrpc::json::*;
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::mint::SpendableCoin;
-use mint_client::rpc::{
-    standard_error, Request, Response, Router, RpcError, Shared, StandardError, JSON_RPC,
-};
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use rand::rngs::OsRng;
 use reqwest::StatusCode;

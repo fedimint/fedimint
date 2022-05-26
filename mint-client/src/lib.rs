@@ -1,8 +1,8 @@
 pub mod api;
 pub mod clients;
+pub mod jsonrpc;
 pub mod ln;
 pub mod mint;
-pub mod rpc;
 pub mod wallet;
 
 use crate::api::FederationApi;
