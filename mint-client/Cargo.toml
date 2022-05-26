@@ -21,7 +21,7 @@ minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 rand = "0.6.5"
 reqwest = { version = "0.11.0", features = [ "json" ], default-features = false }
-secp256k1-zkp = { git = "https://github.com/elsirion/rust-secp256k1-zkp", branch = "minimint", features = [ "serde", "bitcoin_hashes" ] }
+secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [ "serde", "bitcoin_hashes" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 sha3 = "0.9.1"
 sled = "0.34.6"
