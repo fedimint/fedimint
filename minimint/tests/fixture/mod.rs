@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt::Write;
 use std::iter::repeat;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -50,7 +51,7 @@ use real::{RealBitcoinTest, RealLightningTest};
 mod fake;
 mod real;
 
-static BASE_PORT: AtomicU16 = AtomicU16::new(4000 as u16);
+static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -329,7 +330,7 @@ impl FederationTest {
         let (finalization, coins) = user
             .client
             .mint_client()
-            .create_coin_output(amount.into(), OsRng::new().unwrap());
+            .create_coin_output(amount, OsRng::new().unwrap());
         let out_point = OutPoint {
             txid: Default::default(),
             out_idx: 0,
@@ -480,16 +481,16 @@ impl FederationTest {
 
         for (peer, items) in consensus.contributions.iter() {
             let filtered = items
-                .into_iter()
+                .iter()
                 .filter(|item| match item {
                     ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(
                         minimint_wallet::RoundConsensusItem { block_height, .. },
-                    )) => Some(block_height.clone()) != prev_block_height,
+                    )) => Some(*block_height) != prev_block_height,
                     _ => true,
                 })
                 .cloned()
                 .collect();
-            contributions.insert(peer.clone(), filtered);
+            contributions.insert(*peer, filtered);
         }
 
         ConsensusOutcome {
@@ -505,7 +506,7 @@ impl FederationTest {
         for (peer, items) in consensus.contributions.iter() {
             for item in items {
                 let item_debug = Self::item_debug_message(item, database);
-                debug.push_str(&format!("\n  Peer {}: {}", peer, item_debug));
+                write!(debug, "\n  Peer {}: {}", peer, item_debug).unwrap();
             }
         }
         debug
@@ -520,7 +521,7 @@ impl FederationTest {
                 minimint_wallet::PegOutSignatureItem { txid, .. },
             )) => {
                 let sigs = database
-                    .get_value(&UnsignedTransactionKey(txid.clone()))
+                    .get_value(&UnsignedTransactionKey(*txid))
                     .unwrap()
                     .unwrap()
                     .inputs
@@ -546,7 +547,7 @@ impl FederationTest {
                 outputs,
                 ..
             }) => {
-                let mut tx_debug = format!("Transaction");
+                let mut tx_debug = "Transaction".to_string();
                 for input in inputs.iter() {
                     let input_debug = match input {
                         Input::Mint(t) => format!("Mint Coins {}", t.amount()),
@@ -557,16 +558,14 @@ impl FederationTest {
                             format!("LN Contract {} with id {:.8}", t.amount, t.crontract_id)
                         }
                     };
-                    tx_debug.push_str(&format!("\n    Input: {}", input_debug));
+                    write!(tx_debug, "\n    Input: {}", input_debug).unwrap();
                 }
                 for output in outputs.iter() {
                     let output_debug = match output {
                         Output::Mint(t) => format!("Mint Coins {}", t.amount()),
-                        Output::Wallet(t) => format!(
-                            "Wallet PegOut {} to address {:.8}",
-                            t.amount,
-                            t.recipient.to_string()
-                        ),
+                        Output::Wallet(t) => {
+                            format!("Wallet PegOut {} to address {:.8}", t.amount, t.recipient)
+                        }
                         Output::LN(ContractOrOfferOutput::Offer(o)) => {
                             format!("LN Offer for {} with hash {:.8}", o.amount, o.hash)
                         }
@@ -585,7 +584,7 @@ impl FederationTest {
                             }
                         },
                     };
-                    tx_debug.push_str(&format!("\n    Output: {}", output_debug));
+                    write!(tx_debug, "\n    Output: {}", output_debug).unwrap();
                 }
                 tx_debug
             }

@@ -1,3 +1,5 @@
+#![allow(clippy::let_unit_value)]
+
 mod conflictfilter;
 mod interconnect;
 

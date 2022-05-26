@@ -282,10 +282,9 @@ mod tests {
         let sigs = sks
             .iter()
             .enumerate()
-            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, *sk)))
-            .collect::<Vec<_>>();
+            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, *sk)));
 
         // Combining an insufficient number of signature shares should panic
-        combine_valid_shares(sigs.clone().into_iter(), threshold);
+        combine_valid_shares(sigs, threshold);
     }
 }

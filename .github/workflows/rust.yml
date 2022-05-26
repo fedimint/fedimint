@@ -38,7 +38,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --workspace -- -D warnings
+          args: --lib --bins --tests --examples --workspace -- -D warnings
       - name: Lint code with rustfmt
         uses: actions-rs/cargo@v1
         with:
