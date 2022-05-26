@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
+use futures::executor::block_on;
 use futures::future::join_all;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
@@ -377,8 +378,10 @@ impl FederationTest {
     /// transactions will only get broadcast every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
-            let s = server.as_ref().borrow();
-            minimint_wallet::broadcast_pending_tx(&s.database, s.bitcoin_rpc.as_ref()).await;
+            block_on(minimint_wallet::broadcast_pending_tx(
+                &server.borrow().database,
+                server.borrow().bitcoin_rpc.as_ref(),
+            ));
         }
     }
 
@@ -388,12 +391,12 @@ impl FederationTest {
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
             for server in &self.servers {
-                let mut s = server.borrow_mut();
-                let height = s.consensus.wallet.consensus_height();
-                let consensus_outcome = s.outcome_receiver.recv().await.expect("other thread died");
+                let consensus_outcome = block_on(server.borrow_mut().outcome_receiver.recv())
+                    .expect("other thread died");
+                let height = server.borrow().consensus.wallet.consensus_height();
 
                 // only need to update last_consensus_items and print one output since consensus is always the same
-                if s.cfg.identity == PeerId::from(0) {
+                if server.borrow().cfg.identity == PeerId::from(0) {
                     let filtered_consensus =
                         FederationTest::remove_redundant_round_items(&consensus_outcome, height);
                     let new_items = filtered_consensus
@@ -403,15 +406,22 @@ impl FederationTest {
                     *self.last_consensus_items.borrow_mut() = new_items.collect();
                     warn!(
                         "{}",
-                        FederationTest::epoch_debug_message(&filtered_consensus, &s.database)
+                        FederationTest::epoch_debug_message(
+                            &filtered_consensus,
+                            &server.borrow().database
+                        )
                     )
                 }
 
+                let consensus = server.borrow().consensus.clone();
+                let proposal_sender = server.borrow().proposal_sender.clone();
+                let cfg = server.borrow().cfg.clone();
+
                 minimint::run_consensus_epoch(
-                    &s.consensus,
+                    &consensus,
                     consensus_outcome,
-                    &s.proposal_sender,
-                    &s.cfg,
+                    &proposal_sender,
+                    &cfg,
                     0,
                 )
                 .await;
