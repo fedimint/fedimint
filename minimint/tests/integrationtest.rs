@@ -5,6 +5,7 @@ use fixture::{rng, sats};
 use minimint::consensus::ConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
 use std::ops::Sub;
+use std::sync::{Arc, Mutex};
 
 mod fixture;
 
@@ -144,9 +145,10 @@ async fn lightning_gateway_pays_invoice() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
+    let lock = Arc::new(Mutex::new(()));
     let contract_id = user
         .client
-        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
+        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng(), lock)
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // send coins to LN contract
@@ -172,9 +174,10 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
+    let lock = Arc::new(Mutex::new(()));
     let contract_id = user
         .client
-        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
+        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng(), lock)
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // send coins to LN contract
@@ -197,9 +200,10 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
+    let lock = Arc::new(Mutex::new(()));
     let contract_id = user
         .client
-        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
+        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng(), lock)
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // send coins to LN contract
