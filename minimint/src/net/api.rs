@@ -1,5 +1,5 @@
 use crate::config::ServerConfig;
-use crate::consensus::FediMintConsensus;
+use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
 use minimint_api::{FederationModule, TransactionId};
 use std::fmt::Formatter;
@@ -9,7 +9,7 @@ use tracing::{debug, instrument, trace};
 
 #[derive(Clone)]
 struct State {
-    fedimint: Arc<FediMintConsensus<rand::rngs::OsRng>>,
+    minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>,
 }
 
 impl std::fmt::Debug for State {
@@ -18,17 +18,17 @@ impl std::fmt::Debug for State {
     }
 }
 
-pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand::rngs::OsRng>>) {
+pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>) {
     let state = State {
-        fedimint: fedimint.clone(),
+        minimint: minimint.clone(),
     };
     let mut server = tide::with_state(state);
     server.at("/transaction").put(submit_transaction);
     server.at("/transaction/:txid").get(fetch_outcome);
 
-    attach_module_endpoints(&mut server, &fedimint.wallet);
-    attach_module_endpoints(&mut server, &fedimint.mint);
-    attach_module_endpoints(&mut server, &fedimint.ln);
+    attach_module_endpoints(&mut server, &minimint.wallet);
+    attach_module_endpoints(&mut server, &minimint.mint);
+    attach_module_endpoints(&mut server, &minimint.ln);
 
     server
         .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
@@ -39,7 +39,7 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FediMintConsensus<rand:
 fn attach_module_endpoints<M>(server: &mut Server<State>, module: &M)
 where
     M: FederationModule + 'static,
-    for<'a> &'a M: From<&'a FediMintConsensus<rand::rngs::OsRng>>,
+    for<'a> &'a M: From<&'a MinimintConsensus<rand::rngs::OsRng>>,
 {
     for endpoint in module.api_endpoints() {
         // Check that params are actually defined in path spec so that there will be no errors at
@@ -67,7 +67,7 @@ where
                         (*param, value)
                     })
                     .collect();
-                let module: &M = req.state().fedimint.as_ref().into();
+                let module: &M = req.state().minimint.as_ref().into();
                 (endpoint.handler)(module, params, data)
             });
     }
@@ -80,7 +80,7 @@ async fn submit_transaction(mut req: Request<State>) -> tide::Result {
     let tx_id = transaction.tx_hash();
     debug!("Sending peg-in request to consensus");
     req.state()
-        .fedimint
+        .minimint
         .submit_transaction(transaction)
         .expect("Could not submit sign request to consensus");
 
@@ -100,7 +100,7 @@ async fn fetch_outcome(req: Request<State>) -> tide::Result {
 
     let tx_status = req
         .state()
-        .fedimint
+        .minimint
         .transaction_status(tx_hash)
         .ok_or_else(|| tide::Error::from_str(404, "Not found"))?;
 
