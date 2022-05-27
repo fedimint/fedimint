@@ -3,6 +3,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug)]
+pub enum Error {
+    /// Request error
+    Request(reqwest::Error),
+    /// Error response
+    Rpc(RpcError),
+    /// Wrong result
+    ResultMissmatch,
+}
+
+#[derive(Debug)]
 pub enum StandardError {
     /// Invalid JSON was received by the server.
     /// An error occurred on the server while parsing the JSON text.
@@ -65,5 +75,11 @@ pub fn standard_error(code: StandardError, data: Option<Value>) -> RpcError {
             message: "Internal error".to_string(),
             data,
         },
+    }
+}
+
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Self::Request(e)
     }
 }

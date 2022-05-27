@@ -1,5 +1,8 @@
-use crate::jsonrpc::error::RpcError;
-use crate::jsonrpc::json::{InvoiceReq, PegInReq, PegOutReq, Request, Response, RpcResult};
+use crate::jsonrpc::error::Error;
+use crate::jsonrpc::json::{
+    EventsResult, InfoResult, InvoiceReq, LnPayResult, PegInAddressResult, PegInOutResult,
+    PegInReq, PegOutReq, PendingResult, ReissueResult, Request, Response, RpcResult, SpendResult,
+};
 use crate::mint::SpendableCoin;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint_api::Amount;
@@ -18,17 +21,16 @@ impl JsonRpc {
         }
     }
 
-    async fn call(&self, request_object: Request) -> Result<RpcResult, Option<RpcError>> {
+    async fn call(&self, request_object: Request) -> Result<RpcResult, Error> {
         let response = self
             .client
             .post(self.host.as_str())
             .json(&request_object)
             .send()
-            .await
-            .map_err(|_| None)?;
+            .await?;
 
         //note: not using response.json since it would consume response and it would demand different approach bellow
-        let response = response.bytes().await.map_err(|_| None)?;
+        let response = response.bytes().await?;
         if let Ok(serde_json::Value::Null) = serde_json::from_slice(&response) {
             //notification 'null' response
             Ok(RpcResult::Empty)
@@ -43,76 +45,122 @@ impl JsonRpc {
                 //.. an error
                 Ok(Response {
                     error: Some(error), ..
-                }) => Err(Some(error)),
+                }) => Err(Error::Rpc(error)),
                 //either not a valid Response object OR a valid response with neither a result or error
                 _ => panic!("this should not be reached"),
             }
         }
     }
     #[allow(dead_code)]
-    pub async fn get_info(&self) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard("info", Some(DEFAULT_ID))).await
+    pub async fn get_info(&self) -> Result<InfoResult, Error> {
+        let result = self
+            .call(Request::standard("info", Some(DEFAULT_ID)))
+            .await?;
+        if let RpcResult::Info(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn get_pending(&self) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard("pending", Some(DEFAULT_ID)))
-            .await
+    pub async fn get_pending(&self) -> Result<PendingResult, Error> {
+        let result = self
+            .call(Request::standard("pending", Some(DEFAULT_ID)))
+            .await?;
+        if let RpcResult::Pending(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn get_events(&self, params: u64) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "events",
-            params,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    pub async fn get_events(&self, params: u64) -> Result<EventsResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "events",
+                params,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::Events(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn get_new_pegin_address(&self) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard("pegin_address", Some(DEFAULT_ID)))
-            .await
+    pub async fn get_new_pegin_address(&self) -> Result<PegInAddressResult, Error> {
+        let result = self
+            .call(Request::standard("pegin_address", Some(DEFAULT_ID)))
+            .await?;
+        if let RpcResult::PegInAddress(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn peg_in(&self, params: PegInReq) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "pegin",
-            params,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    pub async fn peg_in(&self, params: PegInReq) -> Result<PegInOutResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "pegin",
+                params,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::PegInOut(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn peg_out(&self, params: PegOutReq) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "pegout",
-            params,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    pub async fn peg_out(&self, params: PegOutReq) -> Result<PegInOutResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "pegout",
+                params,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::PegInOut(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn spend(&self, params: Amount) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "spend",
-            params.milli_sat,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    pub async fn spend(&self, params: Amount) -> Result<SpendResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "spend",
+                params.milli_sat,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::Spend(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn lnpay(&self, params: InvoiceReq) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "lnpay",
-            params,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    pub async fn lnpay(&self, params: InvoiceReq) -> Result<LnPayResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "lnpay",
+                params,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::LnPay(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
     #[allow(dead_code)]
-    pub async fn reissue(
-        &self,
-        params: Coins<SpendableCoin>,
-    ) -> Result<RpcResult, Option<RpcError>> {
+    pub async fn reissue(&self, params: Coins<SpendableCoin>) -> Result<RpcResult, Error> {
         self.call(Request::standard_with_params(
             "reissue",
             params,
@@ -124,13 +172,19 @@ impl JsonRpc {
     pub async fn reissue_validate(
         &self,
         params: Coins<SpendableCoin>,
-    ) -> Result<RpcResult, Option<RpcError>> {
-        self.call(Request::standard_with_params(
-            "reissue",
-            params,
-            Some(DEFAULT_ID),
-        ))
-        .await
+    ) -> Result<ReissueResult, Error> {
+        let result = self
+            .call(Request::standard_with_params(
+                "reissue",
+                params,
+                Some(DEFAULT_ID),
+            ))
+            .await?;
+        if let RpcResult::Reissue(result) = result {
+            Ok(result)
+        } else {
+            Err(Error::ResultMissmatch)
+        }
     }
 }
 impl Default for JsonRpc {
