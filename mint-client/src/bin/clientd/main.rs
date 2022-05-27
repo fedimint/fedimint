@@ -3,6 +3,7 @@ mod router;
 use crate::router::{Router, Shared};
 
 use bitcoin_hashes::hex::ToHex;
+use clap::Parser;
 use minimint::config::load_from_file;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint::outcome::TransactionStatus;
@@ -19,16 +20,14 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use structopt::StructOpt;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
 #[derive(Clone)]
 pub struct State {
     shared: Arc<Shared>,
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct Options {
     workdir: PathBuf,
 }
@@ -41,7 +40,7 @@ async fn main() -> tide::Result<()> {
         )
         .with_writer(std::io::stderr)
         .init();
-    let opts: Options = StructOpt::from_args();
+    let opts: Options = Options::parse();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
