@@ -1,5 +1,5 @@
 use crate::jsonrpc::error::RpcError;
-use crate::jsonrpc::json::{APIResponse, InvoiceReq, PegInReq, PegOutReq, Request, Response};
+use crate::jsonrpc::json::{InvoiceReq, PegInReq, PegOutReq, Request, Response, RpcResult};
 use crate::mint::SpendableCoin;
 use minimint::modules::mint::tiered::coins::Coins;
 use minimint_api::Amount;
@@ -18,7 +18,7 @@ impl JsonRpc {
         }
     }
 
-    async fn call(&self, request_object: Request) -> Result<APIResponse, Option<RpcError>> {
+    async fn call(&self, request_object: Request) -> Result<RpcResult, Option<RpcError>> {
         let response = self
             .client
             .post(self.host.as_str())
@@ -31,7 +31,7 @@ impl JsonRpc {
         let response = response.bytes().await.map_err(|_| None)?;
         if let Ok(serde_json::Value::Null) = serde_json::from_slice(&response) {
             //notification 'null' response
-            Ok(APIResponse::Empty)
+            Ok(RpcResult::Empty)
         } else {
             //non-notification with ...
             match serde_json::from_slice::<Response>(&response) {
@@ -39,7 +39,7 @@ impl JsonRpc {
                 Ok(Response {
                     result: Some(result),
                     ..
-                }) => Ok(APIResponse::deserialize(result).expect("can't fail")),
+                }) => Ok(RpcResult::deserialize(result).expect("can't fail")),
                 //.. an error
                 Ok(Response {
                     error: Some(error), ..
@@ -50,16 +50,16 @@ impl JsonRpc {
         }
     }
     #[allow(dead_code)]
-    pub async fn get_info(&self) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn get_info(&self) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard("info", Some(DEFAULT_ID))).await
     }
     #[allow(dead_code)]
-    pub async fn get_pending(&self) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn get_pending(&self) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard("pending", Some(DEFAULT_ID)))
             .await
     }
     #[allow(dead_code)]
-    pub async fn get_events(&self, params: u64) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn get_events(&self, params: u64) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "events",
             params,
@@ -68,12 +68,12 @@ impl JsonRpc {
         .await
     }
     #[allow(dead_code)]
-    pub async fn get_new_pegin_address(&self) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn get_new_pegin_address(&self) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard("pegin_address", Some(DEFAULT_ID)))
             .await
     }
     #[allow(dead_code)]
-    pub async fn peg_in(&self, params: PegInReq) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn peg_in(&self, params: PegInReq) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "pegin",
             params,
@@ -82,7 +82,7 @@ impl JsonRpc {
         .await
     }
     #[allow(dead_code)]
-    pub async fn peg_out(&self, params: PegOutReq) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn peg_out(&self, params: PegOutReq) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "pegout",
             params,
@@ -91,7 +91,7 @@ impl JsonRpc {
         .await
     }
     #[allow(dead_code)]
-    pub async fn spend(&self, params: Amount) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn spend(&self, params: Amount) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "spend",
             params.milli_sat,
@@ -100,7 +100,7 @@ impl JsonRpc {
         .await
     }
     #[allow(dead_code)]
-    pub async fn lnpay(&self, params: InvoiceReq) -> Result<APIResponse, Option<RpcError>> {
+    pub async fn lnpay(&self, params: InvoiceReq) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "lnpay",
             params,
@@ -112,7 +112,7 @@ impl JsonRpc {
     pub async fn reissue(
         &self,
         params: Coins<SpendableCoin>,
-    ) -> Result<APIResponse, Option<RpcError>> {
+    ) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "reissue",
             params,
@@ -124,7 +124,7 @@ impl JsonRpc {
     pub async fn reissue_validate(
         &self,
         params: Coins<SpendableCoin>,
-    ) -> Result<APIResponse, Option<RpcError>> {
+    ) -> Result<RpcResult, Option<RpcError>> {
         self.call(Request::standard_with_params(
             "reissue",
             params,

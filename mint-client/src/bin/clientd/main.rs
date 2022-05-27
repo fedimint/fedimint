@@ -168,16 +168,13 @@ async fn main() -> tide::Result<()> {
 async fn info(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
     let cfd = client.fetch_active_issuances();
-    let result = APIResponse::build_info(client.coins(), cfd);
-    let result = serde_json::json!(&result);
+    let result = serde_json::json!(&RpcResult::Info(InfoResult::build(client.coins(), cfd)));
     Ok(result)
 }
 async fn pending(_: serde_json::Value, shared: Arc<Shared>) -> Result<serde_json::Value, RpcError> {
     let client = &shared.client;
     let cfd = client.fetch_active_issuances();
-    let result = serde_json::json!(&APIResponse::Pending {
-        pending: PendingRes::build_pending(cfd),
-    });
+    let result = serde_json::json!(&RpcResult::Pending(PendingResult::build(cfd)));
     Ok(result)
 }
 async fn events(
@@ -192,7 +189,7 @@ async fn events(
     })?;
     let events = Arc::clone(&shared.events);
     let events = events.get(timestamp);
-    let result = serde_json::json!(&APIResponse::build_events(events));
+    let result = serde_json::json!(&RpcResult::Events(EventsResult::build(events)));
     Ok(result)
 }
 async fn pegin_address(
@@ -201,10 +198,9 @@ async fn pegin_address(
 ) -> Result<serde_json::Value, RpcError> {
     let client = Arc::clone(&shared.client);
     let mut rng = shared.rng.clone();
-    let result = APIResponse::PegInAddress {
-        pegin_address: client.get_new_pegin_address(&mut rng),
-    };
-    let result = serde_json::json!(&result);
+    let result = serde_json::json!(&RpcResult::PegInAddress(PegInAddressResult::build(
+        client.get_new_pegin_address(&mut rng)
+    )));
     Ok(result)
 }
 async fn pegin(
@@ -222,9 +218,9 @@ async fn pegin(
     })?;
     let txout_proof = pegin.txout_proof;
     let transaction = pegin.transaction;
-    let id = client.peg_in(txout_proof, transaction, &mut rng).await?;
-    info!("Started peg-in {}, result will be fetched", id.to_hex());
-    let result = serde_json::json!(&APIResponse::PegIO { txid: id });
+    let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
+    info!("Started peg-in {}, result will be fetched", txid.to_hex());
+    let result = serde_json::json!(&RpcResult::PegInOut(PegInOutResult::build(txid)));
     Ok(result)
 }
 async fn pegout(
@@ -240,10 +236,10 @@ async fn pegout(
             Some(serde_json::Value::String(format!("{:?}", e))),
         )
     })?;
-    let id = client
+    let txid = client
         .peg_out(pegout.amount, pegout.address, &mut rng)
         .await?;
-    let result = serde_json::json!(&APIResponse::PegIO { txid: id });
+    let result = serde_json::json!(&RpcResult::PegInOut(PegInOutResult::build(txid)));
     Ok(result)
 }
 async fn spend(
@@ -262,7 +258,7 @@ async fn spend(
     let drop_when_finished = shared.spend_lock.lock();
     let amount = Amount::from_msat(value);
     let res = match client.select_and_spend_coins(amount) {
-        Ok(outgoing_coins) => APIResponse::build_spend(outgoing_coins),
+        Ok(outgoing_coins) => RpcResult::Spend(SpendResult::build(outgoing_coins)),
         Err(e) => {
             return Err(ClientError::from(e).into());
         }
@@ -295,7 +291,9 @@ async fn ln_pay(
     .await?;
 
     if let StatusCode::OK = res.status() {
-        let result = serde_json::json!(&Event::build_event("successful ln-payment".to_string(),));
+        let result = serde_json::json!(&RpcResult::LnPay(LnPayResult::build(
+            "successful ln-payment".to_string(),
+        )));
         Ok(result)
     } else {
         Err(standard_error(
@@ -354,7 +352,7 @@ async fn reissue_validate(
         Err(e) => TransactionStatus::Error(e.to_string()),
         Ok(s) => s,
     };
-    let result = serde_json::json!(&APIResponse::build_reissue(out_point, status));
+    let result = serde_json::json!(&RpcResult::Reissue(ReissueResult::build(out_point, status)));
     Ok(result)
 }
 

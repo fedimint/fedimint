@@ -87,85 +87,128 @@ impl Response {
     }
 }
 
-// -> clientd
-/// Holds all possible Responses of the RPC-CLient can also be used to parse responses (for client-cli)
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum APIResponse {
-    ///The clients holdings : The quantity of coins for each tier. For total holdings sum(Infoi.quantity * Infoi.tier) with i = 0 - n
-    /// Also contains the [`PendingRes`] variant.
-    Info {
-        coins: Vec<CoinsByTier>,
-        pending: PendingRes,
-    },
-    Pending {
-        pending: PendingRes,
-    },
-    ///Holds a new address for the client to use for peg-in
-    PegInAddress {
-        pegin_address: bitcoin::Address,
-    },
-    ///Holds a [`minimint_api::TransactionId`] from a successful PegIn or PegOut
-    PegIO {
-        txid: TransactionId,
-    },
-    /// Holds the serialized [`Coins<SpendableCoin>`]
-    Spend {
-        token: Coins<SpendableCoin>,
-    },
-    /// Holds the from the federation returned [`OutPoint`] (regarding the reissuance) and the [`TransactionStatus`]
-    Reissue {
-        out_point: OutPoint,
-        status: TransactionStatus,
-    },
-    /// Holds events which could not be sent to the client but were triggered by some action from him. This will be cleared after querying it
-    Events {
-        events: Vec<Event>,
-    },
-    /// Represents an empty response
+#[derive(Serialize, Deserialize)]
+pub enum RpcResult {
+    Info(InfoResult),
+    Pending(PendingResult),
+    PegInAddress(PegInAddressResult),
+    PegInOut(PegInOutResult),
+    Spend(SpendResult),
+    LnPay(LnPayResult),
+    Reissue(ReissueResult),
+    Events(EventsResult),
     Empty,
 }
-
-/// Active issuances : Not yet (bey the federation) signed BUT accepted coins
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct PendingRes {
-    //TODO: Also return Vec<TransactionId> (?)
+#[derive(Serialize, Deserialize)]
+pub struct InfoResult {
+    coins: Vec<CoinsByTier>,
+    pending: PendingResult,
+}
+#[derive(Serialize, Deserialize)]
+pub struct PendingResult {
     transactions: usize,
     acc_qty_coins: usize,
     acc_val_amount: Amount,
 }
-
-impl PendingRes {
-    pub fn build_pending(all_pending: Vec<CoinFinalizationData>) -> Self {
+#[derive(Serialize, Deserialize)]
+pub struct PegInAddressResult {
+    pegin_address: bitcoin::Address,
+}
+#[derive(Serialize, Deserialize)]
+pub struct PegInOutResult {
+    txid: TransactionId,
+}
+#[derive(Serialize, Deserialize)]
+pub struct SpendResult {
+    coins: Coins<SpendableCoin>,
+}
+#[derive(Serialize, Deserialize)]
+pub struct LnPayResult {
+    msg: String, //TODO: make this more useful
+}
+#[derive(Serialize, Deserialize)]
+pub struct ReissueResult {
+    out_point: OutPoint,
+    status: TransactionStatus,
+}
+#[derive(Serialize, Deserialize)]
+pub struct EventsResult {
+    events: Vec<Event>,
+}
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Event {
+    timestamp: u64,
+    data: String,
+}
+impl InfoResult {
+    pub fn build(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
+        let info_coins: Vec<CoinsByTier> = coins
+            .coins
+            .iter()
+            .map(|(tier, c)| CoinsByTier {
+                quantity: c.len(),
+                tier: tier.milli_sat,
+            })
+            .collect();
+        Self {
+            coins: info_coins,
+            pending: PendingResult::build(cfd),
+        }
+    }
+}
+impl PendingResult {
+    pub fn build(all_pending: Vec<CoinFinalizationData>) -> Self {
         let acc_qty_coins = all_pending.iter().map(|cfd| cfd.coin_count()).sum();
         let acc_val_amount = all_pending.iter().map(|cfd| cfd.coin_amount()).sum();
-        PendingRes {
+        Self {
             transactions: all_pending.len(),
             acc_qty_coins,
             acc_val_amount,
         }
     }
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Event {
-    timestamp: u64,
-    data: String, //use something else than string ?
+impl PegInAddressResult {
+    pub fn build(pegin_address: bitcoin::Address) -> Self {
+        Self { pegin_address }
+    }
 }
-
+impl PegInOutResult {
+    pub fn build(txid: TransactionId) -> Self {
+        Self { txid }
+    }
+}
+impl SpendResult {
+    pub fn build(coins: Coins<SpendableCoin>) -> Self {
+        Self { coins }
+    }
+}
+impl LnPayResult {
+    pub fn build(msg: String) -> Self {
+        Self { msg }
+    }
+}
+impl ReissueResult {
+    pub fn build(out_point: OutPoint, status: TransactionStatus) -> Self {
+        Self { out_point, status }
+    }
+}
+impl EventsResult {
+    pub fn build(events: Vec<Event>) -> Self {
+        Self { events }
+    }
+}
 impl Event {
-    pub fn build_event(data: String) -> Self {
+    pub fn build(data: String) -> Self {
         let time = SystemTime::now();
         let d = time.duration_since(UNIX_EPOCH).unwrap();
         let timestamp = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
         Event { timestamp, data }
     }
 }
-/// Stores events (the (un)successful result of some action initiated by a client which couldn't be sent back to him)
-/// If the capacity is reached events will be dropped from the back
+
 pub struct EventLog {
     data: Mutex<VecDeque<Event>>,
     capacity: usize,
-    //maturity: u64 could be used to drop events with timestamp > maturity <- idea
 }
 
 impl EventLog {
@@ -179,7 +222,7 @@ impl EventLog {
         let mut events = self.data.lock().unwrap(); // don't know what to do here.. clientd should be restarted if this happens
                                                     //Because Mutex only guarantees that only one thread at a time but not the (in order) correct one is pushing events
                                                     //this guarantees that the timestamps will be sorted
-        let event = Event::build_event(data);
+        let event = Event::build(data);
 
         if let Some(ts) = events.back() {
             if event.timestamp < ts.timestamp {
@@ -250,33 +293,3 @@ fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error>> {
     let bytes = hex::decode(s)?;
     Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
 }
-impl APIResponse {
-    /// Builds the [`APIResponse::Info`] variant.
-    pub fn build_info(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
-        let info_coins: Vec<CoinsByTier> = coins
-            .coins
-            .iter()
-            .map(|(tier, c)| CoinsByTier {
-                quantity: c.len(),
-                tier: tier.milli_sat,
-            })
-            .collect();
-        APIResponse::Info {
-            coins: info_coins,
-            pending: PendingRes::build_pending(cfd),
-        }
-    }
-    /// Builds the [`APIResponse::Spend`] variant.
-    pub fn build_spend(token: Coins<SpendableCoin>) -> Self {
-        APIResponse::Spend { token }
-    }
-    /// Builds the [`APIResponse::Reissue`] variant.
-    pub fn build_reissue(out_point: OutPoint, status: TransactionStatus) -> Self {
-        APIResponse::Reissue { out_point, status }
-    }
-    /// Builds the [`APIResponse::Events`] variant.
-    pub fn build_events(events: Vec<Event>) -> Self {
-        APIResponse::Events { events }
-    }
-}
-// <- clientd
