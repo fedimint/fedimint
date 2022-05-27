@@ -474,7 +474,11 @@
 <span id="467">467</span>
 <span id="468">468</span>
 <span id="469">469</span>
-</pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">conflictfilter</span>;
+<span id="470">470</span>
+<span id="471">471</span>
+</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
+
+<span class="kw">mod</span> <span class="ident">conflictfilter</span>;
 <span class="kw">mod</span> <span class="ident">interconnect</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;

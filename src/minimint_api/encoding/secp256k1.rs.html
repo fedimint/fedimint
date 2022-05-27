@@ -201,8 +201,8 @@
     <span class="kw">fn</span> <span class="ident">test_schnorr_pub_key</span>() {
         <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::global::SECP256K1</span>;
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">sec_key</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::schnorrsig::KeyPair::new</span>(<span class="kw-2">&amp;</span><span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::schnorrsig::PublicKey::from_keypair</span>(<span class="kw-2">&amp;</span><span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">sec_key</span>);
+        <span class="kw">let</span> <span class="ident">sec_key</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::schnorrsig::KeyPair::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+        <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::schnorrsig::PublicKey::from_keypair</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">sec_key</span>);
         <span class="ident">test_roundtrip</span>(<span class="ident">pub_key</span>);
 
         <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">schnorrsig_sign</span>(
