@@ -278,41 +278,10 @@
 <span id="271">271</span>
 <span id="272">272</span>
 <span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
-<span id="276">276</span>
-<span id="277">277</span>
-<span id="278">278</span>
-<span id="279">279</span>
-<span id="280">280</span>
-<span id="281">281</span>
-<span id="282">282</span>
-<span id="283">283</span>
-<span id="284">284</span>
-<span id="285">285</span>
-<span id="286">286</span>
-<span id="287">287</span>
-<span id="288">288</span>
-<span id="289">289</span>
-<span id="290">290</span>
-<span id="291">291</span>
-<span id="292">292</span>
-<span id="293">293</span>
-<span id="294">294</span>
-<span id="295">295</span>
-<span id="296">296</span>
-<span id="297">297</span>
-<span id="298">298</span>
-<span id="299">299</span>
-<span id="300">300</span>
-<span id="301">301</span>
-<span id="302">302</span>
-<span id="303">303</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">batch::DbBatch</span>;
 <span class="kw">use</span> <span class="ident">std::error::Error</span>;
 <span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
 <span class="kw">use</span> <span class="ident">tracing::trace</span>;
 
@@ -358,15 +327,6 @@
     <span class="kw">fn</span> <span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">PrefixIter</span>;
 
     <span class="kw">fn</span> <span class="ident">raw_apply_batch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">batch</span>: <span class="ident">DbBatch</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">DatabaseError</span><span class="op">&gt;</span>;
-}
-
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DbIter</span><span class="op">&lt;</span><span class="ident">K</span>, <span class="ident">V</span><span class="op">&gt;</span>
-<span class="kw">where</span>
-    <span class="ident">K</span>: <span class="ident">DatabaseKey</span>,
-    <span class="ident">V</span>: <span class="ident">DatabaseValue</span>,
-{
-    <span class="ident">iter</span>: <span class="ident">PrefixIter</span>,
-    <span class="ident">_pd</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span>(<span class="ident">K</span>, <span class="ident">V</span>)<span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="kw">dyn</span> <span class="ident">Database</span> <span class="op">+</span> <span class="lifetime">&#39;a</span> {
@@ -427,50 +387,30 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">K::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value_bytes</span>)<span class="question-mark">?</span>))
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_by_prefix</span><span class="op">&lt;</span><span class="ident">KP</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span><span class="ident">KP</span>) -&gt; <span class="ident">DbIter</span><span class="op">&lt;</span><span class="ident">KP::Key</span>, <span class="ident">KP::Value</span><span class="op">&gt;</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_by_prefix</span><span class="op">&lt;</span><span class="ident">KP</span><span class="op">&gt;</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span><span class="ident">KP</span>,
+    ) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">KP::Key</span>, <span class="ident">KP::Value</span>), <span class="ident">DatabaseError</span><span class="op">&gt;</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="ident">KP</span>: <span class="ident">DatabaseKeyPrefix</span> <span class="op">+</span> <span class="ident">DatabaseKeyPrefixConst</span>,
     {
         <span class="kw">let</span> <span class="ident">prefix_bytes</span> <span class="op">=</span> <span class="ident">key_prefix</span>.<span class="ident">to_bytes</span>();
-        <span class="ident">DbIter</span> {
-            <span class="ident">iter</span>: <span class="self">self</span>.<span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">prefix_bytes</span>),
-            <span class="ident">_pd</span>: <span class="ident">Default::default</span>(),
-        }
+        <span class="self">self</span>.<span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">prefix_bytes</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
+            <span class="ident">res</span>.<span class="ident">and_then</span>(<span class="op">|</span>(<span class="ident">key_bytes</span>, <span class="ident">value_bytes</span>)<span class="op">|</span> {
+                <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="ident">KP::Key::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">key_bytes</span>)<span class="question-mark">?</span>;
+                <span class="macro">trace!</span>(
+                    <span class="string">&quot;find by prefix: Decoding {} from bytes {:?}&quot;</span>,
+                    <span class="ident">std::any::type_name</span>::<span class="op">&lt;</span><span class="ident">KP::Value</span><span class="op">&gt;</span>(),
+                    <span class="ident">value_bytes</span>
+                );
+                <span class="kw">let</span> <span class="ident">value</span> <span class="op">=</span> <span class="ident">KP::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value_bytes</span>)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((<span class="ident">key</span>, <span class="ident">value</span>))
+            })
+        })
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">apply_batch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">batch</span>: <span class="ident">DbBatch</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">DatabaseError</span><span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">raw_apply_batch</span>(<span class="ident">batch</span>)
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">K</span>, <span class="ident">V</span><span class="op">&gt;</span> <span class="ident">Iterator</span> <span class="kw">for</span> <span class="ident">DbIter</span><span class="op">&lt;</span><span class="ident">K</span>, <span class="ident">V</span><span class="op">&gt;</span>
-<span class="kw">where</span>
-    <span class="ident">K</span>: <span class="ident">DatabaseKey</span>,
-    <span class="ident">V</span>: <span class="ident">DatabaseValue</span>,
-{
-    <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">K</span>, <span class="ident">V</span>), <span class="ident">DatabaseError</span><span class="op">&gt;</span>;
-
-    <span class="kw">fn</span> <span class="ident">next</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Item</span><span class="op">&gt;</span> {
-        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">iter</span>.<span class="ident">next</span>()<span class="question-mark">?</span> {
-            <span class="prelude-val">Ok</span>((<span class="ident">key_bytes</span>, <span class="ident">value_bytes</span>)) =&gt; {
-                <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">K::from_bytes</span>(<span class="ident">key_bytes</span>.<span class="ident">as_ref</span>()) {
-                    <span class="prelude-val">Ok</span>(<span class="ident">key</span>) =&gt; <span class="ident">key</span>,
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>.<span class="ident">into</span>())),
-                };
-
-                <span class="macro">trace!</span>(
-                    <span class="string">&quot;db iter: Decoding {} from bytes {:?}&quot;</span>,
-                    <span class="ident">std::any::type_name</span>::<span class="op">&lt;</span><span class="ident">V</span><span class="op">&gt;</span>(),
-                    <span class="ident">value_bytes</span>
-                );
-                <span class="kw">let</span> <span class="ident">value</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">V::from_bytes</span>(<span class="ident">value_bytes</span>.<span class="ident">as_ref</span>()) {
-                    <span class="prelude-val">Ok</span>(<span class="ident">value</span>) =&gt; <span class="ident">value</span>,
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>.<span class="ident">into</span>())),
-                };
-                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>((<span class="ident">key</span>, <span class="ident">value</span>)))
-            }
-            <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>)),
-        }
     }
 }
 
@@ -612,5 +552,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (4cbaac699 2022-05-25)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (490324f7b 2022-05-26)" ></div>
 </body></html>
