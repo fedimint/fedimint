@@ -704,12 +704,7 @@ mod test {
             .map(|config| Mint::new(config, MINTS - THRESHOLD, Arc::new(MemDatabase::new())))
             .collect::<Vec<_>>();
 
-        let agg_pk = client_cfg
-            .tbs_pks
-            .keys
-            .get(&Amount::from_sat(1))
-            .unwrap()
-            .clone();
+        let agg_pk = *client_cfg.tbs_pks.keys.get(&Amount::from_sat(1)).unwrap();
 
         (agg_pk, mints)
     }

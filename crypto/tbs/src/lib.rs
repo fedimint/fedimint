@@ -168,15 +168,19 @@ where
     I: IntoIterator<Item = (usize, BlindedSignatureShare)>,
     I::IntoIter: Clone + ExactSizeIterator,
 {
-    let points = sig_shares.into_iter().take(threshold).map(|(idx, share)| {
-        let x = Scalar::from((idx as u64) + 1);
-        let y = share.0.into();
-        (x, y)
-    });
+    let points = sig_shares
+        .into_iter()
+        .take(threshold)
+        .map(|(idx, share)| {
+            let x = Scalar::from((idx as u64) + 1);
+            let y = share.0.into();
+            (x, y)
+        })
+        .collect::<Vec<(Scalar, G1Projective)>>();
     if points.len() < threshold {
         panic!("Not enough signature shares");
     }
-    let bsig: G1Projective = poly::interpolate_zero(points);
+    let bsig: G1Projective = poly::interpolate_zero(points.into_iter());
     BlindedSignature(bsig.to_affine())
 }
 
@@ -282,10 +286,9 @@ mod tests {
         let sigs = sks
             .iter()
             .enumerate()
-            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, *sk)))
-            .collect::<Vec<_>>();
+            .map(|(idx, sk)| (idx, sign_blinded_msg(bmsg, *sk)));
 
         // Combining an insufficient number of signature shares should panic
-        combine_valid_shares(sigs.clone().into_iter(), threshold);
+        combine_valid_shares(sigs, threshold);
     }
 }

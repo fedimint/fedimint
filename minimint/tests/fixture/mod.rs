@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::env;
+use std::fmt::Write;
 use std::iter::repeat;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
+use futures::executor::block_on;
 use futures::future::join_all;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
@@ -50,7 +52,7 @@ use real::{RealBitcoinTest, RealLightningTest};
 mod fake;
 mod real;
 
-static BASE_PORT: AtomicU16 = AtomicU16::new(4000 as u16);
+static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
@@ -329,7 +331,7 @@ impl FederationTest {
         let (finalization, coins) = user
             .client
             .mint_client()
-            .create_coin_output(amount.into(), OsRng::new().unwrap());
+            .create_coin_output(amount, OsRng::new().unwrap());
         let out_point = OutPoint {
             txid: Default::default(),
             out_idx: 0,
@@ -376,8 +378,10 @@ impl FederationTest {
     /// transactions will only get broadcast every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
-            let s = server.as_ref().borrow();
-            minimint_wallet::broadcast_pending_tx(&s.database, s.bitcoin_rpc.as_ref()).await;
+            block_on(minimint_wallet::broadcast_pending_tx(
+                &server.borrow().database,
+                server.borrow().bitcoin_rpc.as_ref(),
+            ));
         }
     }
 
@@ -387,12 +391,12 @@ impl FederationTest {
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
             for server in &self.servers {
-                let mut s = server.borrow_mut();
-                let height = s.consensus.wallet.consensus_height();
-                let consensus_outcome = s.outcome_receiver.recv().await.expect("other thread died");
+                let consensus_outcome = block_on(server.borrow_mut().outcome_receiver.recv())
+                    .expect("other thread died");
+                let height = server.borrow().consensus.wallet.consensus_height();
 
                 // only need to update last_consensus_items and print one output since consensus is always the same
-                if s.cfg.identity == PeerId::from(0) {
+                if server.borrow().cfg.identity == PeerId::from(0) {
                     let filtered_consensus =
                         FederationTest::remove_redundant_round_items(&consensus_outcome, height);
                     let new_items = filtered_consensus
@@ -402,15 +406,22 @@ impl FederationTest {
                     *self.last_consensus_items.borrow_mut() = new_items.collect();
                     warn!(
                         "{}",
-                        FederationTest::epoch_debug_message(&filtered_consensus, &s.database)
+                        FederationTest::epoch_debug_message(
+                            &filtered_consensus,
+                            &server.borrow().database
+                        )
                     )
                 }
 
+                let consensus = server.borrow().consensus.clone();
+                let proposal_sender = server.borrow().proposal_sender.clone();
+                let cfg = server.borrow().cfg.clone();
+
                 minimint::run_consensus_epoch(
-                    &s.consensus,
+                    &consensus,
                     consensus_outcome,
-                    &s.proposal_sender,
-                    &s.cfg,
+                    &proposal_sender,
+                    &cfg,
                     0,
                 )
                 .await;
@@ -480,16 +491,16 @@ impl FederationTest {
 
         for (peer, items) in consensus.contributions.iter() {
             let filtered = items
-                .into_iter()
+                .iter()
                 .filter(|item| match item {
                     ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(
                         minimint_wallet::RoundConsensusItem { block_height, .. },
-                    )) => Some(block_height.clone()) != prev_block_height,
+                    )) => Some(*block_height) != prev_block_height,
                     _ => true,
                 })
                 .cloned()
                 .collect();
-            contributions.insert(peer.clone(), filtered);
+            contributions.insert(*peer, filtered);
         }
 
         ConsensusOutcome {
@@ -505,7 +516,7 @@ impl FederationTest {
         for (peer, items) in consensus.contributions.iter() {
             for item in items {
                 let item_debug = Self::item_debug_message(item, database);
-                debug.push_str(&format!("\n  Peer {}: {}", peer, item_debug));
+                write!(debug, "\n  Peer {}: {}", peer, item_debug).unwrap();
             }
         }
         debug
@@ -520,7 +531,7 @@ impl FederationTest {
                 minimint_wallet::PegOutSignatureItem { txid, .. },
             )) => {
                 let sigs = database
-                    .get_value(&UnsignedTransactionKey(txid.clone()))
+                    .get_value(&UnsignedTransactionKey(*txid))
                     .unwrap()
                     .unwrap()
                     .inputs
@@ -546,7 +557,7 @@ impl FederationTest {
                 outputs,
                 ..
             }) => {
-                let mut tx_debug = format!("Transaction");
+                let mut tx_debug = "Transaction".to_string();
                 for input in inputs.iter() {
                     let input_debug = match input {
                         Input::Mint(t) => format!("Mint Coins {}", t.amount()),
@@ -557,16 +568,14 @@ impl FederationTest {
                             format!("LN Contract {} with id {:.8}", t.amount, t.crontract_id)
                         }
                     };
-                    tx_debug.push_str(&format!("\n    Input: {}", input_debug));
+                    write!(tx_debug, "\n    Input: {}", input_debug).unwrap();
                 }
                 for output in outputs.iter() {
                     let output_debug = match output {
                         Output::Mint(t) => format!("Mint Coins {}", t.amount()),
-                        Output::Wallet(t) => format!(
-                            "Wallet PegOut {} to address {:.8}",
-                            t.amount,
-                            t.recipient.to_string()
-                        ),
+                        Output::Wallet(t) => {
+                            format!("Wallet PegOut {} to address {:.8}", t.amount, t.recipient)
+                        }
                         Output::LN(ContractOrOfferOutput::Offer(o)) => {
                             format!("LN Offer for {} with hash {:.8}", o.amount, o.hash)
                         }
@@ -585,7 +594,7 @@ impl FederationTest {
                             }
                         },
                     };
-                    tx_debug.push_str(&format!("\n    Output: {}", output_debug));
+                    write!(tx_debug, "\n    Output: {}", output_debug).unwrap();
                 }
                 tx_debug
             }

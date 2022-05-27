@@ -90,8 +90,8 @@ mod tests {
     fn test_schnorr_pub_key() {
         let ctx = secp256k1_zkp::global::SECP256K1;
         let mut rng = rand::rngs::OsRng::new().unwrap();
-        let sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(&ctx, &mut rng);
-        let pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, &sec_key);
+        let sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(ctx, &mut rng);
+        let pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(ctx, &sec_key);
         test_roundtrip(pub_key);
 
         let sig = ctx.schnorrsig_sign(

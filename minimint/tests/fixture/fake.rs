@@ -93,7 +93,7 @@ impl FakeBitcoinTest {
         }
     }
 
-    fn pending_merkle_tree(pending: &Vec<Transaction>) -> PartialMerkleTree {
+    fn pending_merkle_tree(pending: &[Transaction]) -> PartialMerkleTree {
         let txs = pending.iter().map(|tx| tx.txid()).collect::<Vec<Txid>>();
         let matches = repeat(true).take(txs.len()).collect::<Vec<bool>>();
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
@@ -111,10 +111,10 @@ impl FakeBitcoinTest {
     fn mine_block(blocks: &mut Vec<Block>, pending: &mut Vec<Transaction>) {
         let root = BlockHash::hash(&[0]);
         // all blocks need at least one transaction
-        if pending.len() == 0 {
+        if pending.is_empty() {
             pending.push(Self::new_transaction(vec![]));
         }
-        let merkle_root = Self::pending_merkle_tree(&pending)
+        let merkle_root = Self::pending_merkle_tree(pending)
             .extract_matches(&mut vec![], &mut vec![])
             .unwrap();
         let block = Block {
@@ -186,11 +186,10 @@ impl BitcoinTest for FakeBitcoinTest {
             .unwrap()
             .clone()
             .into_iter()
-            .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output.clone()))
+            .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output))
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
             .unwrap()
-            .value
-            .clone();
+            .value;
         Amount::from_sat(sats)
     }
 }
@@ -209,7 +208,6 @@ impl BitcoindRpc for FakeBitcoinTest {
         self.blocks.lock().unwrap()[(height - 1) as usize]
             .header
             .block_hash()
-            .clone()
     }
 
     async fn get_block(&self, hash: &BlockHash) -> Block {
@@ -217,7 +215,7 @@ impl BitcoindRpc for FakeBitcoinTest {
             .lock()
             .unwrap()
             .iter()
-            .find(|block| hash.clone() == block.header.block_hash())
+            .find(|block| *hash == block.header.block_hash())
             .unwrap()
             .clone()
     }

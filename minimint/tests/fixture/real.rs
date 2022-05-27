@@ -120,7 +120,7 @@ impl RealLightningTest {
 
         loop {
             warn!("LN channel not open yet, please wait...");
-            if Self::channel_balance(&rpc_gateway) == Amount::from_sat(FUND_AMOUNT) {
+            if Self::channel_balance(rpc_gateway) == Amount::from_sat(FUND_AMOUNT) {
                 break;
             }
             thread::sleep(Duration::from_millis(1000));
@@ -165,7 +165,7 @@ impl RealBitcoinTest {
         .expect(Self::ERROR);
 
         // ensure we have a wallet with bitcoin
-        if client.list_wallets().expect(Self::ERROR).len() == 0 {
+        if client.list_wallets().expect(Self::ERROR).is_empty() {
             client
                 .create_wallet("", None, None, None, None)
                 .expect(Self::ERROR);
@@ -218,7 +218,7 @@ impl BitcoinTest for RealBitcoinTest {
         ))
         .expect(Self::ERROR);
 
-        return (proof, tx);
+        (proof, tx)
     }
 
     fn get_new_address(&self) -> Address {
