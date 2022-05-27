@@ -2,7 +2,6 @@ use crate::encoding::{Decodable, Encodable};
 use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use thiserror::Error;
 use tracing::trace;
 
@@ -48,15 +47,6 @@ pub trait Database: Send + Sync {
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter;
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
-}
-
-pub struct DbIter<K, V>
-where
-    K: DatabaseKey,
-    V: DatabaseValue,
-{
-    iter: PrefixIter,
-    _pd: PhantomData<(K, V)>,
 }
 
 impl<'a> dyn Database + 'a {
@@ -117,50 +107,30 @@ impl<'a> dyn Database + 'a {
         Ok(Some(K::Value::from_bytes(&value_bytes)?))
     }
 
-    pub fn find_by_prefix<KP>(&self, key_prefix: &KP) -> DbIter<KP::Key, KP::Value>
+    pub fn find_by_prefix<KP>(
+        &self,
+        key_prefix: &KP,
+    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value), DatabaseError>>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
         let prefix_bytes = key_prefix.to_bytes();
-        DbIter {
-            iter: self.raw_find_by_prefix(&prefix_bytes),
-            _pd: Default::default(),
-        }
+        self.raw_find_by_prefix(&prefix_bytes).map(|res| {
+            res.and_then(|(key_bytes, value_bytes)| {
+                let key = KP::Key::from_bytes(&key_bytes)?;
+                trace!(
+                    "find by prefix: Decoding {} from bytes {:?}",
+                    std::any::type_name::<KP::Value>(),
+                    value_bytes
+                );
+                let value = KP::Value::from_bytes(&value_bytes)?;
+                Ok((key, value))
+            })
+        })
     }
 
     pub fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
         self.raw_apply_batch(batch)
-    }
-}
-
-impl<K, V> Iterator for DbIter<K, V>
-where
-    K: DatabaseKey,
-    V: DatabaseValue,
-{
-    type Item = Result<(K, V), DatabaseError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.iter.next()? {
-            Ok((key_bytes, value_bytes)) => {
-                let key = match K::from_bytes(key_bytes.as_ref()) {
-                    Ok(key) => key,
-                    Err(e) => return Some(Err(e.into())),
-                };
-
-                trace!(
-                    "db iter: Decoding {} from bytes {:?}",
-                    std::any::type_name::<V>(),
-                    value_bytes
-                );
-                let value = match V::from_bytes(value_bytes.as_ref()) {
-                    Ok(value) => value,
-                    Err(e) => return Some(Err(e.into())),
-                };
-                Some(Ok((key, value)))
-            }
-            Err(e) => Some(Err(e)),
-        }
     }
 }
 
