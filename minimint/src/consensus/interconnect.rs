@@ -1,4 +1,4 @@
-use crate::consensus::FediMintConsensus;
+use crate::consensus::MinimintConsensus;
 use minimint_api::module::http;
 use minimint_api::module::http::{Method, Response};
 use minimint_api::module::interconnect::ModuleInterconect;
@@ -7,11 +7,11 @@ use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use serde_json::Value;
 
-pub struct FediMintInterconnect<'a, R: RngCore + CryptoRng> {
-    pub fedimint: &'a FediMintConsensus<R>,
+pub struct MinimintInterconnect<'a, R: RngCore + CryptoRng> {
+    pub minimint: &'a MinimintConsensus<R>,
 }
 
-impl<'a, R> ModuleInterconect for FediMintInterconnect<'a, R>
+impl<'a, R> ModuleInterconect for MinimintInterconnect<'a, R>
 where
     R: RngCore + CryptoRng,
 {
@@ -23,9 +23,9 @@ where
         data: Value,
     ) -> http::Result<Response> {
         match module {
-            "wallet" => call_internal(&self.fedimint.wallet, path, method, data),
-            "mint" => call_internal(&self.fedimint.mint, path, method, data),
-            "ln" => call_internal(&self.fedimint.ln, path, method, data),
+            "wallet" => call_internal(&self.minimint.wallet, path, method, data),
+            "mint" => call_internal(&self.minimint.mint, path, method, data),
+            "ln" => call_internal(&self.minimint.ln, path, method, data),
             _ => Err(http::Error::from_str(404, "Module not found")),
         }
     }

@@ -1,33 +1,69 @@
-# MiniMint Architecture
+# Minimint Architecture
 
-MiniMint started out as a federated Chaumian e-cash prototype. By now it is a more general framework for federated financial applications. At its core lies the ability to agree on and process transactions. The possible input and output types of these transactions are defined by modules.
+Minimint is a general framework for building federated financial applications.
 
-To implement the federated e-cash functionality there currently exist two modules:
-* **Fediwallet**: a federated on-chain wallet, supporting deposits and withdrawals
-* **Fedimint**: a federated e-cash mint, supporting issuance and spending of blind signed tokens of diiferent denominations
+The current implementation allows users to make private and low-cost payments through a federated blinded mint that issues [e-cash](https://en.wikipedia.org/wiki/Ecash).
+All e-cash is backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
 
-In the future other modules, e.g. to integrate Lightning, smart contracts or even a federated market place could be implemented.
+## Crate organization
+The [Minimint federation](#Federation-Nodes) consists of nodes that are primarily built from the following crates:
+* `minimint` - the main consensus code for processing transactions and REST API
+* `minimint-api` - the common serialization and database representations for communication between crates
+* `minimint-derive` - helper macros for serialization
 
-## Main loop
-The main functionality is implemented in one big loop shown below.
+[Modules](#Modules) can be added to the `MinimintConsensus` to allow for new types of transactions and federated actions:
+* `modules/minimint-wallet` - an on-chain bitcoin wallet
+* `modules/minimint-mint` - a blinded mint that issues e-cash
+* `modules/minimint-ln` - a Lightning payment service
+
+The [user client](#User-Client):
+* `mint-client` - provides a client for sending transactions to the federation
+
+The [LN gateway](#LN-Gateway):
+* `ln-gateway` - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users
+
+## Federation Nodes
+Each of the nodes spawns three long-running tasks in parallel: an API task, a [HBBFT protocol](https://docs.rs/hbbft/latest/hbbft/) task, and a Minimint consensus task.
+
+The API task in `net:api:run_server` allows clients to submit a `Transaction` and retrieve the `TransactionStatus`.
+Transactions are validated by the `MinimintConsensus` logic before being stored as proposals in the database.
+The proposed list of `ConsensusItem` includes all possible consensus state changes, such as mint transactions or updates to the agreed-upon block height.
+
+The HBBFT protocol task handles communication between federation nodes, combining different `ConsensusItem` proposals from each node into an identical `ConsensusOutcome` during an epoch.
+So long as enough nodes can communicate, epochs will be continually generated, and every node will share the same sequence of `ConsensusOutcome` data.
+
+The `MinimintConsensus` task processes each `ConsensusOutcome` by validating the proposals, updating the database, and performing any necessary actions.
+For instance, the consensus thread may receive a peg-out proposal, validate the PSBT signature and transaction balances, then sign and submit the transaction to the Bitcoin network.
+
+## Modules
+There currently are three `FederationModule` used in `MinimintConsensus` that exist in the [crates](#Crate-organization) previously described:
+* `Wallet` module - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
+* `Mint` module - verifies `Coin` input signatures and issues `BlindToken` outputs of different denominations
+* `LightningModule` - creates `ContractInput` inputs and `ContractOrOfferOutput` outputs representing a payment sent or received by a gateway on behalf of a user
+
+Any module can contribute inputs and outputs in the same `Transaction`.
+For instance, if users wish to convert on-chain bitcoin to Minimint tokens they can create a transaction with `PegInProof` inputs from `modules/minimint-wallet`  and `BlindToken` outputs from `modules/minimint-mint`.
+
+In the future other modules can be added, for instance to enable smart contracts or even a federated marketplace.
+Existing `ConsensusItem` representations are documented in the [database schema](database.md).
+
+A diagram of the module transaction processing:
 
 ![Control and data flow in MiniMint](./architecture.svg)
 
-A BFT consensus algorithm is used to agree on a set of consensus items. These consist of transactions submitted by clients and other data proposed by modules. This globally agreed-upon set is then split into module-specific items and transactions. Module specific items are given to the respective modules first to prepare them for the consensus round.
+## User Client
+The `UserClient` communicates with federation members via an asynchronous REST API.
+Clients are expected to communicate with as many members as necessary to overcome malicious federation nodes.
+Requests are delegated to an underlying `LnClient`, `MintClient`, or `WalletClient` depending on what `FederationModule` the client needs to perform an action.
 
-After that the transactions are processed by checking that the sum of input amounts is greater or equalt to outputs plus fees. If that is the case, the inputs and outputs are delegated to their respective module for processing. If any part is deemed invalid by a module (e.g. invalid signature) the transaction is discarded.
+A submitted `Transaction` often requires multiple epochs to become spendable, usually because they require signatures from a quorum of federation members.
+Clients query for the `TransactionStatus` by unique `OutPoint` that includes the `TransactionId`.
 
-After all transactions have been processed the next consensus proposal is prepared. It consists of transactions submitted by clients and module specific items.
+After enough epochs have passed, the `TransactionStatus` contain either return an `Error` message or the `OutputOutcome` indicating how the inputs were spent and possibly returning data to the user such as blind-signed tokens.
 
-## Modules
-Each module defines an **input**, **output**, and **consensus item** type. Modules also keep their own state using the same key-value store as MiniMint. See the [database documentation](database.md) for more information.
+## LN Gateway
+The `LnGateway` communicates with a local Lightning node in order to provide an API that can pay invoices.
+The gateway uses a `GatewayClient` to communicate with the federation, which delegates to the same underlying `LnClient` or `MintClient` used by the `UserClient`.
 
-| Module     | Input      | Output        | Consensus Items                                                                        |
-|------------|------------|---------------|----------------------------------------------------------------------------------------|
-| FediWallet | Deposit    | Withdrawal    | * Block height, fees and randomness beacon<br>* Signatures for withdrawal transactions |
-| FediMint   | Coin spend | Coin issuance | * Partial blind signatures of issued coins                                             |
-
-## Client interaction
-Clients communicate with federation members via a REST API. They are expected to communicate with as many members as necessary for the required assurances since some might be malicious.
-
-Communication is asynchronous. First clients submit a transaction. After that they can query the transaction's status. If the transaction is found to be faulty the status will be **error** and the transaction will not be submitted to the consensus. Once a transaction has been included in a consensus round its state changes from **proposed** to **accepted** or **error** in case there was a previously undetected problem (e.g. quick double spend). Note that the accepted state is not final. Depending on the module outputs, further action may be required, e.g. generating blind signatures or actually submitting a withdrawal transaction. These actions will show up in the status as they become available.
+When a user submits a pay invoice request, the gateway uses the `GatewayClient` to confirm the user has locked funds into a valid `ContractAccount`.
+The gateway then pays the LN invoice and provides the preimage to the federation as proof the payment succeeded, at which point the federation will release the funds to the gateway.

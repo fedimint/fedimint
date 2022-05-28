@@ -19,7 +19,7 @@ use minimint_ln::LightningModule;
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::Wallet;
 
-use crate::consensus::{ConsensusItem, FediMintConsensus};
+use crate::consensus::{ConsensusItem, MinimintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
 use crate::rng::RngGenerator;
@@ -52,7 +52,7 @@ pub struct MinimintServer {
     pub proposal_receiver: Receiver<Vec<ConsensusItem>>,
     pub outcome_receiver: Receiver<ConsensusOutcome>,
     pub proposal_sender: Sender<Vec<ConsensusItem>>,
-    pub mint_consensus: Arc<FediMintConsensus<OsRng>>,
+    pub mint_consensus: Arc<MinimintConsensus<OsRng>>,
     pub cfg: ServerConfig,
 }
 
@@ -109,7 +109,7 @@ pub async fn minimint_server_with(
 
     let ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
-    let mint_consensus = Arc::new(FediMintConsensus {
+    let mint_consensus = Arc::new(MinimintConsensus {
         rng_gen: Box::new(CloneRngGen(Mutex::new(OsRng::new().unwrap()))), //FIXME
         cfg: cfg.clone(),
         mint,
@@ -132,7 +132,7 @@ pub async fn minimint_server_with(
 }
 
 pub async fn run_consensus(
-    mint_consensus: &Arc<FediMintConsensus<OsRng>>,
+    mint_consensus: &Arc<MinimintConsensus<OsRng>>,
     mut outcome_receiver: Receiver<ConsensusOutcome>,
     proposal_sender: Sender<Vec<ConsensusItem>>,
     cfg: ServerConfig,
@@ -152,7 +152,7 @@ pub async fn run_consensus(
 }
 
 pub async fn run_consensus_epoch(
-    mint_consensus: &Arc<FediMintConsensus<OsRng>>,
+    mint_consensus: &Arc<MinimintConsensus<OsRng>>,
     outcome: ConsensusOutcome,
     proposal_sender: &Sender<Vec<ConsensusItem>>,
     cfg: &ServerConfig,

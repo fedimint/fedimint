@@ -27,7 +27,7 @@ use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
 use minimint::config::ServerConfigParams;
 use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
-use minimint::consensus::{ConsensusItem, ConsensusOutcome, FediMintConsensus};
+use minimint::consensus::{ConsensusItem, ConsensusOutcome, MinimintConsensus};
 use minimint::transaction::{Input, Output};
 use minimint::MinimintServer;
 use minimint_api::config::GenerateConfig;
@@ -291,7 +291,7 @@ pub struct FederationTest {
 struct ServerTest {
     outcome_receiver: Receiver<ConsensusOutcome>,
     proposal_sender: Sender<Vec<ConsensusItem>>,
-    consensus: Arc<FediMintConsensus<OsRng>>,
+    consensus: Arc<MinimintConsensus<OsRng>>,
     cfg: ServerConfig,
     bitcoin_rpc: Box<dyn BitcoindRpc>,
     database: Arc<dyn Database>,

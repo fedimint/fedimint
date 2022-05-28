@@ -5,7 +5,7 @@ mod interconnect;
 
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::consensus::interconnect::FediMintInterconnect;
+use crate::consensus::interconnect::MinimintInterconnect;
 use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
@@ -36,7 +36,7 @@ pub enum ConsensusItem {
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 
-pub struct FediMintConsensus<R>
+pub struct MinimintConsensus<R>
 where
     R: RngCore + CryptoRng,
 {
@@ -67,7 +67,7 @@ struct VerificationCaches {
     ln: <LightningModule as FederationModule>::VerificationCache,
 }
 
-impl<R> FediMintConsensus<R>
+impl<R> MinimintConsensus<R>
 where
     R: RngCore + CryptoRng,
 {
@@ -423,25 +423,25 @@ where
         }
     }
 
-    fn build_interconnect(&self) -> FediMintInterconnect<R> {
-        FediMintInterconnect { fedimint: self }
+    fn build_interconnect(&self) -> MinimintInterconnect<R> {
+        MinimintInterconnect { minimint: self }
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Wallet {
-    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a Wallet {
+    fn from(fed: &'a MinimintConsensus<R>) -> Self {
         &fed.wallet
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a Mint {
-    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a Mint {
+    fn from(fed: &'a MinimintConsensus<R>) -> Self {
         &fed.mint
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a FediMintConsensus<R>> for &'a LightningModule {
-    fn from(fed: &'a FediMintConsensus<R>) -> Self {
+impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a LightningModule {
+    fn from(fed: &'a MinimintConsensus<R>) -> Self {
         &fed.ln
     }
 }
