@@ -120,7 +120,7 @@ pub struct PegInOutResult {
 }
 #[derive(Serialize, Deserialize)]
 pub struct SpendResult {
-    coins: Coins<SpendableCoin>,
+    pub coins: Coins<SpendableCoin>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct LnPayResult {
