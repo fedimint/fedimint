@@ -116,7 +116,7 @@
 <span id="109">109</span>
 <span id="110">110</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::FediMintConsensus</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::MinimintConsensus</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::Transaction</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">TransactionId</span>};
 <span class="kw">use</span> <span class="ident">std::fmt::Formatter</span>;
@@ -126,7 +126,7 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">struct</span> <span class="ident">State</span> {
-    <span class="ident">fedimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">FediMintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">minimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">std::fmt::Debug</span> <span class="kw">for</span> <span class="ident">State</span> {
@@ -135,17 +135,17 @@
     }
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_server</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">fedimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">FediMintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>) {
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_server</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">minimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>) {
     <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">State</span> {
-        <span class="ident">fedimint</span>: <span class="ident">fedimint</span>.<span class="ident">clone</span>(),
+        <span class="ident">minimint</span>: <span class="ident">minimint</span>.<span class="ident">clone</span>(),
     };
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span> <span class="op">=</span> <span class="ident">tide::with_state</span>(<span class="ident">state</span>);
     <span class="ident">server</span>.<span class="ident">at</span>(<span class="string">&quot;/transaction&quot;</span>).<span class="ident">put</span>(<span class="ident">submit_transaction</span>);
     <span class="ident">server</span>.<span class="ident">at</span>(<span class="string">&quot;/transaction/:txid&quot;</span>).<span class="ident">get</span>(<span class="ident">fetch_outcome</span>);
 
-    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">fedimint</span>.<span class="ident">wallet</span>);
-    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">fedimint</span>.<span class="ident">mint</span>);
-    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">fedimint</span>.<span class="ident">ln</span>);
+    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">minimint</span>.<span class="ident">wallet</span>);
+    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">minimint</span>.<span class="ident">mint</span>);
+    <span class="ident">attach_module_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">server</span>, <span class="kw-2">&amp;</span><span class="ident">minimint</span>.<span class="ident">ln</span>);
 
     <span class="ident">server</span>
         .<span class="ident">listen</span>(<span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, <span class="ident">cfg</span>.<span class="ident">get_api_port</span>()))
@@ -156,7 +156,7 @@
 <span class="kw">fn</span> <span class="ident">attach_module_endpoints</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>(<span class="ident">server</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Server</span><span class="op">&lt;</span><span class="ident">State</span><span class="op">&gt;</span>, <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">M</span>)
 <span class="kw">where</span>
     <span class="ident">M</span>: <span class="ident">FederationModule</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
-    <span class="kw">for</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">M</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">FediMintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="kw">for</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">M</span>: <span class="ident">From</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>,
 {
     <span class="kw">for</span> <span class="ident">endpoint</span> <span class="kw">in</span> <span class="ident">module</span>.<span class="ident">api_endpoints</span>() {
         <span class="comment">// Check that params are actually defined in path spec so that there will be no errors at</span>
@@ -184,7 +184,7 @@
                         (<span class="kw-2">*</span><span class="ident">param</span>, <span class="ident">value</span>)
                     })
                     .<span class="ident">collect</span>();
-                <span class="kw">let</span> <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">M</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">state</span>().<span class="ident">fedimint</span>.<span class="ident">as_ref</span>().<span class="ident">into</span>();
+                <span class="kw">let</span> <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">M</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">state</span>().<span class="ident">minimint</span>.<span class="ident">as_ref</span>().<span class="ident">into</span>();
                 (<span class="ident">endpoint</span>.<span class="ident">handler</span>)(<span class="ident">module</span>, <span class="ident">params</span>, <span class="ident">data</span>)
             });
     }
@@ -197,7 +197,7 @@
     <span class="kw">let</span> <span class="ident">tx_id</span> <span class="op">=</span> <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
     <span class="macro">debug!</span>(<span class="string">&quot;Sending peg-in request to consensus&quot;</span>);
     <span class="ident">req</span>.<span class="ident">state</span>()
-        .<span class="ident">fedimint</span>
+        .<span class="ident">minimint</span>
         .<span class="ident">submit_transaction</span>(<span class="ident">transaction</span>)
         .<span class="ident">expect</span>(<span class="string">&quot;Could not submit sign request to consensus&quot;</span>);
 
@@ -217,7 +217,7 @@
 
     <span class="kw">let</span> <span class="ident">tx_status</span> <span class="op">=</span> <span class="ident">req</span>
         .<span class="ident">state</span>()
-        .<span class="ident">fedimint</span>
+        .<span class="ident">minimint</span>
         .<span class="ident">transaction_status</span>(<span class="ident">tx_hash</span>)
         .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">tide::Error::from_str</span>(<span class="number">404</span>, <span class="string">&quot;Not found&quot;</span>))<span class="question-mark">?</span>;
 
@@ -226,5 +226,5 @@
     <span class="prelude-val">Ok</span>(<span class="ident">body</span>.<span class="ident">into</span>())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (490324f7b 2022-05-26)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ebbcbfc23 2022-05-27)" ></div>
 </body></html>

@@ -58,7 +58,7 @@
 <span id="51">51</span>
 <span id="52">52</span>
 <span id="53">53</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::FediMintConsensus</span>;
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::MinimintConsensus</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::module::http</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::module::http</span>::{<span class="ident">Method</span>, <span class="ident">Response</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::module::interconnect::ModuleInterconect</span>;
@@ -67,11 +67,11 @@
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::rand::RngCore</span>;
 <span class="kw">use</span> <span class="ident">serde_json::Value</span>;
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FediMintInterconnect</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="ident">fedimint</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">FediMintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintInterconnect</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span><span class="op">&gt;</span> <span class="ident">ModuleInterconect</span> <span class="kw">for</span> <span class="ident">FediMintInterconnect</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span><span class="op">&gt;</span>
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span><span class="op">&gt;</span> <span class="ident">ModuleInterconect</span> <span class="kw">for</span> <span class="ident">MinimintInterconnect</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">R</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
 {
@@ -83,9 +83,9 @@
         <span class="ident">data</span>: <span class="ident">Value</span>,
     ) -&gt; <span class="ident">http::Result</span><span class="op">&lt;</span><span class="ident">Response</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">module</span> {
-            <span class="string">&quot;wallet&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">fedimint</span>.<span class="ident">wallet</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
-            <span class="string">&quot;mint&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">fedimint</span>.<span class="ident">mint</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
-            <span class="string">&quot;ln&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">fedimint</span>.<span class="ident">ln</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
+            <span class="string">&quot;wallet&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">wallet</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
+            <span class="string">&quot;mint&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">mint</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
+            <span class="string">&quot;ln&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">ln</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>),
             <span class="kw">_</span> =&gt; <span class="prelude-val">Err</span>(<span class="ident">http::Error::from_str</span>(<span class="number">404</span>, <span class="string">&quot;Module not found&quot;</span>)),
         }
     }
@@ -112,5 +112,5 @@
     (<span class="ident">endpoint</span>.<span class="ident">handler</span>)(<span class="ident">module</span>, <span class="ident">Default::default</span>(), <span class="ident">data</span>)
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (490324f7b 2022-05-26)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ebbcbfc23 2022-05-27)" ></div>
 </body></html>
