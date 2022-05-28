@@ -59,8 +59,7 @@ async fn main() -> tide::Result<()> {
         .add_handler("pegout", pegout)
         .add_handler("spend", spend)
         .add_handler("lnpay", ln_pay)
-        .add_handler("reissue", reissue)
-        .add_handler("reissue_validate", reissue_validate);
+        .add_handler("reissue", reissue);
     let sclient = Arc::new(client);
     let sevents = Arc::new(EventLog::new(21));
 
@@ -304,35 +303,6 @@ async fn ln_pay(
     }
 }
 async fn reissue(
-    params: serde_json::Value,
-    shared: Arc<Shared>,
-) -> Result<serde_json::Value, RpcError> {
-    //If Parsing fails here it is NOT a parsing error since we only call this function if we've got valid json, so it must be wrong params
-    let coins: Coins<SpendableCoin> = Coins::deserialize(params).map_err(|e| {
-        standard_error(
-            StandardError::InternalError,
-            Some(serde_json::Value::String(format!("{:?}", e))),
-        )
-    })?;
-    let client = Arc::clone(&shared.client);
-    let events = Arc::clone(&shared.events);
-    tokio::spawn(async move {
-        let mut rng = shared.rng.clone();
-        let out_point = match client.reissue(coins, &mut rng).await {
-            Ok(o) => o,
-            Err(e) => {
-                events.add(format!("{:?}", e));
-                return;
-            }
-        };
-
-        if let Err(e) = client.fetch_tx_outcome(out_point.txid, true).await {
-            events.add(format!("{:?}", e));
-        }
-    });
-    Ok(serde_json::Value::Null)
-}
-async fn reissue_validate(
     params: serde_json::Value,
     shared: Arc<Shared>,
 ) -> Result<serde_json::Value, RpcError> {
