@@ -346,6 +346,7 @@ impl FederationModule for Wallet {
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
+        // We only want to peg out if we have a real randomness beacon after the first consensus round
         let round_consensus = match self.current_round_consensus() {
             Some(consensus) => consensus,
             None => return,
@@ -365,9 +366,7 @@ impl FederationModule for Wallet {
             urgency_threshold = MIN_PEG_OUT_URGENCY,
         );
 
-        // We only want to peg out if we have a real randomness beacon after the first consensus round
-        let peg_out_ready = self.current_round_consensus().is_some(); // TODO: maybe destructure instead?
-        if urgency > MIN_PEG_OUT_URGENCY && peg_out_ready {
+        if urgency > MIN_PEG_OUT_URGENCY {
             let mut psbt = self
                 .create_peg_out_tx(pending_peg_outs, round_consensus)
                 .await;
