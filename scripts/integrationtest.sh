@@ -41,6 +41,10 @@ until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
 done
 
+# Ensure bitcoin core wallet is loaded
+$BTC_CLIENT createwallet "" || true
+$BTC_CLIENT loadwallet "" || true
+
 # Start lightning nodes
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR --addr=127.0.0.1:9001 &
