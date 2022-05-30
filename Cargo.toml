@@ -10,6 +10,7 @@ members = [
     "modules/minimint-mint",
     "modules/minimint-ln",
     "modules/minimint-wallet",
+    "tests",
 ]
 
 [patch.crates-io]

@@ -18,7 +18,7 @@ use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::Feerate;
 
-use crate::fixture::{BitcoinTest, LightningTest};
+use crate::fixtures::{BitcoinTest, LightningTest};
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
