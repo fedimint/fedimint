@@ -1,7 +1,9 @@
-use crate::fixtures::fixtures;
-use crate::fixtures::{rng, sats};
+mod fixtures;
+
 use assert_matches::assert_matches;
 use bitcoin::Amount;
+use fixtures::fixtures;
+use fixtures::{rng, sats};
 use minimint::consensus::ConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
 use std::ops::Sub;
