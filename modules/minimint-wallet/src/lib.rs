@@ -667,9 +667,9 @@ impl Wallet {
                 .await;
         } else {
             panic!(
-                   "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
-                   consensus_height, median_proposal
-               );
+                "Median proposed consensus block height shrunk from {} to {}, the federation is broken",
+                consensus_height, median_proposal
+            );
         }
 
         median_proposal

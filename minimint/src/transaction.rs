@@ -82,19 +82,22 @@ impl TransactionItem for Output {
 }
 
 impl Transaction {
-    pub fn validate_funding(&self, fee_consensus: &FeeConsensus) -> Result<(), TransactionError> {
-        let in_amount = self
-            .inputs
+    pub fn in_amount(&self) -> Amount {
+        self.inputs
             .iter()
             .map(TransactionItem::amount)
-            .sum::<Amount>();
-        let out_amount = self
-            .outputs
+            .sum::<Amount>()
+    }
+
+    pub fn out_amount(&self) -> Amount {
+        self.outputs
             .iter()
             .map(TransactionItem::amount)
-            .sum::<Amount>();
-        let fee_amount = self
-            .inputs
+            .sum::<Amount>()
+    }
+
+    pub fn fee_amount(&self, fee_consensus: &FeeConsensus) -> Amount {
+        self.inputs
             .iter()
             .map(|input| input.fee(fee_consensus))
             .sum::<Amount>()
@@ -102,7 +105,13 @@ impl Transaction {
                 .outputs
                 .iter()
                 .map(|output| output.fee(fee_consensus))
-                .sum::<Amount>();
+                .sum::<Amount>()
+    }
+
+    pub fn validate_funding(&self, fee_consensus: &FeeConsensus) -> Result<(), TransactionError> {
+        let in_amount = self.in_amount();
+        let out_amount = self.out_amount();
+        let fee_amount = self.fee_amount(fee_consensus);
 
         if in_amount >= (out_amount + fee_amount) {
             Ok(())

@@ -1,6 +1,7 @@
 mod db;
 
 use crate::api::ApiError;
+use crate::clients::transaction::TransactionBuilder;
 use crate::BorrowedClientContext;
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
@@ -9,6 +10,7 @@ use minimint::modules::mint::tiered::coins::Coins;
 use minimint::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
+use minimint::transaction::{Output, Transaction};
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
@@ -139,11 +141,36 @@ impl<'c> MintClient<'c> {
         Ok(coin_key_pairs.into_iter().unzip())
     }
 
+    /// Adds change to a TransactionBuilder as the last output (if necessary) and builds the final Transaction
+    pub fn finalize_change<R: Rng + CryptoRng>(
+        &self,
+        change_required: Amount,
+        batch: BatchTx,
+        mut tx: TransactionBuilder,
+        mut rng: R,
+    ) -> Transaction {
+        let min_change = *self.context.config.tbs_pks.tiers().min().unwrap();
+
+        if change_required >= min_change {
+            self.create_coin_output(batch, change_required, &mut rng, |change_output| {
+                tx.output(Output::Mint(change_output));
+                OutPoint {
+                    txid: tx.tx.tx_hash(),
+                    out_idx: (tx.tx.outputs.len() - 1) as u64,
+                }
+            });
+        }
+
+        tx.build(self.context.secp, &mut rng)
+    }
+
     pub fn create_coin_output<R: Rng + CryptoRng>(
         &self,
+        mut batch: BatchTx,
         amount: Amount,
         mut rng: R,
-    ) -> (CoinFinalizationData, Coins<BlindToken>) {
+        mut tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
+    ) {
         let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
             amount,
             &self.context.config.tbs_pks,
@@ -157,21 +184,10 @@ impl<'c> MintClient<'c> {
             .map(|(amt, token)| (amt, BlindToken(token)))
             .collect();
 
-        (coin_finalization_data, coin_output)
-    }
+        let out_point = tx(coin_output);
 
-    // TODO: find a way to make output creation one-step
-    /// We currently need the outpoint as part of coin finalization data. This necessitates to call
-    /// this function after the entire transaction was created and prevents us from saving it in
-    /// `create_coin_output` where it belongs.  
-    pub fn save_coin_finalization_data(
-        &self,
-        mut batch: BatchTx,
-        out_point: OutPoint,
-        coin_finalization_data: CoinFinalizationData,
-    ) {
         batch.append_insert_new(OutputFinalizationKey(out_point), coin_finalization_data);
-        batch.commit()
+        batch.commit();
     }
 
     pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, outpoint: OutPoint) -> Result<()> {
@@ -416,10 +432,12 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 #[cfg(test)]
 mod tests {
     use crate::api::FederationApi;
+
     use crate::mint::MintClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
+    use futures::executor::block_on;
     use minimint::modules::ln::contracts::ContractId;
     use minimint::modules::ln::ContractAccount;
     use minimint::modules::mint::config::MintClientConfig;
@@ -508,19 +526,18 @@ mod tests {
     ) {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
-        let (cfd, output) = client.create_coin_output(amt, rng);
 
         let mut batch = DbBatch::new();
-        client.save_coin_finalization_data(batch.transaction(), out_point, cfd);
-        client_db.apply_batch(batch).unwrap();
+        client.create_coin_output(batch.transaction(), amt, rng, |output| {
+            // Agree on output
+            let mut fed = block_on(fed.lock());
+            block_on(fed.consensus_round(&[], &[(out_point, output)]));
+            // Generate signatures
+            block_on(fed.consensus_round(&[], &[]));
 
-        // Agree on output
-        fed.lock()
-            .await
-            .consensus_round(&[], &[(out_point, output)])
-            .await;
-        // Generate signatures
-        fed.lock().await.consensus_round(&[], &[]).await;
+            out_point
+        });
+        client_db.apply_batch(batch).unwrap();
 
         let mut batch = DbBatch::new();
         client.fetch_all_coins(batch.transaction()).await.unwrap();
@@ -572,9 +589,10 @@ mod tests {
 
         // Spending works
         let mut batch = DbBatch::new();
-        let (spend_keys, input) = client
-            .create_coin_input(batch.transaction(), SPEND_AMOUNT)
+        let coins = client
+            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
+        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -600,9 +618,10 @@ mod tests {
 
         // We can exactly spend the remainder
         let mut batch = DbBatch::new();
-        let (spend_keys, input) = client
-            .create_coin_input(batch.transaction(), SPEND_AMOUNT)
+        let coins = client
+            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
             .unwrap();
+        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();

@@ -2,6 +2,7 @@ use crate::api::{ApiError, FederationApi};
 use crate::clients::gateway::db::{
     OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
+use crate::clients::transaction::TransactionBuilder;
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError};
@@ -10,7 +11,7 @@ use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
 use minimint::modules::ln::contracts::{outgoing, ContractId, IdentifyableContract};
 use minimint::outcome::TransactionStatus;
-use minimint::transaction::{agg_sign, Input, Output, Transaction, TransactionItem};
+use minimint::transaction::{Input, Transaction};
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
 use minimint_api::{Amount, OutPoint, PeerId};
@@ -191,47 +192,28 @@ impl GatewayClient {
         preimage: [u8; 32],
         mut rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
+        let mut batch = DbBatch::new();
+        let mut tx = TransactionBuilder::default();
+
         let contract = self.ln_client().get_outgoing_contract(contract_id).await?;
         let input = Input::LN(contract.claim(outgoing::Preimage(preimage)));
 
-        let (finalization_data, mint_output) = self
-            .mint_client()
-            .create_coin_output(input.amount(), &mut rng);
-        let output = Output::Mint(mint_output);
-
-        let inputs = vec![input];
-        let outputs = vec![output];
-        let txid = Transaction::tx_hash_from_parts(&inputs, &outputs);
-        let signature = agg_sign(
-            &[self.context.config.redeem_key],
-            txid.as_hash(),
-            &self.context.secp,
-            &mut rng,
-        );
-
-        let out_point = OutPoint { txid, out_idx: 0 };
-        let mut batch = DbBatch::new();
-        self.mint_client().save_coin_finalization_data(
-            batch.transaction(),
-            out_point,
-            finalization_data,
-        );
-
-        let transaction = Transaction {
-            inputs,
-            outputs,
-            signature: Some(signature),
-        };
+        tx.input(&mut vec![self.context.config.redeem_key], input);
+        let change = tx.change_required(&self.context.config.common.fee_consensus);
+        let final_tx =
+            self.mint_client()
+                .finalize_change(change, batch.transaction(), tx, &mut rng);
+        let txid = final_tx.tx_hash();
 
         batch.autocommit(|batch| {
             batch.append_delete(OutgoingPaymentKey(contract_id));
-            batch.append_insert(OutgoingPaymentClaimKey(contract_id), transaction.clone());
+            batch.append_insert(OutgoingPaymentClaimKey(contract_id), final_tx.clone());
         });
+
         self.context.db.apply_batch(batch).expect("DB error");
+        self.context.api.submit_transaction(final_tx).await?;
 
-        self.context.api.submit_transaction(transaction).await?;
-
-        Ok(out_point)
+        Ok(OutPoint { txid, out_idx: 0 })
     }
 
     /// Lists all claim transactions for outgoing contracts that we have submitted but were not part
