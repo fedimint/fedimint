@@ -15,7 +15,7 @@ PRs fixing TODOs or issues are always welcome, it might be a good idea though to
 
 To get started with development have a look at the:
 * [Architecture](docs/architecture.md) - high-level description of the codebase and design
-* [Integration tests](tests/README.md) - instructions on how to write and run the integration tests
+* [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
 * `scripts/final-checks.sh` - checks to run locally before opening a PR
 * `scripts/integrationtest.sh` - tests that will run automatically after a PR is opened
 

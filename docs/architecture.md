@@ -10,6 +10,8 @@ The [Minimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `minimint` - the main consensus code for processing transactions and REST API
 * `minimint-api` - the common serialization and database representations for communication between crates
 * `minimint-derive` - helper macros for serialization
+* `crypto/tbs` - helper cryptography library for threshold blind signatures
+* `integrationtests/minimint-tests` - integration testing framework
 
 [Modules](#Modules) can be added to the `MinimintConsensus` to allow for new types of transactions and federated actions:
 * `modules/minimint-wallet` - an on-chain bitcoin wallet
