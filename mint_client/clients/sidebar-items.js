@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["gateway",""],["user",""]]});
+initSidebarItems({"mod":[["gateway",""],["transaction",""],["user",""]]});

@@ -1953,9 +1953,9 @@
                 .<span class="kw">await</span>;
         } <span class="kw">else</span> {
             <span class="macro">panic!</span>(
-                   <span class="string">&quot;Median proposed consensus block height shrunk from {} to {}, the federation is broken&quot;</span>,
-                   <span class="ident">consensus_height</span>, <span class="ident">median_proposal</span>
-               );
+                <span class="string">&quot;Median proposed consensus block height shrunk from {} to {}, the federation is broken&quot;</span>,
+                <span class="ident">consensus_height</span>, <span class="ident">median_proposal</span>
+            );
         }
 
         <span class="ident">median_proposal</span>

@@ -251,6 +251,61 @@
 <span id="244">244</span>
 <span id="245">245</span>
 <span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Amount</span>, <span class="ident">InvalidAmountTierError</span>, <span class="ident">Keys</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">DecodeError</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
@@ -337,29 +392,37 @@
         }
     }
 }
+
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span>
 <span class="kw">where</span>
     <span class="ident">C</span>: <span class="ident">Clone</span>,
 {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">select_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">amount</span>: <span class="ident">Amount</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Select coins with total amount of *at least* `amount`. If more than requested amount of coins</span>
+    <span class="doccomment">/// are returned it was because exact change couldn&#39;t be made, and the next smallest amount will be</span>
+    <span class="doccomment">/// returned.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// The caller can request change from the federation.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">select_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">amount</span>: <span class="ident">Amount</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="ident">amount</span> <span class="op">&gt;</span> <span class="self">self</span>.<span class="ident">amount</span>() {
+            <span class="kw">return</span> <span class="prelude-val">None</span>;
+        }
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">remaining</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">amount</span>();
+
         <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">iter</span>()
             .<span class="ident">rev</span>()
-            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">amt</span>, <span class="ident">coin</span>)<span class="op">|</span> {
-                <span class="kw">if</span> <span class="ident">amount</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">amt</span> {
-                    <span class="ident">amount</span> <span class="op">-</span><span class="op">=</span> <span class="ident">amt</span>;
-                    <span class="prelude-val">Some</span>((<span class="ident">amt</span>, (<span class="kw-2">*</span><span class="ident">coin</span>).<span class="ident">clone</span>()))
-                } <span class="kw">else</span> {
+            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">coin_amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
+                <span class="kw">if</span> <span class="ident">amount</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">remaining</span> <span class="op">-</span> <span class="ident">coin_amount</span> {
+                    <span class="ident">remaining</span> <span class="op">-</span><span class="op">=</span> <span class="ident">coin_amount</span>;
                     <span class="prelude-val">None</span>
+                } <span class="kw">else</span> {
+                    <span class="prelude-val">Some</span>((<span class="ident">coin_amount</span>, (<span class="kw-2">*</span><span class="ident">coin</span>).<span class="ident">clone</span>()))
                 }
             })
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span><span class="op">&gt;</span>();
 
-        <span class="kw">if</span> <span class="ident">amount</span> <span class="op">==</span> <span class="ident">Amount::ZERO</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">coins</span>)
-        } <span class="kw">else</span> {
-            <span class="prelude-val">None</span>
-        }
+        <span class="prelude-val">Some</span>(<span class="ident">coins</span>)
     }
 }
 
@@ -495,6 +558,53 @@
             <span class="ident">amount</span>.<span class="ident">expect</span>(<span class="string">&quot;The multi zip must contain at least one iterator&quot;</span>),
             <span class="ident">coins</span>,
         ))
+    }
+}
+
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
+<span class="kw">mod</span> <span class="ident">test</span> {
+    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::Coins</span>;
+    <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">select_coins_returns_exact_amount</span>() {
+        <span class="kw">let</span> <span class="ident">starting</span> <span class="op">=</span> <span class="ident">coins</span>(<span class="macro">vec!</span>[
+            (<span class="ident">Amount::from_sat</span>(<span class="number">1</span>), <span class="number">5</span>),
+            (<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">5</span>),
+            (<span class="ident">Amount::from_sat</span>(<span class="number">20</span>), <span class="number">5</span>),
+        ]);
+
+        <span class="macro">assert_eq!</span>(
+            <span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">7</span>)),
+            <span class="prelude-val">Some</span>(<span class="ident">coins</span>(<span class="macro">vec!</span>[
+                (<span class="ident">Amount::from_sat</span>(<span class="number">1</span>), <span class="number">2</span>),
+                (<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">1</span>)
+            ]))
+        );
+    }
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">select_coins_uses_smaller_denominations</span>() {
+        <span class="kw">let</span> <span class="ident">starting</span> <span class="op">=</span> <span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">5</span>), (<span class="ident">Amount::from_sat</span>(<span class="number">20</span>), <span class="number">5</span>)]);
+
+        <span class="macro">assert_eq!</span>(
+            <span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">7</span>)),
+            <span class="prelude-val">Some</span>(<span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">2</span>)]))
+        );
+    }
+
+    <span class="attribute">#[<span class="ident">test</span>]</span>
+    <span class="kw">fn</span> <span class="ident">select_coins_returns_none_if_amount_is_too_large</span>() {
+        <span class="kw">let</span> <span class="ident">starting</span> <span class="op">=</span> <span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">10</span>), <span class="number">1</span>)]);
+
+        <span class="macro">assert_eq!</span>(<span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">100</span>)), <span class="prelude-val">None</span>);
+    }
+
+    <span class="kw">fn</span> <span class="ident">coins</span>(<span class="ident">coins</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">Amount</span>, <span class="ident">usize</span>)<span class="op">&gt;</span>) -&gt; <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
+        <span class="ident">coins</span>
+            .<span class="ident">into_iter</span>()
+            .<span class="ident">flat_map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">number</span>)<span class="op">|</span> <span class="macro">vec!</span>[(<span class="ident">amount</span>, <span class="number">0_usize</span>); <span class="ident">number</span>])
+            .<span class="ident">collect</span>()
     }
 }
 </code></pre></div>
