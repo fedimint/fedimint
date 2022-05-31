@@ -1,12 +1,12 @@
+mod fixtures;
+
 use assert_matches::assert_matches;
 use bitcoin::Amount;
-use fixture::fixtures;
-use fixture::{rng, sats};
+use fixtures::fixtures;
+use fixtures::{rng, sats};
 use minimint::consensus::ConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
 use std::ops::Sub;
-
-mod fixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {

@@ -20,7 +20,7 @@ use minimint_api::encoding::Decodable;
 use minimint_wallet::config::WalletConfig;
 use minimint_wallet::txoproof::TxOutProof;
 
-use crate::fixture::{BitcoinTest, LightningTest};
+use crate::fixtures::{BitcoinTest, LightningTest};
 
 pub struct RealLightningTest {
     rpc_gateway: LightningRPC,

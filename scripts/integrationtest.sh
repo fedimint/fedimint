@@ -41,10 +41,6 @@ until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
 done
 
-# Ensure bitcoin core wallet is loaded
-$BTC_CLIENT createwallet "" || true
-$BTC_CLIENT loadwallet "" || true
-
 # Start lightning nodes
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR --addr=127.0.0.1:9001 &
@@ -60,7 +56,7 @@ LN2="lightning-cli --network regtest --lightning-dir=$LN2_DIR"
 # Run the Rust integration tests against the real Bitcoin / Lightning services
 export MINIMINT_TEST_REAL=1
 export MINIMINT_TEST_DIR=$TMP_DIR
-cargo test -p minimint -- --test-threads=1
+cargo test -p minimint-tests -- --test-threads=1
 
 # Generate federation, gateway and client config
 $BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000

@@ -1717,27 +1717,19 @@ checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 name = "minimint"
 version = "0.1.0"
 dependencies = [
- "assert_matches",
  "async-trait",
  "bincode",
  "bitcoin",
- "bitcoincore-rpc",
  "clap",
- "clightningrpc",
- "cln-rpc",
  "futures",
  "hbbft",
  "hex",
  "itertools",
- "lightning",
- "lightning-invoice",
- "ln-gateway",
  "minimint-api",
  "minimint-derive",
  "minimint-ln",
  "minimint-mint",
  "minimint-wallet",
- "mint-client",
  "rand 0.6.5",
  "rayon",
  "secp256k1-zkp",
@@ -1827,6 +1819,34 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "minimint-tests"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "clightningrpc",
+ "cln-rpc",
+ "futures",
+ "itertools",
+ "lightning",
+ "lightning-invoice",
+ "ln-gateway",
+ "minimint",
+ "minimint-api",
+ "minimint-ln",
+ "minimint-mint",
+ "minimint-wallet",
+ "mint-client",
+ "rand 0.6.5",
+ "serde",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
