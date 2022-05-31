@@ -13,4 +13,4 @@ cargo test
 
 export MINIMINT_TEST_REAL=1
 export MINIMINT_TEST_DIR=$PWD/it/
-cargo test -p minimint -- --test-threads=1
+cargo test -p minimint-tests -- --test-threads=1
