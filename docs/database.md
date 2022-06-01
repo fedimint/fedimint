@@ -54,6 +54,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | Our Decryption Shares            | 0x42   | contract id (sha256)                | `DecryptionShare`            |
 | Consensus Decryption Shares      | 0x43   | contract id (sha256), peer id (u16) | `DecryptionShare`            |
 | Contract Update (output outcome) | 0x44   | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
+| Confirmed Invoice                | 0x45   | contract id (sha256 payment hash)   | `ConfirmedInvoice`           |
 
 ## Client DB Layout
 

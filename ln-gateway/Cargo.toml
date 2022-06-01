@@ -10,7 +10,7 @@ async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
 async-trait = "0.1.52"
 bitcoin_hashes = "0.10.0"
 cln-rpc = "0.1"
-clap = { version = "3.1.18", features = ["derive"] }
+cln-plugin = "0.1"
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.16.0"
@@ -24,6 +24,6 @@ serde_json = "1.0.61"
 sled = "0.34.6"
 thiserror = "1.0.30"
 tide = "0.16.0"
-tracing = "0.1.26"
+tracing = { version = "0.1.26", default-features = false, features= ["log", "log-always", "attributes", "std"] }
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 tokio = {version = "1.0", features = ["full"]}
