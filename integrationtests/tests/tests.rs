@@ -12,7 +12,6 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
 use minimint::transaction::Output;
-use minimint_api::OutPoint;
 use minimint_ln::contracts::incoming::PreimageDecryptionShare;
 use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
@@ -183,7 +182,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
 
     let (keypair, unconfirmed_invoice) = user
         .client
-        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
+        .create_unconfirmed_invoice(payment_amount, "".into(), &gateway.keys, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // create offer
@@ -292,6 +291,7 @@ async fn lightning_gateway_pays_invoice() {
         .unwrap();
     user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(2000 - 1010));
+    gateway.user.client.fetch_all_coins().await.unwrap();
     assert_eq!(gateway.user.client.coins().amount(), sats(1010));
     assert_eq!(lightning.amount_sent(), sats(1000));
 }
@@ -309,7 +309,7 @@ async fn receive_lightning_payment_valid_preimage() {
     // Create invoice and offer in the federation
     let (keypair, unconfirmed_invoice) = user
         .client
-        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
+        .create_unconfirmed_invoice(payment_amount, "".into(), &gateway.keys, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // process offer
@@ -322,7 +322,7 @@ async fn receive_lightning_payment_valid_preimage() {
         .unwrap();
 
     // Gateway deposits ecash to trigger preimage decryption by the federation
-    let (txid, contract_id) = gateway
+    let (outpoint, contract_id) = gateway
         .server
         .buy_preimage_offer(invoice.payment_hash(), &payment_amount, rng())
         .await
@@ -339,7 +339,6 @@ async fn receive_lightning_payment_valid_preimage() {
     assert_eq!(user.total_coins(), sats(0));
 
     // Gateway receives decrypted preimage
-    let outpoint = OutPoint { txid, out_idx: 0 };
     let preimage = gateway
         .server
         .await_preimage_decryption(outpoint)

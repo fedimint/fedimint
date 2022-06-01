@@ -32,19 +32,7 @@ MiniMint consists of three kinds of services:
 
 In the following we will set up all three.
 
-### Running bitcoind and lightningd
-
-To test out MiniMint you'll need to run `bitcoind` and (optionally) 2 instances `lightningd` to send and receive via Lightning:
-
-```shell
-bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin
-
-# optional
-lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln1 --addr=127.0.0.1:9000
-lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln2 --addr=127.0.0.1:9001
-```
-
-### Generating config
+### Generate federation config
 
 You first need to generate some config. All scripts assume config to be located in a folder called `cfg`. Then you can generate the necessary configuration files as follows:
 
@@ -65,27 +53,25 @@ cargo run --bin configgen cfg 4 5000 6000 1 10 100 1000 10000 100000 1000000 100
 
 This will both create all the `server-n.json` config files and one `federation_client.json`. The server configs are already complete and can be used to run the nodes. The client config on the other hand needs to be amended with some information about a lightning gateway it can use. For that we run
 
-```shell
-cargo run --bin gw_configgen -- cfg <ln-rpc-path> <ln-node-pub-key>
-```
+### Running bitcoind and lightningd
 
-The **`<ln-rpc>`** placeholder should be replaced with the absolute path to a c-lightning `lightning-rpc` socket, typically located at `/home/<user>/.lightning/regtest/lightning-rpc` for regtest nodes. If you do not intend to use the LN feature this path does not have to be correct and you will not even have to start the gateway. **But for the client to start we need to add at least a dummy gateway**.
-
-The **`<ln-node-pub-key>`** placeholder should be replaced with the gateway's lightning node pubkey. Once again, you can pass a fake pubkey if you don't want to use lightning (e.g. `030160715ddbe8d4cd68e00fc910d6dac161fcfa457bfef4fd8bb93350cc2966aa`).
-
-`gw_configgen` will both generate the final `cfg/client.json` for clients as well as `cfg/gateway.json` which will be used by the Lightning gateway.
-
-Run the client config and set `ln1` as the gateway. If you don't want to use MiniMint with Lightning, you can skip the first command and hard-code a fake pubkey in the second command (e.g. `030160715ddbe8d4cd68e00fc910d6dac161fcfa457bfef4fd8bb93350cc2966aa`).
+First we build a binary for the "lightning gateway":
 
 ```shell
-lightning-cli --network regtest --lightning-dir=ln1 getinfo
-{
-    "id": <ln-node-pub-key>,
-    ...
-}
-
-cargo run --bin gw_configgen -- cfg "ln1/regtest/lightning-rpc" <ln-node-pub-key>
+cargo build --release --bin ln_gateway
 ```
+
+Next you'll need to run `bitcoind` and 2 instances `lightningd` to send and receive via Lightning:
+
+```shell
+bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin
+
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln1 --addr=127.0.0.1:9000 --plugin=$PWD/target/release/ln_gateway --minimint-cfg=$PWD/cfg
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=ln2 --addr=127.0.0.1:9001
+```
+
+Note that we pass the gateway binary as a ["plugin"](https://lightning.readthedocs.io/PLUGINS.html) to the first instance of Core Lightning, as well as a path to our configuration folder.
+
 
 ### Running the mints
 
@@ -98,7 +84,8 @@ bash scripts/startfed.sh <num_nodes> 0
 The `0` in the end specifies how many nodes to leave out. E.g. changing it to one would skip the first node. This is useful to run a single node with a debugger attached.
 
 Log output can be adjusted using the `RUST_LOG` environment variable and is set to `info` by default. Logging can be adjusted per module, see the [`env_logger` documentation](https://docs.rs/env_logger/0.8.4/env_logger/#enabling-logging) for details.
-###Setting up a channel from LN1 to LN2
+
+### Setting up a channel from LN1 to LN2
 If you want to pay invoices later, the node (ln1) you've set as a gateway needs to have a channel to the payee node :
 
 First generate a few hundred blocks to you your regtest `bitcoind` wallet to ensure it has mature coins.
@@ -114,8 +101,8 @@ Send your gateway Ligtning node some funds:
 # Get address from gateway lightning node (we'll call it LN_ADDRESS)
 lightning-cli --network regtest --lightning-dir=ln1 newaddr
 
-# Send bitcoin to gateway lightning address
-bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <LN_ADDRESS> <AMOUNT>
+# Send bitcoin to gateway lightning address, and mine a block to confirm it
+bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin sendtoaddress <LN_ADDRESS> 1.0
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 1 $ADDRESS
 ```
 
@@ -138,7 +125,7 @@ bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 10 
 Then you can use the peg-in script to deposit funds. It contains comments that explain the deposit process.
 
 ```shell
-bash scripts/pegin.sh <amount in BTC>
+bash scripts/pegin.sh 0.1
 ```
 
 Take care to not request too big of a peg-in (depending on your amount tier the smallest representations as tokens might be too big to finish signing in reasonable time) or too small (there is a 500sat fee that needs to be paid). After about 20s your default client in `cfg` should have newly issued coins.
@@ -146,18 +133,21 @@ Take care to not request too big of a peg-in (depending on your amount tier the 
 You can view your client's holdings using the `info` command:
 
 ```
-minimint $ cargo run --bin mint-client-cli --release -- cfg info
+$ cargo run --bin mint-client-cli --release -- cfg info
     Finished release [optimized] target(s) in 0.11s
      Running `target/release/mint-client-cli cfg info`
-Jun 15 14:57:22.066  INFO mint_client_cli: We own 14 coins with a total value of 9500000 msat
-Jun 15 14:57:22.066  INFO mint_client_cli: We own 5 coins of denomination 100000 msat
-Jun 15 14:57:22.066  INFO mint_client_cli: We own 9 coins of denomination 1000000 msat
+We own 41 coins with a total value of 9999500000 msat
+We own 5 coins of denomination 100000 msat
+We own 9 coins of denomination 1000000 msat
+We own 9 coins of denomination 10000000 msat
+We own 9 coins of denomination 100000000 msat
+We own 9 coins of denomination 1000000000 msat
 ```
 
 The `spend` subcommand allows to send tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
 
 ```
-minimint $ cargo run --bin mint-client-cli --release -- cfg spend 400000
+$ cargo run --bin mint-client-cli --release -- cfg spend 400000
     Finished release [optimized] target(s) in 0.12s
      Running `target/release/mint-client-cli cfg spend 400000`
 AQAAAAAAAACghgEAAAAAAAQAAAAAAAAAA7mGus9L4ojsIsctFK7oNz5s4ozZe3pVa0S1jZ3XvSnMMAAAAAAAAACFjOG3a4vlxBOCa9fYD6qWIM2JhH9vitG0
@@ -171,7 +161,7 @@ rRj6oMC6wKoZz0jCuS5i8faLRHGZp3AMR1/xAvMglQZ9zMEDdDd7dcxwp9WpR6JfdAUJku3EGQ/FUXaQ
 A receiving client can now reissue these coins to claim them and avoid double spends:
 
 ```
-minimint $ cargo run --bin mint-client-cli --release -- cfg reissue AQAAAAAAAACghgE…
+$ cargo run --bin mint-client-cli --release -- cfg reissue AQAAAAAAAACghgE…
     Finished release [optimized] target(s) in 0.13s
      Running `target/release/mint-client-cli cfg reissue AQAAAAAAAACghgE…
 Jun 15 15:01:47.027  INFO mint_client_cli: Starting reissuance transaction for 400000 msat
@@ -184,17 +174,10 @@ Jun 15 15:02:06.264  INFO mint_client_cli: Fetched coins from issuance 47d8f0871
 
 ### Using the gateway
 
-To pay a Lightning invoice using ecash tokens via the gateway we must run the gateway itself:
-
-```shell
-cargo run --bin ln_gateway --release cfg
-```
-
 Generate a Lightning invoice from LN2, our non-gateway lightning node:
 
 ```shell
-# Make sure your peg-in created coins of small enough tiers. For now the client is not able to spend without exact change.
-lightning-cli --network regtest --lightning-dir=ln2 invoice 100000 test test 10m
+lightning-cli --network regtest --lightning-dir=ln2 invoice 4000000000 test test 10m
 ```
 
 Have LN2 non-gateway lightning node monitor the payment of this invoice. This command hangs until invoice is paid, so run it in another terminal window. Once paid, it will print out some information.
@@ -207,6 +190,30 @@ Pay the invoice:
 
 ```shell
 cargo run --bin mint-client-cli --release -- cfg ln-pay <INVOICE>
+```
+
+Generate your own invoice: 
+
+```shell
+cargo run --bin mint-client-cli --release -- cfg ln-invoice 10000 "description"
+```
+
+Have LN2 pay invoice via the "lightning gateway":
+
+```shell
+$ lightning-cli --network regtest --lightning-dir=ln2 pay <INVOICE>
+{
+   "destination": "03b7e95e0d159ea18371912d3326a306e907306413188c36a263cf415d0a9ceefa",
+   "payment_hash": "7057839d006a5c5067c7b271724a626ac0f7958502b9522bcd9beaa0d69c0165",
+   "created_at": 1656628023.317,
+   "parts": 1,
+   "msatoshi": 10000,
+   "amount_msat": "10000msat",
+   "msatoshi_sent": 10000,
+   "amount_sent_msat": "10000msat",
+   "payment_preimage": "f038aef6054b7c3577cf93bde4a741a0df942a1e2ca6ed5182084ab68bbd51ae",
+   "status": "complete"
+}
 ```
 
 ### Other options
@@ -233,6 +240,7 @@ SUBCOMMANDS:
     fetch             Fetch (re-)issued coins and finalize issuance process
     help              Prints this message or the help of the given subcommand(s)
     info              Display wallet info (holdings, tiers)
+    ln-invoice        Create a lightning invoice to receive payment via gateway
     ln-pay            Pay a lightning invoice via a gateway
     peg-in            Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
     peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed

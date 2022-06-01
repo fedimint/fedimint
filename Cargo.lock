@@ -603,9 +603,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.7"
+version = "3.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b7b16274bb247b45177db843202209b12191b631a14a9d06e41b3777d6ecf14"
+checksum = "190814073e85d238f31ff738fcb0bf6910cedeb73376c87cd69291028966fd83"
 dependencies = [
  "atty",
  "bitflags",
@@ -652,10 +652,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "cln-plugin"
+version = "0.1.0"
+source = "git+https://github.com/ElementsProject/lightning?rev=e6442d7#e6442d798ef24e1f868ca6003cad6e20a4d8dd5e"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cln-rpc 0.1.0 (git+https://github.com/ElementsProject/lightning?rev=e6442d7)",
+ "futures",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.6.10",
+]
+
+[[package]]
 name = "cln-rpc"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "18fb71ceca239c83a06fb494028b4a6b7b38ad4dd9c0410b7ea6013b90e15045"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures-util",
+ "hex",
+ "log",
+ "native-tls",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util 0.6.10",
+]
+
+[[package]]
+name = "cln-rpc"
+version = "0.1.0"
+source = "git+https://github.com/ElementsProject/lightning?rev=e6442d7#e6442d798ef24e1f868ca6003cad6e20a4d8dd5e"
 dependencies = [
  "anyhow",
  "bytes",
@@ -883,9 +917,9 @@ checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
 
 [[package]]
 name = "either"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+checksum = "3f107b87b6afc2a64fd13cac55fe06d6c8859f12d4b14cbcdd2c67d0976781be"
 
 [[package]]
 name = "encoding_rs"
@@ -1651,7 +1685,8 @@ dependencies = [
  "async-trait",
  "bitcoin_hashes",
  "clap",
- "cln-rpc",
+ "cln-plugin",
+ "cln-rpc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
  "hex",
  "lightning-invoice",
@@ -1899,7 +1934,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "clightningrpc",
- "cln-rpc",
+ "cln-rpc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
  "hbbft",
  "itertools",
@@ -2968,9 +3003,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.81"
+version = "1.0.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
+checksum = "82c2c1fdcd807d1098552c5b9a36e425e42e9fbd7c6a37a8425f390f781f7fa7"
 dependencies = [
  "itoa",
  "ryu",
@@ -3101,9 +3136,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.8.1"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc88c725d61fc6c3132893370cac4a0200e3fedf5da8331c570664b1987f5ca2"
+checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 
 [[package]]
 name = "socket2"
@@ -3543,6 +3578,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-stream"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df54d54117d6fdc4e4fea40fe1e4e566b3505700e148a6827e59b34b0d2600d9"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.9",
+ "tokio",
+]
+
+[[package]]
 name = "tokio-util"
 version = "0.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3583,6 +3629,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a400e31aa60b9d44a52a8ee0343b5b18566b03a8321e0d321f695cf56e940160"
 dependencies = [
  "cfg-if 1.0.0",
+ "log",
  "pin-project-lite 0.2.9",
  "tracing-attributes",
  "tracing-core",
@@ -3636,13 +3683,13 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc28f93baff38037f64e6f43d34cfa1605f27a49c34e8a04c5e78b0babf2596"
+checksum = "cfbbce75cad20b56f4f4200e413b894c990c7bbd7e47245ff5cbc2b82511e4da"
 dependencies = [
  "ansi_term",
- "lazy_static",
  "matchers",
+ "once_cell",
  "regex",
  "sharded-slab",
  "smallvec",
@@ -4018,6 +4065,6 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.5.5"
+version = "1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94693807d016b2f2d2e14420eb3bfcca689311ff775dcf113d74ea624b7cdf07"
+checksum = "20b578acffd8516a6c3f2a1bdefc1ec37e547bb4e0fb8b6b01a4cafc886b4442"

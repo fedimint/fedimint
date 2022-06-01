@@ -41,9 +41,14 @@ until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
 done
 
-# Start lightning nodes
-lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
-lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR --addr=127.0.0.1:9001 &
+# Create federation config (required by gateway plugin)
+$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
+
+# Start lightning nodes. Lightning gateway is run as core-lightning plugin.
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR \
+    --addr=127.0.0.1:9000 --plugin=$BIN_DIR/ln_gateway --minimint-cfg=$CFG_DIR &
+lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR \
+    --addr=127.0.0.1:9001 &
 until [ -e $LN1_DIR/regtest/lightning-rpc ]; do
     sleep $POLL_INTERVAL
 done
@@ -58,11 +63,6 @@ export MINIMINT_TEST_REAL=1
 export MINIMINT_TEST_DIR=$TMP_DIR
 cargo test -p minimint-tests -- --test-threads=1
 
-# Generate federation, gateway and client config
-$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
-LN1_PUB_KEY="$($LN1 getinfo | jq -r '.id')"
-$BIN_DIR/gw_configgen -- $CFG_DIR "$LN1_DIR/regtest/lightning-rpc" $LN1_PUB_KEY
-
 # Initialize wallet and get ourselves some money
 function mine_blocks() {
     PEG_IN_ADDR="$($BTC_CLIENT getnewaddress)"
@@ -76,7 +76,7 @@ $BTC_CLIENT sendtoaddress $LN_ADDR 1
 mine_blocks 10
 LN2_PUB_KEY="$($LN2 getinfo | jq -r '.id')"
 $LN1 connect $LN2_PUB_KEY@127.0.0.1:9001
-until $LN1 fundchannel $LN2_PUB_KEY 0.1btc; do sleep $POLL_INTERVAL; done
+until $LN1 fundchannel $LN2_PUB_KEY 0.01btc; do sleep $POLL_INTERVAL; done
 mine_blocks 10
 
 # FIXME: make db path configurable to avoid cd-ing here
@@ -99,13 +99,10 @@ function await_block_sync() {
 }
 await_block_sync
 
-# Start LN gateway
-$BIN_DIR/ln_gateway $CFG_DIR &
-
 #### BEGIN TESTS ####
 # peg in
 PEG_IN_ADDR="$($MINT_CLIENT peg-in-address)"
-TX_ID="$($BTC_CLIENT sendtoaddress $PEG_IN_ADDR 0.00099999)"
+TX_ID="$($BTC_CLIENT sendtoaddress $PEG_IN_ADDR 0.00999999)"
 
 # Confirm peg-in
 mine_blocks 11
@@ -132,8 +129,16 @@ RECEIVED=$($BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
 # outgoing lightning
-INVOICE="$($LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
+INVOICE="$($LN2 invoice 100000000 test test 1m | jq -r '.bolt11')"
 $MINT_CLIENT ln-pay $INVOICE
 INVOICE_RESULT="$($LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
+
+# incoming lightning
+# sleep 5 # wait for pay to settle (???)
+INVOICE="$($MINT_CLIENT ln-invoice 10000 'integration test')"
+RESULT=$($LN2 pay $INVOICE)
+echo $RESULT
+
+# TODO: fetch balances and check they match

@@ -9,6 +9,8 @@ use bitcoin::util::key::KeyPair;
 use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
+use lightning::routing::gossip::RoutingFees;
+use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
 use minimint_api::db::Database;
@@ -333,6 +335,7 @@ impl UserClient {
         &self,
         amount: Amount,
         description: String,
+        gateway: &LightningGateway,
         mut rng: R,
     ) -> Result<(KeyPair, UnconfirmedInvoice), ClientError> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
@@ -343,6 +346,19 @@ impl UserClient {
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
 
+        // Route hint instructing payer how to route to gateway
+        let gateway_route_hint = RouteHint(vec![RouteHintHop {
+            src_node_id: gateway.node_pub_key,
+            short_channel_id: 8,
+            fees: RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
+            cltv_expiry_delta: (8 << 4) | 1,
+            htlc_minimum_msat: None,
+            htlc_maximum_msat: None,
+        }]);
+
         let invoice = InvoiceBuilder::new(network_to_currency(self.context.config.wallet.network))
             .amount_milli_satoshis(amount.milli_sat)
             .description(description)
@@ -351,6 +367,7 @@ impl UserClient {
             .current_timestamp()
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
+            .private_route(gateway_route_hint)
             .build_signed(|hash| {
                 self.context
                     .secp

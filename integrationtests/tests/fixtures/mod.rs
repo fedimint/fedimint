@@ -17,9 +17,11 @@ use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use hbbft::honey_badger::Message;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use ln_gateway::GatewayRequest;
 use minimint_api::task::spawn;
 use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
@@ -229,7 +231,8 @@ impl GatewayTest {
             database: database.clone(),
         };
         let client = Arc::new(GatewayClient::new(federation_client, database.clone()));
-        let server = LnGateway::new(client.clone(), ln_client).await;
+        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
+        let server = LnGateway::new(client.clone(), ln_client, sender, receiver).await;
 
         GatewayTest {
             server,

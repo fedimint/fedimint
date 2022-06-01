@@ -58,6 +58,9 @@ enum Command {
 
     /// Display wallet info (holdings, tiers)
     Info,
+
+    /// Create a lightning invoice to receive payment via gateway
+    LnInvoice { amount: Amount, description: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,13 +130,13 @@ async fn main() {
         }
         Command::Info => {
             let coins = client.coins();
-            info!(
+            println!(
                 "We own {} coins with a total value of {}",
                 coins.coin_count(),
                 coins.amount()
             );
             for (amount, coins) in coins.coins {
-                info!("We own {} coins of denomination {}", coins.len(), amount);
+                println!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }
         Command::PegOut { address, satoshis } => {
@@ -163,6 +166,20 @@ async fn main() {
                 .send()
                 .await
                 .unwrap();
+        }
+        Command::LnInvoice {
+            amount,
+            description,
+        } => {
+            let (_, unconfirmed_invoice) = client
+                .create_unconfirmed_invoice(amount, description, &cfg.gateway, &mut rng)
+                .await
+                .expect("Couldn't create invoice");
+            let invoice = client
+                .confirm_invoice(unconfirmed_invoice)
+                .await
+                .expect("Couldn't create invoice");
+            println!("{}", invoice)
         }
     }
 }
