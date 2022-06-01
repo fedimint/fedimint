@@ -15,6 +15,12 @@ pub struct IncomingContractOffer {
     pub encrypted_preimage: EncryptedPreimage,
 }
 
+impl IncomingContractOffer {
+    pub fn id(&self) -> OfferId {
+        OfferId::from_hash(self.hash)
+    }
+}
+
 // FIXME: the protocol currently envisions the use of a pub key as preimage. This is bad for privacy
 // though since pub keys are distinguishable from randomness and the payer would learn the recipient
 // is using a federated mint. Probably best to just hash the key before.
@@ -105,9 +111,7 @@ impl EncryptedPreimage {
 
 impl IdentifyableContract for IncomingContract {
     fn contract_id(&self) -> ContractId {
-        let mut engine = ContractId::engine();
-        Encodable::consensus_encode(self, &mut engine).expect("Hashing never fails");
-        ContractId::from_engine(engine)
+        ContractId::from_hash(self.hash)
     }
 }
 

@@ -1,14 +1,18 @@
 mod db;
 pub mod gateway;
+pub mod incoming;
 pub mod outgoing;
 
 use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::gateway::LightningGateway;
+use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::BorrowedClientContext;
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use lightning_invoice::Invoice;
 use minimint::modules::ln::config::LightningModuleClientConfig;
+use minimint::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
 use minimint::modules::ln::contracts::outgoing::OutgoingContract;
 use minimint::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
@@ -96,6 +100,16 @@ impl<'c> LnClient<'c> {
         }
     }
 
+    pub async fn get_incoming_contract(&self, id: ContractId) -> Result<IncomingContractAccount> {
+        let account = self.get_contract_account(id).await?;
+        match account.contract {
+            FundedContract::Incoming(c) => Ok(IncomingContractAccount {
+                amount: account.amount,
+                contract: c.contract,
+            }),
+            _ => Err(LnClientError::WrongAccountType),
+        }
+    }
     pub fn refundable_outgoing_contracts(&self, block_height: u64) -> Vec<OutgoingContractData> {
         // TODO: unify block height type
         self.context
@@ -121,6 +135,30 @@ impl<'c> LnClient<'c> {
             contract_data.contract_account.refund(),
         )
     }
+
+    pub fn create_offer_output(
+        &self,
+        amount: Amount,
+        payment_hash: Sha256Hash,
+        payment_secret: [u8; 32],
+    ) -> ContractOrOfferOutput {
+        ContractOrOfferOutput::Offer(IncomingContractOffer {
+            amount,
+            hash: payment_hash,
+            encrypted_preimage: EncryptedPreimage::new(
+                payment_secret,
+                &self.context.config.threshold_pub_key,
+            ),
+        })
+    }
+
+    pub async fn get_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
+        self.context
+            .api
+            .fetch_offer(payment_hash)
+            .await
+            .map_err(LnClientError::ApiError)
+    }
 }
 
 pub type Result<T> = std::result::Result<T, LnClientError>;
@@ -144,6 +182,7 @@ mod tests {
     use async_trait::async_trait;
     use lightning_invoice::Invoice;
     use minimint::modules::ln::config::LightningModuleClientConfig;
+    use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
     use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
     use minimint::modules::ln::ContractOrOfferOutput;
     use minimint::modules::ln::{ContractAccount, LightningModule};
@@ -198,6 +237,13 @@ mod tests {
 
         async fn fetch_consensus_block_height(&self) -> crate::api::Result<u64> {
             unimplemented!()
+        }
+
+        async fn fetch_offer(
+            &self,
+            _payment_hash: bitcoin::hashes::sha256::Hash,
+        ) -> crate::api::Result<IncomingContractOffer> {
+            unimplemented!();
         }
     }
 

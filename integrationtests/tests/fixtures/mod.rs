@@ -9,6 +9,7 @@ use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
@@ -62,6 +63,14 @@ pub fn rng() -> OsRng {
 
 pub fn sats(amount: u64) -> Amount {
     Amount::from_sat(amount)
+}
+
+pub fn sha256(data: &[u8]) -> sha256::Hash {
+    bitcoin::hashes::sha256::Hash::hash(data)
+}
+
+pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
+    bitcoin::secp256k1::Secp256k1::new()
 }
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
@@ -167,7 +176,7 @@ pub trait BitcoinTest {
 }
 
 pub trait LightningTest {
-    /// Creates an invoice from a non-gateway LN node
+    /// Creates invoice from a non-gateway LN node
     fn invoice(&self, amount: Amount) -> Invoice;
 
     /// Returns the amount that the gateway LN node has sent
@@ -177,14 +186,14 @@ pub trait LightningTest {
 pub struct GatewayTest {
     pub server: LnGateway,
     pub keys: LightningGateway,
-    pub user_client: UserClient,
+    pub user: UserTest,
     pub client: Arc<GatewayClient>,
 }
 
 impl GatewayTest {
     async fn new(
         ln_client: Box<dyn LnRpc>,
-        client: ClientConfig,
+        client_config: ClientConfig,
         node_pub_key: secp256k1::PublicKey,
     ) -> Self {
         let mut rng = OsRng::new().unwrap();
@@ -192,7 +201,7 @@ impl GatewayTest {
         let (secret_key_fed, public_key_fed) = ctx.generate_schnorrsig_keypair(&mut rng);
 
         let federation_client = GatewayClientConfig {
-            common: client.clone(),
+            common: client_config.clone(),
             redeem_key: secret_key_fed,
             timelock_delta: 10,
         };
@@ -204,15 +213,20 @@ impl GatewayTest {
         };
 
         let database = Box::new(MemDatabase::new());
-        let user_client = UserClient::new(client, database.clone(), Default::default());
-
+        let user_client =
+            UserClient::new(client_config.clone(), database.clone(), Default::default());
+        let user = UserTest {
+            client: user_client,
+            config: client_config,
+            database: database.clone(),
+        };
         let client = Arc::new(GatewayClient::new(federation_client, database.clone()));
         let server = LnGateway::new(client.clone(), ln_client).await;
 
         GatewayTest {
             server,
             keys,
-            user_client,
+            user,
             client,
         }
     }
@@ -220,7 +234,7 @@ impl GatewayTest {
 
 pub struct UserTest {
     pub client: UserClient,
-    config: ClientConfig,
+    pub config: ClientConfig,
     database: Box<dyn Database>,
 }
 
@@ -326,6 +340,17 @@ impl FederationTest {
 
         for server in &self.servers {
             server.borrow_mut().override_proposal = Some(proposal.clone());
+        }
+    }
+
+    /// Submit a minimint transaction to all federation servers
+    pub fn submit_transaction(&self, transaction: minimint::transaction::Transaction) {
+        for server in &self.servers {
+            server
+                .borrow_mut()
+                .consensus
+                .submit_transaction(transaction.clone())
+                .unwrap();
         }
     }
 
@@ -664,7 +689,7 @@ impl FederationTest {
                             format!("Wallet PegIn with TxId {:.8}", t.outpoint().txid)
                         }
                         Input::LN(t) => {
-                            format!("LN Contract {} with id {:.8}", t.amount, t.crontract_id)
+                            format!("LN Contract {} with id {:.8}", t.amount, t.contract_id)
                         }
                     };
                     write!(tx_debug, "\n    Input: {}", input_debug).unwrap();

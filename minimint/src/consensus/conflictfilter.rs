@@ -73,7 +73,7 @@ where
                     }
                 }
                 Input::LN(input) => {
-                    if !self.contract_set.insert(input.crontract_id) {
+                    if !self.contract_set.insert(input.contract_id) {
                         return None;
                     }
                 }

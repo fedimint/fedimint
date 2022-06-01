@@ -1,8 +1,9 @@
 pub mod ln;
 
 use crate::ln::{LightningError, LnRpc};
-use minimint::modules::ln::contracts::ContractId;
-use minimint_api::{db::Database, OutPoint};
+use bitcoin_hashes::sha256::Hash;
+use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
+use minimint_api::{db::Database, Amount, OutPoint, TransactionId};
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig, GatewayClientError};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -12,8 +13,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tokio::time::Instant;
-use tracing::{debug, instrument};
-use tracing::{error, warn};
+use tracing::{debug, error, instrument, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LnGatewayConfig {
@@ -57,6 +57,30 @@ impl LnGateway {
             ln_client,
             fetcher,
         }
+    }
+
+    pub async fn buy_preimage_offer(
+        &self,
+        payment_hash: &Hash,
+        amount: &Amount,
+        rng: impl RngCore + CryptoRng,
+    ) -> Result<(TransactionId, ContractId), LnGatewayError> {
+        let (txid, contract_id) = self
+            .federation_client
+            .buy_preimage_offer(payment_hash, amount, rng)
+            .await?;
+        Ok((txid, contract_id))
+    }
+
+    pub async fn await_preimage_decryption(
+        &self,
+        outpoint: OutPoint,
+    ) -> Result<Preimage, LnGatewayError> {
+        let preimage = self
+            .federation_client
+            .await_preimage_decryption(outpoint)
+            .await?;
+        Ok(preimage)
     }
 
     #[instrument(skip_all, fields(%contract_id))]

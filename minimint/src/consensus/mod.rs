@@ -246,8 +246,14 @@ where
                 .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
                 .await;
 
+            let mut drop_ln = self
+                .ln
+                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
+                .await;
+
             drop_peers.append(&mut drop_wallet);
             drop_peers.append(&mut drop_mint);
+            drop_peers.append(&mut drop_ln);
 
             let mut batch_tx = db_batch.transaction();
             for peer in drop_peers {
@@ -289,6 +295,13 @@ where
                     .await
                     .into_iter()
                     .map(ConsensusItem::Mint),
+            )
+            .chain(
+                self.ln
+                    .consensus_proposal(self.rng_gen.get_rng())
+                    .await
+                    .into_iter()
+                    .map(ConsensusItem::LN),
             )
             .collect();
 
