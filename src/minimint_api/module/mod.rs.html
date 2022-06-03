@@ -153,6 +153,10 @@
 <span id="146">146</span>
 <span id="147">147</span>
 <span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">interconnect</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">testing</span>;
 
@@ -162,7 +166,7 @@
 <span class="kw">use</span> <span class="ident">rand::CryptoRng</span>;
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::rand::RngCore</span>;
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::schnorrsig</span>;
-<span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
+<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::interconnect::ModuleInterconect</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">http_types</span> <span class="kw">as</span> <span class="ident">http</span>;
@@ -211,7 +215,7 @@
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus</span>
     <span class="doccomment">/// items of this round are supplied as `consensus_items`. The batch will be committed to the</span>
     <span class="doccomment">/// database after all other modules ran `begin_consensus_epoch`, so the results are available</span>
-    <span class="doccomment">/// when processing transactions.  </span>
+    <span class="doccomment">/// when processing transactions.</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
         <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
@@ -279,11 +283,15 @@
 
     <span class="doccomment">/// This function is called once all transactions have been processed and changes were written</span>
     <span class="doccomment">/// to the database. This allows running finalization code before the next epoch.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers</span>
+    <span class="doccomment">/// to drop if any are misbehaving.</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
         <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
         <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    );
+    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data</span>
     <span class="doccomment">/// needed by the client to access funds or give an estimate of when funds will be available.</span>

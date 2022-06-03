@@ -1284,7 +1284,11 @@
 <span id="1277">1277</span>
 <span id="1278">1278</span>
 <span id="1279">1279</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
+<span id="1280">1280</span>
+<span id="1281">1281</span>
+<span id="1282">1282</span>
+<span id="1283">1283</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
 <span class="kw">use</span> <span class="ident">std::hash::Hasher</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
@@ -1629,13 +1633,14 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
+        <span class="ident">_consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
         <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) {
+    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
         <span class="comment">// We only want to peg out if we have a real randomness beacon after the first consensus round</span>
         <span class="kw">let</span> <span class="ident">round_consensus</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">current_round_consensus</span>() {
             <span class="prelude-val">Some</span>(<span class="ident">consensus</span>) =&gt; <span class="ident">consensus</span>,
-            <span class="prelude-val">None</span> =&gt; <span class="kw">return</span>,
+            <span class="prelude-val">None</span> =&gt; <span class="kw">return</span> <span class="macro">vec!</span>[],
         };
 
         <span class="comment">// Check if we should create a peg-out transaction</span>
@@ -1708,6 +1713,9 @@
             <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">PegOutTxSignatureCI</span>(<span class="ident">txid</span>), <span class="ident">sigs</span>);
         }
         <span class="ident">batch</span>.<span class="ident">commit</span>();
+
+        <span class="comment">// FIXME should use to drop non-contributing peers</span>
+        <span class="macro">vec!</span>[]
     }
 
     <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {

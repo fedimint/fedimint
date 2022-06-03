@@ -861,6 +861,17 @@
 <span id="854">854</span>
 <span id="855">855</span>
 <span id="856">856</span>
+<span id="857">857</span>
+<span id="858">858</span>
+<span id="859">859</span>
+<span id="860">860</span>
+<span id="861">861</span>
+<span id="862">862</span>
+<span id="863">863</span>
+<span id="864">864</span>
+<span id="865">865</span>
+<span id="866">866</span>
+<span id="867">867</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
     <span class="ident">NonceKey</span>, <span class="ident">OutputOutcomeKey</span>, <span class="ident">ProposedPartialSignatureKey</span>, <span class="ident">ProposedPartialSignaturesKeyPrefix</span>,
@@ -878,8 +889,10 @@
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">rayon::iter</span>::{<span class="ident">IntoParallelIterator</span>, <span class="ident">ParallelBridge</span>, <span class="ident">ParallelIterator</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>};
+<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std::hash::Hash</span>;
+<span class="kw">use</span> <span class="ident">std::iter::FromIterator</span>;
+<span class="kw">use</span> <span class="ident">std::ops::Sub</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 <span class="kw">use</span> <span class="ident">tbs</span>::{
     <span class="ident">combine_valid_shares</span>, <span class="ident">sign_blinded_msg</span>, <span class="ident">verify_blind_share</span>, <span class="ident">Aggregatable</span>, <span class="ident">AggregatePublicKey</span>,
@@ -889,7 +902,7 @@
 <span class="kw">use</span> <span class="ident">tiered::coins::Coins</span>;
 <span class="kw">use</span> <span class="ident">tiered::coins::TieredMultiZip</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tiered::keys::Keys</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">warn</span>};
 
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
 
@@ -1101,9 +1114,10 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
         <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) {
+    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
         <span class="comment">// Finalize partial signatures for which we now have enough shares</span>
         <span class="kw">let</span> <span class="ident">req_psigs</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">db</span>
@@ -1117,15 +1131,17 @@
         <span class="comment">// TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn&#39;t need consensus)</span>
         <span class="kw">let</span> <span class="ident">par_batches</span> <span class="op">=</span> <span class="ident">req_psigs</span>
             .<span class="ident">into_par_iter</span>()
-            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">issuance_id</span>, <span class="ident">shares</span>)<span class="op">|</span> {
+            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">issuance_id</span>, <span class="ident">shares</span>)<span class="op">|</span> {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">transaction</span>();
                 <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">shares</span>.<span class="ident">clone</span>());
 
                 <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible</span>
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>() {
-                    <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">errors</span>, <span class="string">&quot;Peer sent faulty share&quot;</span>);
-                }
+                <span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">error</span>)<span class="op">|</span> {
+                    <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, <span class="ident">peer</span>, <span class="ident">error</span>);
+                    <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
+                });
 
                 <span class="kw">match</span> <span class="ident">bsig</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">blind_signature</span>) =&gt; {
@@ -1142,27 +1158,32 @@
                         }));
 
                         <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(<span class="ident">OutputOutcomeKey</span>(<span class="ident">issuance_id</span>), <span class="ident">blind_signature</span>);
-                        <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
-                        <span class="prelude-val">Some</span>(<span class="ident">batch</span>)
                     }
-                    <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(<span class="ident">got</span>, <span class="ident">need</span>)) =&gt; {
-                        <span class="macro">trace!</span>(
-                            <span class="op">%</span><span class="ident">issuance_id</span>,
-                            <span class="ident">got</span>,
-                            <span class="ident">need</span>,
-                            <span class="string">&quot;Failed to combine signature shares: not enough shares&quot;</span>,
-                        );
-                        <span class="prelude-val">None</span>
+                    <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(<span class="ident">got</span>, <span class="kw">_</span>)) =&gt; {
+                        <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">consensus_peers</span>.<span class="ident">sub</span>(<span class="kw-2">&amp;</span><span class="ident">HashSet::from_iter</span>(<span class="ident">got</span>)) {
+                            <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing shares&quot;</span>, <span class="ident">peer</span>);
+                            <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
+                        }
                     }
                     <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                        <span class="macro">error!</span>(<span class="op">%</span><span class="ident">error</span>, <span class="string">&quot;Could not combine shares&quot;</span>);
-                        <span class="prelude-val">None</span>
+                        <span class="macro">warn!</span>(<span class="op">%</span><span class="ident">error</span>, <span class="string">&quot;Could not combine shares&quot;</span>);
                     }
                 }
+                <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
+                (<span class="ident">batch</span>, <span class="ident">drop_peers</span>)
             })
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-        <span class="ident">batch</span>.<span class="ident">append_from_accumulators</span>(<span class="ident">par_batches</span>.<span class="ident">into_iter</span>());
+
+        <span class="kw">let</span> <span class="ident">dropped_peers</span> <span class="op">=</span> <span class="ident">par_batches</span>
+            .<span class="ident">iter</span>()
+            .<span class="ident">flat_map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">peers</span>)<span class="op">|</span> <span class="ident">peers</span>)
+            .<span class="ident">copied</span>()
+            .<span class="ident">collect</span>();
+
+        <span class="ident">batch</span>.<span class="ident">append_from_accumulators</span>(<span class="ident">par_batches</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">batch</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">batch</span>));
         <span class="ident">batch</span>.<span class="ident">commit</span>();
+
+        <span class="ident">dropped_peers</span>
     }
 
     <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {
@@ -1278,7 +1299,7 @@
         <span class="kw">if</span> <span class="ident">partial_sigs</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">threshold</span> {
             <span class="kw">return</span> (
                 <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                    <span class="ident">partial_sigs</span>.<span class="ident">len</span>(),
+                    <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
                     <span class="self">self</span>.<span class="ident">threshold</span>,
                 )),
                 <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
@@ -1502,8 +1523,8 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">CombineError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Too few shares to begin the combination: got {0} need {1}&quot;</span>)]</span>
-    <span class="ident">TooFewShares</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]</span>
+    <span class="ident">TooFewShares</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>, <span class="ident">usize</span>),
     <span class="attribute">#[<span class="ident">error</span>(
         <span class="string">&quot;Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid&quot;</span>
     )]</span>
@@ -1617,11 +1638,12 @@
         });
 
         <span class="comment">// Test too few sig shares</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span> <span class="op">-</span> <span class="number">1</span>)].<span class="ident">to_vec</span>());
+        <span class="kw">let</span> <span class="ident">few_sigs</span> <span class="op">=</span> <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span> <span class="op">-</span> <span class="number">1</span>)].<span class="ident">to_vec</span>();
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">few_sigs</span>.<span class="ident">clone</span>());
         <span class="macro">assert_eq!</span>(
             <span class="ident">bsig_res</span>,
             <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                <span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span> <span class="op">-</span> <span class="number">1</span>,
+                <span class="ident">few_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
                 <span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>
             ))
         );
