@@ -25,7 +25,6 @@ In order to simulate consensus we have to tell the federation how many epochs to
 ```rust
 fed.run_consensus_epochs(2).await;
 ```
-Note that because HBBFT and consensus processing are concurrent you must always add an additional epoch to consume a `ConsensusOutcome` before any newly proposed `ConsensusItems` will be processed.
 
 ## Running tests
 Tests run by default with fake Lightning and Bitcoin services for fast concurrent testing that succeeds in any environment, but can also be run against real services.

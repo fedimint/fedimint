@@ -129,9 +129,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                         .fields
                         .iter()
                         .enumerate()
-                        .map(|(idx, _)| {
-                            format_ident!("bound_{}", idx)
-                        })
+                        .map(|(idx, _)| format_ident!("bound_{}", idx))
                         .collect::<Vec<_>>();
                     quote! {
                         #ident::#variant_ident(#(#variant_fields,)*) => {
@@ -140,15 +138,8 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
                         }
                     }
                 } else {
-                    let variant_fields = variant
-                        .fields
-                        .iter()
-                        .map(|field| {
-                            field
-                                .ident
-                                .clone().unwrap()
-                        })
-                        .collect::<Vec<_>>();
+                    let variant_fields =
+                        variant.fields.iter().map(|field| field.ident.clone().unwrap()).collect::<Vec<_>>();
                     quote! {
                         #ident::#variant_ident { #(#variant_fields,)*} => {
                             len += Encodable::consensus_encode(&(#variant_idx as u64), &mut writer)?;

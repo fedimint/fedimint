@@ -1834,6 +1834,7 @@ dependencies = [
  "clightningrpc",
  "cln-rpc",
  "futures",
+ "hbbft",
  "itertools",
  "lightning",
  "lightning-invoice",

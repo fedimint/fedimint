@@ -13,6 +13,7 @@ use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
 use futures::future::join_all;
+
 use itertools::Itertools;
 use lightning_invoice::Invoice;
 use rand::rngs::OsRng;
@@ -27,7 +28,7 @@ use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
 use minimint::config::ServerConfigParams;
 use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
-use minimint::consensus::{ConsensusItem, ConsensusOutcome, MinimintConsensus};
+use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
 use minimint::transaction::{Input, Output};
 use minimint::MinimintServer;
 use minimint_api::config::GenerateConfig;
@@ -67,7 +68,6 @@ pub fn sats(amount: u64) -> Amount {
 /// federation nodes starting at port 4000.
 pub async fn fixtures(
     num_peers: u16,
-    max_evil_threshold: usize,
     amount_tiers: &[Amount],
 ) -> (
     FederationTest,
@@ -95,12 +95,9 @@ pub async fn fixtures(
     };
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
 
-    let (server_config, client_config) = ServerConfig::trusted_dealer_gen(
-        &peers,
-        max_evil_threshold,
-        &params,
-        OsRng::new().unwrap(),
-    );
+    let max_evil = hbbft::util::max_faulty(peers.len());
+    let (server_config, client_config) =
+        ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
 
     match env::var("MINIMINT_TEST_REAL") {
         Ok(s) if s == "1" => {
@@ -283,25 +280,45 @@ impl UserTest {
 
 pub struct FederationTest {
     servers: Vec<Rc<RefCell<ServerTest>>>,
-    last_consensus_items: RefCell<Vec<ConsensusItem>>,
+    last_consensus: Rc<RefCell<ConsensusOutcome>>,
     pub wallet: WalletConfig,
     pub fee_consensus: FeeConsensus,
 }
 
 struct ServerTest {
     outcome_receiver: Receiver<ConsensusOutcome>,
-    proposal_sender: Sender<Vec<ConsensusItem>>,
+    proposal_sender: Sender<ConsensusProposal>,
     consensus: Arc<MinimintConsensus<OsRng>>,
     cfg: ServerConfig,
     bitcoin_rpc: Box<dyn BitcoindRpc>,
     database: Arc<dyn Database>,
+    override_proposal: Option<ConsensusProposal>,
+    dropped_peers: Vec<PeerId>,
 }
 
 impl FederationTest {
     /// Returns the items that were in the last consensus
     /// Filters out redundant consensus rounds where the block height doesn't change
-    pub fn last_consensus(&self) -> Vec<ConsensusItem> {
-        self.last_consensus_items.borrow().clone()
+    pub fn last_consensus_items(&self) -> Vec<ConsensusItem> {
+        self.last_consensus
+            .borrow()
+            .contributions
+            .values()
+            .flat_map(|items| items.clone())
+            .collect()
+    }
+
+    /// Sends a custom proposal, ignoring whatever is in MinimintConsensus
+    /// Useful for simulating malicious federation nodes
+    pub fn override_proposal(&self, items: Vec<ConsensusItem>) {
+        let proposal = ConsensusProposal {
+            items,
+            drop_peers: vec![],
+        };
+
+        for server in &self.servers {
+            server.borrow_mut().override_proposal = Some(proposal.clone());
+        }
     }
 
     /// Returns a fixture that only calls on a subset of the peers.  Note that PeerIds are always
@@ -321,13 +338,29 @@ impl FederationTest {
                 .collect(),
             wallet: self.wallet.clone(),
             fee_consensus: self.fee_consensus.clone(),
-            last_consensus_items: self.last_consensus_items.clone(),
+            last_consensus: self.last_consensus.clone(),
         }
     }
 
     /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
     /// then fetches the coins for the user client.
     pub async fn mint_coins_for_user(&self, user: &UserTest, amount: Amount) {
+        self.database_add_coins_for_user(user, amount);
+        self.run_consensus_epochs(1).await;
+        user.client.fetch_all_coins().await.unwrap();
+    }
+
+    pub fn has_dropped_peer(&self, peer: u16) -> bool {
+        for server in &self.servers {
+            if !server.borrow().dropped_peers.contains(&PeerId::from(peer)) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Inserts coins directly into the databases of federation nodes
+    pub fn database_add_coins_for_user(&self, user: &UserTest, amount: Amount) -> OutPoint {
         let mut batch = DbBatch::new();
         let out_point = OutPoint {
             txid: Default::default(),
@@ -368,10 +401,8 @@ impl FederationTest {
                 out_point
             },
         );
-
         user.database.apply_batch(batch).unwrap();
-        self.run_consensus_epochs(2).await;
-        user.client.fetch_all_coins().await.unwrap();
+        out_point
     }
 
     /// Has every federation node broadcast any transactions pending to the Bitcoin network, otherwise
@@ -385,47 +416,54 @@ impl FederationTest {
         }
     }
 
-    /// Has every federation node process the consensus outcome from the HBBFT thread then send new
-    /// consensus proposals to the HBBFT thread.  Anything currently pending will take an additional
-    /// epoch to get processed.
+    /// Has every federation node send new consensus proposals to the HBBFT thread then process
+    /// the outcome.  Note that in the production code this happens in the opposite order however
+    /// here we avoid the confusion and concurrency that makes testing difficult.
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            for server in &self.servers {
-                let consensus_outcome = block_on(server.borrow_mut().outcome_receiver.recv())
-                    .expect("other thread died");
-                let height = server.borrow().consensus.wallet.consensus_height();
+            self.send_proposals();
+            self.process_outcomes().await;
+        }
+    }
 
-                // only need to update last_consensus_items and print one output since consensus is always the same
-                if server.borrow().cfg.identity == PeerId::from(0) {
-                    let filtered_consensus =
-                        FederationTest::remove_redundant_round_items(&consensus_outcome, height);
-                    let new_items = filtered_consensus
-                        .contributions
-                        .values()
-                        .flat_map(|items| items.clone());
-                    *self.last_consensus_items.borrow_mut() = new_items.collect();
-                    warn!(
-                        "{}",
-                        FederationTest::epoch_debug_message(
-                            &filtered_consensus,
-                            &server.borrow().database
-                        )
-                    )
-                }
+    pub fn send_proposals(&self) {
+        for server in &self.servers {
+            let mut s = server.borrow_mut();
 
-                let consensus = server.borrow().consensus.clone();
-                let proposal_sender = server.borrow().proposal_sender.clone();
-                let cfg = server.borrow().cfg.clone();
+            let proposal = s
+                .override_proposal
+                .clone()
+                .unwrap_or_else(|| block_on(s.consensus.get_consensus_proposal()));
+            s.dropped_peers.append(&mut proposal.drop_peers.clone());
 
-                minimint::run_consensus_epoch(
-                    &consensus,
-                    consensus_outcome,
-                    &proposal_sender,
-                    &cfg,
-                    0,
-                )
-                .await;
+            block_on(minimint::run_consensus_epoch(
+                proposal,
+                &self.last_consensus.borrow(),
+                &s.proposal_sender,
+            ));
+        }
+    }
+
+    pub async fn process_outcomes(&self) {
+        for server in &self.servers {
+            let consensus_outcome = block_on(server.borrow_mut().outcome_receiver.recv()).unwrap();
+            let height = server.borrow().consensus.wallet.consensus_height();
+
+            let filtered_consensus =
+                FederationTest::remove_redundant_items(&consensus_outcome, height);
+
+            // only need to update last_consensus_items and print one output since consensus is always the same
+            if self.last_consensus.borrow().epoch < consensus_outcome.epoch {
+                let message = FederationTest::epoch_debug_message(
+                    &filtered_consensus,
+                    &server.borrow().database,
+                );
+                warn!("{}", message);
+                *self.last_consensus.borrow_mut() = filtered_consensus;
             }
+
+            let consensus = server.borrow().consensus.clone();
+            consensus.process_consensus_outcome(consensus_outcome).await
         }
     }
 
@@ -466,24 +504,32 @@ impl FederationTest {
                 consensus: mint_consensus,
                 cfg,
                 database,
+                override_proposal: None,
+                dropped_peers: vec![],
             }))
         }))
         .await;
 
+        // Consumes the empty epoch 0 outcome from all servers
+        let last_outcome = servers
+            .iter()
+            .map(|s| block_on(s.borrow_mut().outcome_receiver.recv()).unwrap())
+            .last()
+            .unwrap();
         let server_config = server_config.iter().last().unwrap().1.clone();
         let fee_consensus = server_config.fee_consensus;
         let wallet = server_config.wallet;
-        let last_consensus_items = RefCell::new(vec![]);
+        let last_consensus = Rc::new(RefCell::new(last_outcome));
 
         FederationTest {
             servers,
             fee_consensus,
             wallet,
-            last_consensus_items,
+            last_consensus,
         }
     }
 
-    fn remove_redundant_round_items(
+    fn remove_redundant_items(
         consensus: &ConsensusOutcome,
         prev_block_height: Option<u32>,
     ) -> ConsensusOutcome {
@@ -511,7 +557,8 @@ impl FederationTest {
 
     // outputs a useful debug message for epochs indicating what happened
     fn epoch_debug_message(consensus: &ConsensusOutcome, database: &Arc<dyn Database>) -> String {
-        let mut debug = format!("\n- Epoch: {} -", consensus.epoch);
+        let peers = consensus.contributions.keys();
+        let mut debug = format!("\n- Epoch: {} {:?} -", consensus.epoch, peers);
 
         for (peer, items) in consensus.contributions.iter() {
             for item in items {
@@ -544,11 +591,13 @@ impl FederationTest {
             ConsensusItem::Mint(PartiallySignedRequest {
                 out_point,
                 partial_signature,
-            }) => format!(
-                "Mint Signed Coins {} with TxId {:.8}",
-                partial_signature.0.amount(),
-                out_point.txid
-            ),
+            }) => {
+                format!(
+                    "Mint Signed Coins {} with TxId {:.8}",
+                    partial_signature.0.amount(),
+                    out_point.txid
+                )
+            }
             ConsensusItem::LN(minimint_ln::DecryptionShareCI { contract_id, .. }) => {
                 format!("LN Decrytion Share for contract {:.8}", contract_id)
             }
