@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -343,13 +343,14 @@ impl FederationModule for Wallet {
 
     async fn end_consensus_epoch<'a>(
         &'a self,
+        _consensus_peers: &HashSet<PeerId>,
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
-    ) {
+    ) -> Vec<PeerId> {
         // We only want to peg out if we have a real randomness beacon after the first consensus round
         let round_consensus = match self.current_round_consensus() {
             Some(consensus) => consensus,
-            None => return,
+            None => return vec![],
         };
 
         // Check if we should create a peg-out transaction
@@ -422,6 +423,9 @@ impl FederationModule for Wallet {
             batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
         }
         batch.commit();
+
+        // FIXME should use to drop non-contributing peers
+        vec![]
     }
 
     fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {

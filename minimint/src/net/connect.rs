@@ -1,23 +1,26 @@
-use crate::config::ServerConfig;
-use crate::net::framed::Framed;
-use crate::net::PeerConnections;
+use std::collections::HashMap;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use futures::future::select_all;
 use futures::future::try_join_all;
 use futures::StreamExt;
 use futures::{FutureExt, SinkExt};
 use hbbft::Target;
-use minimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::spawn;
 use tokio::time::sleep;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, instrument, trace, warn};
+
+use minimint_api::PeerId;
+
+use crate::config::ServerConfig;
+use crate::net::framed::Framed;
+use crate::net::PeerConnections;
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
@@ -74,6 +77,11 @@ where
         info!("Successfully connected to all peers");
 
         Connections { connections: peers }
+    }
+
+    pub fn drop_peer(&mut self, peer: &PeerId) {
+        self.connections.remove(peer);
+        warn!("Peer {} dropped.", peer);
     }
 
     #[instrument]
@@ -137,16 +145,17 @@ where
         match target {
             Target::All => {
                 for peer in self.connections.values_mut() {
-                    peer.send(&msg)
-                        .await
-                        .expect("Failed to send message to peer");
+                    if peer.send(&msg).await.is_err() {
+                        warn!("Failed to send message to peer");
+                    }
                 }
             }
             Target::Node(peer_id) => {
-                let peer = self.connections.get_mut(&peer_id).expect("Unknown peer");
-                peer.send(&msg)
-                    .await
-                    .expect("Failed to send message to peer");
+                if let Some(peer) = self.connections.get_mut(&peer_id) {
+                    if peer.send(&msg).await.is_err() {
+                        warn!("Failed to send message to peer");
+                    }
+                }
             }
         }
     }

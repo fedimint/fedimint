@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::schnorrsig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::module::interconnect::ModuleInterconect;
 pub use http_types as http;
@@ -56,7 +56,7 @@ pub trait FederationModule: Sized {
     /// This function is called once before transaction processing starts. All module consensus
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.  
+    /// when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &'a self,
         batch: BatchTx<'a>,
@@ -124,11 +124,15 @@ pub trait FederationModule: Sized {
 
     /// This function is called once all transactions have been processed and changes were written
     /// to the database. This allows running finalization code before the next epoch.
+    ///
+    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
+    /// to drop if any are misbehaving.
     async fn end_consensus_epoch<'a>(
         &'a self,
+        consensus_peers: &HashSet<PeerId>,
         batch: BatchTx<'a>,
         rng: impl RngCore + CryptoRng + 'a,
-    );
+    ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
     /// needed by the client to access funds or give an estimate of when funds will be available.

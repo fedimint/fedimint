@@ -6,7 +6,10 @@ mod interconnect;
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::interconnect::MinimintInterconnect;
-use crate::db::{AcceptedTransactionKey, ProposedTransactionKey, ProposedTransactionKeyPrefix};
+use crate::db::{
+    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, ProposedTransactionKey,
+    ProposedTransactionKeyPrefix,
+};
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
@@ -21,6 +24,7 @@ use minimint_mint::{Mint, MintError};
 use minimint_wallet::{Wallet, WalletError};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
@@ -35,6 +39,13 @@ pub enum ConsensusItem {
 
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
+
+/// Proposed HBBFT consensus changes including removing peers
+#[derive(Debug, Clone)]
+pub struct ConsensusProposal {
+    pub items: Vec<ConsensusItem>,
+    pub drop_peers: Vec<PeerId>,
+}
 
 pub struct MinimintConsensus<R>
 where
@@ -143,6 +154,8 @@ where
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
         let epoch = consensus_outcome.epoch;
+        let epoch_peers: HashSet<PeerId> =
+            consensus_outcome.contributions.keys().copied().collect();
 
         let UnzipConsensusItem {
             transaction: transaction_cis,
@@ -221,18 +234,43 @@ where
         // End consensus epoch
         {
             let mut db_batch = DbBatch::new();
-            self.wallet
-                .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+            let mut drop_peers = Vec::<PeerId>::new();
+
+            let mut drop_wallet = self
+                .wallet
+                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
                 .await;
-            self.mint
-                .end_consensus_epoch(db_batch.transaction(), self.rng_gen.get_rng())
+
+            let mut drop_mint = self
+                .mint
+                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
                 .await;
+
+            drop_peers.append(&mut drop_wallet);
+            drop_peers.append(&mut drop_mint);
+
+            let mut batch_tx = db_batch.transaction();
+            for peer in drop_peers {
+                batch_tx.append_insert(DropPeerKey(peer), ());
+            }
+            batch_tx.commit();
+
             self.db.apply_batch(db_batch).expect("DB error");
         }
     }
 
-    pub async fn get_consensus_proposal(&self) -> Vec<ConsensusItem> {
-        self.db
+    pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
+        let drop_peers = self
+            .db
+            .find_by_prefix(&DropPeerKeyPrefix)
+            .map(|res| {
+                let key = res.expect("DB error").0;
+                key.0
+            })
+            .collect();
+
+        let items = self
+            .db
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
                 let (_key, value) = res.expect("DB error");
@@ -252,7 +290,9 @@ where
                     .into_iter()
                     .map(ConsensusItem::Mint),
             )
-            .collect()
+            .collect();
+
+        ConsensusProposal { items, drop_peers }
     }
 
     fn process_transaction(

@@ -5,6 +5,7 @@ use crate::db::Database;
 use crate::module::http;
 use crate::module::interconnect::ModuleInterconect;
 use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -109,6 +110,7 @@ where
             );
         }
 
+        let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
         for (_peer, member, db) in &mut self.members {
             let mut batch = DbBatch::new();
 
@@ -135,7 +137,7 @@ where
 
             let mut batch = DbBatch::new();
             member
-                .end_consensus_epoch(batch.transaction(), &mut rng)
+                .end_consensus_epoch(&peers, batch.transaction(), &mut rng)
                 .await;
 
             (db as &mut dyn Database)

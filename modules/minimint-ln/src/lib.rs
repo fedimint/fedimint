@@ -35,6 +35,7 @@ use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
@@ -372,9 +373,10 @@ impl FederationModule for LightningModule {
     #[instrument(skip_all)]
     async fn end_consensus_epoch<'a>(
         &'a self,
+        _consensus_peers: &HashSet<PeerId>,
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
-    ) {
+    ) -> Vec<PeerId> {
         // Decrypt preimages
         let preimage_decraption_shares = self
             .db
@@ -479,6 +481,9 @@ impl FederationModule for LightningModule {
             batch.append_insert(outcome_db_key, outcome);
         }
         batch.commit();
+
+        // FIXME should use to drop non-contributing peers
+        vec![]
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {

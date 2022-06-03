@@ -15,8 +15,10 @@ use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
+use std::iter::FromIterator;
+use std::ops::Sub;
 use std::sync::Arc;
 use tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
@@ -26,7 +28,7 @@ use thiserror::Error;
 use tiered::coins::Coins;
 use tiered::coins::TieredMultiZip;
 pub use tiered::keys::Keys;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
 pub mod config;
 
@@ -238,9 +240,10 @@ impl FederationModule for Mint {
 
     async fn end_consensus_epoch<'a>(
         &'a self,
+        consensus_peers: &HashSet<PeerId>,
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
-    ) {
+    ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
         let req_psigs = self
             .db
@@ -254,15 +257,17 @@ impl FederationModule for Mint {
         // TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn't need consensus)
         let par_batches = req_psigs
             .into_par_iter()
-            .filter_map(|(issuance_id, shares)| {
+            .map(|(issuance_id, shares)| {
+                let mut drop_peers = Vec::<PeerId>::new();
                 let mut batch = DbBatch::new();
                 let mut batch_tx = batch.transaction();
                 let (bsig, errors) = self.combine(shares.clone());
 
                 // FIXME: validate shares before writing to DB to make combine infallible
-                if !errors.0.is_empty() {
-                    warn!(?errors, "Peer sent faulty share");
-                }
+                errors.0.iter().for_each(|(peer, error)| {
+                    error!("Dropping {:?} for {:?}", peer, error);
+                    drop_peers.push(*peer);
+                });
 
                 match bsig {
                     Ok(blind_signature) => {
@@ -279,27 +284,32 @@ impl FederationModule for Mint {
                         }));
 
                         batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
-                        batch_tx.commit();
-                        Some(batch)
                     }
-                    Err(CombineError::TooFewShares(got, need)) => {
-                        trace!(
-                            %issuance_id,
-                            got,
-                            need,
-                            "Failed to combine signature shares: not enough shares",
-                        );
-                        None
+                    Err(CombineError::TooFewShares(got, _)) => {
+                        for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
+                            error!("Dropping {:?} for not contributing shares", peer);
+                            drop_peers.push(peer);
+                        }
                     }
                     Err(error) => {
-                        error!(%error, "Could not combine shares");
-                        None
+                        warn!(%error, "Could not combine shares");
                     }
                 }
+                batch_tx.commit();
+                (batch, drop_peers)
             })
             .collect::<Vec<_>>();
-        batch.append_from_accumulators(par_batches.into_iter());
+
+        let dropped_peers = par_batches
+            .iter()
+            .flat_map(|(_, peers)| peers)
+            .copied()
+            .collect();
+
+        batch.append_from_accumulators(par_batches.into_iter().map(|(batch, _)| batch));
         batch.commit();
+
+        dropped_peers
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
@@ -415,7 +425,7 @@ impl Mint {
         if partial_sigs.len() < self.threshold {
             return (
                 Err(CombineError::TooFewShares(
-                    partial_sigs.len(),
+                    partial_sigs.iter().map(|(peer, _)| peer).cloned().collect(),
                     self.threshold,
                 )),
                 MintShareErrors(vec![]),
@@ -639,8 +649,8 @@ pub enum PeerErrorType {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
 pub enum CombineError {
-    #[error("Too few shares to begin the combination: got {0} need {1}")]
-    TooFewShares(usize, usize),
+    #[error("Too few shares to begin the combination: got {0:?} need {1}")]
+    TooFewShares(Vec<PeerId>, usize),
     #[error(
         "Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid"
     )]
@@ -754,11 +764,12 @@ mod test {
         });
 
         // Test too few sig shares
-        let (bsig_res, errors) = mint.combine(psigs[..(MINTS - THRESHOLD - 1)].to_vec());
+        let few_sigs = psigs[..(MINTS - THRESHOLD - 1)].to_vec();
+        let (bsig_res, errors) = mint.combine(few_sigs.clone());
         assert_eq!(
             bsig_res,
             Err(CombineError::TooFewShares(
-                MINTS - THRESHOLD - 1,
+                few_sigs.iter().map(|(peer, _)| peer).cloned().collect(),
                 MINTS - THRESHOLD
             ))
         );
