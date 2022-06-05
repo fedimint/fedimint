@@ -80,3 +80,13 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Integration Tests with nix-shell
         run: nix-shell --command ./scripts/integrationtest.sh
+  nix-build_test:
+    name: Nix-Build Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: cachix/install-nix-action@v15
+        with:
+          nix_path: nixpkgs=channel:nixos-21.11
+      - name: Running nix-build
+        run: nix-build default.nix
