@@ -8,7 +8,7 @@ use minimint_simp::contracts::incoming::{
 };
 use minimint_simp::contracts::outgoing::{OutgoingContract, Preimage};
 use minimint_simp::contracts::{Contract, ContractOutcome, IdentifyableContract};
-use minimint_simp::{ContractInput, LightningModule, LightningModuleError, OutputOutcome};
+use minimint_simp::{ContractInput, LightningModule, LightningModuleError};
 use std::sync::Arc;
 
 #[test_log::test(tokio::test)]

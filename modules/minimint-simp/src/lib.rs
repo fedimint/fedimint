@@ -104,16 +104,16 @@ pub struct ContractInput {
 //     pub contract: contracts::FundedContract,
 // }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum OutputOutcome {
-    Contract {
-        id: ContractId,
-        outcome: ContractOutcome,
-    },
-    Offer {
-        id: OfferId,
-    },
-}
+// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+// pub enum OutputOutcome {
+//     Contract {
+//         id: ContractId,
+//         outcome: ContractOutcome,
+//     },
+//     Offer {
+//         id: OfferId,
+//     },
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct DecryptionShareCI {
@@ -309,6 +309,15 @@ impl FederationModule for LightningModule {
             });
         batch.append_insert(contract_db_key, updated_contract_account);
 
+        batch.append_insert_new(
+            ContractUpdateKey(out_point),
+            contract.contract_id(),
+            // OutputOutcome::Contract {
+            //     id: contract.contract_id(),
+            //     outcome: contract.to_outcome(),
+            // },
+        );
+
         batch.commit();
         Ok(amount)
     }
@@ -325,14 +334,12 @@ impl FederationModule for LightningModule {
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        todo!()
-
         // FIXME: save ContractUpdateKey to db in `apply_output` so that we can look up contracts by outpoint
         // as required by this method
 
-        // self.db
-        //     .get_value(&ContractUpdateKey(out_point))
-        //     .expect("DB error")
+        self.db
+            .get_value(&ContractUpdateKey(out_point))
+            .expect("DB error")
     }
 
     fn api_base_name(&self) -> &'static str {
