@@ -1,6 +1,6 @@
-use crate::contracts::account::AccountContract;
 use crate::contracts::incoming::{IncomingContractOffer, PreimageDecryptionShare};
 use crate::contracts::ContractId;
+use crate::AccountContract;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{OutPoint, PeerId};

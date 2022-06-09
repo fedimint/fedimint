@@ -1,13 +1,3 @@
-//! # Lightning Module
-//!
-//! This module allows to atomically and trustlessly (in the federated trust model) interact with
-//! the Lightning network through a Lightning gateway. See [`LightningModule`] for a high level
-//! overview.
-//!
-//! ## Attention: only one operation per contract and round
-//! If this module is active the consensus' conflict filter must ensure that at most one operation
-//! (spend, funding) happens per contract per round
-
 pub mod config;
 pub mod contracts;
 mod db;
@@ -25,7 +15,6 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
-use contracts::account::{self, AccountContract};
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
@@ -41,28 +30,24 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
-/// The lightning module implements an account system. It does not have the privacy guarantees of
-/// the e-cash mint module but instead allows for smart contracting. There exist three contract
-/// types that can be used to "lock" accounts:
-///
-///   * [Account]: an account locked with a schnorr public key
-///   * [Outgoing]: an account locked with an HTLC-like contract allowing to incentivize an external
-///     Lightning node to make payments for the funder
-///   * [Incoming]: a contract type that represents the acquisition of a preimage belonging to a hash.
-///     Every incoming contract is preceded by an offer that specifies how much the seller is asking
-///     for the preimage to a particular hash. It also contains some threshold-encrypted data. Once
-///     the contract is funded the data is decrypted. If it is a valid preimage the contract's funds
-///     are now accessible to the creator of the offer, if not they are accessible to the funder.
-///
-/// These three primitives allow to integrate the federation with the wider Lightning network
-/// through a centralized but untrusted (except for availability) Lightning gateway server.
-///
-/// [Account]: contracts::account::AccountContract
-/// [Outgoing]: contracts::outgoing::OutgoingContract
-/// [Incoming]: contracts::incoming::IncomingContract
 pub struct LightningModule {
     cfg: LightningModuleConfig,
     db: Arc<dyn Database>,
+}
+
+/// A generic contract to hold money in a pub key locked account
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct AccountContract {
+    pub amount: minimint_api::Amount,
+    pub key: secp256k1::schnorrsig::PublicKey,
+}
+
+impl IdentifyableContract for AccountContract {
+    fn contract_id(&self) -> ContractId {
+        let mut engine = ContractId::engine();
+        Encodable::consensus_encode(self, &mut engine).expect("Hashing never fails");
+        ContractId::from_engine(engine)
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -75,45 +60,6 @@ pub struct ContractInput {
     /// preimage remains.
     pub witness: Option<contracts::outgoing::Preimage>,
 }
-
-/// Represents an output of the Lightning module.
-///
-/// There are two sub-types:
-///   * Normal contracts users may lock funds in
-///   * Offers to buy preimages (see `contracts::incoming` docs)
-///
-/// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
-/// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
-/// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
-/// to receive their fist tokens via LN without already having tokens.
-// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-// pub enum ContractOrOfferOutput {
-//     Contract(ContractOutput),
-//     Offer(contracts::incoming::IncomingContractOffer),
-// }
-
-// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-// pub struct ContractOutput {
-//     pub amount: minimint_api::Amount,
-//     pub contract: account::AccountContract,
-// }
-
-// #[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-// pub struct ContractAccount {
-//     pub amount: minimint_api::Amount,
-//     pub contract: contracts::FundedContract,
-// }
-
-// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-// pub enum OutputOutcome {
-//     Contract {
-//         id: ContractId,
-//         outcome: ContractOutcome,
-//     },
-//     Offer {
-//         id: OfferId,
-//     },
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct DecryptionShareCI {
@@ -134,13 +80,6 @@ impl FederationModule for LightningModule {
         &'a self,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
-        // self.db
-        //     .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
-        //     .map(|res| {
-        //         let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-        //         DecryptionShareCI { contract_id, share }
-        //     })
-        //     .collect()
         vec![]
     }
 
@@ -150,40 +89,6 @@ impl FederationModule for LightningModule {
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        // batch.append_from_iter(consensus_items.into_iter().filter_map(
-        //     |(peer, decryption_share)| {
-        //         let span = info_span!("process decryption share", %peer);
-        //         let _guard = span.enter();
-        //         let contract: ContractAccount = self
-        //             .get_contract_account(decryption_share.contract_id)
-        //             .or_else(|| {
-        //                 warn!("Received decryption share fot non-incoming contract");
-        //                 None
-        //             })?;
-        //         let incoming_contract = match contract.contract {
-        //             FundedContract::Incoming(incoming) => incoming.contract,
-        //             _ => {
-        //                 warn!("Received decryption share fot non-incoming contract");
-        //                 return None;
-        //             }
-        //         };
-
-        //         if !self.validate_decryption_share(
-        //             peer,
-        //             &decryption_share.share,
-        //             &incoming_contract.encrypted_preimage,
-        //         ) {
-        //             warn!("Received invalid decryption share");
-        //             return None;
-        //         }
-
-        //         Some(BatchItem::insert_new(
-        //             AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-        //             decryption_share.share,
-        //         ))
-        //     },
-        // ));
-        // batch.commit();
     }
 
     fn build_verification_cache<'a>(
@@ -198,7 +103,7 @@ impl FederationModule for LightningModule {
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
-        let account: account::AccountContract = self
+        let account: AccountContract = self
             .get_contract_account(input.crontract_id)
             .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
 
@@ -208,48 +113,9 @@ impl FederationModule for LightningModule {
                 input.amount,
             ));
         }
-
-        // let pub_key = match account.contract {
-        //     FundedContract::Outgoing(outgoing) => {
-        //         if outgoing.timelock > block_height(interconnect) {
-        //             // If the timelock hasn't expired yet …
-        //             let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
-        //                 &input
-        //                     .witness
-        //                     .as_ref()
-        //                     .ok_or(LightningModuleError::MissingPreimage)?
-        //                     .0[..],
-        //             );
-
-        //             // … and the spender provides a valid preimage …
-        //             if preimage_hash != outgoing.hash {
-        //                 return Err(LightningModuleError::InvalidPreimage);
-        //             }
-
-        //             // … then the contract account can be spent using the gateway key,
-        //             outgoing.gateway_key
-        //         } else {
-        //             // otherwise the user can claim the funds back.
-        //             outgoing.user_key
-        //         }
-        //     }
-        //     FundedContract::Account(acc_contract) => acc_contract.key,
-        //     FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
-        //         // Once the preimage has been decrypted …
-        //         DecryptedPreimage::Pending => {
-        //             return Err(LightningModuleError::ContractNotReady);
-        //         }
-        //         // … either the user may spend the funds since they sold a valid preimage …
-        //         DecryptedPreimage::Some(preimage) => preimage.0,
-        //         // … or the gateway may claim back funds for not receiving the advertised preimage.
-        //         DecryptedPreimage::Invalid => incoming.contract.gateway_key,
-        //     },
-        // };
-        let pub_key = account.key;
-
         Ok(InputMeta {
             amount: input.amount,
-            puk_keys: Box::new(std::iter::once(pub_key)),
+            puk_keys: Box::new(std::iter::once(account.key)),
         })
     }
 
@@ -299,24 +165,17 @@ impl FederationModule for LightningModule {
             .db
             .get_value(&contract_db_key)
             .expect("DB error")
-            .map(|mut value: account::AccountContract| {
+            .map(|mut value: AccountContract| {
                 value.amount += amount;
                 value
             })
-            .unwrap_or_else(|| account::AccountContract {
+            .unwrap_or_else(|| AccountContract {
                 amount,
                 key: contract.key.clone(),
             });
         batch.append_insert(contract_db_key, updated_contract_account);
 
-        batch.append_insert_new(
-            ContractUpdateKey(out_point),
-            contract.contract_id(),
-            // OutputOutcome::Contract {
-            //     id: contract.contract_id(),
-            //     outcome: contract.to_outcome(),
-            // },
-        );
+        batch.append_insert_new(ContractUpdateKey(out_point), contract.contract_id());
 
         batch.commit();
         Ok(amount)
@@ -334,9 +193,6 @@ impl FederationModule for LightningModule {
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        // FIXME: save ContractUpdateKey to db in `apply_output` so that we can look up contracts by outpoint
-        // as required by this method
-
         self.db
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
@@ -347,41 +203,7 @@ impl FederationModule for LightningModule {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[
-            ApiEndpoint {
-                path_spec: "/account/:contract_id",
-                params: &["contract_id"],
-                method: http::Method::Get,
-                handler: |module, params, _body| {
-                    let contract_id: ContractId = match params
-                        .get("contract_id")
-                        .expect("Contract id not supplied")
-                        .parse()
-                    {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
-
-                    let contract_account = module
-                        .get_contract_account(contract_id)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
-
-                    debug!(%contract_id, "Sending contract account info");
-                    let body = http::Body::from_json(&contract_account).expect("encoding error");
-                    Ok(body.into())
-                },
-            },
-            ApiEndpoint {
-                path_spec: "/offers",
-                params: &[],
-                method: http::Method::Get,
-                handler: |module, _params, _body| {
-                    let offers = module.get_offers();
-                    let body = http::Body::from_json(&offers).expect("encoding error");
-                    Ok(body.into())
-                },
-            },
-        ]
+        &[]
     }
 }
 
@@ -409,10 +231,7 @@ impl LightningModule {
             .collect()
     }
 
-    pub fn get_contract_account(
-        &self,
-        contract_id: ContractId,
-    ) -> Option<account::AccountContract> {
+    pub fn get_contract_account(&self, contract_id: ContractId) -> Option<AccountContract> {
         self.db
             .get_value(&ContractKey(contract_id))
             .expect("DB error")

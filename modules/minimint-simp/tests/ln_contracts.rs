@@ -2,12 +2,12 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
 use minimint_simp::config::LightningModuleClientConfig;
-use minimint_simp::contracts::account::AccountContract;
 use minimint_simp::contracts::incoming::{
     DecryptedPreimage, EncryptedPreimage, IncomingContract, IncomingContractOffer,
 };
 use minimint_simp::contracts::outgoing::{OutgoingContract, Preimage};
 use minimint_simp::contracts::{Contract, ContractOutcome, IdentifyableContract};
+use minimint_simp::AccountContract;
 use minimint_simp::{ContractInput, LightningModule, LightningModuleError};
 use std::sync::Arc;
 
