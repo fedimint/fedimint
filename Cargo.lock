@@ -1824,6 +1824,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimint-simp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "futures",
+ "itertools",
+ "lightning",
+ "lightning-invoice",
+ "minimint-api",
+ "secp256k1",
+ "serde",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "minimint-tests"
 version = "0.1.0"
 dependencies = [

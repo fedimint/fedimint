@@ -1,0 +1,26 @@
+[package]
+name = "minimint-simp"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+bincode = "1"
+bitcoin_hashes = "0.10"
+futures = "0.3.21"
+itertools = "0.10.1"
+lightning = "0.0.106"
+lightning-invoice = "0.14.0"
+minimint-api = { path = "../../minimint-api" }
+secp256k1 = "0.20"
+serde = {version = "1.0.130", features = [ "derive" ] }
+threshold_crypto = "0.3"
+thiserror = "1.0.23"
+tracing = "0.1.29"
+
+[dev-dependencies]
+tokio = {version = "1.14.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
