@@ -76,7 +76,7 @@ impl UserClient {
         }
     }
 
-    fn wallet_client(&self) -> WalletClient {
+    pub fn wallet_client(&self) -> WalletClient {
         WalletClient {
             context: self.context.borrow_with_module_config(|cfg| &cfg.wallet),
             fee_consensus: self.context.config.fee_consensus.clone(), // TODO: remove or put into context
