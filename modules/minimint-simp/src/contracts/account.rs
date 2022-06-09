@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// A generic contract to hold money in a pub key locked account
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct AccountContract {
+    pub amount: minimint_api::Amount,
     pub key: secp256k1::schnorrsig::PublicKey,
 }
 

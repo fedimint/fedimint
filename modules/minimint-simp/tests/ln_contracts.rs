@@ -8,10 +8,7 @@ use minimint_simp::contracts::incoming::{
 };
 use minimint_simp::contracts::outgoing::{OutgoingContract, Preimage};
 use minimint_simp::contracts::{Contract, ContractOutcome, IdentifyableContract};
-use minimint_simp::{
-    ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
-    OutputOutcome,
-};
+use minimint_simp::{ContractInput, LightningModule, LightningModuleError, OutputOutcome};
 use std::sync::Arc;
 
 #[test_log::test(tokio::test)]
@@ -27,30 +24,29 @@ async fn test_simp_account() {
     .await;
 
     let (_sk, pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
-    let contract = AccountContract { key: pk };
+    let contract = AccountContract {
+        amount: Amount::from_sat(42),
+        key: pk,
+    };
 
     // let account_output = ContractOrOfferOutput::Contract(ContractOutput {
     //     amount: Amount::from_sat(42),
     //     contract: contract.clone(),
     // });
-    let account_output = ContractOutput {
-        amount: Amount::from_sat(42),
-        contract: contract.clone(),
-    };
+    // let account_output = ContractOutput {
+    //     amount: Amount::from_sat(42),
+    //     contract: contract.clone(),
+    // };
     let account_out_point = OutPoint {
         txid: Default::default(),
         out_idx: 0,
     };
 
-    let outputs = [(account_out_point, account_output)];
+    let outputs = [(account_out_point, contract.clone())];
 
     fed.consensus_round(&[], &outputs).await;
-    match fed.output_outcome(account_out_point).unwrap() {
-        OutputOutcome::Contract { outcome, .. } => {
-            assert_eq!(outcome, ContractOutcome::Account);
-        }
-        _ => panic!(),
-    };
+    let outcome_contract_id = fed.output_outcome(account_out_point).unwrap();
+    assert_eq!(contract.contract_id(), outcome_contract_id);
 
     let account_input = ContractInput {
         crontract_id: contract.contract_id(),

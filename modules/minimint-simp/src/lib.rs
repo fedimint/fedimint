@@ -25,7 +25,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
-use contracts::account;
+use contracts::account::{self, AccountContract};
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
@@ -86,23 +86,23 @@ pub struct ContractInput {
 /// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
 /// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
 /// to receive their fist tokens via LN without already having tokens.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum ContractOrOfferOutput {
-    Contract(ContractOutput),
-    Offer(contracts::incoming::IncomingContractOffer),
-}
+// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+// pub enum ContractOrOfferOutput {
+//     Contract(ContractOutput),
+//     Offer(contracts::incoming::IncomingContractOffer),
+// }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct ContractOutput {
-    pub amount: minimint_api::Amount,
-    pub contract: account::AccountContract,
-}
+// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+// pub struct ContractOutput {
+//     pub amount: minimint_api::Amount,
+//     pub contract: account::AccountContract,
+// }
 
-#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct ContractAccount {
-    pub amount: minimint_api::Amount,
-    pub contract: contracts::FundedContract,
-}
+// #[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+// pub struct ContractAccount {
+//     pub amount: minimint_api::Amount,
+//     pub contract: contracts::FundedContract,
+// }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum OutputOutcome {
@@ -125,22 +125,23 @@ pub struct DecryptionShareCI {
 impl FederationModule for LightningModule {
     type Error = LightningModuleError;
     type TxInput = ContractInput;
-    type TxOutput = ContractOutput;
-    type TxOutputOutcome = OutputOutcome;
-    type ConsensusItem = DecryptionShareCI;
+    type TxOutput = AccountContract;
+    type TxOutputOutcome = ContractId;
+    type ConsensusItem = ();
     type VerificationCache = ();
 
     async fn consensus_proposal<'a>(
         &'a self,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<Self::ConsensusItem> {
-        self.db
-            .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
-            .map(|res| {
-                let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
-                DecryptionShareCI { contract_id, share }
-            })
-            .collect()
+        // self.db
+        //     .find_by_prefix(&ProposeDecryptionShareKeyPrefix)
+        //     .map(|res| {
+        //         let (ProposeDecryptionShareKey(contract_id), share) = res.expect("DB error");
+        //         DecryptionShareCI { contract_id, share }
+        //     })
+        //     .collect()
+        vec![]
     }
 
     async fn begin_consensus_epoch<'a>(
@@ -149,40 +150,40 @@ impl FederationModule for LightningModule {
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        batch.append_from_iter(consensus_items.into_iter().filter_map(
-            |(peer, decryption_share)| {
-                let span = info_span!("process decryption share", %peer);
-                let _guard = span.enter();
-                let contract: ContractAccount = self
-                    .get_contract_account(decryption_share.contract_id)
-                    .or_else(|| {
-                        warn!("Received decryption share fot non-incoming contract");
-                        None
-                    })?;
-                let incoming_contract = match contract.contract {
-                    FundedContract::Incoming(incoming) => incoming.contract,
-                    _ => {
-                        warn!("Received decryption share fot non-incoming contract");
-                        return None;
-                    }
-                };
+        // batch.append_from_iter(consensus_items.into_iter().filter_map(
+        //     |(peer, decryption_share)| {
+        //         let span = info_span!("process decryption share", %peer);
+        //         let _guard = span.enter();
+        //         let contract: ContractAccount = self
+        //             .get_contract_account(decryption_share.contract_id)
+        //             .or_else(|| {
+        //                 warn!("Received decryption share fot non-incoming contract");
+        //                 None
+        //             })?;
+        //         let incoming_contract = match contract.contract {
+        //             FundedContract::Incoming(incoming) => incoming.contract,
+        //             _ => {
+        //                 warn!("Received decryption share fot non-incoming contract");
+        //                 return None;
+        //             }
+        //         };
 
-                if !self.validate_decryption_share(
-                    peer,
-                    &decryption_share.share,
-                    &incoming_contract.encrypted_preimage,
-                ) {
-                    warn!("Received invalid decryption share");
-                    return None;
-                }
+        //         if !self.validate_decryption_share(
+        //             peer,
+        //             &decryption_share.share,
+        //             &incoming_contract.encrypted_preimage,
+        //         ) {
+        //             warn!("Received invalid decryption share");
+        //             return None;
+        //         }
 
-                Some(BatchItem::insert_new(
-                    AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                    decryption_share.share,
-                ))
-            },
-        ));
-        batch.commit();
+        //         Some(BatchItem::insert_new(
+        //             AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+        //             decryption_share.share,
+        //         ))
+        //     },
+        // ));
+        // batch.commit();
     }
 
     fn build_verification_cache<'a>(
@@ -197,7 +198,7 @@ impl FederationModule for LightningModule {
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
-        let account: ContractAccount = self
+        let account: account::AccountContract = self
             .get_contract_account(input.crontract_id)
             .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
 
@@ -208,42 +209,43 @@ impl FederationModule for LightningModule {
             ));
         }
 
-        let pub_key = match account.contract {
-            FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock > block_height(interconnect) {
-                    // If the timelock hasn't expired yet …
-                    let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
-                        &input
-                            .witness
-                            .as_ref()
-                            .ok_or(LightningModuleError::MissingPreimage)?
-                            .0[..],
-                    );
+        // let pub_key = match account.contract {
+        //     FundedContract::Outgoing(outgoing) => {
+        //         if outgoing.timelock > block_height(interconnect) {
+        //             // If the timelock hasn't expired yet …
+        //             let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
+        //                 &input
+        //                     .witness
+        //                     .as_ref()
+        //                     .ok_or(LightningModuleError::MissingPreimage)?
+        //                     .0[..],
+        //             );
 
-                    // … and the spender provides a valid preimage …
-                    if preimage_hash != outgoing.hash {
-                        return Err(LightningModuleError::InvalidPreimage);
-                    }
+        //             // … and the spender provides a valid preimage …
+        //             if preimage_hash != outgoing.hash {
+        //                 return Err(LightningModuleError::InvalidPreimage);
+        //             }
 
-                    // … then the contract account can be spent using the gateway key,
-                    outgoing.gateway_key
-                } else {
-                    // otherwise the user can claim the funds back.
-                    outgoing.user_key
-                }
-            }
-            FundedContract::Account(acc_contract) => acc_contract.key,
-            FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
-                // Once the preimage has been decrypted …
-                DecryptedPreimage::Pending => {
-                    return Err(LightningModuleError::ContractNotReady);
-                }
-                // … either the user may spend the funds since they sold a valid preimage …
-                DecryptedPreimage::Some(preimage) => preimage.0,
-                // … or the gateway may claim back funds for not receiving the advertised preimage.
-                DecryptedPreimage::Invalid => incoming.contract.gateway_key,
-            },
-        };
+        //             // … then the contract account can be spent using the gateway key,
+        //             outgoing.gateway_key
+        //         } else {
+        //             // otherwise the user can claim the funds back.
+        //             outgoing.user_key
+        //         }
+        //     }
+        //     FundedContract::Account(acc_contract) => acc_contract.key,
+        //     FundedContract::Incoming(incoming) => match incoming.contract.decrypted_preimage {
+        //         // Once the preimage has been decrypted …
+        //         DecryptedPreimage::Pending => {
+        //             return Err(LightningModuleError::ContractNotReady);
+        //         }
+        //         // … either the user may spend the funds since they sold a valid preimage …
+        //         DecryptedPreimage::Some(preimage) => preimage.0,
+        //         // … or the gateway may claim back funds for not receiving the advertised preimage.
+        //         DecryptedPreimage::Invalid => incoming.contract.gateway_key,
+        //     },
+        // };
+        let pub_key = account.key;
 
         Ok(InputMeta {
             amount: input.amount,
@@ -289,51 +291,25 @@ impl FederationModule for LightningModule {
         out_point: OutPoint,
     ) -> Result<Amount, Self::Error> {
         let amount = self.validate_output(output)?;
+        let contract = output;
 
-        // let contract = output;
-        // let contract_db_key = ContractKey(contract.contract.contract_id());
-        // let updated_contract_account = self
-        //     .db
-        //     .get_value(&contract_db_key)
-        //     .expect("DB error")
-        //     .map(|mut value: ContractAccount| {
-        //         value.amount += amount;
-        //         value
-        //     })
-        //     .unwrap_or_else(|| ContractAccount {
-        //         amount,
-        //         contract: contract.contract.clone().to_funded(out_point),
-        //     });
-        // batch.append_insert(contract_db_key, updated_contract_account);
+        // Set a balance on this account
+        let contract_db_key = ContractKey(contract.contract_id());
+        let updated_contract_account = self
+            .db
+            .get_value(&contract_db_key)
+            .expect("DB error")
+            .map(|mut value: account::AccountContract| {
+                value.amount += amount;
+                value
+            })
+            .unwrap_or_else(|| account::AccountContract {
+                amount,
+                key: contract.key.clone(),
+            });
+        batch.append_insert(contract_db_key, updated_contract_account);
 
-        // batch.append_insert_new(
-        //     ContractUpdateKey(out_point),
-        //     OutputOutcome::Contract {
-        //         id: contract.contract.contract_id(),
-        //         outcome: contract.contract.to_outcome(),
-        //     },
-        // );
-
-        // if let Contract::Incoming(incoming) = &contract.contract {
-        //     let offer = self
-        //         .db
-        //         .get_value(&OfferKey(incoming.hash))
-        //         .expect("DB error")
-        //         .expect("offer exists if output is valid");
-
-        //     let deryption_share = self
-        //         .cfg
-        //         .threshold_sec_key
-        //         .decrypt_share(&incoming.encrypted_preimage.0)
-        //         .expect("We checked for decryption share validity on contract creation");
-        //     batch.append_insert_new(
-        //         ProposeDecryptionShareKey(contract.contract.contract_id()),
-        //         PreimageDecryptionShare(deryption_share),
-        //     );
-        //     batch.append_delete(OfferKey(offer.hash));
-        // }
-
-        // batch.commit();
+        batch.commit();
         Ok(amount)
     }
 
@@ -344,119 +320,19 @@ impl FederationModule for LightningModule {
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
-        // Decrypt preimages
-        let preimage_decraption_shares = self
-            .db
-            .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
-            .map(|res| {
-                let (key, value) = res.expect("DB error");
-                (key.0, (key.1, value))
-            })
-            .into_group_map();
-
-        for (contract_id, shares) in preimage_decraption_shares {
-            let span = info_span!("decrypt_preimage", %contract_id);
-            let _gaurd = span.enter();
-
-            if shares.len() < self.cfg.threshold {
-                trace!(
-                    shares = %shares.len(),
-                    shares_needed = %self.cfg.threshold,
-                    "Too few decryption shares"
-                );
-                continue;
-            }
-            debug!("Beginning to decrypt preimage");
-
-            let contract = self
-                .get_contract_account(contract_id)
-                .expect("decryption shares without contracts should be discarded earlier"); // FIXME: verify
-
-            let (incoming_contract, out_point) = match contract.contract {
-                FundedContract::Incoming(incoming) => (incoming.contract, incoming.out_point),
-                _ => panic!(
-                    "decryption shares without incoming contracts should be discarded earlier"
-                ),
-            };
-
-            if !matches!(
-                incoming_contract.decrypted_preimage,
-                DecryptedPreimage::Pending
-            ) {
-                warn!("Tried to decrypt the same preimage twice, this should not happen.");
-                continue;
-            }
-
-            let preimage = match self.cfg.threshold_pub_keys.decrypt(
-                shares
-                    .iter()
-                    .map(|(peer, share)| (peer.to_usize(), &share.0)),
-                &incoming_contract.encrypted_preimage.0,
-            ) {
-                Ok(preimage) => preimage,
-                Err(_) => {
-                    // TODO: check if that can happen even though shares are verified before
-                    error!(contract_hash = %incoming_contract.hash, "Failed to decrypt preimage");
-                    continue;
-                }
-            };
-
-            let decrypted_preimage = if preimage.len() != 32 {
-                DecryptedPreimage::Invalid
-            } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
-                if let Ok(preimage_key) = secp256k1::schnorrsig::PublicKey::from_slice(&preimage) {
-                    DecryptedPreimage::Some(crate::contracts::incoming::Preimage(preimage_key))
-                } else {
-                    DecryptedPreimage::Invalid
-                }
-            } else {
-                DecryptedPreimage::Invalid
-            };
-            debug!(?decrypted_preimage);
-
-            // TODO: maybe define update helper fn
-            // Update contract
-            let contract_db_key = ContractKey(contract_id);
-            let mut contract_account = self
-                .db
-                .get_value(&contract_db_key)
-                .expect("DB error")
-                .expect("checked before that it exists");
-            let mut incoming = match &mut contract_account.contract {
-                FundedContract::Incoming(incoming) => incoming,
-                _ => unreachable!("previously checked that it's an incoming contrac"),
-            };
-            incoming.contract.decrypted_preimage = decrypted_preimage.clone();
-            trace!(?contract_account, "Updating contract account");
-            batch.append_insert(contract_db_key, contract_account);
-
-            // Update output outcome
-            let outcome_db_key = ContractUpdateKey(out_point);
-            let mut outcome = self
-                .db
-                .get_value(&outcome_db_key)
-                .expect("DB error")
-                .expect("outcome was created on funding");
-            let incoming_contract_outcome_preimage = match &mut outcome {
-                OutputOutcome::Contract {
-                    outcome: ContractOutcome::Incoming(decryption_outcome),
-                    ..
-                } => decryption_outcome,
-                _ => panic!("We are expeccting an incoming contract"),
-            };
-            *incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            batch.append_insert(outcome_db_key, outcome);
-        }
-        batch.commit();
-
-        // FIXME should use to drop non-contributing peers
+        // FIXME: use this to drop peers with conflicting simplicity contract IDs
         vec![]
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        self.db
-            .get_value(&ContractUpdateKey(out_point))
-            .expect("DB error")
+        todo!()
+
+        // FIXME: save ContractUpdateKey to db in `apply_output` so that we can look up contracts by outpoint
+        // as required by this method
+
+        // self.db
+        //     .get_value(&ContractUpdateKey(out_point))
+        //     .expect("DB error")
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -526,7 +402,10 @@ impl LightningModule {
             .collect()
     }
 
-    pub fn get_contract_account(&self, contract_id: ContractId) -> Option<ContractAccount> {
+    pub fn get_contract_account(
+        &self,
+        contract_id: ContractId,
+    ) -> Option<account::AccountContract> {
         self.db
             .get_value(&ContractKey(contract_id))
             .expect("DB error")

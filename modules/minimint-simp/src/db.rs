@@ -1,6 +1,7 @@
+use crate::contracts::account::AccountContract;
 use crate::contracts::incoming::{IncomingContractOffer, PreimageDecryptionShare};
 use crate::contracts::ContractId;
-use crate::{ContractAccount, OutputOutcome};
+use crate::OutputOutcome;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{OutPoint, PeerId};
@@ -17,7 +18,7 @@ pub struct ContractKey(pub ContractId);
 impl DatabaseKeyPrefixConst for ContractKey {
     const DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
     type Key = Self;
-    type Value = ContractAccount;
+    type Value = AccountContract;
 }
 
 #[derive(Debug, Encodable, Decodable)]
