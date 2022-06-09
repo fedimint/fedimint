@@ -25,6 +25,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
+use contracts::account;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
@@ -94,7 +95,7 @@ pub enum ContractOrOfferOutput {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractOutput {
     pub amount: minimint_api::Amount,
-    pub contract: contracts::Contract,
+    pub contract: account::AccountContract,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
@@ -124,7 +125,7 @@ pub struct DecryptionShareCI {
 impl FederationModule for LightningModule {
     type Error = LightningModuleError;
     type TxInput = ContractInput;
-    type TxOutput = ContractOrOfferOutput;
+    type TxOutput = ContractOutput;
     type TxOutputOutcome = OutputOutcome;
     type ConsensusItem = DecryptionShareCI;
     type VerificationCache = ();
@@ -273,38 +274,11 @@ impl FederationModule for LightningModule {
     }
 
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
-        match output {
-            ContractOrOfferOutput::Contract(contract) => {
-                // Incoming contracts are special, they need to match an offer
-                if let Contract::Incoming(incoming) = &contract.contract {
-                    let offer = self
-                        .db
-                        .get_value(&OfferKey(incoming.hash))
-                        .expect("DB error")
-                        .ok_or(LightningModuleError::NoOffer(incoming.hash))?;
-
-                    if contract.amount < offer.amount {
-                        // If the account is not sufficiently funded fail the output
-                        return Err(LightningModuleError::InsufficientIncomingFunding(
-                            offer.amount,
-                            contract.amount,
-                        ));
-                    }
-                }
-
-                if contract.amount == Amount::ZERO {
-                    Err(LightningModuleError::ZeroOutput)
-                } else {
-                    Ok(contract.amount)
-                }
-            }
-            ContractOrOfferOutput::Offer(offer) => {
-                if !offer.encrypted_preimage.0.verify() {
-                    Err(LightningModuleError::InvalidEncryptedPreimage)
-                } else {
-                    Ok(Amount::ZERO)
-                }
-            }
+        let contract = output;
+        if contract.amount == Amount::ZERO {
+            Err(LightningModuleError::ZeroOutput)
+        } else {
+            Ok(contract.amount)
         }
     }
 
@@ -316,57 +290,50 @@ impl FederationModule for LightningModule {
     ) -> Result<Amount, Self::Error> {
         let amount = self.validate_output(output)?;
 
-        match output {
-            ContractOrOfferOutput::Contract(contract) => {
-                let contract_db_key = ContractKey(contract.contract.contract_id());
-                let updated_contract_account = self
-                    .db
-                    .get_value(&contract_db_key)
-                    .expect("DB error")
-                    .map(|mut value: ContractAccount| {
-                        value.amount += amount;
-                        value
-                    })
-                    .unwrap_or_else(|| ContractAccount {
-                        amount,
-                        contract: contract.contract.clone().to_funded(out_point),
-                    });
-                batch.append_insert(contract_db_key, updated_contract_account);
+        // let contract = output;
+        // let contract_db_key = ContractKey(contract.contract.contract_id());
+        // let updated_contract_account = self
+        //     .db
+        //     .get_value(&contract_db_key)
+        //     .expect("DB error")
+        //     .map(|mut value: ContractAccount| {
+        //         value.amount += amount;
+        //         value
+        //     })
+        //     .unwrap_or_else(|| ContractAccount {
+        //         amount,
+        //         contract: contract.contract.clone().to_funded(out_point),
+        //     });
+        // batch.append_insert(contract_db_key, updated_contract_account);
 
-                batch.append_insert_new(
-                    ContractUpdateKey(out_point),
-                    OutputOutcome::Contract {
-                        id: contract.contract.contract_id(),
-                        outcome: contract.contract.to_outcome(),
-                    },
-                );
+        // batch.append_insert_new(
+        //     ContractUpdateKey(out_point),
+        //     OutputOutcome::Contract {
+        //         id: contract.contract.contract_id(),
+        //         outcome: contract.contract.to_outcome(),
+        //     },
+        // );
 
-                if let Contract::Incoming(incoming) = &contract.contract {
-                    let offer = self
-                        .db
-                        .get_value(&OfferKey(incoming.hash))
-                        .expect("DB error")
-                        .expect("offer exists if output is valid");
+        // if let Contract::Incoming(incoming) = &contract.contract {
+        //     let offer = self
+        //         .db
+        //         .get_value(&OfferKey(incoming.hash))
+        //         .expect("DB error")
+        //         .expect("offer exists if output is valid");
 
-                    let deryption_share = self
-                        .cfg
-                        .threshold_sec_key
-                        .decrypt_share(&incoming.encrypted_preimage.0)
-                        .expect("We checked for decryption share validity on contract creation");
-                    batch.append_insert_new(
-                        ProposeDecryptionShareKey(contract.contract.contract_id()),
-                        PreimageDecryptionShare(deryption_share),
-                    );
-                    batch.append_delete(OfferKey(offer.hash));
-                }
-            }
-            ContractOrOfferOutput::Offer(offer) => {
-                // TODO: sanity-check encrypted preimage size
-                batch.append_insert_new(OfferKey(offer.hash), (*offer).clone());
-            }
-        }
+        //     let deryption_share = self
+        //         .cfg
+        //         .threshold_sec_key
+        //         .decrypt_share(&incoming.encrypted_preimage.0)
+        //         .expect("We checked for decryption share validity on contract creation");
+        //     batch.append_insert_new(
+        //         ProposeDecryptionShareKey(contract.contract.contract_id()),
+        //         PreimageDecryptionShare(deryption_share),
+        //     );
+        //     batch.append_delete(OfferKey(offer.hash));
+        // }
 
-        batch.commit();
+        // batch.commit();
         Ok(amount)
     }
 
