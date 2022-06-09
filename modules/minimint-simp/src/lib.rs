@@ -3,20 +3,11 @@ pub mod contracts;
 mod db;
 
 use crate::config::LightningModuleConfig;
-use crate::contracts::incoming::{
-    DecryptedPreimage, EncryptedPreimage, IncomingContractOffer, OfferId, PreimageDecryptionShare,
-};
-use crate::contracts::{
-    Contract, ContractId, ContractOutcome, FundedContract, IdentifyableContract,
-};
-use crate::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractUpdateKey,
-    OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
-};
+use crate::contracts::{ContractId, IdentifyableContract};
+use crate::db::{ContractKey, ContractUpdateKey};
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
-use itertools::Itertools;
-use minimint_api::db::batch::{BatchItem, BatchTx};
+use minimint_api::db::batch::BatchTx;
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::module::interconnect::ModuleInterconect;
@@ -28,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, error, info_span, instrument, trace, warn};
+use tracing::{error, instrument};
 
 pub struct LightningModule {
     cfg: LightningModuleConfig,
@@ -58,13 +49,8 @@ pub struct ContractInput {
     /// Of the three contract types only the outgoing one needs any other witness data than a
     /// signature. The signature is aggregated on the transaction level, so only the optional
     /// preimage remains.
-    pub witness: Option<contracts::outgoing::Preimage>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct DecryptionShareCI {
-    pub contract_id: ContractId,
-    pub share: PreimageDecryptionShare,
+    // pub witness: Option<contracts::outgoing::Preimage>,
+    pub witness: Option<String>, // FIXME
 }
 
 #[async_trait(?Send)]
@@ -211,26 +197,6 @@ impl LightningModule {
     pub fn new(cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
         LightningModule { cfg, db }
     }
-
-    fn validate_decryption_share(
-        &self,
-        peer: PeerId,
-        share: &PreimageDecryptionShare,
-        message: &EncryptedPreimage,
-    ) -> bool {
-        self.cfg
-            .threshold_pub_keys
-            .public_key_share(peer.to_usize())
-            .verify_decryption_share(&share.0, &message.0)
-    }
-
-    pub fn get_offers(&self) -> Vec<IncomingContractOffer> {
-        self.db
-            .find_by_prefix(&OfferKeyPrefix)
-            .map(|res| res.expect("DB error").1)
-            .collect()
-    }
-
     pub fn get_contract_account(&self, contract_id: ContractId) -> Option<AccountContract> {
         self.db
             .get_value(&ContractKey(contract_id))
