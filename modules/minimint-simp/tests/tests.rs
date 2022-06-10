@@ -22,8 +22,8 @@ async fn test_simp_account() {
     let preimage = [0; 32];
     let bad_preimage = [1; 32];
     let hash = Sha256::hash(&preimage);
-    let commitment = get_hash_commitment(&hash);
-    let cmr = get_hash_cmr(commitment.clone());
+    let program = get_hash_commitment(&hash);
+    let cmr = get_hash_cmr(program.clone());
 
     let account = Account {
         amount: Amount::from_sat(42),
@@ -44,7 +44,7 @@ async fn test_simp_account() {
     let account_input = Input {
         program_id: account.program_id,
         amount: Amount::from_sat(42),
-        program: get_hash_redemption(commitment.clone(), &bad_preimage),
+        program: get_hash_redemption(program.clone(), &bad_preimage),
     };
     assert!(fed.verify_input(&account_input.clone()).is_err());
 
@@ -52,7 +52,7 @@ async fn test_simp_account() {
     let account_input = Input {
         program_id: account.program_id,
         amount: Amount::from_sat(42),
-        program: get_hash_redemption(commitment.clone(), &preimage),
+        program: get_hash_redemption(program.clone(), &preimage),
     };
     let meta = fed.verify_input(&account_input.clone()).unwrap();
     assert_eq!(meta.keys, vec![]); // doesn't return any keys

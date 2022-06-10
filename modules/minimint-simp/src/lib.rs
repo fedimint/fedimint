@@ -106,11 +106,13 @@ impl FederationModule for SimplicityModule {
             ));
         }
 
+        // Check the input and output simplicity programs are equivalent
         let program_matches = input.program_id.0.as_ref() == input.program.root_node().cmr.as_ref();
         if !program_matches {
             return Err(SimplicityModuleError::BadHash);
         }
 
+        // Check the simplicity program executes without error
         let mut machine = BitMachine::for_program(&input.program);
         machine
             .exec(&input.program, &())
