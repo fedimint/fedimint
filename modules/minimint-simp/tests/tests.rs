@@ -47,7 +47,7 @@ async fn test_simp_account() {
         amount: Amount::from_sat(42),
         program: get_hash_redemption(commitment.clone(), &bad_preimage),
     };
-    assert!(fed.verify_input(&account_input).is_err());
+    assert!(fed.verify_input(&account_input.clone()).is_err());
 
     // Successful with correct hash
     let account_input = ContractInput {
@@ -55,20 +55,10 @@ async fn test_simp_account() {
         amount: Amount::from_sat(42),
         program: get_hash_redemption(commitment.clone(), &preimage),
     };
-    let meta = fed.verify_input(&account_input).unwrap();
+    let meta = fed.verify_input(&account_input.clone()).unwrap();
     assert_eq!(meta.keys, vec![]); // doesn't return any keys
 
     // You can only do it once
-    let account_input = ContractInput {
-        contract_id: contract.id,
-        amount: Amount::from_sat(42),
-        program: get_hash_redemption(commitment.clone(), &preimage),
-    };
-    fed.consensus_round(&[account_input], &[]).await;
-    let account_input = ContractInput {
-        contract_id: contract.id,
-        amount: Amount::from_sat(42),
-        program: get_hash_redemption(commitment, &preimage),
-    };
-    assert!(fed.verify_input(&account_input).is_err());
+    fed.consensus_round(&[account_input.clone()], &[]).await;
+    assert!(fed.verify_input(&account_input.clone()).is_err());
 }

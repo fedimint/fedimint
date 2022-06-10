@@ -34,8 +34,7 @@ pub struct AccountContract {
     pub id: ContractId,
 }
 
-// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ContractInput {
     // Which account to spend from
     pub contract_id: ContractId,

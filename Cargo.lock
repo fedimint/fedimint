@@ -3010,7 +3010,7 @@ dependencies = [
 [[package]]
 name = "simplicity"
 version = "0.1.0"
-source = "git+https://github.com/chlewe/rust-simplicity?branch=simpimint#0196c33700ab0fdff6d4b65254b97564f5bde524"
+source = "git+https://github.com/chlewe/rust-simplicity?rev=6bc32dc2188e40c1a71c1a0c97f31849de320307#6bc32dc2188e40c1a71c1a0c97f31849de320307"
 dependencies = [
  "bitcoin 0.28.1",
  "bitcoin_hashes 0.10.0",
