@@ -3,9 +3,8 @@ use bitcoin_hashes::Hash;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
 use minimint_simp::config::SimplicityModuleClientConfig;
-use minimint_simp::contracts::ContractId;
-use minimint_simp::AccountContract;
-use minimint_simp::{ContractInput, SimplicityModule};
+use minimint_simp::Account;
+use minimint_simp::{Input, ProgramId, SimplicityModule};
 use simplicity::merkle::common::MerkleRoot;
 use simplicity::minimint::{get_hash_cmr, get_hash_commitment, get_hash_redemption};
 use std::sync::Arc;
@@ -26,32 +25,32 @@ async fn test_simp_account() {
     let commitment = get_hash_commitment(&hash);
     let cmr = get_hash_cmr(commitment.clone());
 
-    let contract = AccountContract {
+    let account = Account {
         amount: Amount::from_sat(42),
-        id: ContractId(cmr.into_inner()),
+        program_id: ProgramId(cmr.into_inner()),
     };
     let account_out_point = OutPoint {
         txid: Default::default(),
         out_idx: 0,
     };
 
-    let outputs = [(account_out_point, contract.clone())];
+    let outputs = [(account_out_point, account.clone())];
 
     fed.consensus_round(&[], &outputs).await;
-    let outcome_contract_id = fed.output_outcome(account_out_point).unwrap();
-    assert_eq!(contract.id, outcome_contract_id);
+    let outcome_program_id = fed.output_outcome(account_out_point).unwrap();
+    assert_eq!(account.program_id, outcome_program_id);
 
     // Fail to claim with bad hash
-    let account_input = ContractInput {
-        contract_id: contract.id,
+    let account_input = Input {
+        program_id: account.program_id,
         amount: Amount::from_sat(42),
         program: get_hash_redemption(commitment.clone(), &bad_preimage),
     };
     assert!(fed.verify_input(&account_input.clone()).is_err());
 
     // Successful with correct hash
-    let account_input = ContractInput {
-        contract_id: contract.id,
+    let account_input = Input {
+        program_id: account.program_id,
         amount: Amount::from_sat(42),
         program: get_hash_redemption(commitment.clone(), &preimage),
     };

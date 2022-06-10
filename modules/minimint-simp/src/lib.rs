@@ -1,14 +1,12 @@
 pub mod config;
-pub mod contracts;
 mod db;
 
 use crate::config::SimplicityModuleConfig;
-use crate::contracts::ContractId;
-use crate::db::{ContractKey, ContractUpdateKey};
+use crate::db::{ProgramKey, ProgramUpdateKey};
 use async_trait::async_trait;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::Database;
-use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::encoding::{Decodable, DecodeError, Encodable};
 use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, PeerId};
@@ -18,6 +16,7 @@ use simplicity::exec::BitMachine;
 use simplicity::extension::jets::JetsNode;
 use simplicity::Program;
 use std::collections::HashSet;
+use std::io::Error;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{error, instrument};
@@ -27,17 +26,33 @@ pub struct SimplicityModule {
     db: Arc<dyn Database>,
 }
 
-/// A generic contract to hold money in a pub key locked account
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
-pub struct AccountContract {
+/// Simplicity CMR
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Copy)]
+pub struct ProgramId(pub [u8; 32]);
+
+impl Encodable for ProgramId {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.0.consensus_encode(writer)
+    }
+}
+
+impl Decodable for ProgramId {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        Ok(ProgramId(Decodable::consensus_decode(d)?))
+    }
+}
+
+/// A generic contract to hold money in an account locked by a Simplicity program
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct Account {
     pub amount: minimint_api::Amount,
-    pub id: ContractId,
+    pub program_id: ProgramId,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ContractInput {
+pub struct Input {
     // Which account to spend from
-    pub contract_id: ContractId,
+    pub program_id: ProgramId,
     /// How sats to spend from this account
     pub amount: Amount,
     // Simplicity program
@@ -47,9 +62,9 @@ pub struct ContractInput {
 #[async_trait(?Send)]
 impl FederationModule for SimplicityModule {
     type Error = SimplicityModuleError;
-    type TxInput = ContractInput;
-    type TxOutput = AccountContract;
-    type TxOutputOutcome = ContractId;
+    type TxInput = Input;
+    type TxOutput = Account;
+    type TxOutputOutcome = ProgramId;
     type ConsensusItem = ();
     type VerificationCache = ();
 
@@ -80,9 +95,9 @@ impl FederationModule for SimplicityModule {
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
-        let account: AccountContract = self
-            .get_contract_account(input.contract_id)
-            .ok_or(SimplicityModuleError::UnknownContract(input.contract_id))?;
+        let account: Account = self
+            .get_account(input.program_id)
+            .ok_or(SimplicityModuleError::UnknownProgram(input.program_id))?;
 
         if account.amount < input.amount {
             return Err(SimplicityModuleError::InsufficientFunds(
@@ -91,8 +106,7 @@ impl FederationModule for SimplicityModule {
             ));
         }
 
-        let program_matches =
-            input.contract_id.0.as_ref() == input.program.root_node().cmr.as_ref();
+        let program_matches = input.program_id.0.as_ref() == input.program.root_node().cmr.as_ref();
         if !program_matches {
             return Err(SimplicityModuleError::BadHash);
         }
@@ -117,29 +131,28 @@ impl FederationModule for SimplicityModule {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        let account_db_key = ContractKey(input.contract_id);
-        let mut contract_account = self
+        let account_db_key = ProgramKey(input.program_id);
+        let mut account = self
             .db
             .get_value(&account_db_key)
             .expect("DB error")
-            .expect("Should fail validation if contract account doesn't exist");
+            .expect("Should fail validation if account doesn't exist");
 
         // FIXME: should we be checking that this isn't negative???
-        contract_account.amount -= meta.amount;
+        account.amount -= meta.amount;
 
         // Save simplicity program CMR
-        batch.append_insert(account_db_key, contract_account);
+        batch.append_insert(account_db_key, account);
 
         batch.commit();
         Ok(meta)
     }
 
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
-        let contract = output;
-        if contract.amount == Amount::ZERO {
+        if output.amount == Amount::ZERO {
             Err(SimplicityModuleError::ZeroOutput)
         } else {
-            Ok(contract.amount)
+            Ok(output.amount)
         }
     }
 
@@ -150,25 +163,24 @@ impl FederationModule for SimplicityModule {
         out_point: OutPoint,
     ) -> Result<Amount, Self::Error> {
         let amount = self.validate_output(output)?;
-        let contract = output;
 
         // Set a balance on this account
-        let contract_db_key = ContractKey(contract.id);
-        let updated_contract_account = self
+        let program_db_key = ProgramKey(output.program_id);
+        let updated_account = self
             .db
-            .get_value(&contract_db_key)
+            .get_value(&program_db_key)
             .expect("DB error")
-            .map(|mut value: AccountContract| {
+            .map(|mut value: Account| {
                 value.amount += amount;
                 value
             })
-            .unwrap_or_else(|| AccountContract {
+            .unwrap_or_else(|| Account {
                 amount,
-                id: contract.id,
+                program_id: output.program_id,
             });
-        batch.append_insert(contract_db_key, updated_contract_account);
+        batch.append_insert(program_db_key, updated_account);
 
-        batch.append_insert_new(ContractUpdateKey(out_point), contract.id);
+        batch.append_insert_new(ProgramUpdateKey(out_point), output.program_id);
 
         batch.commit();
         Ok(amount)
@@ -187,7 +199,7 @@ impl FederationModule for SimplicityModule {
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         self.db
-            .get_value(&ContractUpdateKey(out_point))
+            .get_value(&ProgramUpdateKey(out_point))
             .expect("DB error")
     }
 
@@ -204,20 +216,20 @@ impl SimplicityModule {
     pub fn new(_cfg: SimplicityModuleConfig, db: Arc<dyn Database>) -> SimplicityModule {
         SimplicityModule { _cfg, db }
     }
-    pub fn get_contract_account(&self, contract_id: ContractId) -> Option<AccountContract> {
+    pub fn get_account(&self, program_id: ProgramId) -> Option<Account> {
         self.db
-            .get_value(&ContractKey(contract_id))
+            .get_value(&ProgramKey(program_id))
             .expect("DB error")
     }
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum SimplicityModuleError {
-    #[error("The the input contract does not exist")]
-    UnknownContract(ContractId),
-    #[error("The input contract has too little funds, got {0}, input spends {1}")]
+    #[error("The the input program does not exist")]
+    UnknownProgram(ProgramId),
+    #[error("The account has too little funds, got {0}, input spends {1}")]
     InsufficientFunds(Amount, Amount),
-    #[error("Output contract value may not be zero unless it's an offer output")]
+    #[error("Output value may not be zero")]
     ZeroOutput,
     #[error("Hash doesn't match")]
     BadHash,

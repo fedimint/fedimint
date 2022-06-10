@@ -19,6 +19,7 @@ serde = {version = "1.0.130", features = [ "derive" ] }
 threshold_crypto = "0.3"
 thiserror = "1.0.23"
 tracing = "0.1.29"
+
 # Latest commit on 'simpimint' branch
 simplicity = { git ="https://github.com/chlewe/rust-simplicity", rev="6bc32dc2188e40c1a71c1a0c97f31849de320307" }
 
