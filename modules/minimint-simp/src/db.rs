@@ -5,9 +5,6 @@ use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::OutPoint;
 
 const DB_PREFIX_CONTRACT: u8 = 0x40;
-const DB_PREFIX_OFFER: u8 = 0x41;
-const DB_PREFIX_PROPOSE_DECRYPTION_SHARE: u8 = 0x42;
-const DB_PREFIX_AGREED_DECRYPTION_SHARE: u8 = 0x43;
 const DB_PREFIX_CONTRACT_UPDATE: u8 = 0x44;
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]

@@ -6,12 +6,13 @@ use crate::config::LightningModuleConfig;
 use crate::contracts::{ContractId, IdentifyableContract};
 use crate::db::{ContractKey, ContractUpdateKey};
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::module::interconnect::ModuleInterconect;
-use minimint_api::module::{http, ApiEndpoint};
+use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
@@ -22,7 +23,7 @@ use thiserror::Error;
 use tracing::{error, instrument};
 
 pub struct LightningModule {
-    cfg: LightningModuleConfig,
+    _cfg: LightningModuleConfig,
     db: Arc<dyn Database>,
 }
 
@@ -30,7 +31,7 @@ pub struct LightningModule {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct AccountContract {
     pub amount: minimint_api::Amount,
-    pub key: secp256k1::schnorrsig::PublicKey,
+    pub hash: Sha256,
 }
 
 impl IdentifyableContract for AccountContract {
@@ -42,15 +43,16 @@ impl IdentifyableContract for AccountContract {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Preimage(pub [u8; 32]);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractInput {
-    pub crontract_id: contracts::ContractId,
-    /// While for now we only support spending the entire contract we need to avoid
+    // Which account to spend from
+    pub contract_id: contracts::ContractId,
+    /// How sats to spend from this account
     pub amount: Amount,
-    /// Of the three contract types only the outgoing one needs any other witness data than a
-    /// signature. The signature is aggregated on the transaction level, so only the optional
-    /// preimage remains.
-    // pub witness: Option<contracts::outgoing::Preimage>,
-    pub witness: Option<String>, // FIXME
+    // Simplicity witness which provides a preimge
+    pub witness: Preimage, // TODO: make simplicity understand this
 }
 
 #[async_trait(?Send)]
@@ -71,8 +73,8 @@ impl FederationModule for LightningModule {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        mut batch: BatchTx<'a>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
+        mut _batch: BatchTx<'a>,
+        _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
     }
@@ -85,13 +87,13 @@ impl FederationModule for LightningModule {
 
     fn validate_input<'a>(
         &self,
-        interconnect: &dyn ModuleInterconect,
+        _interconnect: &dyn ModuleInterconect,
         _cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         let account: AccountContract = self
-            .get_contract_account(input.crontract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
+            .get_contract_account(input.contract_id)
+            .ok_or(LightningModuleError::UnknownContract(input.contract_id))?;
 
         if account.amount < input.amount {
             return Err(LightningModuleError::InsufficientFunds(
@@ -99,9 +101,15 @@ impl FederationModule for LightningModule {
                 input.amount,
             ));
         }
+
+        // TODO: call simplicity
+        if account.hash != Sha256::hash(&input.witness.0) {
+            return Err(LightningModuleError::BadHash);
+        }
+
         Ok(InputMeta {
             amount: input.amount,
-            puk_keys: Box::new(std::iter::once(account.key)),
+            puk_keys: Box::new(std::iter::empty()),
         })
     }
 
@@ -114,12 +122,14 @@ impl FederationModule for LightningModule {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        let account_db_key = ContractKey(input.crontract_id);
+        let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = self
             .db
             .get_value(&account_db_key)
             .expect("DB error")
             .expect("Should fail validation if contract account doesn't exist");
+
+        // FIXME: should we be checking that this isn't negative???
         contract_account.amount -= meta.amount;
         batch.append_insert(account_db_key, contract_account);
 
@@ -157,7 +167,7 @@ impl FederationModule for LightningModule {
             })
             .unwrap_or_else(|| AccountContract {
                 amount,
-                key: contract.key.clone(),
+                hash: contract.hash.clone(),
             });
         batch.append_insert(contract_db_key, updated_contract_account);
 
@@ -171,7 +181,7 @@ impl FederationModule for LightningModule {
     async fn end_consensus_epoch<'a>(
         &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        mut batch: BatchTx<'a>,
+        mut _batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // FIXME: use this to drop peers with conflicting simplicity contract IDs
@@ -194,8 +204,8 @@ impl FederationModule for LightningModule {
 }
 
 impl LightningModule {
-    pub fn new(cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
-        LightningModule { cfg, db }
+    pub fn new(_cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
+        LightningModule { _cfg, db }
     }
     pub fn get_contract_account(&self, contract_id: ContractId) -> Option<AccountContract> {
         self.db
@@ -204,43 +214,14 @@ impl LightningModule {
     }
 }
 
-fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
-    // This is a future because we are normally reading from a network socket. But for internal
-    // calls the data is available instantly in one go, so we can just block on it.
-    futures::executor::block_on(
-        interconnect
-            .call(
-                "wallet",
-                "/block_height".to_owned(),
-                http::Method::Get,
-                Default::default(),
-            )
-            .expect("Wallet module not present or malfunctioning!")
-            .body_json(),
-    )
-    .expect("Malformed block height response from wallet module!")
-}
-
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum LightningModuleError {
     #[error("The the input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]
     InsufficientFunds(Amount, Amount),
-    #[error("An outgoing LN contract spend did not provide a preimage")]
-    MissingPreimage,
-    #[error("An outgoing LN contract spend provided a wrong preimage")]
-    InvalidPreimage,
-    #[error("Incoming contract not ready to be spent yet, decryption in progress")]
-    ContractNotReady,
     #[error("Output contract value may not be zero unless it's an offer output")]
     ZeroOutput,
-    #[error("Offer contains invalid threshold-encrypted data")]
-    InvalidEncryptedPreimage,
-    #[error(
-        "The incoming LN account requires more funding according to the offer (need {0} got {1})"
-    )]
-    InsufficientIncomingFunding(Amount, Amount),
-    #[error("No offer found for payment hash {0}")]
-    NoOffer(secp256k1::hashes::sha256::Hash),
+    #[error("Hash doesn't match")]
+    BadHash,
 }
