@@ -2,7 +2,7 @@ pub mod config;
 pub mod contracts;
 mod db;
 
-use crate::config::LightningModuleConfig;
+use crate::config::SimplicityModuleConfig;
 use crate::contracts::{ContractId, IdentifyableContract};
 use crate::db::{ContractKey, ContractUpdateKey};
 use async_trait::async_trait;
@@ -22,8 +22,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{error, instrument};
 
-pub struct LightningModule {
-    _cfg: LightningModuleConfig,
+pub struct SimplicityModule {
+    _cfg: SimplicityModuleConfig,
     db: Arc<dyn Database>,
 }
 
@@ -56,8 +56,8 @@ pub struct ContractInput {
 }
 
 #[async_trait(?Send)]
-impl FederationModule for LightningModule {
-    type Error = LightningModuleError;
+impl FederationModule for SimplicityModule {
+    type Error = SimplicityModuleError;
     type TxInput = ContractInput;
     type TxOutput = AccountContract;
     type TxOutputOutcome = ContractId;
@@ -93,10 +93,10 @@ impl FederationModule for LightningModule {
     ) -> Result<InputMeta<'a>, Self::Error> {
         let account: AccountContract = self
             .get_contract_account(input.contract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.contract_id))?;
+            .ok_or(SimplicityModuleError::UnknownContract(input.contract_id))?;
 
         if account.amount < input.amount {
-            return Err(LightningModuleError::InsufficientFunds(
+            return Err(SimplicityModuleError::InsufficientFunds(
                 account.amount,
                 input.amount,
             ));
@@ -104,7 +104,7 @@ impl FederationModule for LightningModule {
 
         // TODO: call simplicity
         if account.hash != Sha256::hash(&input.witness.0) {
-            return Err(LightningModuleError::BadHash);
+            return Err(SimplicityModuleError::BadHash);
         }
 
         Ok(InputMeta {
@@ -140,7 +140,7 @@ impl FederationModule for LightningModule {
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
         let contract = output;
         if contract.amount == Amount::ZERO {
-            Err(LightningModuleError::ZeroOutput)
+            Err(SimplicityModuleError::ZeroOutput)
         } else {
             Ok(contract.amount)
         }
@@ -203,9 +203,9 @@ impl FederationModule for LightningModule {
     }
 }
 
-impl LightningModule {
-    pub fn new(_cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
-        LightningModule { _cfg, db }
+impl SimplicityModule {
+    pub fn new(_cfg: SimplicityModuleConfig, db: Arc<dyn Database>) -> SimplicityModule {
+        SimplicityModule { _cfg, db }
     }
     pub fn get_contract_account(&self, contract_id: ContractId) -> Option<AccountContract> {
         self.db
@@ -215,7 +215,7 @@ impl LightningModule {
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
-pub enum LightningModuleError {
+pub enum SimplicityModuleError {
     #[error("The the input contract {0} does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]

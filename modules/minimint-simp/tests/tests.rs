@@ -2,18 +2,18 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
-use minimint_simp::config::LightningModuleClientConfig;
+use minimint_simp::config::SimplicityModuleClientConfig;
 use minimint_simp::contracts::IdentifyableContract;
 use minimint_simp::{AccountContract, Preimage};
-use minimint_simp::{ContractInput, LightningModule};
+use minimint_simp::{ContractInput, SimplicityModule};
 use std::sync::Arc;
 
 #[test_log::test(tokio::test)]
 async fn test_simp_account() {
-    let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
+    let mut fed = FakeFed::<SimplicityModule, SimplicityModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
+        |cfg, db| async { SimplicityModule::new(cfg, Arc::new(db)) },
         &(),
     )
     .await;

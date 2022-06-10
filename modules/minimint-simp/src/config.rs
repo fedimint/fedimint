@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningModuleConfig {}
+pub struct SimplicityModuleConfig {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningModuleClientConfig {}
+pub struct SimplicityModuleClientConfig {}
 
-impl GenerateConfig for LightningModuleConfig {
+impl GenerateConfig for SimplicityModuleConfig {
     type Params = ();
-    type ClientConfig = LightningModuleClientConfig;
+    type ClientConfig = SimplicityModuleClientConfig;
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
@@ -22,10 +22,10 @@ impl GenerateConfig for LightningModuleConfig {
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let server_cfg = peers
             .iter()
-            .map(|&peer| (peer, LightningModuleConfig {}))
+            .map(|&peer| (peer, SimplicityModuleConfig {}))
             .collect();
 
-        let client_cfg = LightningModuleClientConfig {};
+        let client_cfg = SimplicityModuleClientConfig {};
 
         (server_cfg, client_cfg)
     }

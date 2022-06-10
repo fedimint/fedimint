@@ -9,12 +9,7 @@ pub trait IdentifyableContract: Encodable {
     fn contract_id(&self) -> ContractId;
 }
 
-hash_newtype!(
-    ContractId,
-    Sha256,
-    32,
-    doc = "The hash of a LN incoming contract"
-);
+hash_newtype!(ContractId, Sha256, 32, doc = "A simple hash");
 
 impl Encodable for ContractId {
     fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
