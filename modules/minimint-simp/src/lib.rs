@@ -3,11 +3,9 @@ pub mod contracts;
 mod db;
 
 use crate::config::SimplicityModuleConfig;
-use crate::contracts::{ContractId, IdentifyableContract};
+use crate::contracts::ContractId;
 use crate::db::{ContractKey, ContractUpdateKey};
 use async_trait::async_trait;
-use bitcoin_hashes::sha256::Hash as Sha256;
-use bitcoin_hashes::Hash as BitcoinHash;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
@@ -16,7 +14,9 @@ use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
+use simplicity::exec::BitMachine;
+use simplicity::extension::jets::JetsNode;
+use simplicity::Program;
 use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
@@ -28,31 +28,21 @@ pub struct SimplicityModule {
 }
 
 /// A generic contract to hold money in a pub key locked account
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
 pub struct AccountContract {
     pub amount: minimint_api::Amount,
-    pub hash: Sha256,
+    pub id: ContractId,
 }
 
-impl IdentifyableContract for AccountContract {
-    fn contract_id(&self) -> ContractId {
-        let mut engine = ContractId::engine();
-        Encodable::consensus_encode(self, &mut engine).expect("Hashing never fails");
-        ContractId::from_engine(engine)
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Preimage(pub [u8; 32]);
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+// #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct ContractInput {
     // Which account to spend from
-    pub contract_id: contracts::ContractId,
+    pub contract_id: ContractId,
     /// How sats to spend from this account
     pub amount: Amount,
-    // Simplicity witness which provides a preimge
-    pub witness: Preimage, // TODO: make simplicity understand this
+    // Simplicity program
+    pub program: Program<JetsNode>,
 }
 
 #[async_trait(?Send)]
@@ -102,10 +92,16 @@ impl FederationModule for SimplicityModule {
             ));
         }
 
-        // TODO: call simplicity
-        if account.hash != Sha256::hash(&input.witness.0) {
+        let program_matches =
+            input.contract_id.0.as_ref() == input.program.root_node().cmr.as_ref();
+        if !program_matches {
             return Err(SimplicityModuleError::BadHash);
         }
+
+        let mut machine = BitMachine::for_program(&input.program);
+        machine
+            .exec(&input.program, &())
+            .map_err(|_| SimplicityModuleError::SimplicityError)?;
 
         Ok(InputMeta {
             amount: input.amount,
@@ -131,6 +127,8 @@ impl FederationModule for SimplicityModule {
 
         // FIXME: should we be checking that this isn't negative???
         contract_account.amount -= meta.amount;
+
+        // Save simplicity program CMR
         batch.append_insert(account_db_key, contract_account);
 
         batch.commit();
@@ -156,7 +154,7 @@ impl FederationModule for SimplicityModule {
         let contract = output;
 
         // Set a balance on this account
-        let contract_db_key = ContractKey(contract.contract_id());
+        let contract_db_key = ContractKey(contract.id);
         let updated_contract_account = self
             .db
             .get_value(&contract_db_key)
@@ -167,11 +165,11 @@ impl FederationModule for SimplicityModule {
             })
             .unwrap_or_else(|| AccountContract {
                 amount,
-                hash: contract.hash.clone(),
+                id: contract.id,
             });
         batch.append_insert(contract_db_key, updated_contract_account);
 
-        batch.append_insert_new(ContractUpdateKey(out_point), contract.contract_id());
+        batch.append_insert_new(ContractUpdateKey(out_point), contract.id);
 
         batch.commit();
         Ok(amount)
@@ -195,7 +193,7 @@ impl FederationModule for SimplicityModule {
     }
 
     fn api_base_name(&self) -> &'static str {
-        "ln"
+        "simp"
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
@@ -216,7 +214,7 @@ impl SimplicityModule {
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum SimplicityModuleError {
-    #[error("The the input contract {0} does not exist")]
+    #[error("The the input contract does not exist")]
     UnknownContract(ContractId),
     #[error("The input contract has too little funds, got {0}, input spends {1}")]
     InsufficientFunds(Amount, Amount),
@@ -224,4 +222,6 @@ pub enum SimplicityModuleError {
     ZeroOutput,
     #[error("Hash doesn't match")]
     BadHash,
+    #[error("Simplicity error")]
+    SimplicityError,
 }

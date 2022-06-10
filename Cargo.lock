@@ -422,11 +422,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a41df6ad9642c5c15ae312dd3d074de38fd3eb7cc87ad4ce10f90292a83fe4d"
 dependencies = [
  "bech32",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.10.0",
  "bitcoinconsensus",
- "secp256k1",
+ "secp256k1 0.20.3",
  "serde",
 ]
+
+[[package]]
+name = "bitcoin"
+version = "0.28.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05bba324e6baf655b882df672453dbbc527bc938cadd27750ae510aaccc3a66a"
+dependencies = [
+ "bech32",
+ "bitcoin_hashes 0.10.0",
+ "secp256k1 0.22.1",
+]
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b375d62f341cef9cd9e77793ec8f1db3fc9ce2e4d57e982c8fe697a2c16af3b6"
 
 [[package]]
 name = "bitcoin_hashes"
@@ -465,7 +482,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dce91de73c61f5776cf938bfa88378c5b404a70e3369b761dacbe6024fea79dd"
 dependencies = [
- "bitcoin",
+ "bitcoin 0.27.1",
  "serde",
  "serde_json",
 ]
@@ -896,6 +913,19 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+
+[[package]]
+name = "elements"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a00dab52c515c0cb85d33267326da8fc8a0f8a523f13a0b4c3c73af4ad09cade"
+dependencies = [
+ "bitcoin 0.28.1",
+ "bitcoin_hashes 0.10.0",
+ "secp256k1-zkp 0.6.0",
+ "serde_json",
+ "slip21",
+]
 
 [[package]]
 name = "encoding_rs"
@@ -1595,8 +1625,8 @@ version = "0.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "580647f97f8e6d138ad724027c8ca9b890b1001b05374c270bbee4c10309b641"
 dependencies = [
- "bitcoin",
- "secp256k1",
+ "bitcoin 0.27.1",
+ "secp256k1 0.20.3",
 ]
 
 [[package]]
@@ -1606,10 +1636,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f069b6eb46d7639d07977d14dc7d9a40d9d8bc5ac2b47f1924318fec13edd5c0"
 dependencies = [
  "bech32",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.10.0",
  "lightning",
  "num-traits",
- "secp256k1",
+ "secp256k1 0.20.3",
 ]
 
 [[package]]
@@ -1627,7 +1657,7 @@ dependencies = [
  "minimint-api",
  "mint-client",
  "rand 0.6.5",
- "secp256k1",
+ "secp256k1 0.20.3",
  "serde",
  "serde_json",
  "sled",
@@ -1719,7 +1749,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
- "bitcoin",
+ "bitcoin 0.27.1",
  "clap",
  "futures",
  "hbbft",
@@ -1732,7 +1762,7 @@ dependencies = [
  "minimint-wallet",
  "rand 0.6.5",
  "rayon",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.4.0",
  "serde",
  "serde_json",
  "sha3",
@@ -1751,14 +1781,14 @@ name = "minimint-api"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bitcoin",
- "bitcoin_hashes",
+ "bitcoin 0.27.1",
+ "bitcoin_hashes 0.10.0",
  "getrandom 0.2.6",
  "hex",
  "http-types",
  "minimint-derive",
  "rand 0.6.5",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.4.0",
  "serde",
  "serde_json",
  "sled",
@@ -1786,13 +1816,13 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.10.0",
  "futures",
  "itertools",
  "lightning",
  "lightning-invoice",
  "minimint-api",
- "secp256k1",
+ "secp256k1 0.20.3",
  "serde",
  "test-log",
  "thiserror",
@@ -1814,7 +1844,7 @@ dependencies = [
  "minimint-derive",
  "rand 0.6.5",
  "rayon",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.4.0",
  "serde",
  "tbs",
  "test-log",
@@ -1829,14 +1859,15 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.10.0",
  "futures",
  "itertools",
  "lightning",
  "lightning-invoice",
  "minimint-api",
- "secp256k1",
+ "secp256k1 0.20.3",
  "serde",
+ "simplicity",
  "test-log",
  "thiserror",
  "threshold_crypto",
@@ -1851,7 +1882,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "async-trait",
- "bitcoin",
+ "bitcoin 0.27.1",
  "bitcoincore-rpc",
  "clightningrpc",
  "cln-rpc",
@@ -1879,15 +1910,15 @@ name = "minimint-wallet"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bitcoin",
+ "bitcoin 0.27.1",
  "bitcoincore-rpc",
  "hex",
  "itertools",
  "minimint-api",
  "minimint-derive",
- "miniscript",
+ "miniscript 6.1.0",
  "rand 0.6.5",
- "secp256k1",
+ "secp256k1 0.20.3",
  "serde",
  "test-log",
  "thiserror",
@@ -1903,8 +1934,17 @@ version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e292b58407dfbf1384e5aca8428d3b0f2eaa09d24cb17088f6db0b7ca31194a"
 dependencies = [
- "bitcoin",
+ "bitcoin 0.27.1",
  "serde",
+]
+
+[[package]]
+name = "miniscript"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da39fc7a8adea97a677337b0091779dd86349226b869053af496584a9b9e5847"
+dependencies = [
+ "bitcoin 0.28.1",
 ]
 
 [[package]]
@@ -1923,8 +1963,8 @@ dependencies = [
  "async-trait",
  "base64 0.13.0",
  "bincode",
- "bitcoin",
- "bitcoin_hashes",
+ "bitcoin 0.27.1",
+ "bitcoin_hashes 0.10.0",
  "clap",
  "futures",
  "hex",
@@ -1932,10 +1972,10 @@ dependencies = [
  "lightning-invoice",
  "minimint",
  "minimint-api",
- "miniscript",
+ "miniscript 6.1.0",
  "rand 0.6.5",
  "reqwest",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.4.0",
  "serde",
  "sha3",
  "sled",
@@ -2714,10 +2754,21 @@ name = "secp256k1"
 version = "0.20.3"
 source = "git+https://github.com/fedimint/rust-secp256k1/?branch=minimint#37b9d77d98a497fddfb435df4f806b17276edb8d"
 dependencies = [
- "bitcoin_hashes",
+ "bitcoin_hashes 0.10.0",
  "rand 0.6.5",
- "secp256k1-sys",
+ "secp256k1-sys 0.4.1",
  "serde",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26947345339603ae8395f68e2f3d85a6b0a8ddfe6315818e80b8504415099db0"
+dependencies = [
+ "bitcoin_hashes 0.10.0",
+ "rand 0.6.5",
+ "secp256k1-sys 0.5.2",
 ]
 
 [[package]]
@@ -2729,14 +2780,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1-sys"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "152e20a0fd0519390fc43ab404663af8a0b794273d2a91d60ad4a39f13ffe110"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "secp256k1-zkp"
 version = "0.4.0"
 source = "git+https://github.com/fedimint/rust-secp256k1-zkp?branch=minimint#1c4d6e843333947804df1be20d7fe9bd636a1555"
 dependencies = [
  "rand 0.6.5",
- "secp256k1",
- "secp256k1-zkp-sys",
+ "secp256k1 0.20.3",
+ "secp256k1-zkp-sys 0.4.0",
  "serde",
+]
+
+[[package]]
+name = "secp256k1-zkp"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c724fda6aae465ed9a39320202bc6164e0adb3cdf9bc16d5af4be7eebaba75e5"
+dependencies = [
+ "rand 0.6.5",
+ "secp256k1 0.22.1",
+ "secp256k1-zkp-sys 0.6.0",
 ]
 
 [[package]]
@@ -2745,7 +2816,17 @@ version = "0.4.0"
 source = "git+https://github.com/fedimint/rust-secp256k1-zkp?branch=minimint#1c4d6e843333947804df1be20d7fe9bd636a1555"
 dependencies = [
  "cc",
- "secp256k1-sys",
+ "secp256k1-sys 0.4.1",
+]
+
+[[package]]
+name = "secp256k1-zkp-sys"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6f880412a627e79d3ce17355150ea1e0e76570efb7f0f70df51504cbe2582e3"
+dependencies = [
+ "cc",
+ "secp256k1-sys 0.5.2",
 ]
 
 [[package]]
@@ -2927,6 +3008,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "simplicity"
+version = "0.1.0"
+source = "git+https://github.com/chlewe/rust-simplicity?branch=simpimint#0196c33700ab0fdff6d4b65254b97564f5bde524"
+dependencies = [
+ "bitcoin 0.28.1",
+ "bitcoin_hashes 0.10.0",
+ "byteorder",
+ "elements",
+ "miniscript 7.0.0",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2946,6 +3039,15 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
+]
+
+[[package]]
+name = "slip21"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acff9a1a0f4d902c8184bdde5338861dd95eb1397a12c4df78fb0b6ebeed4cbe"
+dependencies = [
+ "bitcoin_hashes 0.7.6",
 ]
 
 [[package]]

@@ -19,6 +19,7 @@ serde = {version = "1.0.130", features = [ "derive" ] }
 threshold_crypto = "0.3"
 thiserror = "1.0.23"
 tracing = "0.1.29"
+simplicity = { git ="https://github.com/chlewe/rust-simplicity", branch="simpimint" }
 
 [dev-dependencies]
 tokio = {version = "1.14.0", features = [ "full" ] }
