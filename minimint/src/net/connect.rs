@@ -1,5 +1,5 @@
 use crate::config::ServerConfig;
-use crate::net::framed::TcpBidiFramed;
+use crate::net::framed::{FramedTransport, TcpBidiFramed};
 use crate::net::PeerConnections;
 use async_trait::async_trait;
 use futures::future::select_all;
@@ -19,7 +19,7 @@ use tracing::{debug, info, instrument, trace, warn};
 
 // FIXME: make connections dynamically managed
 pub struct Connections<T> {
-    connections: HashMap<PeerId, TcpBidiFramed<T>>,
+    connections: HashMap<PeerId, Box<dyn FramedTransport<T> + Send + Unpin>>,
 }
 
 impl<T: 'static> Connections<T>
@@ -66,7 +66,11 @@ where
             .await
             .expect("Error during peer handshakes")
             .into_iter()
-            .map(|(id, stream)| (id, TcpBidiFramed::new_from_tcp(stream)))
+            .map(
+                |(id, stream)| -> (PeerId, Box<dyn FramedTransport<T> + Send + Unpin>) {
+                    (id, Box::new(TcpBidiFramed::new_from_tcp(stream)))
+                },
+            )
             .collect::<HashMap<_, _>>();
 
         info!("Successfully connected to all peers");
@@ -115,7 +119,10 @@ where
         }
     }
 
-    async fn receive_from_peer(id: PeerId, peer: &mut TcpBidiFramed<T>) -> Option<T> {
+    async fn receive_from_peer(
+        id: PeerId,
+        peer: &mut (dyn FramedTransport<T> + Send + Unpin),
+    ) -> Option<T> {
         let msg = peer.next().await?.ok()?;
 
         trace!(peer = %id, "Received msg");
@@ -155,7 +162,7 @@ where
         // TODO: optimize, don't throw away remaining futures
         loop {
             let (received, _, _) = select_all(self.connections.iter_mut().map(|(id, peer)| {
-                let future = async move { (*id, Self::receive_from_peer(*id, peer).await) };
+                let future = async move { (*id, Self::receive_from_peer(*id, &mut **peer).await) };
                 future.boxed()
             }))
             .await;
