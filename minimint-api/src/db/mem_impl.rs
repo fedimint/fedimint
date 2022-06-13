@@ -1,8 +1,10 @@
-use super::batch::{BatchItem, DbBatch};
-use super::{Database, DatabaseError};
-use crate::db::PrefixIter;
+use super::{Database, DatabaseError, Transaction};
+use async_trait::async_trait;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::future::Future;
+use std::ops::ControlFlow;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use tracing::{error, trace};
 
@@ -26,8 +28,9 @@ impl MemDatabase {
     }
 }
 
+#[async_trait(?Send)]
 impl Database for MemDatabase {
-    fn raw_insert_entry(
+    async fn raw_insert_entry(
         &self,
         key: &[u8],
         value: Vec<u8>,
@@ -35,15 +38,19 @@ impl Database for MemDatabase {
         Ok(self.data.lock().unwrap().insert(key.to_vec(), value))
     }
 
-    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    async fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self.data.lock().unwrap().get(key).cloned())
     }
 
-    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    async fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self.data.lock().unwrap().remove(key))
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
+    async fn raw_find_by_prefix(
+        &self,
+        key_prefix: &[u8],
+        cb: &mut dyn FnMut(Result<(Vec<u8>, Vec<u8>), DatabaseError>) -> ControlFlow<()>,
+    ) -> ControlFlow<()> {
         let mut data = self
             .data
             .lock()
@@ -54,38 +61,13 @@ impl Database for MemDatabase {
             .collect::<Vec<_>>();
         data.reverse();
 
-        Box::new(MemDbIter { data })
+        ControlFlow::Continue(())
     }
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
-        let batch: Vec<_> = batch.into();
-
-        for change in batch.iter() {
-            match change {
-                BatchItem::InsertNewElement(element) => {
-                    if self
-                        .raw_insert_entry(&element.key.to_bytes(), element.value.to_bytes())?
-                        .is_some()
-                    {
-                        error!("Database replaced element! This should not happen!");
-                        trace!("Problematic key: {:?}", element.key);
-                    }
-                }
-                BatchItem::InsertElement(element) => {
-                    self.raw_insert_entry(&element.key.to_bytes(), element.value.to_bytes())?;
-                }
-                BatchItem::DeleteElement(key) => {
-                    if self.raw_remove_entry(&key.to_bytes())?.is_none() {
-                        error!("Database deleted absent element! This should not happen!");
-                        trace!("Problematic key: {:?}", key);
-                    }
-                }
-                BatchItem::MaybeDeleteElement(key) => {
-                    self.raw_remove_entry(&key.to_bytes())?;
-                }
-            }
-        }
-
+    async fn raw_transaction<'a>(
+        &'a self,
+        f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
+    ) -> Result<(), DatabaseError> {
         Ok(())
     }
 }

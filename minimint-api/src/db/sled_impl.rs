@@ -1,12 +1,17 @@
-use super::batch::{BatchItem, DbBatch};
-use super::{Database, DatabaseError, DecodingError};
-use crate::db::PrefixIter;
+use core::future::Future;
+use core::marker::Send;
+use core::pin::Pin;
+use std::ops::ControlFlow;
+
+use super::{Database, DatabaseError, DecodingError, Transaction};
+use async_trait::async_trait;
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
 // TODO: maybe make the concrete impl its own crate
+#[async_trait(?Send)]
 impl Database for sled::Tree {
-    fn raw_insert_entry(
+    async fn raw_insert_entry(
         &self,
         key: &[u8],
         value: Vec<u8>,
@@ -17,59 +22,40 @@ impl Database for sled::Tree {
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    async fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self
             .get(key)
             .map_err(|e| DatabaseError::DbError(Box::new(e)))?
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    async fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
         Ok(self
             .remove(key)
             .map_err(|e| DatabaseError::DbError(Box::new(e)))?
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
-        Box::new(self.scan_prefix(key_prefix).map(|res| {
-            res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map_err(|e| DatabaseError::DbError(Box::new(e)))
-        }))
+    async fn raw_find_by_prefix(
+        &self,
+        key_prefix: &[u8],
+        cb: &mut dyn FnMut(Result<(Vec<u8>, Vec<u8>), DatabaseError>) -> ControlFlow<()>,
+    ) -> ControlFlow<()> {
+        for res in self.scan_prefix(key_prefix) {
+            let res = res
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map_err(|e| DatabaseError::DbError(Box::new(e)));
+
+            cb(res)?
+        }
+        ControlFlow::Continue(())
     }
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
-        let batch: Vec<_> = batch.into();
-
-        self.transaction(|t| {
-            for change in batch.iter() {
-                match change {
-                    BatchItem::InsertNewElement(element) => {
-                        if t.insert(element.key.to_bytes(), element.value.to_bytes())?
-                            .is_some()
-                        {
-                            error!("Database replaced element! This should not happen!");
-                            trace!("Problematic key: {:?}", element.key);
-                        }
-                    }
-                    BatchItem::InsertElement(element) => {
-                        t.insert(element.key.to_bytes(), element.value.to_bytes())?;
-                    }
-                    BatchItem::DeleteElement(key) => {
-                        if t.remove(key.to_bytes())?.is_none() {
-                            error!("Database deleted absent element! This should not happen!");
-                            trace!("Problematic key: {:?}", key);
-                        }
-                    }
-                    BatchItem::MaybeDeleteElement(key) => {
-                        t.remove(key.to_bytes())?;
-                    }
-                }
-            }
-
-            Ok(())
-        })
-        .map_err(|e: TransactionError| DatabaseError::DbError(Box::new(e)))
+    async fn raw_transaction<'a>(
+        &'a self,
+        f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
+    ) -> Result<(), DatabaseError> {
+        Ok(())
     }
 }
 
