@@ -1,6 +1,7 @@
-use crate::{PendingPegOut, RoundConsensus, SpendableUTXO};
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{BlockHash, OutPoint, Transaction, Txid};
+use crate::{
+    PendingPegOut, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+};
+use bitcoin::{BlockHash, OutPoint, Txid};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use secp256k1::Signature;
@@ -73,7 +74,16 @@ pub struct UnsignedTransactionKey(pub Txid);
 impl DatabaseKeyPrefixConst for UnsignedTransactionKey {
     const DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
     type Key = Self;
-    type Value = PartiallySignedTransaction;
+    type Value = UnsignedTransaction;
+}
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct UnsignedTransactionPrefixKey;
+
+impl DatabaseKeyPrefixConst for UnsignedTransactionPrefixKey {
+    const DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    type Key = UnsignedTransactionKey;
+    type Value = UnsignedTransaction;
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -110,10 +120,4 @@ impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
     type Key = PegOutTxSignatureCI;
     type Value = Vec<Signature>;
-}
-
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingTransaction {
-    pub tx: Transaction,
-    pub tweak: [u8; 32],
 }

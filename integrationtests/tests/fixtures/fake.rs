@@ -188,8 +188,8 @@ impl BitcoinTest for FakeBitcoinTest {
             .into_iter()
             .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output))
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
-            .unwrap()
-            .value;
+            .map(|tx| tx.value)
+            .unwrap_or(0);
         Amount::from_sat(sats)
     }
 }

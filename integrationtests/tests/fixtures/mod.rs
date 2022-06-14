@@ -35,15 +35,15 @@ use minimint_api::config::GenerateConfig;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::mem_impl::MemDatabase;
 use minimint_api::db::Database;
-use minimint_api::{Amount, FederationModule, OutPoint, PeerId};
+use minimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_ln::contracts::Contract;
 use minimint_ln::{ContractOrOfferOutput, ContractOutput};
 use minimint_mint::PartiallySignedRequest;
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::config::WalletConfig;
-use minimint_wallet::db::UnsignedTransactionKey;
+use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
-use minimint_wallet::{Wallet, WalletConsensusItem};
+use minimint_wallet::{SpendableUTXO, Wallet, WalletConsensusItem};
 use mint_client::api::HttpFederationApi;
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
@@ -234,6 +234,14 @@ impl UserTest {
         Self::new(self.config.clone(), peers)
     }
 
+    /// Helper to simplify the peg_out method call
+    pub async fn peg_out(&self, amount: u64, address: &Address) -> TransactionId {
+        self.client
+            .peg_out(bitcoin::Amount::from_sat(amount), address.clone(), rng())
+            .await
+            .unwrap()
+    }
+
     /// Returns the amount denominations of all coins from lowest to highest
     pub fn coin_amounts(&self) -> Vec<Amount> {
         self.client
@@ -350,6 +358,37 @@ impl FederationTest {
         user.client.fetch_all_coins().await.unwrap();
     }
 
+    pub fn mine_spendable_utxo(
+        &self,
+        user: &UserTest,
+        bitcoin: &dyn BitcoinTest,
+        amount: bitcoin::Amount,
+    ) {
+        let address = user.client.get_new_pegin_address(rng());
+        let (txout_proof, btc_transaction) = bitcoin.send_and_mine_block(&address, amount);
+        let (_, input) = user
+            .client
+            .wallet_client()
+            .create_pegin_input(txout_proof, btc_transaction)
+            .unwrap();
+
+        for server in &self.servers {
+            let mut batch = DbBatch::new();
+            let mut batch_tx = batch.transaction();
+
+            batch_tx.append_insert_new(
+                UTXOKey(input.outpoint()),
+                SpendableUTXO {
+                    tweak: input.tweak_contract_key().serialize(),
+                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                },
+            );
+            batch_tx.commit();
+
+            server.borrow_mut().database.apply_batch(batch).unwrap();
+        }
+    }
+
     pub fn has_dropped_peer(&self, peer: u16) -> bool {
         for server in &self.servers {
             if !server.borrow().dropped_peers.contains(&PeerId::from(peer)) {
@@ -426,6 +465,31 @@ impl FederationTest {
         }
     }
 
+    /// Simulates sending an empty epoch which can happen in production (see run_consensus_epochs).
+    pub async fn run_empty_epoch(&self) {
+        for server in &self.servers {
+            let wallet_items = block_on(server.borrow().consensus.wallet.consensus_proposal(rng()));
+
+            let items = wallet_items
+                .into_iter()
+                .filter_map(|item| match item {
+                    WalletConsensusItem::RoundConsensus(_) => Some(ConsensusItem::Wallet(item)),
+                    _ => None,
+                })
+                .collect();
+
+            block_on(minimint::run_consensus_epoch(
+                ConsensusProposal {
+                    items,
+                    drop_peers: vec![],
+                },
+                &self.last_consensus.borrow(),
+                &server.borrow().proposal_sender,
+            ));
+        }
+        self.process_outcomes().await;
+    }
+
     pub fn send_proposals(&self) {
         for server in &self.servers {
             let mut s = server.borrow_mut();
@@ -454,10 +518,7 @@ impl FederationTest {
 
             // only need to update last_consensus_items and print one output since consensus is always the same
             if self.last_consensus.borrow().epoch < consensus_outcome.epoch {
-                let message = FederationTest::epoch_debug_message(
-                    &filtered_consensus,
-                    &server.borrow().database,
-                );
+                let message = FederationTest::epoch_debug_message(&filtered_consensus);
                 warn!("{}", message);
                 *self.last_consensus.borrow_mut() = filtered_consensus;
             }
@@ -556,38 +617,27 @@ impl FederationTest {
     }
 
     // outputs a useful debug message for epochs indicating what happened
-    fn epoch_debug_message(consensus: &ConsensusOutcome, database: &Arc<dyn Database>) -> String {
+    fn epoch_debug_message(consensus: &ConsensusOutcome) -> String {
         let peers = consensus.contributions.keys();
         let mut debug = format!("\n- Epoch: {} {:?} -", consensus.epoch, peers);
 
         for (peer, items) in consensus.contributions.iter() {
             for item in items {
-                let item_debug = Self::item_debug_message(item, database);
+                let item_debug = Self::item_debug_message(item);
                 write!(debug, "\n  Peer {}: {}", peer, item_debug).unwrap();
             }
         }
         debug
     }
 
-    fn item_debug_message(item: &ConsensusItem, database: &Arc<dyn Database>) -> String {
+    fn item_debug_message(item: &ConsensusItem) -> String {
         match item {
             ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(
                 minimint_wallet::RoundConsensusItem { block_height, .. },
             )) => format!("Wallet Block Height {}", block_height),
             ConsensusItem::Wallet(WalletConsensusItem::PegOutSignature(
                 minimint_wallet::PegOutSignatureItem { txid, .. },
-            )) => {
-                let sigs = database
-                    .get_value(&UnsignedTransactionKey(*txid))
-                    .unwrap()
-                    .unwrap()
-                    .inputs
-                    .first()
-                    .unwrap()
-                    .partial_sigs
-                    .len();
-                format!("Wallet Peg Out PSBT {:.8} with {} signatures", txid, sigs)
-            }
+            )) => format!("Wallet Peg Out PSBT {:.8}", txid),
             ConsensusItem::Mint(PartiallySignedRequest {
                 out_point,
                 partial_signature,
