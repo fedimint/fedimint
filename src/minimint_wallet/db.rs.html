@@ -124,9 +124,14 @@
 <span id="117">117</span>
 <span id="118">118</span>
 <span id="119">119</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">PendingPegOut</span>, <span class="ident">RoundConsensus</span>, <span class="ident">SpendableUTXO</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::util::psbt::PartiallySignedTransaction</span>;
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">BlockHash</span>, <span class="ident">OutPoint</span>, <span class="ident">Transaction</span>, <span class="ident">Txid</span>};
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{
+    <span class="ident">PendingPegOut</span>, <span class="ident">PendingTransaction</span>, <span class="ident">RoundConsensus</span>, <span class="ident">SpendableUTXO</span>, <span class="ident">UnsignedTransaction</span>,
+};
+<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">BlockHash</span>, <span class="ident">OutPoint</span>, <span class="ident">Txid</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">secp256k1::Signature</span>;
@@ -199,7 +204,16 @@
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UnsignedTransactionKey</span> {
     <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_UNSIGNED_TRANSACTION</span>;
     <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PartiallySignedTransaction</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">UnsignedTransaction</span>;
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransactionPrefixKey</span>;
+
+<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UnsignedTransactionPrefixKey</span> {
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_UNSIGNED_TRANSACTION</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">UnsignedTransactionKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">UnsignedTransaction</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -237,12 +251,6 @@
     <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">PegOutTxSignatureCI</span>;
     <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Signature</span><span class="op">&gt;</span>;
 }
-
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingTransaction</span> {
-    <span class="kw">pub</span> <span class="ident">tx</span>: <span class="ident">Transaction</span>,
-    <span class="kw">pub</span> <span class="ident">tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (99930ac7f 2022-06-11)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ca122c7eb 2022-06-13)" ></div>
 </body></html>

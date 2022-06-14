@@ -449,7 +449,7 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">wallet_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">WalletClient</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">wallet_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">WalletClient</span> {
         <span class="ident">WalletClient</span> {
             <span class="ident">context</span>: <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">borrow_with_module_config</span>(<span class="op">|</span><span class="ident">cfg</span><span class="op">|</span> <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">wallet</span>),
             <span class="ident">fee_consensus</span>: <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(), <span class="comment">// TODO: remove or put into context</span>
@@ -738,5 +738,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (99930ac7f 2022-06-11)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ca122c7eb 2022-06-13)" ></div>
 </body></html>
