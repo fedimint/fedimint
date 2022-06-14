@@ -2,7 +2,7 @@ pub mod ln;
 
 use crate::ln::{LightningError, LnRpc};
 use minimint::modules::ln::contracts::ContractId;
-use minimint_api::db::Database;
+use minimint_api::{db::Database, OutPoint};
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig, GatewayClientError};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,7 @@ impl LnGateway {
         &self,
         contract_id: ContractId,
         rng: impl RngCore + CryptoRng,
-    ) -> Result<(), LnGatewayError> {
+    ) -> Result<OutPoint, LnGatewayError> {
         debug!("Fetching contract");
         let contract_account = self
             .federation_client
@@ -106,18 +106,23 @@ impl LnGateway {
 
         // FIXME: figure out how to treat RNGs (maybe include in context?)
         debug!("Claiming outgoing contract");
-        self.federation_client
+        let outpoint = self
+            .federation_client
             .claim_outgoing_contract(contract_id, preimage, rng)
             .await?;
 
-        Ok(())
+        Ok(outpoint)
     }
 
-    pub async fn await_contract_claimed(&self, contract_id: ContractId) {
-        self.federation_client
-            .await_claimed_outgoing_accepted(contract_id)
-            .await;
-        debug!("Claim transaction accepted");
+    pub async fn await_outgoing_contract_claimed(
+        &self,
+        contract_id: ContractId,
+        outpoint: OutPoint,
+    ) -> Result<(), LnGatewayError> {
+        Ok(self
+            .federation_client
+            .await_outgoing_contract_claimed(contract_id, outpoint)
+            .await?)
     }
 }
 

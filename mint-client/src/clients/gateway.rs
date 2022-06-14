@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::api::{ApiError, FederationApi};
 use crate::clients::gateway::db::{
     OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
@@ -9,9 +11,10 @@ use crate::mint::{MintClient, MintClientError};
 use crate::{api, OwnedClientContext};
 use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
-use minimint::modules::ln::contracts::{outgoing, ContractId, IdentifyableContract};
-use minimint::outcome::TransactionStatus;
-use minimint::transaction::{Input, Transaction};
+use minimint::modules::ln::contracts::{
+    outgoing, ContractId, IdentifyableContract, OutgoingContractOutcome,
+};
+use minimint::transaction::Input;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
 use minimint_api::{Amount, OutPoint, PeerId};
@@ -226,75 +229,27 @@ impl GatewayClient {
             .collect()
     }
 
-    // TODO: improve error propagation on tx transmission
     /// Waits for a outgoing contract claim transaction to be confirmed and retransmits it
     /// periodically if this does not happen.
-    ///
-    /// # Panics
-    /// * If the contract with the given ID isn't in the database. Only call this function with
-    ///   pending claimed contracts returned by `list_pending_claimed_outgoing`.
-    /// * If the task can not be completed in reasonable time meaning something went horribly
-    ///   wrong (should not happen with an honest federation).
-    pub async fn await_claimed_outgoing_accepted(&self, contract_id: ContractId) {
-        let transaction: Transaction = self
-            .context
+    pub async fn await_outgoing_contract_claimed(
+        &self,
+        contract_id: ContractId,
+        outpoint: OutPoint,
+    ) -> Result<()> {
+        self.context
+            .api
+            .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(10))
+            .await?;
+        // We remove the entry that indicates we are still waiting for transaction
+        // confirmation. This does not mean we are finished yet. As a last step we need
+        // to fetch the blind signatures for the newly issued tokens, but as long as the
+        // federation is honest as a whole they will produce the signatures, so we don't
+        // have to worry
+        self.context
             .db
-            .get_value(&OutgoingPaymentClaimKey(contract_id))
-            .expect("DB error")
-            .expect("Contract not found");
-        let txid = transaction.tx_hash();
-
-        let await_confirmed = || async {
-            loop {
-                match self.context.api.fetch_tx_outcome(txid).await {
-                    Ok(TransactionStatus::Accepted { .. }) => return,
-                    Ok(TransactionStatus::Error(e)) => {
-                        panic!("Transaction was rejected by federation: {}", e);
-                    }
-                    Err(e) => {
-                        if e.is_retryable_fetch_coins() {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                        } else {
-                            // FIXME: maybe survive a few of these and only bail if the error remains, federation could be unreachable
-                            panic!(
-                                "Federation returned error when fetching tx outcome: {:?}",
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        };
-
-        let timeout = tokio::time::Duration::from_secs(10);
-        for _ in 0..6 {
-            tokio::select! {
-                () = await_confirmed() => {
-                    // We remove the entry that indicates we are still waiting for transaction
-                    // confirmation. This does not mean we are finished yet. As a last step we need
-                    // to fetch the blind signatures for the newly issued tokens, but as long as the
-                    // federation is honest as a whole they will produce the signatures, so we don't
-                    // have to worry about that.
-                    self.context
-                        .db
-                        .remove_entry(&OutgoingPaymentClaimKey(contract_id))
-                        .expect("DB error");
-                    return;
-                },
-                _ = tokio::time::sleep(timeout) => {
-                    self.context
-                        .api
-                        .submit_transaction(transaction.clone())
-                        .await
-                        .expect("Error submitting transaction");
-                }
-            };
-        }
-
-        panic!(
-            "Could not get claim transaction for contract {} finalized",
-            contract_id
-        );
+            .remove_entry(&OutgoingPaymentClaimKey(contract_id))
+            .expect("DB error");
+        Ok(())
     }
 
     pub fn list_fetchable_coins(&self) -> Vec<OutPoint> {

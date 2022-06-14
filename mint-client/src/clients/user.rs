@@ -9,13 +9,11 @@ use crate::{api, OwnedClientContext};
 use bitcoin::{Address, Transaction};
 use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
-use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
-use minimint::modules::ln::{ContractAccount, ContractOrOfferOutput};
+use minimint::modules::ln::contracts::{ContractId, IdentifyableContract, OutgoingContractOutcome};
+use minimint::modules::ln::ContractOrOfferOutput;
 use minimint::modules::mint::tiered::coins::Coins;
-
-use minimint::modules::wallet::txoproof::TxOutProof;
-
 use minimint::modules::mint::BlindToken;
+use minimint::modules::wallet::txoproof::TxOutProof;
 use minimint::transaction::{Input, Output, TransactionItem};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
 use minimint_api::db::Database;
@@ -64,7 +62,7 @@ impl UserClient {
         }
     }
 
-    fn ln_client(&self) -> LnClient {
+    pub fn ln_client(&self) -> LnClient {
         LnClient {
             context: self.context.borrow_with_module_config(|cfg| &cfg.ln),
         }
@@ -258,7 +256,7 @@ impl UserClient {
         gateway: &LightningGateway,
         invoice: Invoice,
         mut rng: R,
-    ) -> Result<ContractId, ClientError> {
+    ) -> Result<(ContractId, OutPoint), ClientError> {
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
@@ -290,38 +288,22 @@ impl UserClient {
 
         tx.input(&mut coin_keys, Input::Mint(coin_input));
         tx.output(ln_output);
-        self.submit_tx_with_change(tx, batch, &mut rng).await?;
+        let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
+        let outpoint = OutPoint { txid, out_idx: 0 };
 
-        Ok(contract_id)
+        Ok((contract_id, outpoint))
     }
 
-    pub async fn wait_contract(
+    pub async fn await_outgoing_contract_acceptance(
         &self,
-        contract: ContractId,
-    ) -> Result<ContractAccount, ClientError> {
-        loop {
-            match self.ln_client().get_contract_account(contract).await {
-                Ok(contract) => return Ok(contract),
-                Err(LnClientError::ApiError(e)) => {
-                    if e.is_retryable_fetch_coins() {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    } else {
-                        return Err(ClientError::MintApiError(e));
-                    }
-                }
-                Err(e) => return Err(ClientError::LnClientError(e)),
-            }
-        }
-    }
-
-    pub async fn wait_contract_timeout(
-        &self,
-        contract: ContractId,
-        timeout: Duration,
-    ) -> Result<ContractAccount, ClientError> {
-        tokio::time::timeout(timeout, self.wait_contract(contract))
+        outpoint: OutPoint,
+    ) -> Result<(), ClientError> {
+        self.context
+            .api
+            .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(30))
             .await
-            .map_err(|_| ClientError::WaitContractTimeout)?
+            .map_err(ClientError::MintApiError)?;
+        Ok(())
     }
 }
 

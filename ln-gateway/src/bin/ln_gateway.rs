@@ -21,18 +21,21 @@ struct Opts {
 #[instrument(skip_all, err)]
 async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
     let rng = rand::rngs::OsRng::new().unwrap();
-    let contract: ContractId = req.body_json().await?;
+    let contract_id: ContractId = req.body_json().await?;
     let State { ref gateway } = req.state();
 
-    debug!(%contract, "Received request to pay invoice");
+    debug!(%contract_id, "Received request to pay invoice");
 
-    let result = gateway
-        .pay_invoice(contract, rng)
+    let outpoint = gateway
+        .pay_invoice(contract_id, rng)
         .await
-        .map_err(tide::Error::from_debug)
-        .map(|()| Response::new(200));
-    gateway.await_contract_claimed(contract).await;
-    result
+        .map_err(tide::Error::from_debug)?;
+
+    gateway
+        .await_outgoing_contract_claimed(contract_id, outpoint)
+        .await?;
+
+    Ok(Response::new(200))
 }
 
 #[tokio::main]

@@ -199,15 +199,26 @@ async fn lightning_gateway_pays_invoice() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(2000)).await;
-    let contract_id = user
+    let (contract_id, outpoint) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    let contract_account = user.client.wait_contract(contract_id).await.unwrap();
+    let contract_account = user
+        .client
+        .ln_client()
+        .get_contract_account(contract_id)
+        .await
+        .unwrap();
     assert_eq!(contract_account.amount, sats(1010)); // 1% LN fee
+
+    user.client
+        .await_outgoing_contract_acceptance(outpoint)
+        .await
+        .unwrap();
+
     gateway
         .server
         .pay_invoice(contract_id, rng())
@@ -215,7 +226,11 @@ async fn lightning_gateway_pays_invoice() {
         .unwrap();
     fed.run_consensus_epochs(2).await; // contract to mint coins, sign coins
 
-    gateway.server.await_contract_claimed(contract_id).await;
+    gateway
+        .server
+        .await_outgoing_contract_claimed(contract_id, outpoint)
+        .await
+        .unwrap();
     user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(2000 - 1010));
     assert_eq!(gateway.user_client.coins().amount(), sats(1010));
@@ -228,7 +243,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
-    let contract_id = user
+    let (contract_id, _) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
         .await
@@ -253,7 +268,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
-    let contract_id = user
+    let (contract_id, _) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
         .await
