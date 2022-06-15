@@ -15,7 +15,8 @@ use std::pin::Pin;
 use std::time::Duration;
 use thiserror::Error;
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait FederationApi: Send + Sync {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
@@ -113,9 +114,14 @@ impl ApiError {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;
 
-#[async_trait]
+#[cfg(target_family = "wasm")]
+type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + 'a>>;
+
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl FederationApi for HttpFederationApi {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
