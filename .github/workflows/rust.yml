@@ -56,16 +56,11 @@ jobs:
           target: wasm32-unknown-unknown
           profile: minimal
       - uses: Swatinem/rust-cache@v1
-      - name: Build minimint-api
+      - name: Build modules/mint-client
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target wasm32-unknown-unknown --package minimint-api
-      - name: Build modules/minimint-mint
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target wasm32-unknown-unknown --package minimint-mint
+          args: --target wasm32-unknown-unknown --package mint-client
 
   build_and_integration_test:
     name: Integration Tests
