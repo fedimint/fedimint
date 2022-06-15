@@ -539,8 +539,8 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a829c821999c06be34de314eaeb7dd1b42be38661178bc26ad47a4eacebdb0f9"
 dependencies = [
- "ff",
- "group",
+ "ff 0.11.1",
+ "group 0.11.0",
  "pairing 0.21.0",
  "rand_core 0.6.3",
  "subtle",
@@ -1004,6 +1004,17 @@ dependencies = [
 
 [[package]]
 name = "ff"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4b967a3ee6ae993f0094174257d404a5818f58be79d67a1aea1ec8996d28906"
+dependencies = [
+ "byteorder",
+ "ff_derive",
+ "rand_core 0.5.1",
+]
+
+[[package]]
+name = "ff"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "131655483be284720a17d74ff97592b8e76576dc25563148601df2d7c9080924"
@@ -1011,6 +1022,20 @@ dependencies = [
  "bitvec",
  "rand_core 0.6.3",
  "subtle",
+]
+
+[[package]]
+name = "ff_derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3776aaf60a45037a9c3cabdd8542b38693acaa3e241ff957181b72579d29feb"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "proc-macro2 1.0.39",
+ "quote 1.0.18",
+ "syn 1.0.95",
 ]
 
 [[package]]
@@ -1243,12 +1268,23 @@ dependencies = [
 
 [[package]]
 name = "group"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f15be54742789e36f03307c8fdf0621201e1345e94f1387282024178b5e9ec8c"
+dependencies = [
+ "ff 0.6.0",
+ "rand 0.7.3",
+ "rand_xorshift 0.2.0",
+]
+
+[[package]]
+name = "group"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5ac374b108929de78460075f3dc439fa66df9d8fc77e8f12caa5165fcf0c89"
 dependencies = [
  "byteorder",
- "ff",
+ "ff 0.11.1",
  "rand_core 0.6.3",
  "subtle",
 ]
@@ -1295,8 +1331,8 @@ dependencies = [
  "rand_derive",
  "reed-solomon-erasure",
  "serde",
- "threshold_crypto",
- "tiny-keccak",
+ "threshold_crypto 0.3.2",
+ "tiny-keccak 1.5.0",
 ]
 
 [[package]]
@@ -1793,11 +1829,12 @@ dependencies = [
  "lightning",
  "lightning-invoice",
  "minimint-api",
+ "rand 0.7.3",
  "secp256k1",
  "serde",
  "test-log",
  "thiserror",
- "threshold_crypto",
+ "threshold_crypto 0.4.0",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1957,6 +1994,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-bigint"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
+dependencies = [
+ "autocfg 1.1.0",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2079,11 +2127,23 @@ dependencies = [
 
 [[package]]
 name = "pairing"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8290dea210a712682cd65031dc2b34fd132cf2729def3df7ee08f0737ff5ed6"
+dependencies = [
+ "byteorder",
+ "ff 0.6.0",
+ "group 0.6.0",
+ "rand_core 0.5.1",
+]
+
+[[package]]
+name = "pairing"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2e415e349a3006dd7d9482cdab1c980a845bed1377777d768cb693a44540b42"
 dependencies = [
- "group",
+ "group 0.11.0",
 ]
 
 [[package]]
@@ -2332,7 +2392,7 @@ dependencies = [
  "rand_jitter",
  "rand_os",
  "rand_pcg",
- "rand_xorshift",
+ "rand_xorshift 0.1.1",
  "winapi",
 ]
 
@@ -2521,6 +2581,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbf7e9e623549b0e21f6e97cf8ecf247c1a8fd2e8a992ae265314300b2455d5c"
 dependencies = [
  "rand_core 0.3.1",
+]
+
+[[package]]
+name = "rand_xorshift"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77d416b86801d23dde1aa643023b775c3a462efc0ed96443add11546cdf1dca8"
+dependencies = [
+ "rand_core 0.5.1",
 ]
 
 [[package]]
@@ -3095,8 +3164,8 @@ dependencies = [
  "bincode",
  "bls12_381",
  "clap",
- "ff",
- "group",
+ "ff 0.11.1",
+ "group 0.11.0",
  "hex",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -3190,7 +3259,26 @@ dependencies = [
  "rand04_compat",
  "rand_chacha 0.1.1",
  "serde",
- "tiny-keccak",
+ "tiny-keccak 1.5.0",
+]
+
+[[package]]
+name = "threshold_crypto"
+version = "0.4.0"
+source = "git+https://github.com/fedimint/threshold_crypto#a7fbfa4522835010b6037fb45388c7b04ee14194"
+dependencies = [
+ "byteorder",
+ "ff 0.6.0",
+ "group 0.6.0",
+ "hex_fmt",
+ "log",
+ "pairing 0.16.0",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "serde",
+ "thiserror",
+ "tiny-keccak 2.0.2",
+ "zeroize",
 ]
 
 [[package]]
@@ -3270,6 +3358,15 @@ name = "tiny-keccak"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d8a021c69bb74a44ccedb824a046447e2c84a01df9e5c20779750acb38e11b2"
+dependencies = [
+ "crunchy",
+]
+
+[[package]]
+name = "tiny-keccak"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c9d3793400a45f954c52e73d068316d76b6f4e36977e3fcebb13a2721e80237"
 dependencies = [
  "crunchy",
 ]
@@ -3780,3 +3877,9 @@ checksum = "129e027ad65ce1453680623c3fb5163cbf7107bfe1aa32257e7d0e63f9ced188"
 dependencies = [
  "tap",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94693807d016b2f2d2e14420eb3bfcca689311ff775dcf113d74ea624b7cdf07"
