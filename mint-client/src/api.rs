@@ -64,12 +64,14 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_output_outcome(outpoint).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable_fetch_coins() => tokio::time::sleep(interval).await,
+                    Err(e) if e.is_retryable_fetch_coins() => {
+                        minimint_api::task::sleep(interval).await
+                    }
                     Err(e) => return Err(e),
                 }
             }
         };
-        tokio::time::timeout(timeout, poll())
+        minimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| ApiError::Timeout)?
     }

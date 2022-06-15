@@ -17,8 +17,8 @@ use futures::future::join_all;
 
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use minimint_api::task::spawn;
 use rand::rngs::OsRng;
-use tokio::spawn;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tracing::{info, warn};

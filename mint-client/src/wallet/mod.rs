@@ -292,7 +292,7 @@ mod tests {
         fed.lock().await.consensus_round(&[], &[]).await;
 
         // wait for broadcast
-        tokio::time::sleep(Duration::from_secs(12)).await;
+        minimint_api::task::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
         let wallet_value = fed

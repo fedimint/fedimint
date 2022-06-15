@@ -157,7 +157,7 @@ pub async fn run_consensus(
         if we_contributed {
             // TODO: define latency target for consensus rounds and monitor it
             // give others a chance to catch up
-            tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+            minimint_api::task::sleep(std::time::Duration::from_millis(2000)).await;
         }
     }
 }

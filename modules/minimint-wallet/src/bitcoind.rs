@@ -60,7 +60,7 @@ pub trait BitcoindRpc: Send + Sync {
 #[async_trait]
 impl BitcoindRpc for bitcoincore_rpc::Client {
     async fn get_network(&self) -> Network {
-        let network = tokio::task::block_in_place(|| self.get_blockchain_info())
+        let network = minimint_api::task::block_in_place(|| self.get_blockchain_info())
             .expect("Bitcoind returned an error");
         match network.chain.as_str() {
             "main" => Network::Bitcoin,
@@ -71,21 +71,22 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
     }
 
     async fn get_block_height(&self) -> u64 {
-        tokio::task::block_in_place(|| self.get_block_count()).expect("Bitcoind returned an error")
+        minimint_api::task::block_in_place(|| self.get_block_count())
+            .expect("Bitcoind returned an error")
     }
 
     async fn get_block_hash(&self, height: u64) -> BlockHash {
-        tokio::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block_hash(self, height))
+        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block_hash(self, height))
             .expect("Bitcoind returned an error")
     }
 
     async fn get_block(&self, hash: &BlockHash) -> Block {
-        tokio::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block(self, hash))
+        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block(self, hash))
             .expect("Bitcoind returned an error")
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> Option<Feerate> {
-        tokio::task::block_in_place(|| {
+        minimint_api::task::block_in_place(|| {
             self.estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
         })
         .expect("Bitcoind returned an error") // TODO: implement retry logic in case bitcoind is temporarily unreachable
@@ -96,7 +97,8 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        if let Err(error) = tokio::task::block_in_place(|| self.send_raw_transaction(&transaction))
+        if let Err(error) =
+            minimint_api::task::block_in_place(|| self.send_raw_transaction(&transaction))
         {
             warn!(?error, "Submitting transaction failed");
         }

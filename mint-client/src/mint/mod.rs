@@ -256,7 +256,7 @@ impl<'c> MintClient<'c> {
                     // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
                     Err(e) if e.is_retryable_fetch_coins() => {
                         trace!("Mint returned retryable error: {:?}", e);
-                        tokio::time::sleep(Duration::from_secs(1)).await
+                        minimint_api::task::sleep(Duration::from_secs(1)).await
                     }
                     Err(e) => return Err(e),
                 }

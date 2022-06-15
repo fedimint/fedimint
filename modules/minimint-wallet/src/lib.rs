@@ -37,8 +37,8 @@ use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use std::ops::Sub;
+use std::time::Duration;
 use thiserror::Error;
-use tokio::time::Duration;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 pub mod bitcoind;
@@ -539,7 +539,7 @@ impl Wallet {
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind_gen();
         let broadcaster_db = db.clone();
-        tokio::spawn(async move {
+        minimint_api::task::spawn(async move {
             run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).await;
         });
 
@@ -1161,7 +1161,7 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 pub async fn run_broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
     loop {
         broadcast_pending_tx(&db, rpc.as_ref()).await;
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        minimint_api::task::sleep(Duration::from_secs(10)).await;
     }
 }
 
