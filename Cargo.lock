@@ -1988,7 +1988,6 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
- "tokio",
  "tracing",
  "tracing-subscriber",
 ]
