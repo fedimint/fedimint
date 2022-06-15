@@ -19,7 +19,7 @@ minimint-api = { path = "../minimint-api" }
 minimint-derive = { path = "../minimint-derive" }
 minimint-ln = { path = "../modules/minimint-ln" }
 minimint-mint = { path = "../modules/minimint-mint" }
-minimint-wallet = { path = "../modules/minimint-wallet" }
+minimint-wallet = { path = "../modules/minimint-wallet", features = ["native"] }
 rand = "0.6.5"
 rayon = "1.5.0"
 secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [ "global-context", "bitcoin_hashes" ] }

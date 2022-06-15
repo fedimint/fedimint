@@ -1,9 +1,20 @@
+use std::error::Error;
+
 use crate::Feerate;
 use async_trait::async_trait;
-use bitcoin::{Block, BlockHash, Network, Transaction};
-use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-use bitcoincore_rpc::RpcApi;
-use tracing::warn;
+use bitcoin::{BlockHash, Transaction};
+use thiserror::Error;
+
+#[cfg(feature = "native")]
+use {
+    bitcoin::{Block, Network},
+    bitcoincore_rpc::{bitcoincore_rpc_json::EstimateMode, RpcApi},
+    tracing::warn,
+};
+
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct BitcoinRpcError(#[from] pub Box<dyn Error + Sync + Send>);
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
@@ -45,6 +56,7 @@ pub trait BitcoindRpc: Send + Sync {
     async fn submit_transaction(&self, transaction: Transaction);
 }
 
+#[cfg(feature = "native")]
 #[async_trait]
 impl BitcoindRpc for bitcoincore_rpc::Client {
     async fn get_network(&self) -> Network {
@@ -99,8 +111,7 @@ pub mod test {
     use bitcoin::hashes::Hash;
     use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
     use std::collections::{HashMap, VecDeque};
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Debug, Default)]
     pub struct FakeBitcoindRpcState {
@@ -126,7 +137,7 @@ pub mod test {
         }
 
         async fn get_block_height(&self) -> u64 {
-            self.state.lock().await.block_height
+            self.state.lock().unwrap().block_height
         }
 
         async fn get_block_hash(&self, height: u64) -> BlockHash {
@@ -137,7 +148,7 @@ pub mod test {
             let txdata = self
                 .state
                 .lock()
-                .await
+                .unwrap()
                 .tx_in_blocks
                 .get(hash)
                 .cloned()
@@ -156,11 +167,15 @@ pub mod test {
         }
 
         async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
-            self.state.lock().await.fee_rate
+            self.state.lock().unwrap().fee_rate
         }
 
         async fn submit_transaction(&self, transaction: Transaction) {
-            self.state.lock().await.transactions.push_back(transaction);
+            self.state
+                .lock()
+                .unwrap()
+                .transactions
+                .push_back(transaction);
         }
     }
 
@@ -178,11 +193,11 @@ pub mod test {
 
     impl FakeBitcoindRpcController {
         pub async fn set_fee_rate(&self, fee_rate: Option<Feerate>) {
-            self.state.lock().await.fee_rate = fee_rate;
+            self.state.lock().unwrap().fee_rate = fee_rate;
         }
 
         pub async fn set_block_height(&self, block_height: u64) {
-            self.state.lock().await.block_height = block_height
+            self.state.lock().unwrap().block_height = block_height
         }
 
         pub async fn is_btc_sent_to(
@@ -192,7 +207,7 @@ pub mod test {
         ) -> bool {
             self.state
                 .lock()
-                .await
+                .unwrap()
                 .transactions
                 .iter()
                 .flat_map(|tx| tx.output.iter())
@@ -204,7 +219,7 @@ pub mod test {
 
         pub async fn add_pending_tx_to_block(&self, block: u64) {
             let block_hash = height_hash(block);
-            let mut state = self.state.lock().await;
+            let mut state = self.state.lock().unwrap();
             #[allow(clippy::needless_collect)]
             let txns = state.transactions.drain(..).collect::<Vec<_>>();
             state

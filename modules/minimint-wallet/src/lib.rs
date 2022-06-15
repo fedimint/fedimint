@@ -22,7 +22,7 @@ use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
 use bitcoin::{
     Address, AddressType, BlockHash, Network, Script, SigHashType, Transaction, TxIn, TxOut, Txid,
 };
-use bitcoincore_rpc::Auth;
+use bitcoind::BitcoinRpcError;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
@@ -517,7 +517,9 @@ impl FederationModule for Wallet {
 }
 
 impl Wallet {
+    #[cfg(feature = "native")]
     pub fn bitcoind(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
+        use bitcoincore_rpc::Auth;
         move || -> Box<dyn BitcoindRpc> {
             Box::new(
                 bitcoincore_rpc::Client::new(
@@ -1209,7 +1211,7 @@ pub enum WalletError {
     #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
     WrongNetwork(Network, Network),
     #[error("Error querying bitcoind: {0}")]
-    RpcError(bitcoincore_rpc::Error),
+    RpcError(#[from] BitcoinRpcError),
     #[error("Unknown bitcoin network: {0}")]
     UnknownNetwork(String),
     #[error("Unknown block hash in peg-in proof: {0}")]
@@ -1236,12 +1238,6 @@ pub enum ProcessPegOutSigError {
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0}")]
     ErrorFinalizingPsbt(miniscript::psbt::Error),
-}
-
-impl From<bitcoincore_rpc::Error> for WalletError {
-    fn from(e: bitcoincore_rpc::Error) -> Self {
-        WalletError::RpcError(e)
-    }
 }
 
 impl From<PegInProofError> for WalletError {
