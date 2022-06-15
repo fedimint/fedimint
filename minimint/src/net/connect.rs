@@ -120,16 +120,12 @@ where
         }
     }
 
-    async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> (PeerId, T) {
-        let msg = peer
-            .next()
-            .await
-            .expect("Stream closed unexpectedly")
-            .expect("Error receiving peer message");
+    async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> Option<T> {
+        let msg = peer.next().await?.ok()?;
 
         trace!(peer = %id, "Received msg");
 
-        (id, msg)
+        Some(msg)
     }
 }
 
@@ -162,12 +158,19 @@ where
 
     async fn receive(&mut self) -> (Self::Id, T) {
         // TODO: optimize, don't throw away remaining futures
-        select_all(
-            self.connections
-                .iter_mut()
-                .map(|(id, peer)| Self::receive_from_peer(*id, peer).boxed()),
-        )
-        .map(|(msg, _, _)| msg)
-        .await
+        loop {
+            let (received, _, _) = select_all(self.connections.iter_mut().map(|(id, peer)| {
+                let future = async move { (*id, Self::receive_from_peer(*id, peer).await) };
+                future.boxed()
+            }))
+            .await;
+
+            match received {
+                (peer, Some(msg)) => return (peer, msg),
+                (peer, None) => {
+                    self.connections.remove(&peer);
+                }
+            }
+        }
     }
 }
