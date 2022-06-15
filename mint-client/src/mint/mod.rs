@@ -5,15 +5,15 @@ use crate::clients::transaction::TransactionBuilder;
 use crate::BorrowedClientContext;
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use minimint::modules::mint::config::MintClientConfig;
-use minimint::modules::mint::tiered::coins::Coins;
-use minimint::modules::mint::{
-    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
-};
-use minimint::transaction::{Output, Transaction};
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
+use minimint_core::modules::mint::config::MintClientConfig;
+use minimint_core::modules::mint::tiered::coins::Coins;
+use minimint_core::modules::mint::{
+    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+};
+use minimint_core::transaction::{Output, Transaction};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -438,18 +438,18 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use futures::executor::block_on;
-    use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint::modules::ln::contracts::ContractId;
-    use minimint::modules::ln::ContractAccount;
-    use minimint::modules::mint::config::MintClientConfig;
-    use minimint::modules::mint::Mint;
-    use minimint::outcome::{OutputOutcome, TransactionStatus};
-    use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
+    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use minimint_core::modules::ln::contracts::ContractId;
+    use minimint_core::modules::ln::ContractAccount;
+    use minimint_core::modules::mint::config::MintClientConfig;
+    use minimint_core::modules::mint::Mint;
+    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use minimint_core::transaction::Transaction;
     use std::sync::Arc;
 
     type Fed = FakeFed<Mint, MintClientConfig>;

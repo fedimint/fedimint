@@ -1,8 +1,8 @@
-use minimint::modules::ln::contracts::incoming::IncomingContract;
-use minimint::modules::ln::contracts::IdentifyableContract;
-use minimint::modules::ln::ContractInput;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::Amount;
+use minimint_core::modules::ln::contracts::incoming::IncomingContract;
+use minimint_core::modules::ln::contracts::IdentifyableContract;
+use minimint_core::modules::ln::ContractInput;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct IncomingContractAccount {

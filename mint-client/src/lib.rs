@@ -7,8 +7,8 @@ pub mod wallet;
 use crate::api::FederationApi;
 use crate::ln::gateway::LightningGateway;
 pub use clients::user::UserClient;
-use minimint::config::ClientConfig;
 use minimint_api::db::Database;
+use minimint_core::config::ClientConfig;
 use serde::{Deserialize, Serialize};
 
 pub struct BorrowedClientContext<'a, C> {

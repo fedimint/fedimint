@@ -19,6 +19,8 @@ use minimint_ln::LightningModule;
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::Wallet;
 
+pub use minimint_core::*;
+
 use crate::consensus::{ConsensusItem, ConsensusProposal, MinimintConsensus};
 use crate::net::connect::Connections;
 use crate::net::PeerConnections;
@@ -36,10 +38,8 @@ pub mod net;
 /// MiniMint toplevel config
 pub mod config;
 
-pub mod outcome;
 /// Some abstractions to handle randomness
 mod rng;
-pub mod transaction;
 
 pub mod modules {
     pub use minimint_ln as ln;

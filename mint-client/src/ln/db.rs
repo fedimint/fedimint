@@ -1,7 +1,7 @@
 use crate::ln::outgoing::OutgoingContractData;
-use minimint::modules::ln::contracts::ContractId;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_core::modules::ln::contracts::ContractId;
 
 const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x40;
 

@@ -1,8 +1,8 @@
 use crate::mint::{CoinFinalizationData, SpendableCoin};
-use minimint::modules::mint::CoinNonce;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint};
+use minimint_core::modules::mint::CoinNonce;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;

@@ -10,16 +10,16 @@ use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError};
 use crate::{api, OwnedClientContext};
 use lightning_invoice::Invoice;
-use minimint::config::ClientConfig;
-use minimint::modules::ln::contracts::{
-    incoming::{DecryptedPreimage, IncomingContract, IncomingContractOffer, Preimage},
-    outgoing, Contract, ContractId, IdentifyableContract, OutgoingContractOutcome,
-};
-use minimint::modules::ln::{ContractOrOfferOutput, ContractOutput};
-use minimint::transaction::Input;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
 use minimint_api::{Amount, OutPoint, PeerId, TransactionId};
+use minimint_core::config::ClientConfig;
+use minimint_core::modules::ln::contracts::{
+    incoming::{DecryptedPreimage, IncomingContract, IncomingContractOffer, Preimage},
+    outgoing, Contract, ContractId, IdentifyableContract, OutgoingContractOutcome,
+};
+use minimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput};
+use minimint_core::transaction::Input;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -251,11 +251,12 @@ impl GatewayClient {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output =
-            minimint::transaction::Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
+        let incoming_output = minimint_core::transaction::Output::LN(
+            ContractOrOfferOutput::Contract(ContractOutput {
                 amount: *amount,
                 contract: contract.clone(),
-            }));
+            }),
+        );
 
         // Submit transaction
         let mut builder = TransactionBuilder::default();
@@ -414,10 +415,10 @@ impl From<MintClientError> for GatewayClientError {
 
 mod db {
     use crate::ln::outgoing::OutgoingContractAccount;
-    use minimint::modules::ln::contracts::ContractId;
-    use minimint::transaction::Transaction;
     use minimint_api::db::DatabaseKeyPrefixConst;
     use minimint_api::encoding::{Decodable, Encodable};
+    use minimint_core::modules::ln::contracts::ContractId;
+    use minimint_core::transaction::Transaction;
 
     const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x50;
     const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x51;

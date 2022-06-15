@@ -1763,6 +1763,7 @@ dependencies = [
  "hex",
  "itertools",
  "minimint-api",
+ "minimint-core",
  "minimint-derive",
  "minimint-ln",
  "minimint-mint",
@@ -1809,6 +1810,31 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "minimint-core"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "futures",
+ "hex",
+ "itertools",
+ "minimint-api",
+ "minimint-derive",
+ "minimint-ln",
+ "minimint-mint",
+ "minimint-wallet",
+ "rand 0.6.5",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tbs",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -1950,8 +1976,8 @@ dependencies = [
  "hex",
  "lightning",
  "lightning-invoice",
- "minimint",
  "minimint-api",
+ "minimint-core",
  "miniscript",
  "rand 0.6.5",
  "reqwest",

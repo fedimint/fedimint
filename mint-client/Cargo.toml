@@ -18,7 +18,7 @@ hex = "0.4.3"
 lightning-invoice = "0.14.0"
 lightning = "0.0.106"
 miniscript = "6.0.0"
-minimint = { path = "../minimint" }
+minimint-core = { path = "../minimint-core" }
 minimint-api = { path = "../minimint-api" }
 rand = "0.6.5"
 reqwest = { version = "0.11.0", features = [ "json" ], default-features = false }

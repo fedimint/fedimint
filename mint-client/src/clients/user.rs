@@ -10,18 +10,20 @@ use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
-use minimint::config::ClientConfig;
-use minimint::modules::ln::contracts::incoming::OfferId;
-use minimint::modules::ln::contracts::{ContractId, IdentifyableContract, OutgoingContractOutcome};
-use minimint::modules::ln::ContractOrOfferOutput;
-use minimint::modules::mint::tiered::coins::Coins;
-use minimint::modules::mint::BlindToken;
-use minimint::modules::wallet::txoproof::TxOutProof;
-use minimint::transaction::{Input, Output, TransactionItem};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
+use minimint_core::config::ClientConfig;
+use minimint_core::modules::ln::contracts::incoming::OfferId;
+use minimint_core::modules::ln::contracts::{
+    ContractId, IdentifyableContract, OutgoingContractOutcome,
+};
+use minimint_core::modules::ln::ContractOrOfferOutput;
+use minimint_core::modules::mint::tiered::coins::Coins;
+use minimint_core::modules::mint::BlindToken;
+use minimint_core::modules::wallet::txoproof::TxOutProof;
+use minimint_core::transaction::{Input, Output, TransactionItem};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use std::time::Duration;
@@ -372,7 +374,7 @@ impl UserClient {
         &self,
         invoice: UnconfirmedInvoice,
     ) -> Result<Invoice, ClientError> {
-        let timeout = tokio::time::Duration::from_secs(10);
+        let timeout = std::time::Duration::from_secs(10);
         self.context
             .api
             .await_output_outcome::<OfferId>(invoice.outpoint, timeout)

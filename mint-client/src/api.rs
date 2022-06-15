@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use futures::{Future, StreamExt, TryFutureExt};
-use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
-use minimint::modules::ln::contracts::ContractId;
-use minimint::modules::ln::ContractAccount;
-use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
-use minimint::transaction::Transaction;
 use minimint_api::{OutPoint, PeerId, TransactionId};
+use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+use minimint_core::modules::ln::contracts::ContractId;
+use minimint_core::modules::ln::ContractAccount;
+use minimint_core::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
+use minimint_core::transaction::Transaction;
 use reqwest::{StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
