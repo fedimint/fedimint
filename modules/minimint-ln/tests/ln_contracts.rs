@@ -7,7 +7,10 @@ use minimint_ln::contracts::incoming::{
     DecryptedPreimage, EncryptedPreimage, IncomingContract, IncomingContractOffer,
 };
 use minimint_ln::contracts::outgoing::{OutgoingContract, Preimage};
-use minimint_ln::contracts::{Contract, ContractOutcome, IdentifyableContract};
+use minimint_ln::contracts::{
+    AccountContractOutcome, Contract, ContractOutcome, IdentifyableContract,
+    OutgoingContractOutcome,
+};
 use minimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
@@ -42,7 +45,7 @@ async fn test_account() {
     fed.consensus_round(&[], &outputs).await;
     match fed.output_outcome(account_out_point).unwrap() {
         OutputOutcome::Contract { outcome, .. } => {
-            assert_eq!(outcome, ContractOutcome::Account);
+            assert_eq!(outcome, ContractOutcome::Account(AccountContractOutcome {}));
         }
         _ => panic!(),
     };
@@ -98,7 +101,10 @@ async fn test_outgoing() {
     fed.consensus_round(&[], &outputs).await;
     match fed.output_outcome(outgoing_out_point).unwrap() {
         OutputOutcome::Contract { outcome, .. } => {
-            assert_eq!(outcome, ContractOutcome::Outgoing);
+            assert_eq!(
+                outcome,
+                ContractOutcome::Outgoing(OutgoingContractOutcome {})
+            );
         }
         _ => panic!(),
     };

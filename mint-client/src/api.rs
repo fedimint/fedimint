@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
+use std::time::Duration;
 use thiserror::Error;
 
 #[async_trait]
@@ -17,7 +18,7 @@ pub trait FederationApi: Send + Sync {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
 
-    /// Submit a transaction to all federtion members
+    /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
 
     // TODO: more generic module API extensibility
@@ -48,6 +49,25 @@ impl<'a> dyn FederationApi + 'a {
             }
         }
     }
+    pub async fn await_output_outcome<T: TryIntoOutcome + Send>(
+        &self,
+        outpoint: OutPoint,
+        timeout: Duration,
+    ) -> Result<T> {
+        let poll = || async {
+            let interval = Duration::from_secs(1);
+            loop {
+                match self.fetch_output_outcome(outpoint).await {
+                    Ok(t) => return Ok(t),
+                    Err(e) if e.is_retryable_fetch_coins() => tokio::time::sleep(interval).await,
+                    Err(e) => return Err(e),
+                }
+            }
+        };
+        tokio::time::timeout(timeout, poll())
+            .await
+            .map_err(|_| ApiError::Timeout)?
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +91,8 @@ pub enum ApiError {
     OutPointOutOfRange(usize, usize),
     #[error("Returned output type did not match expectation: {0}")]
     WrongOutputType(MismatchingVariant),
+    #[error("Timeout error awaiting outcome")]
+    Timeout,
 }
 
 impl ApiError {

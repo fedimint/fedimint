@@ -46,10 +46,16 @@ pub enum FundedContract {
 /// the user (the decrypted preimage).
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum ContractOutcome {
-    Account,
+    Account(AccountContractOutcome),
     Incoming(incoming::DecryptedPreimage),
-    Outgoing,
+    Outgoing(OutgoingContractOutcome),
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct AccountContractOutcome {}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct OutgoingContractOutcome {}
 
 impl IdentifyableContract for Contract {
     fn contract_id(&self) -> ContractId {
@@ -76,9 +82,9 @@ impl Contract {
     /// the contract type it is not yet final.
     pub fn to_outcome(&self) -> ContractOutcome {
         match self {
-            Contract::Account(_) => ContractOutcome::Account,
+            Contract::Account(_) => ContractOutcome::Account(AccountContractOutcome {}),
             Contract::Incoming(_) => ContractOutcome::Incoming(DecryptedPreimage::Pending),
-            Contract::Outgoing(_) => ContractOutcome::Outgoing,
+            Contract::Outgoing(_) => ContractOutcome::Outgoing(OutgoingContractOutcome {}),
         }
     }
 

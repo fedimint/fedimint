@@ -143,13 +143,13 @@ async fn main() {
         Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();
 
-            let contract_id = client
+            let (contract_id, outpoint) = client
                 .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
                 .await
                 .expect("Not enough coins");
 
             client
-                .wait_contract_timeout(contract_id, Duration::from_secs(5))
+                .await_outgoing_contract_acceptance(outpoint)
                 .await
                 .expect("Contract wasn't accepted in time");
 
