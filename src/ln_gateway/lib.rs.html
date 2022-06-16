@@ -173,11 +173,16 @@
 <span id="166">166</span>
 <span id="167">167</span>
 <span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln</span>::{<span class="ident">LightningError</span>, <span class="ident">LnRpc</span>};
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
+<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">db::Database</span>, <span class="ident">OutPoint</span>};
 <span class="kw">use</span> <span class="ident">mint_client::clients::gateway</span>::{<span class="ident">GatewayClient</span>, <span class="ident">GatewayClientConfig</span>, <span class="ident">GatewayClientError</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
@@ -239,7 +244,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
         <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
         <span class="macro">debug!</span>(<span class="string">&quot;Fetching contract&quot;</span>);
         <span class="kw">let</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">federation_client</span>
@@ -281,18 +286,23 @@
 
         <span class="comment">// FIXME: figure out how to treat RNGs (maybe include in context?)</span>
         <span class="macro">debug!</span>(<span class="string">&quot;Claiming outgoing contract&quot;</span>);
-        <span class="self">self</span>.<span class="ident">federation_client</span>
+        <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">federation_client</span>
             .<span class="ident">claim_outgoing_contract</span>(<span class="ident">contract_id</span>, <span class="ident">preimage</span>, <span class="ident">rng</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(<span class="ident">outpoint</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_contract_claimed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) {
-        <span class="self">self</span>.<span class="ident">federation_client</span>
-            .<span class="ident">await_claimed_outgoing_accepted</span>(<span class="ident">contract_id</span>)
-            .<span class="kw">await</span>;
-        <span class="macro">debug!</span>(<span class="string">&quot;Claim transaction accepted&quot;</span>);
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_outgoing_contract_claimed</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
+        <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>
+            .<span class="ident">federation_client</span>
+            .<span class="ident">await_outgoing_contract_claimed</span>(<span class="ident">contract_id</span>, <span class="ident">outpoint</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 }
 
@@ -342,5 +352,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ca122c7eb 2022-06-13)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (b31f9cc22 2022-06-15)" ></div>
 </body></html>

@@ -113,6 +113,12 @@
 <span id="106">106</span>
 <span id="107">107</span>
 <span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">account</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">incoming</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">outgoing</span>;
@@ -161,10 +167,16 @@
 <span class="doccomment">/// the user (the decrypted preimage).</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ContractOutcome</span> {
-    <span class="ident">Account</span>,
+    <span class="ident">Account</span>(<span class="ident">AccountContractOutcome</span>),
     <span class="ident">Incoming</span>(<span class="ident">incoming::DecryptedPreimage</span>),
-    <span class="ident">Outgoing</span>,
+    <span class="ident">Outgoing</span>(<span class="ident">OutgoingContractOutcome</span>),
 }
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AccountContractOutcome</span> {}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContractOutcome</span> {}
 
 <span class="kw">impl</span> <span class="ident">IdentifyableContract</span> <span class="kw">for</span> <span class="ident">Contract</span> {
     <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
@@ -191,9 +203,9 @@
     <span class="doccomment">/// the contract type it is not yet final.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_outcome</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractOutcome</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">Contract::Account</span>(<span class="kw">_</span>) =&gt; <span class="ident">ContractOutcome::Account</span>,
+            <span class="ident">Contract::Account</span>(<span class="kw">_</span>) =&gt; <span class="ident">ContractOutcome::Account</span>(<span class="ident">AccountContractOutcome</span> {}),
             <span class="ident">Contract::Incoming</span>(<span class="kw">_</span>) =&gt; <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">DecryptedPreimage::Pending</span>),
-            <span class="ident">Contract::Outgoing</span>(<span class="kw">_</span>) =&gt; <span class="ident">ContractOutcome::Outgoing</span>,
+            <span class="ident">Contract::Outgoing</span>(<span class="kw">_</span>) =&gt; <span class="ident">ContractOutcome::Outgoing</span>(<span class="ident">OutgoingContractOutcome</span> {}),
         }
     }
 
@@ -222,5 +234,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ca122c7eb 2022-06-13)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (b31f9cc22 2022-06-15)" ></div>
 </body></html>

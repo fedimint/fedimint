@@ -71,6 +71,9 @@
 <span id="64">64</span>
 <span id="65">65</span>
 <span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">clap::Parser</span>;
 <span class="kw">use</span> <span class="ident">ln_gateway</span>::{<span class="ident">LnGateway</span>, <span class="ident">LnGatewayConfig</span>};
 <span class="kw">use</span> <span class="ident">minimint::config::load_from_file</span>;
@@ -94,18 +97,21 @@
 <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
 <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(<span class="kw-2">mut</span> <span class="ident">req</span>: <span class="ident">tide::Request</span><span class="op">&lt;</span><span class="ident">State</span><span class="op">&gt;</span>) -&gt; <span class="ident">tide::Result</span> {
     <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
-    <span class="kw">let</span> <span class="ident">contract</span>: <span class="ident">ContractId</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">body_json</span>().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let</span> <span class="ident">contract_id</span>: <span class="ident">ContractId</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">body_json</span>().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let</span> <span class="ident">State</span> { <span class="kw-2">ref</span> <span class="ident">gateway</span> } <span class="op">=</span> <span class="ident">req</span>.<span class="ident">state</span>();
 
-    <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
+    <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
-    <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">gateway</span>
-        .<span class="ident">pay_invoice</span>(<span class="ident">contract</span>, <span class="ident">rng</span>)
+    <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">gateway</span>
+        .<span class="ident">pay_invoice</span>(<span class="ident">contract_id</span>, <span class="ident">rng</span>)
         .<span class="kw">await</span>
-        .<span class="ident">map_err</span>(<span class="ident">tide::Error::from_debug</span>)
-        .<span class="ident">map</span>(<span class="op">|</span>()<span class="op">|</span> <span class="ident">Response::new</span>(<span class="number">200</span>));
-    <span class="ident">gateway</span>.<span class="ident">await_contract_claimed</span>(<span class="ident">contract</span>).<span class="kw">await</span>;
-    <span class="ident">result</span>
+        .<span class="ident">map_err</span>(<span class="ident">tide::Error::from_debug</span>)<span class="question-mark">?</span>;
+
+    <span class="ident">gateway</span>
+        .<span class="ident">await_outgoing_contract_claimed</span>(<span class="ident">contract_id</span>, <span class="ident">outpoint</span>)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="ident">Response::new</span>(<span class="number">200</span>))
 }
 
 <span class="attribute">#[<span class="ident">tokio::main</span>]</span>
@@ -138,5 +144,5 @@
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (ca122c7eb 2022-06-13)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (b31f9cc22 2022-06-15)" ></div>
 </body></html>
