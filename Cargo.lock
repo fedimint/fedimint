@@ -1618,6 +1618,7 @@ version = "0.1.0"
 dependencies = [
  "async-std",
  "async-trait",
+ "bitcoin_hashes",
  "clap",
  "cln-rpc",
  "futures",

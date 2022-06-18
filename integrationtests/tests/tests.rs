@@ -1,18 +1,22 @@
 mod fixtures;
 
+use std::thread;
+use std::time::Duration;
+
 use assert_matches::assert_matches;
+use bitcoin::schnorr::PublicKey;
 use bitcoin::Amount;
-use fixtures::fixtures;
-use fixtures::{rng, sats};
+use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
+
+use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
+use minimint::transaction::Output;
+use minimint_api::OutPoint;
 use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
-
-use crate::fixtures::FederationTest;
-use std::thread;
-use std::time::Duration;
+use mint_client::clients::transaction::TransactionBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {
@@ -233,8 +237,139 @@ async fn lightning_gateway_pays_invoice() {
         .unwrap();
     user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(2000 - 1010));
-    assert_eq!(gateway.user_client.coins().amount(), sats(1010));
+    assert_eq!(gateway.user.client.coins().amount(), sats(1010));
     assert_eq!(lightning.amount_sent(), sats(1000));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_lightning_payment_valid_preimage() {
+    let starting_balance = sats(2000);
+    let payment_amount = sats(100);
+    let (fed, user, _, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    fed.mint_coins_for_user(&gateway.user, starting_balance)
+        .await;
+    assert_eq!(user.total_coins(), sats(0));
+    assert_eq!(gateway.user.total_coins(), starting_balance);
+
+    // Create invoice and offer in the federation
+    let (keypair, unconfirmed_invoice) = user
+        .client
+        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await; // process offer
+
+    // Confirm the offer has been accepted by the federation
+    let invoice = user
+        .client
+        .confirm_invoice(unconfirmed_invoice)
+        .await
+        .unwrap();
+
+    // Gateway deposits ecash to trigger preimage decryption by the federation
+    let (txid, contract_id) = gateway
+        .server
+        .buy_preimage_offer(invoice.payment_hash(), &payment_amount, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+
+    // Gateway funds have been escrowed
+    assert_eq!(
+        gateway.user.client.coins().amount(),
+        starting_balance - payment_amount
+    );
+    assert_eq!(user.total_coins(), sats(0));
+
+    // Gateway receives decrypted preimage
+    let outpoint = OutPoint { txid, out_idx: 0 };
+    let preimage = gateway
+        .server
+        .await_preimage_decryption(outpoint)
+        .await
+        .unwrap();
+
+    // Check that the preimage matches user pubkey & lightning invoice preimage
+    let pubkey = PublicKey::from_keypair(&secp(), &keypair);
+    assert_eq!(pubkey, preimage.0);
+    assert_eq!(&sha256(&pubkey.serialize()), invoice.payment_hash());
+
+    // User claims their ecash
+    user.client
+        .claim_incoming_contract(contract_id, keypair, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
+
+    // Ecash tokens have been transferred from gateway to user
+    user.client.fetch_all_coins().await.unwrap();
+    assert_eq!(
+        gateway.user.client.coins().amount(),
+        starting_balance - payment_amount
+    );
+    assert_eq!(user.total_coins(), payment_amount);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_lightning_payment_invalid_preimage() {
+    let starting_balance = sats(2000);
+    let payment_amount = sats(100);
+    let (fed, user, _, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    fed.mint_coins_for_user(&gateway.user, starting_balance)
+        .await;
+    assert_eq!(user.total_coins(), sats(0));
+    assert_eq!(gateway.user.total_coins(), starting_balance);
+
+    // Manually construct offer where sha256(preimage) != hash
+    let (keypair, pubkey) = secp().generate_schnorrsig_keypair(&mut rng());
+    let payment_hash = sha256(&[0]);
+    let offer_output = user.client.ln_client().create_offer_output(
+        payment_amount,
+        payment_hash,
+        pubkey.serialize(),
+    );
+    let mut builder = TransactionBuilder::default();
+    builder.output(Output::LN(offer_output));
+    let tx = builder.build(&secp(), &mut rng());
+    fed.submit_transaction(tx);
+    fed.run_consensus_epochs(2).await; // process offer
+
+    // Gateway escrows ecash to trigger preimage decryption by the federation
+    let (_, contract_id) = gateway
+        .server
+        .buy_preimage_offer(&payment_hash, &payment_amount, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+
+    // Gateway funds have been escrowed
+    assert_eq!(user.total_coins(), sats(0));
+    assert_eq!(
+        gateway.user.total_coins(),
+        starting_balance - payment_amount
+    );
+
+    // User gets error when they try to claim gateway's escrowed ecash
+    let response = user
+        .client
+        .claim_incoming_contract(contract_id, keypair, rng())
+        .await;
+    assert!(response.is_err());
+
+    // Gateway re-claims their funds
+    let _outpoint = gateway
+        .client
+        .claim_incoming_contract(contract_id, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
+
+    // TODO: disable background_fetch for this test and fetch the coins manually
+    // gateway.client.fetch_coins(_outpoint).await.unwrap();
+
+    // Gateway has clawed back their escrowed funds
+    assert_eq!(user.total_coins(), sats(0));
+    assert_eq!(gateway.user.client.coins().amount(), starting_balance);
 }
 
 #[tokio::test(flavor = "multi_thread")]

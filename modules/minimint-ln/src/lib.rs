@@ -66,7 +66,7 @@ pub struct LightningModule {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractInput {
-    pub crontract_id: contracts::ContractId,
+    pub contract_id: contracts::ContractId,
     /// While for now we only support spending the entire contract we need to avoid
     pub amount: Amount,
     /// Of the three contract types only the outgoing one needs any other witness data than a
@@ -197,8 +197,8 @@ impl FederationModule for LightningModule {
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
         let account: ContractAccount = self
-            .get_contract_account(input.crontract_id)
-            .ok_or(LightningModuleError::UnknownContract(input.crontract_id))?;
+            .get_contract_account(input.contract_id)
+            .ok_or(LightningModuleError::UnknownContract(input.contract_id))?;
 
         if account.amount < input.amount {
             return Err(LightningModuleError::InsufficientFunds(
@@ -259,7 +259,7 @@ impl FederationModule for LightningModule {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        let account_db_key = ContractKey(input.crontract_id);
+        let account_db_key = ContractKey(input.contract_id);
         let mut contract_account = self
             .db
             .get_value(&account_db_key)
@@ -361,6 +361,10 @@ impl FederationModule for LightningModule {
                 }
             }
             ContractOrOfferOutput::Offer(offer) => {
+                batch.append_insert_new(
+                    ContractUpdateKey(out_point),
+                    OutputOutcome::Offer { id: offer.id() },
+                );
                 // TODO: sanity-check encrypted preimage size
                 batch.append_insert_new(OfferKey(offer.hash), (*offer).clone());
             }
@@ -531,6 +535,29 @@ impl FederationModule for LightningModule {
                     Ok(body.into())
                 },
             },
+            ApiEndpoint {
+                path_spec: "/offer/:payment_hash",
+                params: &["payment_hash"],
+                method: http::Method::Get,
+                handler: |module, params, _body| {
+                    let payment_hash: bitcoin_hashes::sha256::Hash = match params
+                        .get("payment_hash")
+                        .expect("Contract id not supplied")
+                        .parse()
+                    {
+                        Ok(id) => id,
+                        Err(_) => return Ok(http::Response::new(400)),
+                    };
+
+                    let offer = module
+                        .get_offer(payment_hash)
+                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
+
+                    debug!(%payment_hash, "Sending offer info");
+                    let body = http::Body::from_json(&offer).expect("encoding error");
+                    Ok(body.into())
+                },
+            },
         ]
     }
 }
@@ -550,6 +577,15 @@ impl LightningModule {
             .threshold_pub_keys
             .public_key_share(peer.to_usize())
             .verify_decryption_share(&share.0, &message.0)
+    }
+
+    pub fn get_offer(
+        &self,
+        payment_hash: bitcoin_hashes::sha256::Hash,
+    ) -> Option<IncomingContractOffer> {
+        self.db
+            .get_value(&OfferKey(payment_hash))
+            .expect("DB error")
     }
 
     pub fn get_offers(&self) -> Vec<IncomingContractOffer> {

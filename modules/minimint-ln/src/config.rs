@@ -29,7 +29,7 @@ impl GenerateConfig for LightningModuleConfig {
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let threshold = peers.len() - max_evil;
-        let sks = threshold_crypto::SecretKeySet::random(threshold, &mut rng);
+        let sks = threshold_crypto::SecretKeySet::random(threshold - 1, &mut rng);
         let pks = sks.public_keys();
 
         let server_cfg = peers

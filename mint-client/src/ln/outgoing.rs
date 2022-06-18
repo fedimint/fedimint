@@ -17,10 +17,9 @@ pub struct OutgoingContractAccount {
 }
 
 impl OutgoingContractAccount {
-    #[allow(dead_code)]
     pub fn claim(&self, preimage: Preimage) -> ContractInput {
         ContractInput {
-            crontract_id: self.contract.contract_id(),
+            contract_id: self.contract.contract_id(),
             amount: self.amount,
             witness: Some(preimage),
         }
@@ -28,7 +27,7 @@ impl OutgoingContractAccount {
 
     pub fn refund(&self) -> ContractInput {
         ContractInput {
-            crontract_id: self.contract.contract_id(),
+            contract_id: self.contract.contract_id(),
             amount: self.amount,
             witness: None,
         }

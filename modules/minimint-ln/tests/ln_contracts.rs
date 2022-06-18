@@ -51,7 +51,7 @@ async fn test_account() {
     };
 
     let account_input = ContractInput {
-        crontract_id: contract.contract_id(),
+        contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
     };
@@ -114,7 +114,7 @@ async fn test_outgoing() {
 
     // Error: Missing preimage
     let account_input_no_witness = ContractInput {
-        crontract_id: contract.contract_id(),
+        contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
     };
@@ -123,7 +123,7 @@ async fn test_outgoing() {
 
     // Ok
     let account_input_witness = ContractInput {
-        crontract_id: contract.contract_id(),
+        contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: Some(Preimage(preimage)),
     };
@@ -200,7 +200,7 @@ async fn test_incoming() {
     };
 
     let incoming_input = ContractInput {
-        crontract_id: contract.contract_id(),
+        contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
         witness: None,
     };

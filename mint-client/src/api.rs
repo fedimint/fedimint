@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use futures::{Future, StreamExt, TryFutureExt};
+use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
 use minimint::modules::ln::contracts::ContractId;
 use minimint::modules::ln::ContractAccount;
 use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
@@ -24,6 +26,9 @@ pub trait FederationApi: Send + Sync {
     // TODO: more generic module API extensibility
     /// Fetch ln contract state
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
+
+    /// Fetch preimage offer for incoming lightning payments
+    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer>;
 
     /// Fetch the current consensus block height (trailing actual block height)
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
@@ -127,6 +132,10 @@ impl FederationApi for HttpFederationApi {
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
         self.get("/wallet/block_height").await
+    }
+
+    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
+        self.get(&format!("/ln/offer/{}", payment_hash)).await
     }
 }
 

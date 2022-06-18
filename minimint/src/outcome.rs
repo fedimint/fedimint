@@ -1,5 +1,5 @@
 use minimint_api::FederationModule;
-use minimint_ln::contracts::incoming::{DecryptedPreimage, Preimage};
+use minimint_ln::contracts::incoming::{DecryptedPreimage, OfferId, Preimage};
 use minimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use minimint_ln::LightningModule;
 use minimint_mint::SigResponse;
@@ -113,6 +113,16 @@ impl TryIntoOutcome for Preimage {
         }) = common_outcome
         {
             Ok(preimage)
+        } else {
+            Err(MismatchingVariant("ln::incoming", "other"))
+        }
+    }
+}
+
+impl TryIntoOutcome for OfferId {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+        if let OutputOutcome::LN(minimint_ln::OutputOutcome::Offer { id }) = common_outcome {
+            Ok(id)
         } else {
             Err(MismatchingVariant("ln::incoming", "other"))
         }

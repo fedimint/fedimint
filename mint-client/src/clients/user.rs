@@ -5,10 +5,13 @@ use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
-
-use bitcoin::{Address, Transaction};
-use lightning_invoice::Invoice;
+use bitcoin::schnorr::KeyPair;
+use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
+use bitcoin_hashes::Hash;
+use lightning::ln::PaymentSecret;
+use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
 use minimint::config::ClientConfig;
+use minimint::modules::ln::contracts::incoming::OfferId;
 use minimint::modules::ln::contracts::{ContractId, IdentifyableContract, OutgoingContractOutcome};
 use minimint::modules::ln::ContractOrOfferOutput;
 use minimint::modules::mint::tiered::coins::Coins;
@@ -26,8 +29,25 @@ use thiserror::Error;
 
 const TIMELOCK: u64 = 100;
 
+fn network_to_currency(network: Network) -> Currency {
+    match network {
+        Network::Bitcoin => Currency::Bitcoin,
+        Network::Regtest => Currency::Regtest,
+        Network::Testnet => Currency::BitcoinTestnet,
+        Network::Signet => Currency::Signet,
+    }
+}
+
 pub struct UserClient {
     context: OwnedClientContext<ClientConfig>,
+}
+
+/// Invoice whose "offer" hasn't yet been accepted by federation
+pub struct UnconfirmedInvoice {
+    /// The invoice itself
+    invoice: Invoice,
+    /// The outpoint which creates the "offer" this invoice depends on
+    outpoint: OutPoint,
 }
 
 impl UserClient {
@@ -84,7 +104,7 @@ impl UserClient {
     pub async fn peg_in<R: RngCore + CryptoRng>(
         &self,
         txout_proof: TxOutProof,
-        btc_transaction: Transaction,
+        btc_transaction: BitcoinTransaction,
         mut rng: R,
     ) -> Result<TransactionId, ClientError> {
         let mut tx = TransactionBuilder::default();
@@ -305,6 +325,76 @@ impl UserClient {
             .map_err(ClientError::MintApiError)?;
         Ok(())
     }
+
+    pub async fn create_unconfirmed_invoice<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        description: String,
+        mut rng: R,
+    ) -> Result<(KeyPair, UnconfirmedInvoice), ClientError> {
+        let (payment_keypair, payment_public_key) =
+            self.context.secp.generate_schnorrsig_keypair(&mut rng);
+        let raw_payment_secret = payment_public_key.serialize();
+        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
+        let payment_secret = PaymentSecret(raw_payment_secret);
+
+        // Temporary lightning node pubkey
+        let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
+
+        let invoice = InvoiceBuilder::new(network_to_currency(self.context.config.wallet.network))
+            .amount_milli_satoshis(amount.milli_sat)
+            .description(description)
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .current_timestamp()
+            .min_final_cltv_expiry(18)
+            .payee_pub_key(node_public_key)
+            .build_signed(|hash| self.context.secp.sign_recoverable(hash, &node_secret_key))?;
+
+        let offer_output =
+            self.ln_client()
+                .create_offer_output(amount, payment_hash, raw_payment_secret);
+        let ln_output = Output::LN(offer_output);
+
+        // There is no input here because this is just an announcement
+        let mut tx = TransactionBuilder::default();
+        tx.output(ln_output);
+        let txid = self
+            .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
+            .await?;
+
+        let outpoint = OutPoint { txid, out_idx: 0 };
+        Ok((payment_keypair, UnconfirmedInvoice { invoice, outpoint }))
+    }
+
+    /// Wait for this invoice's offer to be accepted by federation
+    pub async fn confirm_invoice(
+        &self,
+        invoice: UnconfirmedInvoice,
+    ) -> Result<Invoice, ClientError> {
+        let timeout = tokio::time::Duration::from_secs(10);
+        self.context
+            .api
+            .await_output_outcome::<OfferId>(invoice.outpoint, timeout)
+            .await?;
+        Ok(invoice.invoice)
+    }
+
+    pub async fn claim_incoming_contract(
+        &self,
+        contract_id: ContractId,
+        keypair: KeyPair,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<TransactionId, ClientError> {
+        // Lookup contract
+        let contract = self.ln_client().get_incoming_contract(contract_id).await?;
+
+        // Input claims this contract
+        let mut tx = TransactionBuilder::default();
+        tx.input(&mut vec![keypair], Input::LN(contract.claim()));
+        self.submit_tx_with_change(tx, DbBatch::new(), &mut rng)
+            .await
+    }
 }
 
 #[derive(Error, Debug)]
@@ -321,6 +411,10 @@ pub enum ClientError {
     PegInAmountTooSmall,
     #[error("Timed out while waiting for contract to be accepted")]
     WaitContractTimeout,
+    #[error("Error fetching offer")]
+    FetchOfferError,
+    #[error("Failed to create lightning invoice: {0}")]
+    InvoiceError(CreationError),
 }
 
 impl From<ApiError> for ClientError {
@@ -344,5 +438,11 @@ impl From<MintClientError> for ClientError {
 impl From<LnClientError> for ClientError {
     fn from(e: LnClientError) -> Self {
         ClientError::LnClientError(e)
+    }
+}
+
+impl From<CreationError> for ClientError {
+    fn from(e: CreationError) -> Self {
+        ClientError::InvoiceError(e)
     }
 }

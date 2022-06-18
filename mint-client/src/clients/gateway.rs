@@ -12,12 +12,14 @@ use crate::{api, OwnedClientContext};
 use lightning_invoice::Invoice;
 use minimint::config::ClientConfig;
 use minimint::modules::ln::contracts::{
-    outgoing, ContractId, IdentifyableContract, OutgoingContractOutcome,
+    incoming::{DecryptedPreimage, IncomingContract, IncomingContractOffer, Preimage},
+    outgoing, Contract, ContractId, IdentifyableContract, OutgoingContractOutcome,
 };
+use minimint::modules::ln::{ContractOrOfferOutput, ContractOutput};
 use minimint::transaction::Input;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
-use minimint_api::{Amount, OutPoint, PeerId};
+use minimint_api::{Amount, OutPoint, PeerId, TransactionId};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -153,7 +155,7 @@ impl GatewayClient {
     /// to be called prior to instructing the lightning node to pay the invoice since otherwise a
     /// crash could lead to loss of funds.
     ///
-    /// Not though that extended periods of staying offline will result in loss of funds anyway if
+    /// Note though that extended periods of staying offline will result in loss of funds anyway if
     /// the client can not claim the respective contract in time.
     pub fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
         self.context
@@ -219,6 +221,82 @@ impl GatewayClient {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
+    pub async fn buy_preimage_offer(
+        &self,
+        payment_hash: &bitcoin_hashes::sha256::Hash,
+        amount: &Amount,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<(minimint_api::TransactionId, ContractId)> {
+        let mut batch = DbBatch::new();
+
+        // Fetch offer for this payment hash
+        let offer: IncomingContractOffer = self.ln_client().get_offer(*payment_hash).await?;
+        if &offer.amount > amount || &offer.hash != payment_hash {
+            return Err(GatewayClientError::InvalidOffer);
+        }
+
+        // Inputs
+        let (mut coin_keys, coin_input) = self
+            .mint_client()
+            .create_coin_input(batch.transaction(), offer.amount)?;
+
+        // Outputs
+        let our_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
+            &self.context.secp,
+            &self.context.config.redeem_key,
+        );
+        let contract = Contract::Incoming(IncomingContract {
+            hash: offer.hash,
+            encrypted_preimage: offer.encrypted_preimage.clone(),
+            decrypted_preimage: DecryptedPreimage::Pending,
+            gateway_key: our_pub_key,
+        });
+        let incoming_output =
+            minimint::transaction::Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
+                amount: *amount,
+                contract: contract.clone(),
+            }));
+
+        // Submit transaction
+        let mut builder = TransactionBuilder::default();
+        builder.input(&mut coin_keys, Input::Mint(coin_input));
+        builder.output(incoming_output);
+        let change = builder.change_required(&self.context.config.common.fee_consensus);
+        let tx = self
+            .mint_client()
+            .finalize_change(change, batch.transaction(), builder, &mut rng);
+        let mint_tx_id = self.context.api.submit_transaction(tx).await?;
+
+        self.context.db.apply_batch(batch).expect("DB error");
+
+        Ok((mint_tx_id, contract.contract_id()))
+    }
+
+    /// Claw back funds after outgoing contract that had invalid preimage
+    pub async fn claim_incoming_contract(
+        &self,
+        contract_id: ContractId,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<TransactionId> {
+        let mut batch = DbBatch::new();
+        let contract_account = self.ln_client().get_incoming_contract(contract_id).await?;
+
+        let mut builder = TransactionBuilder::default();
+
+        // Input claims this contract
+        builder.input(
+            &mut vec![self.context.config.redeem_key],
+            Input::LN(contract_account.claim()),
+        );
+        let change = builder.change_required(&self.context.config.common.fee_consensus);
+        let tx = self
+            .mint_client()
+            .finalize_change(change, batch.transaction(), builder, &mut rng);
+        let mint_tx_id = self.context.api.submit_transaction(tx).await?;
+        self.context.db.apply_batch(batch).expect("DB error");
+        Ok(mint_tx_id)
+    }
+
     /// Lists all claim transactions for outgoing contracts that we have submitted but were not part
     /// of the consensus yet.
     pub fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
@@ -229,6 +307,16 @@ impl GatewayClient {
             .collect()
     }
 
+    /// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
+    pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
+        Ok(self
+            .context
+            .api
+            .await_output_outcome::<Preimage>(outpoint, Duration::from_secs(10))
+            .await?)
+    }
+
+    // TODO: improve error propagation on tx transmission
     /// Waits for a outgoing contract claim transaction to be confirmed and retransmits it
     /// periodically if this does not happen.
     pub async fn await_outgoing_contract_claimed(
@@ -292,6 +380,18 @@ pub enum GatewayClientError {
     Underfunded(Amount, Amount),
     #[error("The contract's timeout is in the past or does not allow for a safety margin")]
     TimeoutTooClose,
+    #[error("No offer")]
+    NoOffer,
+    #[error("Invalid offer")]
+    InvalidOffer,
+    #[error("Wrong contract type")]
+    WrongContractType,
+    #[error("Wrong transaction type")]
+    WrongTransactionType,
+    #[error("Invalid transaction {0}")]
+    InvalidTransaction(String),
+    #[error("Invalid preimage")]
+    InvalidPreimage,
 }
 
 impl From<LnClientError> for GatewayClientError {
@@ -303,6 +403,12 @@ impl From<LnClientError> for GatewayClientError {
 impl From<ApiError> for GatewayClientError {
     fn from(e: ApiError) -> Self {
         GatewayClientError::MintApiError(e)
+    }
+}
+
+impl From<MintClientError> for GatewayClientError {
+    fn from(e: MintClientError) -> Self {
+        GatewayClientError::MintClientError(e)
     }
 }
 
