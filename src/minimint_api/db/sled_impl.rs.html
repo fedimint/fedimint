@@ -103,6 +103,9 @@
 <span id="96">96</span>
 <span id="97">97</span>
 <span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">super</span>::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">DbBatch</span>};
 <span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">Database</span>, <span class="ident">DatabaseError</span>, <span class="ident">DecodingError</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::PrefixIter</span>;
@@ -196,11 +199,14 @@
 
     <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_basic_rw</span>() {
-        <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="ident">tempdir::TempDir::new</span>(<span class="string">&quot;fcb-sled-test&quot;</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="ident">tempfile::Builder::new</span>()
+            .<span class="ident">prefix</span>(<span class="string">&quot;fcb-sled-test&quot;</span>)
+            .<span class="ident">tempdir</span>()
+            .<span class="ident">unwrap</span>();
         <span class="kw">let</span> <span class="ident">db</span> <span class="op">=</span> <span class="ident">sled::open</span>(<span class="ident">path</span>).<span class="ident">unwrap</span>();
         <span class="ident"><span class="kw">crate</span>::db::tests::test_db_impl</span>(<span class="ident">Arc::new</span>(<span class="ident">db</span>.<span class="ident">open_tree</span>(<span class="string">&quot;default&quot;</span>).<span class="ident">unwrap</span>()));
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (b31f9cc22 2022-06-15)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (c3b7d7b49 2022-06-17)" ></div>
 </body></html>
