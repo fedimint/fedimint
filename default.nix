@@ -1,15 +1,13 @@
+with import <nixpkgs>{};
+
 let
     pkgs = import <nixpkgs> {};
     sources = import ./nix/sources.nix;
     naersk = pkgs.callPackage sources.naersk {};
 in naersk.buildPackage {
   pname = "minimint";
-  version = "master";
-  src = builtins.fetchGit {
-    url = "https://github.com/fedimint/minimint";
-    ref = "master";
-  };
-  copyTarget = true;
+  version = "ci";
+  src = builtins.filterSource (p: t: lib.cleanSourceFilter p t && baseNameOf p != "target") ./.;
   buildInputs = [
       pkgs.openssl
       pkgs.pkg-config
