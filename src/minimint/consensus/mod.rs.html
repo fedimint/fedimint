@@ -516,6 +516,19 @@
 <span id="509">509</span>
 <span id="510">510</span>
 <span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
 
 <span class="kw">mod</span> <span class="ident">conflictfilter</span>;
@@ -764,8 +777,14 @@
                 .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
                 .<span class="kw">await</span>;
 
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_ln</span> <span class="op">=</span> <span class="self">self</span>
+                .<span class="ident">ln</span>
+                .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+                .<span class="kw">await</span>;
+
             <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_wallet</span>);
             <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_mint</span>);
+            <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_ln</span>);
 
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
             <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">drop_peers</span> {
@@ -807,6 +826,13 @@
                     .<span class="kw">await</span>
                     .<span class="ident">into_iter</span>()
                     .<span class="ident">map</span>(<span class="ident">ConsensusItem::Mint</span>),
+            )
+            .<span class="ident">chain</span>(
+                <span class="self">self</span>.<span class="ident">ln</span>
+                    .<span class="ident">consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+                    .<span class="kw">await</span>
+                    .<span class="ident">into_iter</span>()
+                    .<span class="ident">map</span>(<span class="ident">ConsensusItem::LN</span>),
             )
             .<span class="ident">collect</span>();
 

@@ -153,8 +153,18 @@
 <span id="146">146</span>
 <span id="147">147</span>
 <span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::FederationModule</span>;
-<span class="kw">use</span> <span class="ident">minimint_ln::contracts::incoming</span>::{<span class="ident">DecryptedPreimage</span>, <span class="ident">Preimage</span>};
+<span class="kw">use</span> <span class="ident">minimint_ln::contracts::incoming</span>::{<span class="ident">DecryptedPreimage</span>, <span class="ident">OfferId</span>, <span class="ident">Preimage</span>};
 <span class="kw">use</span> <span class="ident">minimint_ln::contracts</span>::{<span class="ident">AccountContractOutcome</span>, <span class="ident">ContractOutcome</span>, <span class="ident">OutgoingContractOutcome</span>};
 <span class="kw">use</span> <span class="ident">minimint_ln::LightningModule</span>;
 <span class="kw">use</span> <span class="ident">minimint_mint::SigResponse</span>;
@@ -268,6 +278,16 @@
         }) <span class="op">=</span> <span class="ident">common_outcome</span>
         {
             <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>)
+        } <span class="kw">else</span> {
+            <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
+        }
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">OfferId</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Offer</span> { <span class="ident">id</span> }) <span class="op">=</span> <span class="ident">common_outcome</span> {
+            <span class="prelude-val">Ok</span>(<span class="ident">id</span>)
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
         }

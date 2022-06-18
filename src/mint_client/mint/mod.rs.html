@@ -645,6 +645,14 @@
 <span id="638">638</span>
 <span id="639">639</span>
 <span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -1085,6 +1093,7 @@
     <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
     <span class="kw">use</span> <span class="ident">bitcoin::hashes::Hash</span>;
     <span class="kw">use</span> <span class="ident">futures::executor::block_on</span>;
+    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::ln::ContractAccount</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::mint::config::MintClientConfig</span>;
@@ -1136,6 +1145,13 @@
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> {
             <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_offer</span>(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            <span class="ident">_payment_hash</span>: <span class="ident">bitcoin::hashes::sha256::Hash</span>,
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>();
         }
     }
 

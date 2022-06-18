@@ -163,6 +163,10 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>;
@@ -178,6 +182,12 @@
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">minimint_api::Amount</span>,
     <span class="kw">pub</span> <span class="ident">hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
     <span class="kw">pub</span> <span class="ident">encrypted_preimage</span>: <span class="ident">EncryptedPreimage</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">IncomingContractOffer</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">OfferId</span> {
+        <span class="ident">OfferId::from_hash</span>(<span class="self">self</span>.<span class="ident">hash</span>)
+    }
 }
 
 <span class="comment">// FIXME: the protocol currently envisions the use of a pub key as preimage. This is bad for privacy</span>
@@ -270,9 +280,7 @@
 
 <span class="kw">impl</span> <span class="ident">IdentifyableContract</span> <span class="kw">for</span> <span class="ident">IncomingContract</span> {
     <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> <span class="op">=</span> <span class="ident">ContractId::engine</span>();
-        <span class="ident">Encodable::consensus_encode</span>(<span class="self">self</span>, <span class="kw-2">&amp;mut</span> <span class="ident">engine</span>).<span class="ident">expect</span>(<span class="string">&quot;Hashing never fails&quot;</span>);
-        <span class="ident">ContractId::from_engine</span>(<span class="ident">engine</span>)
+        <span class="ident">ContractId::from_hash</span>(<span class="self">self</span>.<span class="ident">hash</span>)
     }
 }
 

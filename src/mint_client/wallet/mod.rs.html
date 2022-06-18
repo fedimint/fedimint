@@ -311,6 +311,15 @@
 <span id="304">304</span>
 <span id="305">305</span>
 <span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
 <span class="kw">use</span> <span class="ident">db::PegInKey</span>;
@@ -450,7 +459,9 @@
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::OwnedClientContext</span>;
     <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
     <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
+
     <span class="kw">use</span> <span class="ident">minimint::config::FeeConsensus</span>;
+    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::ln::ContractAccount</span>;
     <span class="kw">use</span> <span class="ident">minimint::modules::wallet::bitcoind::test</span>::{<span class="ident">FakeBitcoindRpc</span>, <span class="ident">FakeBitcoindRpcController</span>};
@@ -499,6 +510,13 @@
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> {
             <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_offer</span>(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            <span class="ident">_payment_hash</span>: <span class="ident">bitcoin::hashes::sha256::Hash</span>,
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>();
         }
     }
 

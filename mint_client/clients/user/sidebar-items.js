@@ -1,1 +1,1 @@
-initSidebarItems({"constant":[["TIMELOCK",""]],"enum":[["ClientError",""]],"struct":[["UserClient",""]]});
+initSidebarItems({"constant":[["TIMELOCK",""]],"enum":[["ClientError",""]],"fn":[["network_to_currency",""]],"struct":[["UnconfirmedInvoice","Invoice whose “offer” hasn’t yet been accepted by federation"],["UserClient",""]]});
