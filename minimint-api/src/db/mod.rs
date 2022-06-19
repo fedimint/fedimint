@@ -1,5 +1,6 @@
 use crate::encoding::{Decodable, Encodable};
 use async_trait::async_trait;
+use futures::future::LocalBoxFuture;
 use futures::stream::LocalBoxStream;
 use futures::{Stream, StreamExt};
 use std::error::Error;
@@ -72,10 +73,10 @@ pub trait Database: Send + Sync {
         key_prefix: &[u8],
     ) -> LocalBoxStream<'_, Result<(Vec<u8>, Vec<u8>), DatabaseError>>;
 
-    async fn raw_transaction<'a>(
+    fn raw_transaction<'a>(
         &'a self,
-        f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
-    ) -> Result<(), DatabaseError>;
+        f: &mut (dyn FnMut(&'a mut dyn Transaction) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
+    ) -> LocalBoxFuture<'a, Result<(), DatabaseError>>;
 }
 
 impl<'a> dyn Database + 'a {
@@ -162,18 +163,21 @@ impl<'a> dyn Database + 'a {
         })
     }
 
-    pub async fn transaction<'s, F: Future<Output = ()> + 's>(
-        &self,
-        cb: impl FnOnce(Box<dyn Transaction>) -> F,
-    ) -> Result<(), DatabaseError> {
+    pub fn transaction<'s, F: Future<Output = ()> + 's>(
+        &'a self,
+        cb: impl FnOnce(&'s mut dyn Transaction) -> F + 's,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + 's
+    where
+        'a: 's,
+    {
         let mut cb = Some(cb);
-        self.raw_transaction(&mut |tr| {
-            let cb = cb
+        self.raw_transaction(&mut move |tx| {
+            Box::pin((cb
                 .take()
-                .expect("raw_transaction callback called more than once");
-            Box::pin((cb)(tr))
+                .expect("transaction function called more than once"))(
+                tx
+            ))
         })
-        .await
     }
 }
 

@@ -6,6 +6,7 @@ use std::ops::ControlFlow;
 use super::{Database, DatabaseError, DecodingError, Transaction};
 use async_trait::async_trait;
 use futures::{
+    future::LocalBoxFuture,
     stream::{self, LocalBoxStream},
     Stream,
 };
@@ -51,11 +52,11 @@ impl Database for sled::Tree {
         Box::pin(stream::iter(iter))
     }
 
-    async fn raw_transaction<'a>(
+    fn raw_transaction<'a>(
         &'a self,
-        f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
-    ) -> Result<(), DatabaseError> {
-        Ok(())
+        f: &mut (dyn FnMut(&'a mut dyn Transaction) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
+    ) -> LocalBoxFuture<'a, Result<(), DatabaseError>> {
+        todo!()
     }
 }
 

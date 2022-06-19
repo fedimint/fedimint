@@ -1,5 +1,4 @@
 use crate::config::GenerateConfig;
-use crate::db::batch::DbBatch;
 use crate::db::mem_impl::MemDatabase;
 use crate::db::Database;
 use crate::module::http;
@@ -11,6 +10,31 @@ use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+macro_rules! capture {
+    (
+        &$var:ident,
+        $($rest:tt)*
+    ) => {{
+        let $var = &$var;
+        capture! {
+            $($rest)*
+        }
+    }};
+
+    (
+        &mut $var:ident,
+        $($rest:tt)*
+    ) => {{
+        let mut $var = &mut $var;
+        capture! {
+            $($rest)*
+        }
+    }};
+
+    ($body:expr) => {
+        $body
+    }
+}
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, MemDatabase)>,
     client_cfg: CC,
@@ -112,36 +136,37 @@ where
 
         let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
         for (_peer, member, db) in &mut self.members {
-            let mut batch = DbBatch::new();
-
-            member
-                .begin_consensus_epoch(batch.transaction(), consensus.clone(), &mut rng)
-                .await;
-
-            let cache = member.build_verification_cache(inputs.iter());
-            for input in inputs {
-                member
-                    .apply_input(&fake_ic, batch.transaction(), input, &cache)
-                    .expect("Faulty input");
-            }
-
-            for (out_point, output) in outputs {
-                member
-                    .apply_output(batch.transaction(), output, *out_point)
-                    .expect("Faulty output");
-            }
-
             (db as &mut dyn Database)
-                .apply_batch(batch)
+                .transaction(|tx| {
+                    capture!(&consensus, &mut rng, &fake_ic, &member, async move {
+                        member
+                            .begin_consensus_epoch(tx, consensus.clone(), &mut rng)
+                            .await;
+
+                        let cache = member.build_verification_cache(inputs.iter());
+                        for input in inputs {
+                            member
+                                .apply_input(fake_ic, tx, input, &cache)
+                                .expect("Faulty input");
+                        }
+
+                        for (out_point, output) in outputs {
+                            member
+                                .apply_output(tx, output, *out_point)
+                                .expect("Faulty output");
+                        }
+                    })
+                })
+                .await
                 .expect("DB error");
 
-            let mut batch = DbBatch::new();
-            member
-                .end_consensus_epoch(&peers, batch.transaction(), &mut rng)
-                .await;
-
             (db as &mut dyn Database)
-                .apply_batch(batch)
+                .transaction(|tx| {
+                    capture!(&mut rng, &peers, &member, async move {
+                        member.end_consensus_epoch(&peers, &mut *tx, &mut rng).await;
+                    })
+                })
+                .await
                 .expect("DB error");
         }
     }

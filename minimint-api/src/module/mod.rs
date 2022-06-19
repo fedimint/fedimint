@@ -1,6 +1,7 @@
 pub mod interconnect;
 pub mod testing;
 
+use crate::db::Transaction;
 use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
@@ -59,7 +60,7 @@ pub trait FederationModule: Sized {
     /// when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        batch: BatchTx<'a>,
+        tx: &'a mut dyn Transaction,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         rng: impl RngCore + CryptoRng + 'a,
     );
@@ -94,7 +95,7 @@ pub trait FederationModule: Sized {
     fn apply_input<'a, 'b>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        tx: &'a mut dyn Transaction,
         input: &'b Self::TxInput,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error>;
@@ -117,7 +118,7 @@ pub trait FederationModule: Sized {
     /// processed.
     fn apply_output<'a>(
         &'a self,
-        batch: BatchTx<'a>,
+        tx: &'a mut dyn Transaction,
         output: &'a Self::TxOutput,
         out_point: crate::OutPoint,
     ) -> Result<Amount, Self::Error>;
@@ -130,7 +131,7 @@ pub trait FederationModule: Sized {
     async fn end_consensus_epoch<'a>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'a>,
+        tx: &'a mut dyn Transaction,
         rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId>;
 

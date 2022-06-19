@@ -1,5 +1,6 @@
 use super::{Database, DatabaseError, Transaction};
 use async_trait::async_trait;
+use futures::future::LocalBoxFuture;
 use futures::stream::{self, LocalBoxStream};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -62,12 +63,11 @@ impl Database for MemDatabase {
         Box::pin(stream::iter(data.into_iter().map(Ok)))
     }
 
-    async fn raw_transaction<'a>(
+    fn raw_transaction<'a>(
         &'a self,
-        f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
-    ) -> Result<(), DatabaseError> {
-        // TODO
-        Ok(())
+        f: &mut (dyn FnMut(&'a mut dyn Transaction) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
+    ) -> LocalBoxFuture<'a, Result<(), DatabaseError>> {
+        todo!()
     }
 }
 
