@@ -17,6 +17,5 @@ in naersk.buildPackage {
   ''
     SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
     cp -r $out/target $SRC_DIR/target
-    echo "Done!"
   '';
 }
