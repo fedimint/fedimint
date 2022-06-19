@@ -1,8 +1,10 @@
 use crate::encoding::{Decodable, Encodable};
 use async_trait::async_trait;
+use futures::stream::LocalBoxStream;
+use futures::{Stream, StreamExt};
 use std::error::Error;
 use std::fmt::Debug;
-use std::future::{ready, Future};
+use std::future::Future;
 use std::ops::ControlFlow;
 use std::pin::Pin;
 use thiserror::Error;
@@ -65,11 +67,10 @@ pub trait Database: Send + Sync {
 
     async fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError>;
 
-    async fn raw_find_by_prefix(
+    fn raw_find_by_prefix(
         &self,
         key_prefix: &[u8],
-        cb: &mut dyn FnMut(Result<(Vec<u8>, Vec<u8>), DatabaseError>) -> ControlFlow<()>,
-    ) -> ControlFlow<()>;
+    ) -> LocalBoxStream<'_, Result<(Vec<u8>, Vec<u8>), DatabaseError>>;
 
     async fn raw_transaction<'a>(
         &'a self,
@@ -138,28 +139,27 @@ impl<'a> dyn Database + 'a {
         Ok(Some(K::Value::from_bytes(&value_bytes)?))
     }
 
-    pub async fn find_by_prefix<KP>(
+    pub fn find_by_prefix<KP>(
         &self,
         key_prefix: &KP,
-        mut cb: impl FnMut(Result<(KP::Key, KP::Value), DatabaseError>) -> ControlFlow<()>,
-    ) where
+    ) -> impl Stream<Item = Result<(KP::Key, KP::Value), DatabaseError>> + '_
+    where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
         let prefix_bytes = key_prefix.to_bytes();
-        self.raw_find_by_prefix(&prefix_bytes, &mut move |res| {
-            let value = res.and_then(|(key_bytes, value_bytes)| {
-                let key = KP::Key::from_bytes(&key_bytes)?;
-                trace!(
-                    "find by prefix: Decoding {} from bytes {:?}",
-                    std::any::type_name::<KP::Value>(),
-                    value_bytes
-                );
-                let value = KP::Value::from_bytes(&value_bytes)?;
-                Ok((key, value))
-            });
-            cb(value)
+
+        let stream = self.raw_find_by_prefix(&prefix_bytes);
+        stream.map(|res| {
+            let (key_bytes, value_bytes) = res?;
+            let key = KP::Key::from_bytes(&key_bytes)?;
+            trace!(
+                "find by prefix: Decoding {} from bytes {:?}",
+                std::any::type_name::<KP::Value>(),
+                value_bytes
+            );
+            let value = KP::Value::from_bytes(&value_bytes)?;
+            Ok((key, value))
         })
-        .await;
     }
 
     pub async fn transaction<'s, F: Future<Output = ()> + 's>(

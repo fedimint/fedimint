@@ -1,12 +1,11 @@
 use super::{Database, DatabaseError, Transaction};
 use async_trait::async_trait;
+use futures::stream::{self, LocalBoxStream};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::future::Future;
-use std::ops::ControlFlow;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use tracing::{error, trace};
 
 #[derive(Debug, Default, Clone)]
 pub struct MemDatabase {
@@ -46,11 +45,10 @@ impl Database for MemDatabase {
         Ok(self.data.lock().unwrap().remove(key))
     }
 
-    async fn raw_find_by_prefix(
+    fn raw_find_by_prefix(
         &self,
         key_prefix: &[u8],
-        cb: &mut dyn FnMut(Result<(Vec<u8>, Vec<u8>), DatabaseError>) -> ControlFlow<()>,
-    ) -> ControlFlow<()> {
+    ) -> LocalBoxStream<'_, Result<(Vec<u8>, Vec<u8>), DatabaseError>> {
         let mut data = self
             .data
             .lock()
@@ -61,13 +59,14 @@ impl Database for MemDatabase {
             .collect::<Vec<_>>();
         data.reverse();
 
-        ControlFlow::Continue(())
+        Box::pin(stream::iter(data.into_iter().map(Ok)))
     }
 
     async fn raw_transaction<'a>(
         &'a self,
         f: &mut (dyn FnMut(Box<dyn Transaction>) -> Pin<Box<dyn Future<Output = ()> + 'a>> + 'a),
     ) -> Result<(), DatabaseError> {
+        // TODO
         Ok(())
     }
 }

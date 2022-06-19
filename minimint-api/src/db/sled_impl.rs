@@ -5,6 +5,10 @@ use std::ops::ControlFlow;
 
 use super::{Database, DatabaseError, DecodingError, Transaction};
 use async_trait::async_trait;
+use futures::{
+    stream::{self, LocalBoxStream},
+    Stream,
+};
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
@@ -36,19 +40,15 @@ impl Database for sled::Tree {
             .map(|bytes| bytes.to_vec()))
     }
 
-    async fn raw_find_by_prefix(
+    fn raw_find_by_prefix(
         &self,
         key_prefix: &[u8],
-        cb: &mut dyn FnMut(Result<(Vec<u8>, Vec<u8>), DatabaseError>) -> ControlFlow<()>,
-    ) -> ControlFlow<()> {
-        for res in self.scan_prefix(key_prefix) {
-            let res = res
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map_err(|e| DatabaseError::DbError(Box::new(e)));
-
-            cb(res)?
-        }
-        ControlFlow::Continue(())
+    ) -> LocalBoxStream<'_, Result<(Vec<u8>, Vec<u8>), DatabaseError>> {
+        let iter = self.scan_prefix(key_prefix).map(|res| {
+            res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map_err(|e| DatabaseError::DbError(Box::new(e)))
+        });
+        Box::pin(stream::iter(iter))
     }
 
     async fn raw_transaction<'a>(
