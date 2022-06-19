@@ -1,6 +1,5 @@
 use crate::config::ServerConfig;
-use crate::net::framed::{FramedTransport, TcpBidiFramed};
-use crate::net::PeerConnections;
+use crate::net::framed::{AnyFramedTransport, FramedTransport, TcpBidiFramed};
 use async_trait::async_trait;
 use futures::future::select_all;
 use futures::future::try_join_all;
@@ -17,14 +16,35 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
 use tracing::{debug, info, instrument, trace, warn};
 
-// FIXME: make connections dynamically managed
-pub struct Connections<T> {
-    connections: HashMap<PeerId, Box<dyn FramedTransport<T> + Send + Unpin>>,
+type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
+
+#[async_trait]
+pub trait PeerConnections<T>
+where
+    T: Serialize + DeserializeOwned + Unpin + Send,
+{
+    async fn send(&mut self, target: Target<PeerId>, msg: T);
+
+    async fn receive(&mut self) -> (PeerId, T);
+
+    async fn ban_peer(&mut self, peer: PeerId);
+
+    fn to_any(self) -> AnyPeerConnections<T>
+    where
+        Self: Sized + Send + Unpin + 'static,
+    {
+        Box::new(self)
+    }
 }
 
-impl<T: 'static> Connections<T>
+// FIXME: make connections dynamically managed
+pub struct TcpPeerConnections<T> {
+    connections: HashMap<PeerId, AnyFramedTransport<T>>,
+}
+
+impl<T: 'static> TcpPeerConnections<T>
 where
-    T: std::fmt::Debug + Serialize + DeserializeOwned + Unpin + Send,
+    T: std::fmt::Debug + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     #[instrument(skip_all)]
     pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
@@ -68,19 +88,14 @@ where
             .into_iter()
             .map(
                 |(id, stream)| -> (PeerId, Box<dyn FramedTransport<T> + Send + Unpin>) {
-                    (id, Box::new(TcpBidiFramed::new_from_tcp(stream)))
+                    (id, TcpBidiFramed::new_from_tcp(stream).to_any())
                 },
             )
             .collect::<HashMap<_, _>>();
 
         info!("Successfully connected to all peers");
 
-        Connections { connections: peers }
-    }
-
-    pub fn drop_peer(&mut self, peer: &PeerId) {
-        self.connections.remove(peer);
-        warn!("Peer {} dropped.", peer);
+        TcpPeerConnections { connections: peers }
     }
 
     #[instrument]
@@ -132,13 +147,11 @@ where
 }
 
 #[async_trait]
-impl<T> PeerConnections<T> for Connections<T>
+impl<T> PeerConnections<T> for TcpPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
-    type Id = PeerId;
-
-    async fn send(&mut self, target: Target<Self::Id>, msg: T) {
+    async fn send(&mut self, target: Target<PeerId>, msg: T) {
         trace!(?target, "Sending message to");
         match target {
             Target::All => {
@@ -158,7 +171,7 @@ where
         }
     }
 
-    async fn receive(&mut self) -> (Self::Id, T) {
+    async fn receive(&mut self) -> (PeerId, T) {
         // TODO: optimize, don't throw away remaining futures
         loop {
             let (received, _, _) = select_all(self.connections.iter_mut().map(|(id, peer)| {
@@ -174,5 +187,10 @@ where
                 }
             }
         }
+    }
+
+    async fn ban_peer(&mut self, peer: PeerId) {
+        self.connections.remove(&peer);
+        warn!("Peer {} dropped.", peer);
     }
 }
