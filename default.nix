@@ -13,9 +13,10 @@ in naersk.buildPackage {
       pkgs.pkg-config
       pkgs.perl
   ];
-  shellHook =
-  ''
-    SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
-    cp -r $out/target $SRC_DIR/target
-  '';
+  gitSubmodules = true;
+  #shellHook =
+  #''
+  #  SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
+  #  cp -r $out/target $SRC_DIR/target
+  #'';
 }
