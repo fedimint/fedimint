@@ -48,6 +48,9 @@ pub mod keys;
 pub mod tweakable;
 pub mod txoproof;
 
+#[cfg(feature = "native")]
+pub mod bitcoincore_rpc;
+
 pub const CONFIRMATION_TARGET: u16 = 24;
 
 /// The urgency of doing a peg-out is defined as the sum over all pending peg-outs of the amount of
@@ -517,20 +520,6 @@ impl FederationModule for Wallet {
 }
 
 impl Wallet {
-    #[cfg(feature = "native")]
-    pub fn bitcoind(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
-        use bitcoincore_rpc::Auth;
-        move || -> Box<dyn BitcoindRpc> {
-            Box::new(
-                bitcoincore_rpc::Client::new(
-                    &cfg.btc_rpc_address,
-                    Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-                )
-                .expect("Could not connect to bitcoind"),
-            )
-        }
-    }
-
     // TODO: work around bitcoind_gen being a closure, maybe make clonable?
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,

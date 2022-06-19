@@ -17,7 +17,7 @@ use minimint_api::db::Database;
 use minimint_api::PeerId;
 use minimint_ln::LightningModule;
 use minimint_wallet::bitcoind::BitcoindRpc;
-use minimint_wallet::Wallet;
+use minimint_wallet::{bitcoincore_rpc, Wallet};
 
 pub use minimint_core::*;
 
@@ -83,7 +83,7 @@ pub async fn minimint_server(cfg: ServerConfig) -> MinimintServer {
     minimint_server_with(
         cfg.clone(),
         Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap()),
-        Wallet::bitcoind(cfg.wallet.clone()),
+        bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
     )
     .await
 }
