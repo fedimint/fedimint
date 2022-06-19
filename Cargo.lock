@@ -1967,13 +1967,9 @@ name = "mint-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "base64 0.13.0",
- "bincode",
  "bitcoin",
  "bitcoin_hashes",
- "clap",
  "futures",
- "hex",
  "lightning",
  "lightning-invoice",
  "minimint-api",
@@ -1983,11 +1979,33 @@ dependencies = [
  "reqwest",
  "secp256k1-zkp",
  "serde",
- "sha3",
- "sled",
  "tbs",
  "test-log",
  "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "mint-client-cli"
+version = "0.1.0"
+dependencies = [
+ "base64 0.13.0",
+ "bincode",
+ "bitcoin",
+ "bitcoin_hashes",
+ "clap",
+ "hex",
+ "lightning-invoice",
+ "minimint-api",
+ "minimint-core",
+ "mint-client",
+ "rand 0.6.5",
+ "reqwest",
+ "serde",
+ "sled",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
