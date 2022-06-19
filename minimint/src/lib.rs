@@ -22,6 +22,7 @@ use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusProposal, MinimintConsensus};
+use crate::net::connect::{Connector, InsecureTcpConnector};
 use crate::net::peers::{PeerConnections, TcpPeerConnections};
 use crate::rng::RngGenerator;
 
@@ -193,7 +194,10 @@ pub async fn hbbft(
     initial_cis: ConsensusProposal,
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
 ) {
-    let mut connections = TcpPeerConnections::connect_to_all(&cfg).await.to_any();
+    let connector = InsecureTcpConnector::new(cfg.identity).to_any();
+    let mut connections = TcpPeerConnections::connect_to_all(&cfg, connector)
+        .await
+        .to_any();
 
     let net_info = NetworkInfo::new(
         cfg.identity,

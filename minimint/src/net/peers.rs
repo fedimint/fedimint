@@ -1,18 +1,16 @@
 use crate::config::ServerConfig;
-use crate::net::framed::{AnyFramedTransport, FramedTransport, TcpBidiFramed};
+use crate::net::connect::{AnyConnector, ConnectResult, ConnectionListener};
+use crate::net::framed::{AnyFramedTransport, FramedTransport};
 use async_trait::async_trait;
 use futures::future::select_all;
 use futures::future::try_join_all;
-use futures::StreamExt;
-use futures::{FutureExt, SinkExt};
+use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
 use hbbft::Target;
 use minimint_api::PeerId;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
 use tokio::time::sleep;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -47,19 +45,20 @@ where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     #[instrument(skip_all)]
-    pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
+    pub async fn connect_to_all(cfg: &ServerConfig, connect: AnyConnector<T>) -> Self {
         info!("Starting mint {}", cfg.identity);
-        let listener = tokio::spawn(Self::await_peers(
-            cfg.get_hbbft_port(),
-            cfg.get_incoming_count(),
-        ));
+        let listener = connect
+            .listen(format!("127.0.0.1:{}", cfg.get_hbbft_port()))
+            .await
+            .unwrap();
+        let listener_task = tokio::spawn(Self::await_peers(listener, cfg.get_incoming_count()));
 
         debug!("Beginning to connect to peers");
 
         let out_conns = try_join_all(cfg.peers.iter().filter_map(|(id, peer)| {
             if cfg.identity < *id {
                 info!("Connecting to mint {} at 127.0.0.1:{}", id, peer.hbbft_port);
-                Some(Self::connect_to_peer(peer.hbbft_port, *id, 10))
+                Some(Self::connect_to_peer(&connect, peer.hbbft_port, *id, 10))
             } else {
                 None
             }
@@ -67,30 +66,14 @@ where
         .await
         .expect("Failed to connect to peer");
 
-        let in_conns = listener
+        let in_conns = listener_task
             .await
             .unwrap()
             .expect("Failed to accept connection");
 
-        let identity = &cfg.identity;
-        let handshakes = out_conns
+        let peers = out_conns
             .into_iter()
             .chain(in_conns)
-            .map(move |mut stream| async move {
-                stream.write_u16((*identity).into()).await?;
-                let peer = stream.read_u16().await?.into();
-                Result::<_, std::io::Error>::Ok((peer, stream))
-            });
-
-        let peers = try_join_all(handshakes)
-            .await
-            .expect("Error during peer handshakes")
-            .into_iter()
-            .map(
-                |(id, stream)| -> (PeerId, Box<dyn FramedTransport<T> + Send + Unpin>) {
-                    (id, TcpBidiFramed::new_from_tcp(stream).to_any())
-                },
-            )
             .collect::<HashMap<_, _>>();
 
         info!("Successfully connected to all peers");
@@ -98,34 +81,32 @@ where
         TcpPeerConnections { connections: peers }
     }
 
-    #[instrument]
-    async fn await_peers(port: u16, num_awaited: u16) -> Result<Vec<TcpStream>, std::io::Error> {
-        let listener = TcpListener::bind(("127.0.0.1", port))
-            .await
-            .expect("Couldn't bind to port.");
-
+    #[instrument(skip_all)]
+    async fn await_peers(
+        listener: ConnectionListener<T>,
+        num_awaited: u16,
+    ) -> Result<Vec<(PeerId, AnyFramedTransport<T>)>, anyhow::Error> {
         debug!("Listening for incoming connections");
 
-        let peers = (0..num_awaited).map(|_| listener.accept());
-        let connections = try_join_all(peers)
-            .await?
-            .into_iter()
-            .map(|(socket, _)| socket)
-            .collect::<Vec<_>>();
+        let connections = listener
+            .take(num_awaited as usize)
+            .try_collect::<Vec<_>>()
+            .await?;
 
         debug!("Received all {} connections", connections.len());
         Ok(connections)
     }
 
     async fn connect_to_peer(
+        connect: &AnyConnector<T>,
         port: u16,
         peer: PeerId,
         retries: u32,
-    ) -> Result<TcpStream, std::io::Error> {
+    ) -> ConnectResult<T> {
         debug!("Connecting to peer {}", peer);
         let mut counter = 0;
         loop {
-            let res = TcpStream::connect(("127.0.0.1", port)).await;
+            let res = connect.connect_framed(format!("127.0.0.1:{}", port)).await;
             if res.is_ok() || counter >= retries {
                 return res;
             }
