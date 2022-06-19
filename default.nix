@@ -1,7 +1,7 @@
 with import <nixpkgs>{};
 
 let
-    pkgs = import <nixpkgs> {};
+    pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/57622cb817210146b379adbbd036d3da0d1f367c.tar.gz") {};
     sources = import ./nix/sources.nix;
     naersk = pkgs.callPackage sources.naersk {};
 in naersk.buildPackage {
@@ -14,9 +14,4 @@ in naersk.buildPackage {
       pkgs.perl
   ];
   gitSubmodules = true;
-  #shellHook =
-  #''
-  #  SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
-  #  cp -r $out/target $SRC_DIR/target
-  #'';
 }
