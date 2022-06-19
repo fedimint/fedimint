@@ -84,4 +84,4 @@ jobs:
         with:
           name: mini
           signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-      - run: nix-build | cachix push minimint-test
+      - run: nix-build | cachix push mini
