@@ -82,6 +82,6 @@ jobs:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v10
         with:
-          name: mini
+          name: fedimint
           signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-      - run: nix-build | cachix push mini
+      - run: nix-build | cachix push fedimint
