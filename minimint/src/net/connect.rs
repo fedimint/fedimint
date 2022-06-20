@@ -4,9 +4,11 @@ use futures::Stream;
 use minimint_api::PeerId;
 use std::fmt::Debug;
 use std::pin::Pin;
+use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
+pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
 pub type AnyConnector<M> = Box<dyn Connector<M> + Send + Sync + Unpin + 'static>;
 pub type ConnectResult<M> = Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>;
 pub type ConnectionListener<M> =

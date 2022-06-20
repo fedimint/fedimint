@@ -23,7 +23,7 @@ pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusProposal, MinimintConsensus};
 use crate::net::connect::{Connector, InsecureTcpConnector};
-use crate::net::peers::{PeerConnections, TcpPeerConnections};
+use crate::net::peers::{PeerConnections, ReconnectPeerConnections};
 use crate::rng::RngGenerator;
 
 /// The actual implementation of the federated mint
@@ -195,7 +195,7 @@ pub async fn hbbft(
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
 ) {
     let connector = InsecureTcpConnector::new(cfg.identity).to_any();
-    let mut connections = TcpPeerConnections::connect_to_all(&cfg, connector)
+    let mut connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
         .await
         .to_any();
 
