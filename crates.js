@@ -1,1 +1,1 @@
-window.ALL_CRATES = ["configgen","gw_configgen","ln_gateway","minimint","minimint_api","minimint_derive","minimint_ln","minimint_mint","minimint_wallet","mint_client","server","tbs"];
+window.ALL_CRATES = ["configgen","gw_configgen","ln_gateway","minimint","minimint_api","minimint_core","minimint_derive","minimint_ln","minimint_mint","minimint_wallet","mint_client","mint_client_cli","server","tbs"];

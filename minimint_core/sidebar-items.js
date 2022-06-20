@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["config","MiniMint toplevel config"],["modules",""],["outcome",""],["transaction",""]]});

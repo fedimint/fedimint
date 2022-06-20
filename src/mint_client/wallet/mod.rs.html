@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `mint-client/src/wallet/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/wallet/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
     <noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../mint_client/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
         </a><h2 class="location"></h2>
     </nav>
@@ -320,16 +320,18 @@
 <span id="313">313</span>
 <span id="314">314</span>
 <span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
 <span class="kw">use</span> <span class="ident">db::PegInKey</span>;
-<span class="kw">use</span> <span class="ident">minimint::config::FeeConsensus</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::wallet::config::WalletClientConfig</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::wallet::tweakable::Tweakable</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::wallet::txoproof</span>::{<span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span>, <span class="ident">TxOutProof</span>};
-<span class="kw">use</span> <span class="ident">minimint::modules::wallet::PegOut</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch::BatchTx</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::config::FeeConsensus</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::config::WalletClientConfig</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::tweakable::Tweakable</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof</span>::{<span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span>, <span class="ident">TxOutProof</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOut</span>;
 <span class="kw">use</span> <span class="ident">miniscript::DescriptorTrait</span>;
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::schnorrsig::KeyPair</span>;
@@ -460,19 +462,21 @@
     <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
     <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
 
-    <span class="kw">use</span> <span class="ident">minimint::config::FeeConsensus</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming::IncomingContractOffer</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::ContractAccount</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::wallet::bitcoind::test</span>::{<span class="ident">FakeBitcoindRpc</span>, <span class="ident">FakeBitcoindRpcController</span>};
-    <span class="kw">use</span> <span class="ident">minimint::modules::wallet::config::WalletClientConfig</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::wallet::db::UTXOKey</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::wallet</span>::{<span class="ident">SpendableUTXO</span>, <span class="ident">Wallet</span>};
-    <span class="kw">use</span> <span class="ident">minimint::outcome</span>::{<span class="ident">OutputOutcome</span>, <span class="ident">TransactionStatus</span>};
-    <span class="kw">use</span> <span class="ident">minimint::transaction::Transaction</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::module::testing::FakeFed</span>;
     <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::config::FeeConsensus</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractAccount</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::bitcoind::test</span>::{
+        <span class="ident">FakeBitcoindRpc</span>, <span class="ident">FakeBitcoindRpcController</span>,
+    };
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::config::WalletClientConfig</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::db::UTXOKey</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">SpendableUTXO</span>, <span class="ident">Wallet</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">OutputOutcome</span>, <span class="ident">TransactionStatus</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::transaction::Transaction</span>;
     <span class="kw">use</span> <span class="ident">std::str::FromStr</span>;
     <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
     <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
@@ -614,7 +618,7 @@
         <span class="ident">fed</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">consensus_round</span>(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
         <span class="comment">// wait for broadcast</span>
-        <span class="ident">tokio::time::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">12</span>)).<span class="kw">await</span>;
+        <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">12</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(<span class="ident">btc_rpc</span>.<span class="ident">is_btc_sent_to</span>(<span class="ident">amount</span>, <span class="ident">addr</span>).<span class="kw">await</span>);
 
         <span class="kw">let</span> <span class="ident">wallet_value</span> <span class="op">=</span> <span class="ident">fed</span>
@@ -636,5 +640,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (21e9336fe 2022-06-18)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
 </body></html>

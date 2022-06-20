@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""]]});
+initSidebarItems({"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""],["Rand07Compat",""]]});

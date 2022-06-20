@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `mint-client/src/ln/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `client/client-lib/src/ln/mod.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled><link rel="stylesheet" type="text/css" href="../../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><script defer src="../../../main.js"></script><script defer src="../../../source-script.js"></script><script defer src="../../../source-files.js"></script>
     <noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../../mint_client/index.html"><div class="logo-container"><img class="rust-logo" src="../../../rust-logo.svg" alt="logo"></div>
         </a><h2 class="location"></h2>
     </nav>
@@ -398,17 +398,17 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">lightning_invoice::Invoice</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::config::LightningModuleClientConfig</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming</span>::{<span class="ident">EncryptedPreimage</span>, <span class="ident">IncomingContractOffer</span>};
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::outgoing::OutgoingContract</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts</span>::{
-    <span class="ident">Contract</span>, <span class="ident">ContractId</span>, <span class="ident">FundedContract</span>, <span class="ident">IdentifyableContract</span>,
-};
-<span class="kw">use</span> <span class="ident">minimint::modules::ln</span>::{
-    <span class="ident">ContractAccount</span>, <span class="ident">ContractInput</span>, <span class="ident">ContractOrOfferOutput</span>, <span class="ident">ContractOutput</span>,
-};
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch::BatchTx</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::config::LightningModuleClientConfig</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming</span>::{<span class="ident">EncryptedPreimage</span>, <span class="ident">IncomingContractOffer</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::outgoing::OutgoingContract</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{
+    <span class="ident">Contract</span>, <span class="ident">ContractId</span>, <span class="ident">FundedContract</span>, <span class="ident">IdentifyableContract</span>,
+};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{
+    <span class="ident">ContractAccount</span>, <span class="ident">ContractInput</span>, <span class="ident">ContractOrOfferOutput</span>, <span class="ident">ContractOutput</span>,
+};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
 
@@ -568,17 +568,17 @@
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::OwnedClientContext</span>;
     <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
     <span class="kw">use</span> <span class="ident">lightning_invoice::Invoice</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::config::LightningModuleClientConfig</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming::IncomingContractOffer</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln::ContractOrOfferOutput</span>;
-    <span class="kw">use</span> <span class="ident">minimint::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningModule</span>};
-    <span class="kw">use</span> <span class="ident">minimint::outcome</span>::{<span class="ident">OutputOutcome</span>, <span class="ident">TransactionStatus</span>};
-    <span class="kw">use</span> <span class="ident">minimint::transaction::Transaction</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::db::batch::DbBatch</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::module::testing::FakeFed</span>;
     <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::config::LightningModuleClientConfig</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractOrOfferOutput</span>;
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningModule</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">OutputOutcome</span>, <span class="ident">TransactionStatus</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::transaction::Transaction</span>;
     <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
     <span class="kw">type</span> <span class="ident">Fed</span> <span class="op">=</span> <span class="ident">FakeFed</span><span class="op">&lt;</span><span class="ident">LightningModule</span>, <span class="ident">LightningModuleClientConfig</span><span class="op">&gt;</span>;
@@ -766,5 +766,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (21e9336fe 2022-06-18)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
 </body></html>

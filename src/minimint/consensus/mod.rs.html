@@ -549,10 +549,10 @@
 <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">LightningModule</span>, <span class="ident">LightningModuleError</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::mint</span>::{<span class="ident">Mint</span>, <span class="ident">MintError</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">Wallet</span>, <span class="ident">WalletError</span>};
 <span class="kw">use</span> <span class="ident">minimint_derive::UnzipConsensus</span>;
-<span class="kw">use</span> <span class="ident">minimint_ln</span>::{<span class="ident">LightningModule</span>, <span class="ident">LightningModuleError</span>};
-<span class="kw">use</span> <span class="ident">minimint_mint</span>::{<span class="ident">Mint</span>, <span class="ident">MintError</span>};
-<span class="kw">use</span> <span class="ident">minimint_wallet</span>::{<span class="ident">Wallet</span>, <span class="ident">WalletError</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
 <span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
@@ -1054,5 +1054,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (21e9336fe 2022-06-18)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
 </body></html>

@@ -180,7 +180,6 @@
 <span id="173">173</span>
 <span id="174">174</span>
 <span id="175">175</span>
-<span id="176">176</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
 <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 
@@ -190,12 +189,11 @@
 <span class="kw">use</span> <span class="ident">futures::StreamExt</span>;
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">FutureExt</span>, <span class="ident">SinkExt</span>};
 <span class="kw">use</span> <span class="ident">hbbft::Target</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::task::sleep</span>;
 <span class="kw">use</span> <span class="ident">serde::de::DeserializeOwned</span>;
 <span class="kw">use</span> <span class="ident">serde::Serialize</span>;
 <span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncReadExt</span>, <span class="ident">AsyncWriteExt</span>};
 <span class="kw">use</span> <span class="ident">tokio::net</span>::{<span class="ident">TcpListener</span>, <span class="ident">TcpStream</span>};
-<span class="kw">use</span> <span class="ident">tokio::spawn</span>;
-<span class="kw">use</span> <span class="ident">tokio::time::sleep</span>;
 <span class="kw">use</span> <span class="ident">tokio_util::compat</span>::{<span class="ident">Compat</span>, <span class="ident">TokioAsyncReadCompatExt</span>};
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
@@ -217,7 +215,7 @@
     <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_to_all</span>(<span class="ident">cfg</span>: <span class="kw-2">&amp;</span><span class="ident">ServerConfig</span>) -&gt; <span class="self">Self</span> {
         <span class="macro">info!</span>(<span class="string">&quot;Starting mint {}&quot;</span>, <span class="ident">cfg</span>.<span class="ident">identity</span>);
-        <span class="kw">let</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">spawn</span>(<span class="ident"><span class="self">Self</span>::await_peers</span>(
+        <span class="kw">let</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident"><span class="self">Self</span>::await_peers</span>(
             <span class="ident">cfg</span>.<span class="ident">get_hbbft_port</span>(),
             <span class="ident">cfg</span>.<span class="ident">get_incoming_count</span>(),
         ));
@@ -358,5 +356,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (21e9336fe 2022-06-18)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
 </body></html>
