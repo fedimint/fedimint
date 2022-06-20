@@ -272,12 +272,6 @@
 <span id="265">265</span>
 <span id="266">266</span>
 <span id="267">267</span>
-<span id="268">268</span>
-<span id="269">269</span>
-<span id="270">270</span>
-<span id="271">271</span>
-<span id="272">272</span>
-<span id="273">273</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">batch::DbBatch</span>;
 <span class="kw">use</span> <span class="ident">std::error::Error</span>;
@@ -495,13 +489,7 @@
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Underlying Database Error: {0}&quot;</span>)]</span>
     <span class="ident">DbError</span>(<span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Error</span> <span class="op">+</span> <span class="ident">Send</span><span class="op">&gt;</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Decoding error: {0}&quot;</span>)]</span>
-    <span class="ident">DecodingError</span>(<span class="ident">DecodingError</span>),
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">DecodingError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">DatabaseError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">DecodingError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">DatabaseError::DecodingError</span>(<span class="ident">e</span>)
-    }
+    <span class="ident">DecodingError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">DecodingError</span>),
 }
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>

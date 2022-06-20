@@ -1327,12 +1327,6 @@
 <span id="1320">1320</span>
 <span id="1321">1321</span>
 <span id="1322">1322</span>
-<span id="1323">1323</span>
-<span id="1324">1324</span>
-<span id="1325">1325</span>
-<span id="1326">1326</span>
-<span id="1327">1327</span>
-<span id="1328">1328</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
 <span class="kw">use</span> <span class="ident">std::hash::Hasher</span>;
@@ -2541,7 +2535,7 @@
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]</span>
     <span class="ident">UnknownPegInProofBlock</span>(<span class="ident">BlockHash</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]</span>
-    <span class="ident">PegInProofError</span>(<span class="ident">PegInProofError</span>),
+    <span class="ident">PegInProofError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">PegInProofError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]</span>
     <span class="ident">PegInAlreadyClaimed</span>,
 }
@@ -2562,12 +2556,6 @@
     <span class="ident">MissingOrMalformedChangeTweak</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error finalizing PSBT {0}&quot;</span>)]</span>
     <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">miniscript::psbt::Error</span>),
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">PegInProofError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">WalletError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">PegInProofError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">WalletError::PegInProofError</span>(<span class="ident">e</span>)
-    }
 }
 
 <span class="comment">// FIXME: make FakeFed not require Eq</span>

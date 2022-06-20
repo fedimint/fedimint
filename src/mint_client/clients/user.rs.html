@@ -425,36 +425,6 @@
 <span id="418">418</span>
 <span id="419">419</span>
 <span id="420">420</span>
-<span id="421">421</span>
-<span id="422">422</span>
-<span id="423">423</span>
-<span id="424">424</span>
-<span id="425">425</span>
-<span id="426">426</span>
-<span id="427">427</span>
-<span id="428">428</span>
-<span id="429">429</span>
-<span id="430">430</span>
-<span id="431">431</span>
-<span id="432">432</span>
-<span id="433">433</span>
-<span id="434">434</span>
-<span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
-<span id="438">438</span>
-<span id="439">439</span>
-<span id="440">440</span>
-<span id="441">441</span>
-<span id="442">442</span>
-<span id="443">443</span>
-<span id="444">444</span>
-<span id="445">445</span>
-<span id="446">446</span>
-<span id="447">447</span>
-<span id="448">448</span>
-<span id="449">449</span>
-<span id="450">450</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api</span>::{<span class="ident">ApiError</span>, <span class="ident">FederationApi</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::clients::transaction::TransactionBuilder</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::gateway::LightningGateway</span>;
@@ -859,13 +829,13 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Error</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ClientError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]</span>
-    <span class="ident">MintApiError</span>(<span class="ident">ApiError</span>),
+    <span class="ident">MintApiError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">ApiError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]</span>
-    <span class="ident">WalletClientError</span>(<span class="ident">WalletClientError</span>),
+    <span class="ident">WalletClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">WalletClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Mint client error: {0}&quot;</span>)]</span>
-    <span class="ident">MintClientError</span>(<span class="ident">MintClientError</span>),
+    <span class="ident">MintClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">MintClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Lightning client error: {0}&quot;</span>)]</span>
-    <span class="ident">LnClientError</span>(<span class="ident">LnClientError</span>),
+    <span class="ident">LnClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">LnClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]</span>
     <span class="ident">PegInAmountTooSmall</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]</span>
@@ -873,37 +843,7 @@
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error fetching offer&quot;</span>)]</span>
     <span class="ident">FetchOfferError</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Failed to create lightning invoice: {0}&quot;</span>)]</span>
-    <span class="ident">InvoiceError</span>(<span class="ident">CreationError</span>),
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">ApiError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">ApiError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ClientError::MintApiError</span>(<span class="ident">e</span>)
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">WalletClientError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">WalletClientError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ClientError::WalletClientError</span>(<span class="ident">e</span>)
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">MintClientError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">MintClientError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ClientError::MintClientError</span>(<span class="ident">e</span>)
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">LnClientError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">LnClientError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ClientError::LnClientError</span>(<span class="ident">e</span>)
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">CreationError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">CreationError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ClientError::InvoiceError</span>(<span class="ident">e</span>)
-    }
+    <span class="ident">InvoiceError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">CreationError</span>),
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>

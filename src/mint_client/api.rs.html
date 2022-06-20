@@ -276,12 +276,6 @@
 <span id="269">269</span>
 <span id="270">270</span>
 <span id="271">271</span>
-<span id="272">272</span>
-<span id="273">273</span>
-<span id="274">274</span>
-<span id="275">275</span>
-<span id="276">276</span>
-<span id="277">277</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">Future</span>, <span class="ident">StreamExt</span>, <span class="ident">TryFutureExt</span>};
@@ -376,7 +370,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ApiError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;HTTP error: {0}&quot;</span>)]</span>
-    <span class="ident">HttpError</span>(<span class="ident">reqwest::Error</span>),
+    <span class="ident">HttpError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">reqwest::Error</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Accepted transaction errored on execution: {0}&quot;</span>)]</span>
     <span class="ident">TransactionError</span>(<span class="ident">String</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]</span>
@@ -551,12 +545,6 @@
             <span class="prelude-val">Ok</span>(<span class="ident">res</span>) =&gt; <span class="ident">res</span>.<span class="ident">hash</span>(<span class="ident">state</span>),
             <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">status</span>().<span class="ident">hash</span>(<span class="ident">state</span>),
         }
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">reqwest::Error</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ApiError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">reqwest::Error</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ApiError::HttpError</span>(<span class="ident">e</span>)
     }
 }
 </code></pre></div>

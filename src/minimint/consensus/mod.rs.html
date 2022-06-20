@@ -523,12 +523,6 @@
 <span id="516">516</span>
 <span id="517">517</span>
 <span id="518">518</span>
-<span id="519">519</span>
-<span id="520">520</span>
-<span id="521">521</span>
-<span id="522">522</span>
-<span id="523">523</span>
-<span id="524">524</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
 
 <span class="kw">mod</span> <span class="ident">conflictfilter</span>;
@@ -1033,7 +1027,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">TransactionSubmissionError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;High level transaction error: {0}&quot;</span>)]</span>
-    <span class="ident">TransactionError</span>(<span class="ident">TransactionError</span>),
+    <span class="ident">TransactionError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">TransactionError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Input coin error: {0}&quot;</span>)]</span>
     <span class="ident">InputCoinError</span>(<span class="ident">MintError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Input peg-in error: {0}&quot;</span>)]</span>
@@ -1046,12 +1040,6 @@
     <span class="ident">OutputPegOut</span>(<span class="ident">WalletError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;LN contract output error: {0}&quot;</span>)]</span>
     <span class="ident">ContractOutputError</span>(<span class="ident">LightningModuleError</span>),
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">TransactionError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">TransactionSubmissionError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">TransactionError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">TransactionSubmissionError::TransactionError</span>(<span class="ident">e</span>)
-    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>

@@ -641,18 +641,6 @@
 <span id="634">634</span>
 <span id="635">635</span>
 <span id="636">636</span>
-<span id="637">637</span>
-<span id="638">638</span>
-<span id="639">639</span>
-<span id="640">640</span>
-<span id="641">641</span>
-<span id="642">642</span>
-<span id="643">643</span>
-<span id="644">644</span>
-<span id="645">645</span>
-<span id="646">646</span>
-<span id="647">647</span>
-<span id="648">648</span>
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -1039,9 +1027,9 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Error</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">MintClientError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]</span>
-    <span class="ident">ApiError</span>(<span class="ident">ApiError</span>),
+    <span class="ident">ApiError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">ApiError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]</span>
-    <span class="ident">FinalizationError</span>(<span class="ident">CoinFinalizationError</span>),
+    <span class="ident">FinalizationError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">CoinFinalizationError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The client&#39;s wallet has not enough coins or they are not in the right denomination&quot;</span>)]</span>
     <span class="ident">NotEnoughCoins</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]</span>
@@ -1063,18 +1051,6 @@
             <span class="ident">MintClientError::OutputNotReadyYet</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             <span class="kw">_</span> =&gt; <span class="bool-val">false</span>,
         }
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">ApiError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MintClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">ApiError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">MintClientError::ApiError</span>(<span class="ident">e</span>)
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">CoinFinalizationError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MintClientError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">CoinFinalizationError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">MintClientError::FinalizationError</span>(<span class="ident">e</span>)
     }
 }
 

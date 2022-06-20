@@ -196,12 +196,6 @@
 <span id="189">189</span>
 <span id="190">190</span>
 <span id="191">191</span>
-<span id="192">192</span>
-<span id="193">193</span>
-<span id="194">194</span>
-<span id="195">195</span>
-<span id="196">196</span>
-<span id="197">197</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln</span>::{<span class="ident">LightningError</span>, <span class="ident">LnRpc</span>};
@@ -389,15 +383,9 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">LnGatewayError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Federation operation error: {0:?}&quot;</span>)]</span>
-    <span class="ident">FederationError</span>(<span class="ident">GatewayClientError</span>),
+    <span class="ident">FederationError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">GatewayClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Our LN node could not route the payment: {0:?}&quot;</span>)]</span>
     <span class="ident">CouldNotRoute</span>(<span class="ident">LightningError</span>),
-}
-
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">GatewayClientError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">LnGatewayError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">GatewayClientError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">LnGatewayError::FederationError</span>(<span class="ident">e</span>)
-    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
