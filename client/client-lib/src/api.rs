@@ -92,7 +92,7 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("HTTP error: {0}")]
-    HttpError(reqwest::Error),
+    HttpError(#[from] reqwest::Error),
     #[error("Accepted transaction errored on execution: {0}")]
     TransactionError(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
@@ -267,11 +267,5 @@ where
             Ok(res) => res.hash(state),
             Err(e) => e.status().hash(state),
         }
-    }
-}
-
-impl From<reqwest::Error> for ApiError {
-    fn from(e: reqwest::Error) -> Self {
-        ApiError::HttpError(e)
     }
 }

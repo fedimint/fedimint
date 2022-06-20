@@ -384,9 +384,9 @@ pub enum CoinFinalizationError {
 #[derive(Error, Debug)]
 pub enum MintClientError {
     #[error("Error querying federation: {0}")]
-    ApiError(ApiError),
+    ApiError(#[from] ApiError),
     #[error("Could not finalize issuance request: {0}")]
-    FinalizationError(CoinFinalizationError),
+    FinalizationError(#[from] CoinFinalizationError),
     #[error("The client's wallet has not enough coins or they are not in the right denomination")]
     NotEnoughCoins,
     #[error("The transaction outcome received from the mint did not contain a result for output {0} yet")]
@@ -408,18 +408,6 @@ impl MintClientError {
             MintClientError::OutputNotReadyYet(_) => true,
             _ => false,
         }
-    }
-}
-
-impl From<ApiError> for MintClientError {
-    fn from(e: ApiError) -> Self {
-        MintClientError::ApiError(e)
-    }
-}
-
-impl From<CoinFinalizationError> for MintClientError {
-    fn from(e: CoinFinalizationError) -> Self {
-        MintClientError::FinalizationError(e)
     }
 }
 

@@ -185,13 +185,7 @@ impl Drop for LnGateway {
 #[derive(Debug, Error)]
 pub enum LnGatewayError {
     #[error("Federation operation error: {0:?}")]
-    FederationError(GatewayClientError),
+    FederationError(#[from] GatewayClientError),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
-}
-
-impl From<GatewayClientError> for LnGatewayError {
-    fn from(e: GatewayClientError) -> Self {
-        LnGatewayError::FederationError(e)
-    }
 }

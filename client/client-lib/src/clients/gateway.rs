@@ -366,11 +366,11 @@ type Result<T> = std::result::Result<T, GatewayClientError>;
 #[derive(Error, Debug)]
 pub enum GatewayClientError {
     #[error("Error querying federation: {0}")]
-    MintApiError(ApiError),
+    MintApiError(#[from] ApiError),
     #[error("Mint client error: {0}")]
-    MintClientError(MintClientError),
+    MintClientError(#[from] MintClientError),
     #[error("Lightning client error: {0}")]
-    LnClientError(LnClientError),
+    LnClientError(#[from] LnClientError),
     #[error("The Account or offer is keyed to another gateway")]
     NotOurKey,
     #[error("Can't parse contract's invoice: {0:?}")]
@@ -393,24 +393,6 @@ pub enum GatewayClientError {
     InvalidTransaction(String),
     #[error("Invalid preimage")]
     InvalidPreimage,
-}
-
-impl From<LnClientError> for GatewayClientError {
-    fn from(e: LnClientError) -> Self {
-        GatewayClientError::LnClientError(e)
-    }
-}
-
-impl From<ApiError> for GatewayClientError {
-    fn from(e: ApiError) -> Self {
-        GatewayClientError::MintApiError(e)
-    }
-}
-
-impl From<MintClientError> for GatewayClientError {
-    fn from(e: MintClientError) -> Self {
-        GatewayClientError::MintClientError(e)
-    }
 }
 
 mod db {

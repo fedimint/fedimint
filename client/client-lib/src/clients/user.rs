@@ -402,13 +402,13 @@ impl UserClient {
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Error querying federation: {0}")]
-    MintApiError(ApiError),
+    MintApiError(#[from] ApiError),
     #[error("Wallet client error: {0}")]
-    WalletClientError(WalletClientError),
+    WalletClientError(#[from] WalletClientError),
     #[error("Mint client error: {0}")]
-    MintClientError(MintClientError),
+    MintClientError(#[from] MintClientError),
     #[error("Lightning client error: {0}")]
-    LnClientError(LnClientError),
+    LnClientError(#[from] LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
     #[error("Timed out while waiting for contract to be accepted")]
@@ -416,35 +416,5 @@ pub enum ClientError {
     #[error("Error fetching offer")]
     FetchOfferError,
     #[error("Failed to create lightning invoice: {0}")]
-    InvoiceError(CreationError),
-}
-
-impl From<ApiError> for ClientError {
-    fn from(e: ApiError) -> Self {
-        ClientError::MintApiError(e)
-    }
-}
-
-impl From<WalletClientError> for ClientError {
-    fn from(e: WalletClientError) -> Self {
-        ClientError::WalletClientError(e)
-    }
-}
-
-impl From<MintClientError> for ClientError {
-    fn from(e: MintClientError) -> Self {
-        ClientError::MintClientError(e)
-    }
-}
-
-impl From<LnClientError> for ClientError {
-    fn from(e: LnClientError) -> Self {
-        ClientError::LnClientError(e)
-    }
-}
-
-impl From<CreationError> for ClientError {
-    fn from(e: CreationError) -> Self {
-        ClientError::InvoiceError(e)
-    }
+    InvoiceError(#[from] CreationError),
 }
