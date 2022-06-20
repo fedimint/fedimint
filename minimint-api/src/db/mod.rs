@@ -215,13 +215,7 @@ pub enum DatabaseError {
     #[error("Underlying Database Error: {0}")]
     DbError(Box<dyn Error + Send>),
     #[error("Decoding error: {0}")]
-    DecodingError(DecodingError),
-}
-
-impl From<DecodingError> for DatabaseError {
-    fn from(e: DecodingError) -> Self {
-        DatabaseError::DecodingError(e)
-    }
+    DecodingError(#[from] DecodingError),
 }
 
 #[cfg(test)]

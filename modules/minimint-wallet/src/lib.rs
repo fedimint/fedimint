@@ -1206,7 +1206,7 @@ pub enum WalletError {
     #[error("Unknown block hash in peg-in proof: {0}")]
     UnknownPegInProofBlock(BlockHash),
     #[error("Invalid peg-in proof: {0}")]
-    PegInProofError(PegInProofError),
+    PegInProofError(#[from] PegInProofError),
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
 }
@@ -1227,12 +1227,6 @@ pub enum ProcessPegOutSigError {
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0}")]
     ErrorFinalizingPsbt(miniscript::psbt::Error),
-}
-
-impl From<PegInProofError> for WalletError {
-    fn from(e: PegInProofError) -> Self {
-        WalletError::PegInProofError(e)
-    }
 }
 
 // FIXME: make FakeFed not require Eq
