@@ -15,9 +15,9 @@ use config::ServerConfig;
 use consensus::ConsensusOutcome;
 use minimint_api::db::Database;
 use minimint_api::PeerId;
-use minimint_ln::LightningModule;
-use minimint_wallet::bitcoind::BitcoindRpc;
-use minimint_wallet::{bitcoincore_rpc, Wallet};
+use minimint_core::modules::ln::LightningModule;
+use minimint_core::modules::wallet::bitcoind::BitcoindRpc;
+use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
 pub use minimint_core::*;
 
@@ -40,12 +40,6 @@ pub mod config;
 
 /// Some abstractions to handle randomness
 mod rng;
-
-pub mod modules {
-    pub use minimint_ln as ln;
-    pub use minimint_mint as mint;
-    pub use minimint_wallet as wallet;
-}
 
 pub struct MinimintServer {
     pub outcome_sender: Sender<ConsensusOutcome>,
@@ -101,7 +95,8 @@ pub async fn minimint_server_with(
 
     let threshold = cfg.peers.len() - cfg.max_faulty();
 
-    let mint = minimint_mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
+    let mint =
+        minimint_core::modules::mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
 
     let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
         .await

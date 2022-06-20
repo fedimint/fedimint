@@ -5,9 +5,9 @@ use clap::Parser;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
 use minimint_api::PeerId;
-use minimint_ln::config::LightningModuleConfig;
-use minimint_mint::config::MintConfig;
-use minimint_wallet::config::WalletConfig;
+use minimint_core::modules::ln::config::LightningModuleConfig;
+use minimint_core::modules::mint::config::MintConfig;
+use minimint_core::modules::wallet::config::WalletConfig;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

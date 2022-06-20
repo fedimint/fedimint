@@ -18,8 +18,6 @@ itertools = "0.10.0"
 minimint-api = { path = "../minimint-api" }
 minimint-core = { path = "../minimint-core" }
 minimint-derive = { path = "../minimint-derive" }
-minimint-ln = { path = "../modules/minimint-ln" }
-minimint-mint = { path = "../modules/minimint-mint" }
 minimint-wallet = { path = "../modules/minimint-wallet", features = ["native"] }
 rand = "0.6.5"
 rayon = "1.5.0"
