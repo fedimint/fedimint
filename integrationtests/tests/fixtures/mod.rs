@@ -17,8 +17,9 @@ use futures::future::join_all;
 
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use minimint_api::task::spawn;
+use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
-use tokio::spawn;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
@@ -44,7 +45,7 @@ use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::config::WalletConfig;
 use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
-use minimint_wallet::{SpendableUTXO, Wallet, WalletConsensusItem};
+use minimint_wallet::{SpendableUTXO, WalletConsensusItem};
 use mint_client::api::HttpFederationApi;
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
@@ -114,7 +115,7 @@ pub async fn fixtures(
             let dir =
                 env::var("MINIMINT_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-            let bitcoin_rpc = Wallet::bitcoind(wallet_config.clone());
+            let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
             let bitcoin = RealBitcoinTest::new(wallet_config);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");

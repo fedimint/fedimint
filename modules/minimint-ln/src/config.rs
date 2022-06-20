@@ -1,6 +1,6 @@
 use minimint_api::config::GenerateConfig;
 use minimint_api::PeerId;
-use secp256k1::rand::{CryptoRng, RngCore};
+use secp256k1::rand::{CryptoRng, RngCore as RngCore06};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -18,6 +18,26 @@ pub struct LightningModuleClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
 }
 
+struct Rand07Compat<R: RngCore06>(R);
+
+impl<R: RngCore06> rand07::RngCore for Rand07Compat<R> {
+    fn next_u32(&mut self) -> u32 {
+        self.0.next_u32()
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0.next_u64()
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.0.fill_bytes(dest)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand07::Error> {
+        self.0.try_fill_bytes(dest).map_err(rand07::Error::new)
+    }
+}
+
 impl GenerateConfig for LightningModuleConfig {
     type Params = ();
     type ClientConfig = LightningModuleClientConfig;
@@ -26,10 +46,10 @@ impl GenerateConfig for LightningModuleConfig {
         peers: &[PeerId],
         max_evil: usize,
         _params: &Self::Params,
-        mut rng: impl RngCore + CryptoRng,
+        rng: impl RngCore06 + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let threshold = peers.len() - max_evil;
-        let sks = threshold_crypto::SecretKeySet::random(threshold - 1, &mut rng);
+        let sks = threshold_crypto::SecretKeySet::random(threshold - 1, &mut Rand07Compat(rng));
         let pks = sks.public_keys();
 
         let server_cfg = peers

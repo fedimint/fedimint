@@ -86,7 +86,7 @@ for ((ID=0; ID<4; ID++)); do
   echo "starting mint $ID"
   ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
 done
-MINT_CLIENT="$BIN_DIR/mint-client $CFG_DIR"
+MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
 
 function await_block_sync() {
   EXPECTED_BLOCK_HEIGHT="$(( $($BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $CONFIRMATION_TIME ))"

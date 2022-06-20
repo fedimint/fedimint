@@ -20,7 +20,7 @@ minimint-api = { path = "../minimint-api" }
 minimint-ln = { path = "../modules/minimint-ln" }
 minimint-mint = { path = "../modules/minimint-mint" }
 minimint-wallet = { path = "../modules/minimint-wallet" }
-mint-client = { path = "../mint-client" }
+mint-client = { path = "../client/client-lib" }
 rand = "0.6.5"
 serde = { version = "1.0.118", features = [ "derive" ] }
 tokio = { version = "1.0.1", features = ["full"] }

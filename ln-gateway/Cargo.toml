@@ -16,7 +16,7 @@ hex = "0.4.3"
 lightning-invoice = "0.14.0"
 minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
-mint-client = { path = "../mint-client" }
+mint-client = { path = "../client/client-lib" }
 rand = "0.6"
 secp256k1 = "0.20"
 serde = { version = "1.0", features = ["derive"] }

@@ -1,9 +1,9 @@
 use crate::transaction::{Input, Output, Transaction};
-use minimint_ln::contracts::{ContractId, IdentifyableContract};
-use minimint_ln::ContractOrOfferOutput;
-use minimint_mint::tiered::coins::Coins;
-use minimint_mint::Coin;
-use minimint_wallet::txoproof::PegInProof;
+use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+use minimint_core::modules::ln::ContractOrOfferOutput;
+use minimint_core::modules::mint::tiered::coins::Coins;
+use minimint_core::modules::mint::Coin;
+use minimint_core::modules::wallet::txoproof::PegInProof;
 use std::collections::HashSet;
 
 pub trait ConflictFilterable<T>

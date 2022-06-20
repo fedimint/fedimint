@@ -1,9 +1,9 @@
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::schnorrsig;
 
-use minimint::config::FeeConsensus;
-use minimint::transaction::{Input, Output, Transaction};
 use minimint_api::Amount;
+use minimint_core::config::FeeConsensus;
+use minimint_core::transaction::{Input, Output, Transaction};
 
 pub struct TransactionBuilder {
     keys: Vec<schnorrsig::KeyPair>,
@@ -43,7 +43,7 @@ impl TransactionBuilder {
         mut rng: R,
     ) -> Transaction {
         if !self.keys.is_empty() {
-            let signature = minimint::transaction::agg_sign(
+            let signature = minimint_core::transaction::agg_sign(
                 &self.keys,
                 self.tx.tx_hash().as_hash(),
                 secp,

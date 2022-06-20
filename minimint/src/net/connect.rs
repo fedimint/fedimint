@@ -7,12 +7,11 @@ use futures::future::try_join_all;
 use futures::StreamExt;
 use futures::{FutureExt, SinkExt};
 use hbbft::Target;
+use minimint_api::task::sleep;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::spawn;
-use tokio::time::sleep;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -34,7 +33,7 @@ where
     #[instrument(skip_all)]
     pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
         info!("Starting mint {}", cfg.identity);
-        let listener = spawn(Self::await_peers(
+        let listener = tokio::spawn(Self::await_peers(
             cfg.get_hbbft_port(),
             cfg.get_incoming_count(),
         ));
