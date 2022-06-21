@@ -89,7 +89,7 @@ where
     Ok(PeerId::from(u16::from_le_bytes(peer_id)))
 }
 
-#[cfg(test)]
+#[allow(unused_imports)]
 pub mod mock {
     use crate::net::connect::{do_handshake, ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};

@@ -18,7 +18,8 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 
-type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
+pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
+pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
 
 #[async_trait]
 pub trait PeerConnections<T>
@@ -74,7 +75,7 @@ where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
 {
     #[instrument(skip_all)]
-    pub async fn new(cfg: NetworkConfig, connect: AnyConnector<PeerMessage<T>>) -> Self {
+    pub async fn new(cfg: NetworkConfig, connect: PeerConnector<T>) -> Self {
         info!("Starting mint {}", cfg.identity);
 
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();

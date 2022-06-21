@@ -14,6 +14,7 @@ use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
 use futures::future::join_all;
+use hbbft::honey_badger::Message;
 
 use itertools::Itertools;
 use lightning_invoice::Invoice;
@@ -31,6 +32,9 @@ use ln_gateway::LnGateway;
 use minimint::config::ServerConfigParams;
 use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
 use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
+use minimint::net::connect::mock::MockNetwork;
+use minimint::net::connect::{Connector, InsecureTcpConnector};
+use minimint::net::peers::PeerConnector;
 use minimint::transaction::{Input, Output};
 use minimint::MinimintServer;
 use minimint_api::config::GenerateConfig;
@@ -127,7 +131,8 @@ pub async fn fixtures(
                     .await
                     .expect("connect to ln_socket"),
             );
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc).await;
+            let connect_gen = |peer| InsecureTcpConnector::new(peer).to_any();
+            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
             let user = UserTest::new(client_config.clone(), peers);
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
@@ -143,7 +148,10 @@ pub async fn fixtures(
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
             let lightning = FakeLightningTest::new();
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc).await;
+            let net = MockNetwork::new();
+            let net_ref = &net;
+            let connect_gen = move |peer| net_ref.connector(peer).to_any();
+            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
             let user = UserTest::new(client_config.clone(), peers);
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
@@ -557,6 +565,7 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
+        connect_gen: &impl Fn(PeerId) -> PeerConnector<Message<PeerId>>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {
             let bitcoin_rpc = bitcoin_gen();
@@ -579,6 +588,7 @@ impl FederationTest {
             spawn(minimint::hbbft(
                 outcome_sender,
                 proposal_receiver,
+                connect_gen(cfg.identity),
                 cfg.clone(),
                 initial_cis,
                 OsRng::new().unwrap(),
