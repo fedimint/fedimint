@@ -1,5 +1,6 @@
 pub use minimint_core::config::*;
 
+use crate::net::peers::{ConnectionConfig, NetworkConfig};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use clap::Parser;
 use hbbft::crypto::serde_impl::SerdeSecret;
@@ -22,8 +23,8 @@ pub struct ServerOpts {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub identity: PeerId,
-    pub hbbft_port: u16,
-    pub api_port: u16,
+    pub hbbft_bind_addr: String,
+    pub api_bind_addr: String,
 
     pub peers: BTreeMap<PeerId, Peer>,
     #[serde(with = "serde_binary_human_readable")]
@@ -45,8 +46,7 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
-    pub hbbft_port: u16,
-    pub api_port: u16,
+    pub connection: ConnectionConfig,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk: hbbft::crypto::PublicKey,
 }
@@ -76,8 +76,9 @@ impl GenerateConfig for ServerConfig {
             .map(|(&id, netinf)| {
                 let id_u16: u16 = id.into();
                 let peer = Peer {
-                    hbbft_port: params.hbbft_base_port + id_u16,
-                    api_port: params.api_base_port + id_u16,
+                    connection: ConnectionConfig {
+                        addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                    },
                     hbbft_pk: *netinf.public_key(&id).unwrap(),
                 };
 
@@ -107,8 +108,8 @@ impl GenerateConfig for ServerConfig {
                 let id_u16: u16 = id.into();
                 let config = ServerConfig {
                     identity: id,
-                    hbbft_port: params.hbbft_base_port + id_u16,
-                    api_port: params.api_base_port + id_u16,
+                    hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                    api_bind_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
                     peers: cfg_peers.clone(),
                     hbbft_sk: SerdeSecret(netinf.secret_key().clone()),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
@@ -144,11 +145,16 @@ impl GenerateConfig for ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn get_hbbft_port(&self) -> u16 {
-        self.hbbft_port
-    }
-    pub fn get_api_port(&self) -> u16 {
-        self.api_port
+    pub fn network_config(&self) -> NetworkConfig {
+        NetworkConfig {
+            identity: self.identity,
+            bind_addr: self.hbbft_bind_addr.clone(),
+            peers: self
+                .peers
+                .iter()
+                .map(|(&id, peer)| (id, peer.connection.clone()))
+                .collect(),
+        }
     }
 
     pub fn get_incoming_count(&self) -> u16 {

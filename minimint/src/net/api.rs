@@ -31,7 +31,7 @@ pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand:
     attach_module_endpoints(&mut server, &minimint.ln);
 
     server
-        .listen(format!("127.0.0.1:{}", cfg.get_api_port()))
+        .listen(&cfg.api_bind_addr)
         .await
         .expect("Could not start API server");
 }

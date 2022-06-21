@@ -3,7 +3,7 @@ extern crate minimint_api;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-use hbbft::honey_badger::{HoneyBadger, Step};
+use hbbft::honey_badger::{HoneyBadger, Message, Step};
 use hbbft::{Epoched, NetworkInfo};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
@@ -22,8 +22,8 @@ use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusProposal, MinimintConsensus};
-use crate::net::connect::Connections;
-use crate::net::PeerConnections;
+use crate::net::connect::{Connector, InsecureTcpConnector};
+use crate::net::peers::{PeerConnections, PeerConnector, ReconnectPeerConnections};
 use crate::rng::RngGenerator;
 
 /// The actual implementation of the federated mint
@@ -66,6 +66,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
     spawn(hbbft(
         outcome_sender,
         proposal_receiver,
+        InsecureTcpConnector::new(cfg.identity).to_any(),
         cfg.clone(),
         initial_cis,
         OsRng::new().unwrap(),
@@ -190,11 +191,14 @@ pub async fn run_consensus_epoch(
 pub async fn hbbft(
     outcome_sender: Sender<ConsensusOutcome>,
     mut proposal_receiver: Receiver<ConsensusProposal>,
+    connector: PeerConnector<Message<PeerId>>,
     cfg: ServerConfig,
     initial_cis: ConsensusProposal,
     mut rng: impl RngCore + CryptoRng + Clone + Send + 'static,
 ) {
-    let mut connections = Connections::connect_to_all(&cfg).await;
+    let mut connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
+        .await
+        .to_any();
 
     let net_info = NetworkInfo::new(
         cfg.identity,
@@ -218,7 +222,7 @@ pub async fn hbbft(
             .expect("This is always refilled");
 
         for peer in contribution.drop_peers.iter() {
-            connections.drop_peer(peer);
+            connections.ban_peer(*peer).await;
         }
 
         debug!(

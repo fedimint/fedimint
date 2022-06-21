@@ -1,175 +1,255 @@
-use std::collections::HashMap;
-use std::time::Duration;
-
+use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 use async_trait::async_trait;
-use futures::future::select_all;
-use futures::future::try_join_all;
-use futures::StreamExt;
-use futures::{FutureExt, SinkExt};
-use hbbft::Target;
-use minimint_api::task::sleep;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
-use tracing::{debug, info, instrument, trace, warn};
-
+use futures::Stream;
 use minimint_api::PeerId;
+use std::fmt::Debug;
+use std::pin::Pin;
+use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 
-use crate::config::ServerConfig;
-use crate::net::framed::Framed;
-use crate::net::PeerConnections;
+pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
+pub type AnyConnector<M> = Box<dyn Connector<M> + Send + Sync + Unpin + 'static>;
+pub type ConnectResult<M> = Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>;
+pub type ConnectionListener<M> =
+    Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>;
 
-// FIXME: make connections dynamically managed
-pub struct Connections<T> {
-    connections: HashMap<PeerId, Framed<Compat<TcpStream>, T>>,
+#[async_trait]
+pub trait Connector<M> {
+    async fn connect_framed(&self, destination: String) -> ConnectResult<M>;
+
+    async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error>;
+
+    fn to_any(self) -> AnyConnector<M>
+    where
+        Self: Sized + Send + Sync + Unpin + 'static,
+    {
+        Box::new(self)
+    }
 }
 
-impl<T: 'static> Connections<T>
-where
-    T: Serialize + DeserializeOwned + Unpin + Send,
-{
-    #[instrument(skip_all)]
-    pub async fn connect_to_all(cfg: &ServerConfig) -> Self {
-        info!("Starting mint {}", cfg.identity);
-        let listener = tokio::spawn(Self::await_peers(
-            cfg.get_hbbft_port(),
-            cfg.get_incoming_count(),
-        ));
+pub struct InsecureTcpConnector {
+    our_id: PeerId,
+}
 
-        debug!("Beginning to connect to peers");
-
-        let out_conns = try_join_all(cfg.peers.iter().filter_map(|(id, peer)| {
-            if cfg.identity < *id {
-                info!("Connecting to mint {}", id);
-                Some(Self::connect_to_peer(peer.hbbft_port, *id, 10))
-            } else {
-                None
-            }
-        }))
-        .await
-        .expect("Failed to connect to peer");
-
-        let in_conns = listener
-            .await
-            .unwrap()
-            .expect("Failed to accept connection");
-
-        let identity = &cfg.identity;
-        let handshakes = out_conns
-            .into_iter()
-            .chain(in_conns)
-            .map(move |mut stream| async move {
-                stream.write_u16((*identity).into()).await?;
-                let peer = stream.read_u16().await?.into();
-                Result::<_, std::io::Error>::Ok((peer, stream))
-            });
-
-        let peers = try_join_all(handshakes)
-            .await
-            .expect("Error during peer handshakes")
-            .into_iter()
-            .map(|(id, stream)| (id, Framed::new(stream.compat())))
-            .collect::<HashMap<_, _>>();
-
-        info!("Successfully connected to all peers");
-
-        Connections { connections: peers }
-    }
-
-    pub fn drop_peer(&mut self, peer: &PeerId) {
-        self.connections.remove(peer);
-        warn!("Peer {} dropped.", peer);
-    }
-
-    #[instrument]
-    async fn await_peers(port: u16, num_awaited: u16) -> Result<Vec<TcpStream>, std::io::Error> {
-        let listener = TcpListener::bind(("127.0.0.1", port))
-            .await
-            .expect("Couldn't bind to port.");
-
-        debug!("Listening for incoming connections");
-
-        let peers = (0..num_awaited).map(|_| listener.accept());
-        let connections = try_join_all(peers)
-            .await?
-            .into_iter()
-            .map(|(socket, _)| socket)
-            .collect::<Vec<_>>();
-
-        debug!("Received all {} connections", connections.len());
-        Ok(connections)
-    }
-
-    async fn connect_to_peer(
-        port: u16,
-        peer: PeerId,
-        retries: u32,
-    ) -> Result<TcpStream, std::io::Error> {
-        debug!("Connecting to peer {}", peer);
-        let mut counter = 0;
-        loop {
-            let res = TcpStream::connect(("127.0.0.1", port)).await;
-            if res.is_ok() || counter >= retries {
-                return res;
-            }
-            counter += 1;
-            sleep(Duration::from_millis(500)).await;
-        }
-    }
-
-    async fn receive_from_peer(id: PeerId, peer: &mut Framed<Compat<TcpStream>, T>) -> Option<T> {
-        let msg = peer.next().await?.ok()?;
-
-        trace!(peer = %id, "Received msg");
-
-        Some(msg)
+impl InsecureTcpConnector {
+    pub fn new(us: PeerId) -> Self {
+        InsecureTcpConnector { our_id: us }
     }
 }
 
 #[async_trait]
-impl<T> PeerConnections<T> for Connections<T>
+impl<M> Connector<M> for InsecureTcpConnector
 where
-    T: Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
+    M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
 {
-    type Id = PeerId;
+    async fn connect_framed(&self, destination: String) -> ConnectResult<M> {
+        let mut connection = TcpStream::connect(destination).await?;
+        let peer = do_handshake(self.our_id, &mut connection).await?;
+        Ok((peer, Box::new(BidiFramed::new_from_tcp(connection))))
+    }
 
-    async fn send(&mut self, target: Target<Self::Id>, msg: T) {
-        trace!(?target, "Sending message to");
-        match target {
-            Target::All => {
-                for peer in self.connections.values_mut() {
-                    if peer.send(&msg).await.is_err() {
-                        warn!("Failed to send message to peer");
-                    }
-                }
+    async fn listen(
+        &self,
+        bind_addr: String,
+    ) -> Result<Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>, anyhow::Error>
+    {
+        let listener = TcpListener::bind(bind_addr).await?;
+        let our_id = self.our_id;
+
+        let stream = futures::stream::unfold(listener, move |listener| {
+            Box::pin(async move {
+                let res = listener.accept().await;
+
+                let res = match res {
+                    Ok((mut connection, _)) => do_handshake(our_id, &mut connection)
+                        .await
+                        .map(|peer| (peer, BidiFramed::new_from_tcp(connection).to_any())),
+                    Err(e) => Err(anyhow::Error::new(e)),
+                };
+
+                Some((res, listener))
+            })
+        });
+        Ok(Box::pin(stream))
+    }
+}
+
+async fn do_handshake<S>(our_id: PeerId, stream: &mut S) -> Result<PeerId, anyhow::Error>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    // Send our id
+    let our_id = our_id.to_usize() as u16;
+    stream.write_all(&our_id.to_le_bytes()[..]).await?;
+
+    // Receive peer id
+    let mut peer_id = [0u8; 2];
+    stream.read_exact(&mut peer_id[..]).await?;
+    Ok(PeerId::from(u16::from_le_bytes(peer_id)))
+}
+
+#[allow(unused_imports)]
+pub mod mock {
+    use crate::net::connect::{do_handshake, ConnectResult, Connector};
+    use crate::net::framed::{BidiFramed, FramedTransport};
+    use anyhow::Error;
+    use futures::{FutureExt, SinkExt, Stream, StreamExt};
+    use minimint_api::PeerId;
+    use std::collections::HashMap;
+    use std::fmt::Debug;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::io::{DuplexStream, ReadHalf, WriteHalf};
+    use tokio::sync::mpsc::Sender;
+    use tokio::sync::Mutex;
+
+    pub struct MockNetwork {
+        clients: Arc<Mutex<HashMap<String, Sender<DuplexStream>>>>,
+    }
+
+    pub struct MockConnector {
+        id: PeerId,
+        clients: Arc<Mutex<HashMap<String, Sender<DuplexStream>>>>,
+    }
+
+    impl MockNetwork {
+        #[allow(clippy::new_without_default)]
+        pub fn new() -> MockNetwork {
+            MockNetwork {
+                clients: Arc::new(Default::default()),
             }
-            Target::Node(peer_id) => {
-                if let Some(peer) = self.connections.get_mut(&peer_id) {
-                    if peer.send(&msg).await.is_err() {
-                        warn!("Failed to send message to peer");
-                    }
-                }
+        }
+
+        pub fn connector(&self, id: PeerId) -> MockConnector {
+            MockConnector {
+                id,
+                clients: self.clients.clone(),
             }
         }
     }
 
-    async fn receive(&mut self) -> (Self::Id, T) {
-        // TODO: optimize, don't throw away remaining futures
-        loop {
-            let (received, _, _) = select_all(self.connections.iter_mut().map(|(id, peer)| {
-                let future = async move { (*id, Self::receive_from_peer(*id, peer).await) };
-                future.boxed()
-            }))
-            .await;
-
-            match received {
-                (peer, Some(msg)) => return (peer, msg),
-                (peer, None) => {
-                    self.connections.remove(&peer);
-                }
+    #[async_trait::async_trait]
+    impl<M> Connector<M> for MockConnector
+    where
+        M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
+    {
+        async fn connect_framed(&self, destination: String) -> ConnectResult<M> {
+            let mut clients_lock = self.clients.lock().await;
+            if let Some(client) = clients_lock.get_mut(&destination) {
+                let (mut stream_our, stream_theirs) = tokio::io::duplex(43_689);
+                client.send(stream_theirs).await.unwrap();
+                let peer = do_handshake(self.id, &mut stream_our).await.unwrap();
+                let framed = BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
+                    stream_our,
+                )
+                .to_any();
+                Ok((peer, framed))
+            } else {
+                return Err(anyhow::anyhow!("can't connect"));
             }
         }
+
+        async fn listen(
+            &self,
+            bind_addr: String,
+        ) -> Result<Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>, Error>
+        {
+            let (send, receive) = tokio::sync::mpsc::channel(16);
+
+            if self.clients.lock().await.insert(bind_addr, send).is_some() {
+                return Err(anyhow::anyhow!("Address already bound"));
+            }
+
+            let our_id = self.id;
+            let stream = futures::stream::unfold(receive, move |mut receive| {
+                Box::pin(async move {
+                    let mut connection = receive.recv().await.unwrap();
+                    let peer = do_handshake(our_id, &mut connection).await.unwrap();
+                    let framed =
+                        BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
+                            connection,
+                        )
+                        .to_any();
+
+                    Some((Ok((peer, framed)), receive))
+                })
+            });
+            Ok(Box::pin(stream))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mock_network() {
+        let peer_a = PeerId::from(1);
+        let peer_b = PeerId::from(2);
+
+        let net = MockNetwork::new();
+        let conn_a = net.connector(peer_a);
+        let conn_b = net.connector(peer_b);
+
+        let mut listener = Connector::<u64>::listen(&conn_a, "a".into()).await.unwrap();
+        let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
+
+        let (auth_peer_b, mut conn_b) = Connector::<u64>::connect_framed(&conn_b, "a".into())
+            .await
+            .unwrap();
+        let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
+
+        assert_eq!(auth_peer_a, peer_b);
+        assert_eq!(auth_peer_b, peer_a);
+
+        conn_a.send(42).await.unwrap();
+        conn_b.send(21).await.unwrap();
+
+        assert_eq!(conn_a.next().await.unwrap().unwrap(), 21);
+        assert_eq!(conn_b.next().await.unwrap().unwrap(), 42);
+    }
+
+    #[allow(dead_code)]
+    async fn timeout<F, T>(f: F) -> Option<T>
+    where
+        F: Future<Output = T>,
+    {
+        tokio::time::timeout(Duration::from_secs(1), f).await.ok()
+    }
+
+    #[tokio::test]
+    async fn test_large_messages() {
+        let peer_a = PeerId::from(1);
+        let peer_b = PeerId::from(2);
+
+        let net = MockNetwork::new();
+        let conn_a = net.connector(peer_a);
+        let conn_b = net.connector(peer_b);
+
+        let mut listener = Connector::<Vec<u8>>::listen(&conn_a, "a".into())
+            .await
+            .unwrap();
+        let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
+
+        let (auth_peer_b, mut conn_b) = Connector::<Vec<u8>>::connect_framed(&conn_b, "a".into())
+            .await
+            .unwrap();
+        let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
+
+        assert_eq!(auth_peer_a, peer_b);
+        assert_eq!(auth_peer_b, peer_a);
+
+        let send_future = async move {
+            conn_a.send(vec![42; 16000]).await.unwrap();
+        }
+        .boxed();
+        let receive_future = async move {
+            assert_eq!(
+                timeout(conn_b.next()).await.unwrap().unwrap().unwrap(),
+                vec![42; 16000]
+            );
+        }
+        .boxed();
+
+        tokio::join!(send_future, receive_future);
     }
 }
