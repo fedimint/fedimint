@@ -24,6 +24,11 @@ pub mod responses {
         acc_val_amount: Amount,
     }
 
+    #[derive(Serialize)]
+    pub struct PeginAddressResponse {
+        pegin_address: bitcoin::Address,
+    }
+
     impl InfoResponse {
         pub fn build(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
             let info_coins: Vec<CoinsByTier> = coins
@@ -50,6 +55,12 @@ pub mod responses {
                 acc_qty_coins,
                 acc_val_amount,
             }
+        }
+    }
+
+    impl PeginAddressResponse {
+        pub fn new(pegin_address: bitcoin::Address) -> Self {
+            Self { pegin_address }
         }
     }
 }

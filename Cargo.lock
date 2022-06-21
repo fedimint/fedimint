@@ -690,10 +690,12 @@ name = "clientd"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bitcoin",
  "clap",
  "minimint-api",
  "minimint-core",
  "mint-client",
+ "rand 0.6.5",
  "serde",
  "sled",
  "tokio",
