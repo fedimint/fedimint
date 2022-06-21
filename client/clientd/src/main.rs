@@ -1,6 +1,6 @@
 mod utils;
 
-use crate::utils::responses::InfoResponse;
+use crate::utils::responses::{InfoResponse, PendingResponse};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
@@ -40,16 +40,20 @@ async fn main() {
     let client = UserClient::new(cfg.client, Box::new(db), Default::default());
 
     let shared_state = Arc::new(State { client });
-    let app = Router::new().route("/getInfo", post(info)).layer(
-        ServiceBuilder::new()
-            .layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(DefaultMakeSpan::new().include_headers(true))
-                    .on_request(DefaultOnRequest::new().level(Level::INFO))
-                    .on_response(DefaultOnResponse::new().level(Level::INFO)),
-            )
-            .layer(Extension(shared_state)),
-    );
+
+    let app = Router::new()
+        .route("/getInfo", post(info))
+        .route("/getPending", post(pending))
+        .layer(
+            ServiceBuilder::new()
+                .layer(
+                    TraceLayer::new_for_http()
+                        .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                        .on_request(DefaultOnRequest::new().level(Level::INFO))
+                        .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                )
+                .layer(Extension(shared_state)),
+        );
 
     Server::bind(&"127.0.0.1:8081".parse().unwrap())
         .serve(app.into_make_service())
@@ -58,5 +62,14 @@ async fn main() {
 }
 
 async fn info(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
-    Json(InfoResponse::build(state.client.coins()))
+    let client = &state.client;
+    Json(InfoResponse::build(
+        client.coins(),
+        client.fetch_active_issuances(),
+    ))
+}
+
+async fn pending(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+    let client = &state.client;
+    Json(PendingResponse::new(client.fetch_active_issuances()))
 }

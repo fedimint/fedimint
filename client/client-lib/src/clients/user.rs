@@ -2,7 +2,7 @@ use crate::api::{ApiError, FederationApi};
 use crate::clients::transaction::TransactionBuilder;
 use crate::ln::gateway::LightningGateway;
 use crate::ln::{LnClient, LnClientError};
-use crate::mint::{MintClient, MintClientError, SpendableCoin};
+use crate::mint::{CoinFinalizationData, MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
 use bitcoin::schnorr::KeyPair;
@@ -396,6 +396,10 @@ impl UserClient {
         tx.input(&mut vec![keypair], Input::LN(contract.claim()));
         self.submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await
+    }
+
+    pub fn fetch_active_issuances(&self) -> Vec<CoinFinalizationData> {
+        self.mint_client().list_active_issuances().1
     }
 }
 

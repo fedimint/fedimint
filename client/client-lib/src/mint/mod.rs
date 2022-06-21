@@ -227,12 +227,15 @@ impl<'c> MintClient<'c> {
         Ok(())
     }
 
-    pub fn list_active_issuances(&self) -> Vec<OutPoint> {
+    pub fn list_active_issuances(&self) -> (Vec<OutPoint>, Vec<CoinFinalizationData>) {
         self.context
             .db
             .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .map(|res| res.expect("DB error").0 .0)
-            .collect()
+            .map(|res| {
+                let res = res.expect("DB error");
+                (res.0 .0, res.1)
+            })
+            .unzip()
     }
 
     // FIXME: remove
@@ -335,6 +338,9 @@ impl CoinFinalizationData {
 
     pub fn coin_count(&self) -> usize {
         self.coins.coins.values().map(|v| v.len()).sum()
+    }
+    pub fn coin_amount(&self) -> Amount {
+        self.coins.amount()
     }
 }
 

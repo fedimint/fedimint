@@ -342,7 +342,7 @@ impl GatewayClient {
     }
 
     pub fn list_fetchable_coins(&self) -> Vec<OutPoint> {
-        self.mint_client().list_active_issuances()
+        self.mint_client().list_active_issuances().0
     }
 
     /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
