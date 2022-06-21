@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Connections",""]]});
+initSidebarItems({"fn":[["do_handshake",""]],"mod":[["mock",""]],"struct":[["InsecureTcpConnector",""]],"trait":[["Connector",""]],"type":[["AnyConnector",""],["ConnectResult",""],["ConnectionListener",""],["SharedAnyConnector",""]]});

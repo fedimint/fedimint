@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["FrameError",""]],"struct":[["Framed",""]]});
+initSidebarItems({"struct":[["BidiFramed","Framed transport codec for streams"],["BincodeCodec","Framed codec that uses [`bincode`] to encode structs with [`serde`] support"]],"trait":[["FramedTransport",""]],"type":[["AnyFramedTransport","Trait object that contains a framed transport connection"],["FramedSink","Sink (sending) half of [`BidiFramed`]"],["FramedStream","Stream (receiving) half of [`BidiFramed`]"],["TcpBidiFramed","Special case for tokio `TcpStream` based [`BidiFramed`] instances"]]});

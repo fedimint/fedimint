@@ -170,171 +170,435 @@
 <span id="163">163</span>
 <span id="164">164</span>
 <span id="165">165</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">AsyncRead</span>, <span class="ident">AsyncWrite</span>};
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bytes</span>::{<span class="ident">Buf</span>, <span class="ident">BufMut</span>, <span class="ident">BytesMut</span>};
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">Sink</span>, <span class="ident">Stream</span>};
-<span class="kw">use</span> <span class="ident">serde::de::DeserializeOwned</span>;
-<span class="kw">use</span> <span class="ident">serde::Serialize</span>;
+<span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
+<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
+<span class="kw">use</span> <span class="ident">std::io</span>::{<span class="ident">Read</span>, <span class="ident">Write</span>};
 <span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
 <span class="kw">use</span> <span class="ident">std::pin::Pin</span>;
 <span class="kw">use</span> <span class="ident">std::task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>};
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">trace</span>};
+<span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncRead</span>, <span class="ident">AsyncWrite</span>, <span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>};
+<span class="kw">use</span> <span class="ident">tokio::net::tcp</span>::{<span class="ident">OwnedReadHalf</span>, <span class="ident">OwnedWriteHalf</span>};
+<span class="kw">use</span> <span class="ident">tokio_util::codec</span>::{<span class="ident">FramedRead</span>, <span class="ident">FramedWrite</span>};
+<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">trace</span>};
 
-<span class="comment">// FIXME: look into using tokio for that, I  just didn&#39;t know it was a core component by now</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Framed</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="ident">stream</span>: <span class="ident">S</span>,
-    <span class="ident">write_buffer</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>,
-    <span class="ident">read_len_len</span>: <span class="ident">usize</span>,
-    <span class="ident">read_len_buffer</span>: [<span class="ident">u8</span>; <span class="number">8</span>],
-    <span class="ident">read_len_actual</span>: <span class="ident">usize</span>,
-    <span class="ident">read_buffer</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>,
-    <span class="ident">_phantom</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
-}
+<span class="doccomment">/// Trait object that contains a framed transport connection</span>
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">FramedTransport</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Framed</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span>
-<span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">AsyncRead</span> <span class="op">+</span> <span class="ident">AsyncWrite</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">T</span>: <span class="ident">Serialize</span> <span class="op">+</span> <span class="ident">DeserializeOwned</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">FramedTransport</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>:
+    <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="op">&gt;</span>
 {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">stream</span>: <span class="ident">S</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">Framed</span> {
-            <span class="ident">stream</span>,
-            <span class="ident">write_buffer</span>: <span class="ident">Vec::new</span>(),
-            <span class="ident">read_len_len</span>: <span class="number">0</span>,
-            <span class="ident">read_len_buffer</span>: [<span class="number">0u8</span>; <span class="number">8</span>],
-            <span class="ident">read_len_actual</span>: <span class="number">0</span>,
-            <span class="ident">read_buffer</span>: <span class="ident">Vec::new</span>(),
-            <span class="ident">_phantom</span>: <span class="ident">PhantomData</span>,
-        }
+    <span class="kw">fn</span> <span class="ident">borrow_split</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+    ) -&gt; (
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>),
+    );
+
+    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+    {
+        <span class="ident">Box::new</span>(<span class="self">self</span>)
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Framed</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span>
-<span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">AsyncWrite</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">T</span>: <span class="ident">Serialize</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-{
-    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">FrameError</span>;
+<span class="doccomment">/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based [`BidiFramed`] instances</span>
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">TcpBidiFramed</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">OwnedWriteHalf</span>, <span class="ident">OwnedReadHalf</span><span class="op">&gt;</span>;
 
-    <span class="kw">fn</span> <span class="ident">poll_ready</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">mut_self</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_mut</span>();
+<span class="doccomment">/// Sink (sending) half of [`BidiFramed`]</span>
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">FramedSink</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">FramedWrite</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+<span class="doccomment">/// Stream (receiving) half of [`BidiFramed`]</span>
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">FramedStream</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">FramedRead</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
-        <span class="kw">if</span> <span class="ident">mut_self</span>.<span class="ident">write_buffer</span>.<span class="ident">is_empty</span>() {
-            <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(()));
-        }
-
-        <span class="kw">match</span> <span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="ident">mut_self</span>.<span class="ident">stream</span>).<span class="ident">poll_write</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;</span><span class="ident">mut_self</span>.<span class="ident">write_buffer</span>) {
-            <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">len</span>)) =&gt; <span class="ident">mut_self</span>.<span class="ident">write_buffer</span> <span class="op">=</span> <span class="ident">mut_self</span>.<span class="ident">write_buffer</span>[<span class="ident">len</span>..].<span class="ident">to_vec</span>(),
-            <span class="ident">Poll::Ready</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>)) =&gt; <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Err</span>(<span class="ident">FrameError::IOError</span>(<span class="ident">e</span>))),
-            <span class="ident">Poll::Pending</span> =&gt; <span class="kw">return</span> <span class="ident">Poll::Pending</span>,
-        };
-
-        <span class="kw">if</span> <span class="ident">mut_self</span>.<span class="ident">write_buffer</span>.<span class="ident">is_empty</span>() {
-            <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(()))
-        } <span class="kw">else</span> {
-            <span class="ident">Poll::Pending</span>
-        }
-    }
-
-    <span class="kw">fn</span> <span class="ident">start_send</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">item</span>: <span class="kw-2">&amp;</span><span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">match</span> <span class="ident">bincode::serialize</span>(<span class="ident">item</span>) {
-            <span class="prelude-val">Ok</span>(<span class="ident">encoded</span>) =&gt; {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">frame</span> <span class="op">=</span> <span class="ident">Vec::with_capacity</span>(<span class="ident">encoded</span>.<span class="ident">len</span>() <span class="op">+</span> <span class="number">8</span>);
-                <span class="ident">frame</span>.<span class="ident">extend_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">encoded</span>.<span class="ident">len</span>().<span class="ident">to_be_bytes</span>());
-                <span class="ident">frame</span>.<span class="ident">extend_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">encoded</span>);
-                <span class="macro">debug!</span>(<span class="string">&quot;Sending  {} bytes&quot;</span>, <span class="ident">encoded</span>.<span class="ident">len</span>());
-                <span class="macro">trace!</span>(<span class="string">&quot;Sending  {:x?}&quot;</span>, <span class="ident">encoded</span>);
-                <span class="self">self</span>.<span class="ident">get_mut</span>().<span class="ident">write_buffer</span> <span class="op">=</span> <span class="ident">frame</span>;
-                <span class="prelude-val">Ok</span>(())
-            }
-            <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">FrameError::CodingError</span>(<span class="ident">e</span>)),
-        }
-    }
-
-    <span class="kw">fn</span> <span class="ident">poll_flush</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="ident">Sink</span>::<span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">T</span><span class="op">&gt;</span><span class="ident">::poll_ready</span>(<span class="self">self</span>, <span class="ident">cx</span>)
-    }
-
-    <span class="kw">fn</span> <span class="ident">poll_close</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="ident">Sink</span>::<span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">T</span><span class="op">&gt;</span><span class="ident">::poll_ready</span>(<span class="self">self</span>, <span class="ident">cx</span>)
-    }
-}
-
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">Stream</span> <span class="kw">for</span> <span class="ident">Framed</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">T</span><span class="op">&gt;</span>
-<span class="kw">where</span>
-    <span class="ident">S</span>: <span class="ident">AsyncRead</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-    <span class="ident">T</span>: <span class="ident">DeserializeOwned</span> <span class="op">+</span> <span class="ident">Unpin</span>,
-{
-    <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">FrameError</span><span class="op">&gt;</span>;
-
-    <span class="kw">fn</span> <span class="ident">poll_next</span>(<span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Item</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">mut_self</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">get_mut</span>();
-
-        <span class="kw">if</span> <span class="ident">mut_self</span>.<span class="ident">read_len_len</span> <span class="op">!</span><span class="op">=</span> <span class="number">8</span> {
-            <span class="kw">match</span> <span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="ident">mut_self</span>.<span class="ident">stream</span>)
-                .<span class="ident">poll_read</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">mut_self</span>.<span class="ident">read_len_buffer</span>[<span class="ident">mut_self</span>.<span class="ident">read_len_len</span>..])
-            {
-                <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">len</span>)) =&gt; {
-                    <span class="ident">mut_self</span>.<span class="ident">read_len_len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">len</span>;
-                }
-                <span class="ident">Poll::Ready</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>)) =&gt; <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="ident">FrameError::IOError</span>(<span class="ident">e</span>)))),
-                <span class="ident">Poll::Pending</span> =&gt; <span class="kw">return</span> <span class="ident">Poll::Pending</span>,
-            }
-        }
-
-        <span class="kw">if</span> <span class="ident">mut_self</span>.<span class="ident">read_len_len</span> <span class="op">==</span> <span class="number">8</span> {
-            <span class="kw">let</span> <span class="ident">exp_len</span> <span class="op">=</span> <span class="ident">u64::from_be_bytes</span>(<span class="ident">mut_self</span>.<span class="ident">read_len_buffer</span>) <span class="kw">as</span> <span class="ident">usize</span>;
-            <span class="kw">if</span> <span class="ident">exp_len</span> <span class="op">!</span><span class="op">=</span> <span class="ident">mut_self</span>.<span class="ident">read_buffer</span>.<span class="ident">len</span>() {
-                <span class="ident">mut_self</span>.<span class="ident">read_buffer</span> <span class="op">=</span> <span class="macro">vec!</span>[<span class="number">0</span>; <span class="ident">exp_len</span> <span class="kw">as</span> <span class="ident">usize</span>];
-            }
-
-            <span class="kw">if</span> <span class="ident">exp_len</span> <span class="op">&gt;</span> <span class="ident">mut_self</span>.<span class="ident">read_len_actual</span> {
-                <span class="kw">match</span> <span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="ident">mut_self</span>.<span class="ident">stream</span>)
-                    .<span class="ident">poll_read</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">mut_self</span>.<span class="ident">read_buffer</span>[<span class="ident">mut_self</span>.<span class="ident">read_len_actual</span>..])
-                {
-                    <span class="ident">Poll::Ready</span>(<span class="prelude-val">Ok</span>(<span class="ident">len</span>)) =&gt; {
-                        <span class="ident">mut_self</span>.<span class="ident">read_len_actual</span> <span class="op">+</span><span class="op">=</span> <span class="ident">len</span>;
-                    }
-                    <span class="ident">Poll::Ready</span>(<span class="prelude-val">Err</span>(<span class="ident">e</span>)) =&gt; <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="ident">FrameError::IOError</span>(<span class="ident">e</span>)))),
-                    <span class="ident">Poll::Pending</span> =&gt; <span class="kw">return</span> <span class="ident">Poll::Pending</span>,
-                }
-            }
-
-            <span class="kw">if</span> <span class="ident">exp_len</span> <span class="op">==</span> <span class="ident">mut_self</span>.<span class="ident">read_len_actual</span> {
-                <span class="macro">debug!</span>(<span class="string">&quot;Received {} bytes&quot;</span>, <span class="ident">exp_len</span>);
-                <span class="macro">trace!</span>(<span class="string">&quot;Received {:x?}&quot;</span>, <span class="ident">mut_self</span>.<span class="ident">read_buffer</span>);
-                <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">bincode::deserialize</span>(<span class="kw-2">&amp;</span><span class="ident">mut_self</span>.<span class="ident">read_buffer</span>) {
-                    <span class="prelude-val">Ok</span>(<span class="ident">decoded</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">decoded</span>),
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">FrameError::CodingError</span>(<span class="ident">e</span>)),
-                };
-
-                <span class="ident">mut_self</span>.<span class="ident">read_len_len</span> <span class="op">=</span> <span class="number">0</span>;
-                <span class="ident">mut_self</span>.<span class="ident">read_len_actual</span> <span class="op">=</span> <span class="number">0</span>;
-
-                <span class="kw">return</span> <span class="ident">Poll::Ready</span>(<span class="prelude-val">Some</span>(<span class="ident">res</span>));
-            }
-        }
-
-        <span class="ident">Poll::Pending</span>
-    }
-}
-
+<span class="doccomment">/// Framed transport codec for streams</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are</span>
+<span class="doccomment">/// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.</span>
+<span class="doccomment">/// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">FrameError</span> {
-    <span class="ident">CodingError</span>(<span class="ident">bincode::Error</span>),
-    <span class="ident">IOError</span>(<span class="ident">std::io::Error</span>),
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span> {
+    <span class="ident">sink</span>: <span class="ident">FramedSink</span><span class="op">&lt;</span><span class="ident">WH</span>, <span class="ident">T</span><span class="op">&gt;</span>,
+    <span class="ident">stream</span>: <span class="ident">FramedStream</span><span class="op">&lt;</span><span class="ident">RH</span>, <span class="ident">T</span><span class="op">&gt;</span>,
 }
 
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">bincode::Error</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">FrameError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">bincode::Error</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">FrameError::CodingError</span>(<span class="ident">e</span>)
+<span class="doccomment">/// Framed codec that uses [`bincode`] to encode structs with [`serde`] support</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+    <span class="ident">_pd</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">WH</span>: <span class="ident">AsyncWrite</span>,
+    <span class="ident">RH</span>: <span class="ident">AsyncRead</span>,
+    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span>,
+{
+    <span class="doccomment">/// Builds a new `BidiFramed` codec around a stream `stream`.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case the stream is a tokio TCP stream.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>(<span class="ident">stream</span>: <span class="ident">S</span>) -&gt; <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">S</span>: <span class="ident">AsyncRead</span> <span class="op">+</span> <span class="ident">AsyncWrite</span>,
+    {
+        <span class="kw">let</span> (<span class="ident">read</span>, <span class="ident">write</span>) <span class="op">=</span> <span class="ident">tokio::io::split</span>(<span class="ident">stream</span>);
+        <span class="ident">BidiFramed</span> {
+            <span class="ident">sink</span>: <span class="ident">FramedSink::new</span>(<span class="ident">write</span>, <span class="ident">BincodeCodec::new</span>()),
+            <span class="ident">stream</span>: <span class="ident">FramedStream::new</span>(<span class="ident">read</span>, <span class="ident">BincodeCodec::new</span>()),
+        }
+    }
+
+    <span class="doccomment">/// Splits the codec in its sending and receiving parts</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This can be useful in cases where potentially simultaneous read and write operations are</span>
+    <span class="doccomment">/// required. Otherwise a we would need a mutex to guard access.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">borrow_parts</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="kw-2">&amp;mut</span> <span class="ident">FramedSink</span><span class="op">&lt;</span><span class="ident">WH</span>, <span class="ident">T</span><span class="op">&gt;</span>, <span class="kw-2">&amp;mut</span> <span class="ident">FramedStream</span><span class="op">&lt;</span><span class="ident">RH</span>, <span class="ident">T</span><span class="op">&gt;</span>) {
+        (<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>, <span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">stream</span>)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">std::io::Error</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">FrameError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">std::io::Error</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">FrameError::IOError</span>(<span class="ident">e</span>)
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">TcpBidiFramed</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span>,
+{
+    <span class="doccomment">/// Special constructor for tokio TCP connections.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient method of splitting the</span>
+    <span class="doccomment">/// stream into a read and a write half this constructor takes advantage of.</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_from_tcp</span>(<span class="ident">stream</span>: <span class="ident">tokio::net::TcpStream</span>) -&gt; <span class="ident">TcpBidiFramed</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> (<span class="ident">read</span>, <span class="ident">write</span>) <span class="op">=</span> <span class="ident">stream</span>.<span class="ident">into_split</span>();
+        <span class="ident">BidiFramed</span> {
+            <span class="ident">sink</span>: <span class="ident">FramedSink::new</span>(<span class="ident">write</span>, <span class="ident">BincodeCodec::new</span>()),
+            <span class="ident">stream</span>: <span class="ident">FramedStream::new</span>(<span class="ident">read</span>, <span class="ident">BincodeCodec::new</span>()),
+        }
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">WH</span>: <span class="ident">tokio::io::AsyncWrite</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">RH</span>: <span class="ident">Unpin</span>,
+    <span class="ident">T</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">serde::Serialize</span>,
+{
+    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span>;
+
+    <span class="kw">fn</span> <span class="ident">poll_ready</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident">Sink::poll_ready</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    }
+
+    <span class="kw">fn</span> <span class="ident">start_send</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">item</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
+        <span class="ident">Sink::start_send</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">item</span>)
+    }
+
+    <span class="kw">fn</span> <span class="ident">poll_flush</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident">Sink::poll_flush</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    }
+
+    <span class="kw">fn</span> <span class="ident">poll_close</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident">Sink::poll_close</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span> <span class="ident">Stream</span> <span class="kw">for</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">serde::de::DeserializeOwned</span>,
+    <span class="ident">WH</span>: <span class="ident">Unpin</span>,
+    <span class="ident">RH</span>: <span class="ident">tokio::io::AsyncRead</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+{
+    <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>;
+
+    <span class="kw">fn</span> <span class="ident">poll_next</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span><span class="op">&lt;</span><span class="kw-2">&amp;mut</span> <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">Poll</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Item</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="ident">Stream::poll_next</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">stream</span>), <span class="ident">cx</span>)
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span> <span class="ident">FramedTransport</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">BidiFramed</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span> <span class="op">+</span> <span class="ident">Send</span>,
+    <span class="ident">WH</span>: <span class="ident">tokio::io::AsyncWrite</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+    <span class="ident">RH</span>: <span class="ident">tokio::io::AsyncRead</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+{
+    <span class="kw">fn</span> <span class="ident">borrow_split</span>(
+        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+    ) -&gt; (
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Sink</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span>),
+    ) {
+        <span class="kw">let</span> (<span class="ident">sink</span>, <span class="ident">stream</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">borrow_parts</span>();
+        (<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">sink</span>, <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">stream</span>)
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
+        <span class="ident">BincodeCodec</span> {
+            <span class="ident">_pd</span>: <span class="ident">Default::default</span>(),
+        }
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">tokio_util::codec::Encoder</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">Debug</span>,
+{
+    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span>;
+
+    <span class="kw">fn</span> <span class="ident">encode</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">item</span>: <span class="ident">T</span>, <span class="ident">dst</span>: <span class="kw-2">&amp;mut</span> <span class="ident">bytes::BytesMut</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
+        <span class="comment">// First, write a dummy length field and remember its position</span>
+        <span class="kw">let</span> <span class="ident">old_len</span> <span class="op">=</span> <span class="ident">dst</span>.<span class="ident">len</span>();
+        <span class="ident">dst</span>.<span class="ident">writer</span>().<span class="ident">write_all</span>(<span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">8</span>]).<span class="ident">unwrap</span>();
+        <span class="macro">assert_eq!</span>(<span class="ident">dst</span>.<span class="ident">len</span>(), <span class="ident">old_len</span> <span class="op">+</span> <span class="number">8</span>);
+
+        <span class="comment">// Then we serialize the message into the buffer</span>
+        <span class="ident">bincode::serialize_into</span>(<span class="ident">dst</span>.<span class="ident">writer</span>(), <span class="kw-2">&amp;</span><span class="ident">item</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+            <span class="macro">error!</span>(<span class="string">&quot;Serializing message failed: {:?}&quot;</span>, <span class="ident">item</span>);
+            <span class="ident">e</span>
+        })<span class="question-mark">?</span>;
+
+        <span class="comment">// Lastly we update the length field by counting how many bytes have been written</span>
+        <span class="kw">let</span> <span class="ident">new_len</span> <span class="op">=</span> <span class="ident">dst</span>.<span class="ident">len</span>();
+        <span class="kw">let</span> <span class="ident">encoded_len</span> <span class="op">=</span> <span class="ident">new_len</span> <span class="op">-</span> <span class="ident">old_len</span> <span class="op">-</span> <span class="number">8</span>;
+        <span class="ident">dst</span>[<span class="ident">old_len</span>..<span class="ident">old_len</span> <span class="op">+</span> <span class="number">8</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">encoded_len</span>.<span class="ident">to_le_bytes</span>()[..]);
+
+        <span class="prelude-val">Ok</span>(())
+    }
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">tokio_util::codec::Decoder</span> <span class="kw">for</span> <span class="ident">BincodeCodec</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">T</span>: <span class="ident">serde::de::DeserializeOwned</span>,
+{
+    <span class="kw">type</span> <span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span>;
+    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">anyhow::Error</span>;
+
+    <span class="kw">fn</span> <span class="ident">decode</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">src</span>: <span class="kw-2">&amp;mut</span> <span class="ident">BytesMut</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Item</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
+        <span class="kw">if</span> <span class="ident">src</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="number">8</span> {
+            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        }
+
+        <span class="kw">let</span> <span class="ident">length</span> <span class="op">=</span> <span class="ident">u64::from_le_bytes</span>(<span class="ident">src</span>[<span class="number">0</span>..<span class="number">8</span>].<span class="ident">try_into</span>().<span class="ident">expect</span>(<span class="string">&quot;correct length&quot;</span>));
+        <span class="kw">if</span> <span class="ident">src</span>.<span class="ident">len</span>() <span class="op">&lt;</span> (<span class="ident">length</span> <span class="kw">as</span> <span class="ident">usize</span>) <span class="op">+</span> <span class="number">8</span> {
+            <span class="macro">trace!</span>(<span class="ident">length</span>, <span class="ident">buffern_len</span> <span class="op">=</span> <span class="ident">src</span>.<span class="ident">len</span>(), <span class="string">&quot;Received partial message&quot;</span>);
+            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        } <span class="kw">else</span> {
+            <span class="macro">trace!</span>(<span class="ident">length</span>, <span class="string">&quot;Received full message&quot;</span>);
+        }
+
+        <span class="ident">src</span>.<span class="ident">reader</span>()
+            .<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> [<span class="number">0u8</span>; <span class="number">8</span>][..])
+            .<span class="ident">expect</span>(<span class="string">&quot;minimum length checked&quot;</span>);
+
+        <span class="prelude-val">Ok</span>(<span class="ident">bincode::deserialize_from</span>(<span class="ident">src</span>.<span class="ident">reader</span>()).<span class="ident">map</span>(<span class="ident">Option::Some</span>)<span class="question-mark">?</span>)
+    }
+}
+
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
+<span class="kw">mod</span> <span class="ident">tests</span> {
+    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed::BidiFramed</span>;
+    <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">SinkExt</span>, <span class="ident">StreamExt</span>};
+    <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
+    <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
+    <span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncReadExt</span>, <span class="ident">AsyncWriteExt</span>, <span class="ident">DuplexStream</span>, <span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>};
+
+    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_roundtrip</span>() {
+        <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">PartialEq</span>)]</span>
+        <span class="kw">enum</span> <span class="ident">TestEnum</span> {
+            <span class="ident">Foo</span>,
+            <span class="ident">Bar</span>(<span class="ident">u64</span>),
+        }
+
+        <span class="kw">let</span> <span class="ident">input</span> <span class="op">=</span> <span class="macro">vec!</span>[<span class="ident">TestEnum::Foo</span>, <span class="ident">TestEnum::Bar</span>(<span class="number">42</span>), <span class="ident">TestEnum::Foo</span>];
+        <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">recipient</span>) <span class="op">=</span> <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_sender</span> <span class="op">=</span>
+            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="ident">sender</span>);
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_recipient</span> <span class="op">=</span>
+            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="ident">recipient</span>);
+
+        <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">input</span> {
+            <span class="ident">framed_sender</span>.<span class="ident">send</span>(<span class="ident">item</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        }
+
+        <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">input</span> {
+            <span class="kw">let</span> <span class="ident">received</span> <span class="op">=</span> <span class="ident">framed_recipient</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+            <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="ident">received</span>, <span class="ident">item</span>);
+        }
+        <span class="ident">drop</span>(<span class="ident">framed_sender</span>);
+
+        <span class="macro">assert!</span>(<span class="ident">framed_recipient</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">is_none</span>());
+    }
+
+    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_not_try_parse_partial</span>() {
+        <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">PartialEq</span>)]</span>
+        <span class="kw">enum</span> <span class="ident">TestEnum</span> {
+            <span class="ident">Foo</span>,
+            <span class="ident">Bar</span>(<span class="ident">u64</span>),
+        }
+
+        <span class="kw">let</span> (<span class="ident">sender_src</span>, <span class="kw-2">mut</span> <span class="ident">recipient_src</span>) <span class="op">=</span> <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
+        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">sender_dst</span>, <span class="ident">recipient_dst</span>) <span class="op">=</span> <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_sender</span> <span class="op">=</span>
+            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+                <span class="ident">sender_src</span>,
+            );
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_recipient</span> <span class="op">=</span>
+            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+                <span class="ident">recipient_dst</span>,
+            );
+
+        <span class="ident">framed_sender</span>
+            .<span class="ident">send</span>(<span class="ident">TestEnum::Bar</span>(<span class="number">0x4242_4242_4242_4242</span>))
+            .<span class="kw">await</span>
+            .<span class="ident">unwrap</span>();
+
+        <span class="comment">// Simulate a partial send</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">buf</span> <span class="op">=</span> [<span class="number">0u8</span>; <span class="number">3</span>];
+        <span class="ident">recipient_src</span>.<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> <span class="ident">buf</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="ident">sender_dst</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+
+        <span class="comment">// Try to read, should not return an error but block</span>
+        <span class="kw">let</span> <span class="ident">received</span> <span class="op">=</span> <span class="ident">tokio::time::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>), <span class="ident">framed_recipient</span>.<span class="ident">next</span>()).<span class="kw">await</span>;
+
+        <span class="macro">assert!</span>(<span class="ident">received</span>.<span class="ident">is_err</span>());
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (bb8c2f411 2022-06-19)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (5750a6aa2 2022-06-20)" ></div>
 </body></html>
