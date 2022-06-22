@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+telemetry = ["opentelemetry", "opentelemetry-jaeger"]
+
 [dependencies]
 anyhow = "1.0.58"
 async-trait = "0.1.42"
@@ -21,6 +24,8 @@ minimint-api = { path = "../minimint-api" }
 minimint-core = { path = "../minimint-core" }
 minimint-derive = { path = "../minimint-derive" }
 minimint-wallet = { path = "../modules/minimint-wallet", features = ["native"] }
+opentelemetry = { version = "0.17.0", optional = true }
+opentelemetry-jaeger = { version = "0.16.0", optional = true }
 rand = "0.6.5"
 rayon = "1.5.0"
 secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [ "global-context", "bitcoin_hashes" ] }
@@ -34,4 +39,5 @@ tide = "0.16.0"
 tokio = { version = "1.0.1", features = ["full"] }
 tokio-util = { version = "0.6.0", features = [ "codec" ] }
 tracing ="0.1.22"
+tracing-opentelemetry = "0.17.2"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }

@@ -2,7 +2,6 @@ pub use minimint_core::config::*;
 
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
-use clap::Parser;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use minimint_api::config::GenerateConfig;
 use minimint_api::PeerId;
@@ -14,11 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use std::path::PathBuf;
-
-#[derive(Parser)]
-pub struct ServerOpts {
-    pub cfg_path: PathBuf,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
