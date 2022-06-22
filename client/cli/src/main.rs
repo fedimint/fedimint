@@ -1,15 +1,14 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use minimint_api::encoding::Decodable;
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::SpendableCoin;
+use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
 use tracing::{error, info};
@@ -166,25 +165,4 @@ async fn main() {
                 .unwrap();
         }
     }
-}
-
-fn parse_coins(s: &str) -> Coins<SpendableCoin> {
-    let bytes = base64::decode(s).unwrap();
-    bincode::deserialize(&bytes).unwrap()
-}
-
-fn serialize_coins(c: &Coins<SpendableCoin>) -> String {
-    let bytes = bincode::serialize(&c).unwrap();
-    base64::encode(&bytes)
-}
-
-fn from_hex<D: Decodable>(s: &str) -> Result<D, Box<dyn Error + Send + Sync>> {
-    let bytes = hex::decode(s)?;
-    Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
-}
-
-fn parse_bitcoin_amount(
-    s: &str,
-) -> Result<bitcoin::Amount, bitcoin::util::amount::ParseAmountError> {
-    bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
 }

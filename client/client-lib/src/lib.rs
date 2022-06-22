@@ -2,6 +2,7 @@ pub mod api;
 pub mod clients;
 pub mod ln;
 pub mod mint;
+pub mod utils;
 pub mod wallet;
 
 use crate::api::FederationApi;

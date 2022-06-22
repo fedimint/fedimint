@@ -1976,9 +1976,12 @@ name = "mint-client"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.13.0",
+ "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "futures",
+ "hex",
  "lightning",
  "lightning-invoice",
  "minimint-api",
@@ -2000,12 +2003,9 @@ dependencies = [
 name = "mint-client-cli"
 version = "0.1.0"
 dependencies = [
- "base64 0.13.0",
- "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "clap",
- "hex",
  "lightning-invoice",
  "minimint-api",
  "minimint-core",
