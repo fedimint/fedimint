@@ -62,7 +62,7 @@ pub mod responses {
     }
 
     impl InfoResponse {
-        pub fn build(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
+        pub fn new(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
             let info_coins: Vec<CoinsByTier> = coins
                 .coins
                 .iter()

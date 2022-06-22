@@ -76,7 +76,7 @@ async fn main() {
 
 async fn info(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     let client = &state.client;
-    Json(InfoResponse::build(
+    Json(InfoResponse::new(
         client.coins(),
         client.fetch_active_issuances(),
     ))
