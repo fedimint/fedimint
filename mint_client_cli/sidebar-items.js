@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["from_hex",""],["main",""],["parse_bitcoin_amount",""],["parse_coins",""],["serialize_coins",""]],"struct":[["Options",""],["PayRequest",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["main",""]],"struct":[["Options",""],["PayRequest",""]]};

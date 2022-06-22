@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["api",""],["clients",""],["ln",""],["mint",""],["wallet",""]],"struct":[["BorrowedClientContext",""],["ClientAndGatewayConfig",""],["OwnedClientContext",""]]};
+window.SIDEBAR_ITEMS = {"mod":[["api",""],["clients",""],["ln",""],["mint",""],["utils",""],["wallet",""]],"struct":[["BorrowedClientContext",""],["ClientAndGatewayConfig",""],["OwnedClientContext",""]]};

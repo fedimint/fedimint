@@ -172,40 +172,17 @@
 <span id="166">166</span>
 <span id="167">167</span>
 <span id="168">168</span>
-<span id="169">169</span>
-<span id="170">170</span>
-<span id="171">171</span>
-<span id="172">172</span>
-<span id="173">173</span>
-<span id="174">174</span>
-<span id="175">175</span>
-<span id="176">176</span>
-<span id="177">177</span>
-<span id="178">178</span>
-<span id="179">179</span>
-<span id="180">180</span>
-<span id="181">181</span>
-<span id="182">182</span>
-<span id="183">183</span>
-<span id="184">184</span>
-<span id="185">185</span>
-<span id="186">186</span>
-<span id="187">187</span>
-<span id="188">188</span>
-<span id="189">189</span>
-<span id="190">190</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::hex::ToHex</span>;
 <span class="kw">use</span> <span class="ident">clap::Parser</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding::Decodable</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::config::load_from_file</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof::TxOutProof</span>;
 <span class="kw">use</span> <span class="ident">mint_client::mint::SpendableCoin</span>;
+<span class="kw">use</span> <span class="ident">mint_client::utils</span>::{<span class="ident">from_hex</span>, <span class="ident">parse_bitcoin_amount</span>, <span class="ident">parse_coins</span>, <span class="ident">serialize_coins</span>};
 <span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">ClientAndGatewayConfig</span>, <span class="ident">UserClient</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::error::Error</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">info</span>};
@@ -362,27 +339,6 @@
                 .<span class="ident">unwrap</span>();
         }
     }
-}
-
-<span class="kw">fn</span> <span class="ident">parse_coins</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="ident">base64::decode</span>(<span class="ident">s</span>).<span class="ident">unwrap</span>();
-    <span class="ident">bincode::deserialize</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>).<span class="ident">unwrap</span>()
-}
-
-<span class="kw">fn</span> <span class="ident">serialize_coins</span>(<span class="ident">c</span>: <span class="kw-2">&amp;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span>) -&gt; <span class="ident">String</span> {
-    <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="ident">bincode::serialize</span>(<span class="kw-2">&amp;</span><span class="ident">c</span>).<span class="ident">unwrap</span>();
-    <span class="ident">base64::encode</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>)
-}
-
-<span class="kw">fn</span> <span class="ident">from_hex</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">Decodable</span><span class="op">&gt;</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">D</span>, <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Error</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="ident">hex::decode</span>(<span class="ident">s</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="ident">D::consensus_decode</span>(<span class="ident">std::io::Cursor::new</span>(<span class="ident">bytes</span>))<span class="question-mark">?</span>)
-}
-
-<span class="kw">fn</span> <span class="ident">parse_bitcoin_amount</span>(
-    <span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">bitcoin::Amount</span>, <span class="ident">bitcoin::util::amount::ParseAmountError</span><span class="op">&gt;</span> {
-    <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (dc80ca78b 2022-06-21)" ></div>
