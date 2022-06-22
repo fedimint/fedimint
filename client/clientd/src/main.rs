@@ -1,9 +1,14 @@
 mod utils;
 
-use crate::utils::responses::{InfoResponse, PeginAddressResponse, PendingResponse};
+use crate::utils::payload::PeginPayload;
+use crate::utils::responses::{
+    InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
+};
+use crate::utils::JsonDecodeTransaction;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
+use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use minimint_core::config::load_from_file;
 use mint_client::{ClientAndGatewayConfig, UserClient};
@@ -12,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -44,10 +49,12 @@ async fn main() {
     let rng = OsRng::new().unwrap();
 
     let shared_state = Arc::new(State { client, rng });
+
     let app = Router::new()
         .route("/getInfo", post(info))
         .route("/getPending", post(pending))
         .route("/getPeginAdress", post(pegin_address))
+        .route("/pegin", post(pegin))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -84,4 +91,20 @@ async fn pegin_address(Extension(state): Extension<Arc<State>>) -> impl IntoResp
     Json(PeginAddressResponse::new(
         client.get_new_pegin_address(&mut rng),
     ))
+}
+
+async fn pegin(
+    Extension(state): Extension<Arc<State>>,
+    payload: JsonDecodeTransaction,
+) -> impl IntoResponse {
+    let client = &state.client;
+    let mut rng = state.rng.clone();
+    let txout_proof = payload.0.txout_proof;
+    let transaction = payload.0.transaction;
+    let txid = client
+        .peg_in(txout_proof, transaction, &mut rng)
+        .await
+        .unwrap(); //TODO: handle unwrap()
+    info!("Started peg-in {}, result will be fetched", txid.to_hex());
+    Json(PegInOutResponse::new(txid))
 }
