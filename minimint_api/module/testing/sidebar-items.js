@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["assert_all_equal",""]],"struct":[["FakeFed",""],["FakeInterconnect",""],["TestInputMeta",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["assert_all_equal",""]],"struct":[["FakeFed",""],["FakeInterconnect",""],["TestInputMeta",""]]};

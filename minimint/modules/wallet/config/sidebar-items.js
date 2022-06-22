@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["WalletClientConfig",""],["WalletConfig",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["WalletClientConfig",""],["WalletConfig",""]]};

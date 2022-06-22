@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""]]};

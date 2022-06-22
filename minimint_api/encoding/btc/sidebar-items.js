@@ -1,1 +1,1 @@
-initSidebarItems({"macro":[["impl_encode_decode_bridge",""]]});
+window.SIDEBAR_ITEMS = {"macro":[["impl_encode_decode_bridge",""]]};

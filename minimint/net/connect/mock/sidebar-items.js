@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["timeout",""]],"struct":[["MockConnector",""],["MockNetwork",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["timeout",""]],"struct":[["MockConnector",""],["MockNetwork",""]]};

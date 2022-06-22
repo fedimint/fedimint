@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["coins",""],["keys",""]]});
+window.SIDEBAR_ITEMS = {"mod":[["coins",""],["keys",""]]};

@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Keys","Represents all tiered keys belonging to a certain entity"]]});
+window.SIDEBAR_ITEMS = {"struct":[["Keys","Represents all tiered keys belonging to a certain entity"]]};

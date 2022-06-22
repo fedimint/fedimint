@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["interpolate_zero","Interpolates the constant factor of a polynomial defined by the points supplied in `elements`."]],"struct":[["Poly",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["interpolate_zero","Interpolates the constant factor of a polynomial defined by the points supplied in `elements`."]],"struct":[["Poly",""]]};

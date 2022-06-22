@@ -1,1 +1,1 @@
-initSidebarItems({"enum":[["LnClientError",""]],"mod":[["db",""],["gateway",""],["incoming",""],["outgoing",""]],"struct":[["LnClient",""]],"type":[["Result",""]]});
+window.SIDEBAR_ITEMS = {"enum":[["LnClientError",""]],"mod":[["db",""],["gateway",""],["incoming",""],["outgoing",""]],"struct":[["LnClient",""]],"type":[["Result",""]]};

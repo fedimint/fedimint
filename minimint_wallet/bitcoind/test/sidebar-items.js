@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["height_hash",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["height_hash",""]],"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]};

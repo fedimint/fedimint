@@ -1,1 +1,1 @@
-initSidebarItems({"mod":[["ln","Lightning Module"],["mint",""],["wallet",""]]});
+window.SIDEBAR_ITEMS = {"mod":[["ln","Lightning Module"],["mint",""],["wallet",""]]};

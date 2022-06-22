@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["LightningGateway",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["LightningGateway",""]]};

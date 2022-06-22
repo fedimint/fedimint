@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["load_from_file",""]],"mod":[["serde_binary_human_readable",""]],"struct":[["ClientConfig",""],["FeeConsensus",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["load_from_file",""]],"mod":[["serde_binary_human_readable",""]],"struct":[["ClientConfig",""],["FeeConsensus",""]]};

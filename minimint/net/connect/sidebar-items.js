@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["do_handshake",""]],"mod":[["mock",""]],"struct":[["InsecureTcpConnector",""]],"trait":[["Connector",""]],"type":[["AnyConnector",""],["ConnectResult",""],["ConnectionListener",""],["SharedAnyConnector",""]]});
+window.SIDEBAR_ITEMS = {"fn":[["do_handshake",""]],"mod":[["mock",""]],"struct":[["InsecureTcpConnector",""]],"trait":[["Connector",""]],"type":[["AnyConnector",""],["ConnectResult",""],["ConnectionListener",""],["SharedAnyConnector",""]]};

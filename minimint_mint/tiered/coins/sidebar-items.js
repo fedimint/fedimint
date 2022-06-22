@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["Coins","Represents coins of different denominations."],["TieredMultiZip",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["Coins","Represents coins of different denominations."],["TieredMultiZip",""]]};

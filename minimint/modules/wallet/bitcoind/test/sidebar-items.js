@@ -1,1 +1,1 @@
-initSidebarItems({"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]});
+window.SIDEBAR_ITEMS = {"struct":[["FakeBitcoindRpc",""],["FakeBitcoindRpcController",""],["FakeBitcoindRpcState",""]]};

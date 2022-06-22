@@ -1,1 +1,1 @@
-initSidebarItems({"constant":[["DB_PREFIX_PEG_IN",""]],"struct":[["PegInKey",""],["PegInPrefixKey",""]]});
+window.SIDEBAR_ITEMS = {"constant":[["DB_PREFIX_PEG_IN",""]],"struct":[["PegInKey",""],["PegInPrefixKey",""]]};
