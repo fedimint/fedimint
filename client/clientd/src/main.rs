@@ -2,7 +2,7 @@ mod utils;
 
 use crate::utils::payload::PeginPayload;
 use crate::utils::responses::{
-    InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
+    InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse, SpendResponse,
 };
 use crate::utils::JsonDecodeTransaction;
 use axum::response::IntoResponse;
@@ -10,6 +10,7 @@ use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
+use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use rand::rngs::OsRng;
@@ -55,6 +56,7 @@ async fn main() {
         .route("/getPending", post(pending))
         .route("/getPeginAdress", post(pegin_address))
         .route("/pegin", post(pegin))
+        .route("/spend", post(spend))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -107,4 +109,16 @@ async fn pegin(
         .unwrap(); //TODO: handle unwrap()
     info!("Started peg-in {}, result will be fetched", txid.to_hex());
     Json(PegInOutResponse::new(txid))
+}
+
+//TODO: wait for https://github.com/fedimint/minimint/issues/80 and implement solution for this handler
+async fn spend(
+    Extension(state): Extension<Arc<State>>,
+    payload: Json<Amount>,
+) -> impl IntoResponse {
+    let client = &state.client;
+    let amount = payload.0;
+
+    let spending_coins = client.select_and_spend_coins(amount).unwrap(); //TODO: handle unwrap()
+    Json(SpendResponse::new(spending_coins))
 }

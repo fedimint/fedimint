@@ -56,6 +56,11 @@ pub mod responses {
         txid: TransactionId,
     }
 
+    #[derive(Serialize)]
+    pub struct SpendResponse {
+        pub coins: Coins<SpendableCoin>,
+    }
+
     impl InfoResponse {
         pub fn build(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
             let info_coins: Vec<CoinsByTier> = coins
@@ -94,6 +99,12 @@ pub mod responses {
     impl PegInOutResponse {
         pub fn new(txid: TransactionId) -> Self {
             Self { txid }
+        }
+    }
+
+    impl SpendResponse {
+        pub fn new(coins: Coins<SpendableCoin>) -> Self {
+            Self { coins }
         }
     }
 }
