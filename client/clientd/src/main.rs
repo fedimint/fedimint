@@ -2,9 +2,10 @@ mod utils;
 
 use crate::utils::payload::PeginPayload;
 use crate::utils::responses::{
-    InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse, SpendResponse,
+    EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
+    SpendResponse,
 };
-use crate::utils::JsonDecodeTransaction;
+use crate::utils::{EventLog, JsonDecodeTransaction};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
@@ -31,6 +32,7 @@ struct Config {
 }
 struct State {
     client: Arc<UserClient>,
+    event_log: Arc<EventLog>,
     fetch_tx: Sender<()>,
     rng: OsRng,
 }
@@ -57,10 +59,12 @@ async fn main() {
         Default::default(),
     ));
     let (tx, mut rx) = mpsc::channel(1024);
+    let event_log = Arc::new(EventLog::new(1024));
     let rng = OsRng::new().unwrap();
 
     let shared_state = Arc::new(State {
         client: Arc::clone(&client),
+        event_log: Arc::clone(&event_log),
         fetch_tx: tx,
         rng,
     });
@@ -69,6 +73,7 @@ async fn main() {
         .route("/getInfo", post(info))
         .route("/getPending", post(pending))
         .route("/getPeginAdress", post(pegin_address))
+        .route("/getEvents", post(events))
         .route("/pegin", post(pegin))
         .route("/spend", post(spend))
         .route("/reissue", post(reissue))
@@ -84,9 +89,10 @@ async fn main() {
         );
 
     let fetch_client = Arc::clone(&client);
+    let fetch_event_log = Arc::clone(&event_log);
     tokio::spawn(async move {
         while rx.recv().await.is_some() {
-            fetch(Arc::clone(&fetch_client)).await;
+            fetch(Arc::clone(&fetch_client), Arc::clone(&fetch_event_log)).await;
         }
     });
 
@@ -115,6 +121,13 @@ async fn pegin_address(Extension(state): Extension<Arc<State>>) -> impl IntoResp
     Json(PeginAddressResponse::new(
         client.get_new_pegin_address(&mut rng),
     ))
+}
+
+async fn events(Extension(state): Extension<Arc<State>>, payload: Json<u64>) -> impl IntoResponse {
+    let timestamp = payload.0;
+    let event_log = &state.event_log;
+    let queried_events = event_log.get(timestamp).await;
+    Json(EventsResponse::new(queried_events))
 }
 
 async fn pegin(
@@ -150,15 +163,38 @@ async fn reissue(Extension(state): Extension<Arc<State>>, payload: Json<Coins<Sp
     let coins = payload.0;
     tokio::spawn(async move {
         let client = &state.client;
+        let event_log = &state.event_log;
         let fetch_tx = state.fetch_tx.clone();
         let mut rng = state.rng.clone();
-        //TODO: log what happens here and handle unwraps()
-        client.reissue(coins, &mut rng).await.unwrap();
-        fetch_tx.send(()).await.unwrap();
+        match client.reissue(coins, &mut rng).await {
+            Ok(o) => {
+                event_log
+                    .add(format!("Successful reissue, outpoint: {:?}", o))
+                    .await;
+                if let Err(e) = fetch_tx.send(()).await {
+                    event_log
+                        .add(format!("Critical error, restart the deamon: {}", e))
+                        .await;
+                }
+            }
+            Err(e) => {
+                event_log.add(format!("Error while reissue: {:?}", e)).await;
+            }
+        }
     });
 }
 
-async fn fetch(client: Arc<UserClient>) {
-    //TODO: log txid or error (handle unwrap)
-    client.fetch_all_coins().await.unwrap();
+async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
+    match client.fetch_all_coins().await {
+        Ok(txids) => {
+            event_log
+                .add(format!("successfully fetched: {:?}", txids))
+                .await
+        }
+        Err(e) => {
+            event_log
+                .add(format!("Error while fetching: {:?}", e))
+                .await
+        }
+    };
 }

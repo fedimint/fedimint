@@ -3,8 +3,11 @@ use axum::body::HttpBody;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, RequestParts};
 use axum::{BoxError, Json};
+use std::collections::VecDeque;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;
@@ -61,6 +64,11 @@ pub mod responses {
         pub coins: Coins<SpendableCoin>,
     }
 
+    #[derive(Serialize)]
+    pub struct EventsResponse {
+        events: Vec<super::Event>,
+    }
+
     impl InfoResponse {
         pub fn new(coins: Coins<SpendableCoin>, cfd: Vec<CoinFinalizationData>) -> Self {
             let info_coins: Vec<CoinsByTier> = coins
@@ -107,6 +115,12 @@ pub mod responses {
             Self { coins }
         }
     }
+
+    impl EventsResponse {
+        pub fn new(events: Vec<super::Event>) -> Self {
+            Self { events }
+        }
+    }
 }
 // Holds quantity of coins per tier
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -114,6 +128,65 @@ pub struct CoinsByTier {
     tier: u64,
     quantity: usize,
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Event {
+    timestamp: u64,
+    data: String,
+}
+
+impl Event {
+    pub fn new(data: String) -> Self {
+        let time = SystemTime::now();
+        let d = time.duration_since(UNIX_EPOCH).unwrap();
+        let timestamp = (d.as_secs() as u64) * 1000 + (u64::from(d.subsec_nanos()) / 1_000_000);
+        Event { timestamp, data }
+    }
+}
+
+pub struct EventLog {
+    data: Mutex<VecDeque<Event>>,
+}
+
+impl EventLog {
+    pub fn new(capacity: usize) -> Self {
+        EventLog {
+            data: Mutex::new(VecDeque::with_capacity(capacity)),
+        }
+    }
+    pub async fn add(&self, data: String) -> u64 {
+        let event = Event::new(data);
+        self.add_event(event).await
+    }
+    pub async fn add_event(&self, event: Event) -> u64 {
+        let mut events = self.data.lock().await;
+        let timestamp = event.timestamp;
+
+        if events.len() == events.capacity() {
+            events.pop_front();
+        }
+        if let Some(last_event) = events.back() {
+            // it is only needed to check the Order of the first one because this will be always done on 'add' so ( a,b,c,d) [d < e] => a,b,c also < e
+            if event.timestamp < last_event.timestamp {
+                let len = events.len();
+                events.insert(len - 1, event)
+            } else {
+                events.push_back(event);
+            }
+        } else {
+            events.push_back(event);
+        }
+        timestamp
+    }
+    pub async fn get(&self, timestamp: u64) -> Vec<Event> {
+        let events = self.data.lock().await;
+        let i = events
+            .binary_search_by_key(&timestamp, |event| event.timestamp)
+            .unwrap_or_else(|i| i);
+        events.range(i..).cloned().collect()
+    }
+}
+
 pub struct JsonDecodeTransaction(pub PeginPayload);
 //Alternative for this would be serde_from and impl from raw -> decoded
 #[async_trait]
