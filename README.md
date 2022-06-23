@@ -23,7 +23,7 @@ Happy hacking!
 
 ## Running MiniMint locally
 
-MiniMint is tested and developed using rust `stable`, you can get it through your package manager or from [rustup.rs](https://rustup.rs/).
+MiniMint is tested and developed using rust `stable`, you can get it through your package manager or from [rustup.rs](https://rustup.rs/). If you use nix/nixos you can refer to our [nix](docs/nix_instructions.md) documentation.
 
 MiniMint consists of three kinds of services:
 * federation member nodes (`server` binary) which make up the federation and run the consensus protocol among each other.
