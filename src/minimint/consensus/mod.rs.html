@@ -522,6 +522,21 @@
 <span id="516">516</span>
 <span id="517">517</span>
 <span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
 
 <span class="kw">mod</span> <span class="ident">conflictfilter</span>;
@@ -537,6 +552,7 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::outcome::OutputOutcome</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::rng::RngGenerator</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction</span>::{<span class="ident">Input</span>, <span class="ident">Output</span>, <span class="ident">Transaction</span>, <span class="ident">TransactionError</span>};
+<span class="kw">use</span> <span class="ident">futures::future::select_all</span>;
 <span class="kw">use</span> <span class="ident">hbbft::honey_badger::Batch</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
@@ -551,6 +567,7 @@
 <span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+<span class="kw">use</span> <span class="ident">tokio::sync::Notify</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info_span</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">UnzipConsensus</span>)]</span>
@@ -587,6 +604,9 @@
 
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash</span>
     <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+
+    <span class="comment">// Notifies tasks when there is a new transaction</span>
+    <span class="kw">pub</span> <span class="ident">transaction_notify</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Notify</span><span class="op">&gt;</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -672,6 +692,7 @@
             <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
         }
 
+        <span class="self">self</span>.<span class="ident">transaction_notify</span>.<span class="ident">notify_one</span>();
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -787,6 +808,15 @@
 
             <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
         }
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="ident">select_all</span>(<span class="macro">vec!</span>[
+            <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
+            <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
+            <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
+        ])
+        .<span class="kw">await</span>;
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ConsensusProposal</span> {
@@ -1041,5 +1071,5 @@
     <span class="ident">ContractOutputError</span>(<span class="ident">LightningModuleError</span>),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (10f4ce324 2022-06-22)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (43347397f 2022-06-23)" ></div>
 </body></html>
