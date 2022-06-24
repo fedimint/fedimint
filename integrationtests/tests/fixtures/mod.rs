@@ -8,12 +8,14 @@ use std::rc::Rc;
 use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
-use futures::future::join_all;
+use futures::future::{join_all, select_all};
+use hbbft::honey_badger::Batch;
 use hbbft::honey_badger::Message;
 
 use itertools::Itertools;
@@ -21,7 +23,6 @@ use lightning_invoice::Invoice;
 use minimint_api::task::spawn;
 use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
@@ -31,7 +32,7 @@ use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
 use minimint::config::ServerConfigParams;
 use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
-use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
+use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal};
 use minimint::net::connect::mock::MockNetwork;
 use minimint::net::connect::{Connector, InsecureTcpConnector};
 use minimint::net::peers::PeerConnector;
@@ -317,10 +318,8 @@ pub struct FederationTest {
 }
 
 struct ServerTest {
-    outcome_receiver: Receiver<ConsensusOutcome>,
-    proposal_sender: Sender<ConsensusProposal>,
-    consensus: Arc<MinimintConsensus<OsRng>>,
-    cfg: ServerConfig,
+    minimint: MinimintServer,
+    last_consensus: Vec<ConsensusOutcome>,
     bitcoin_rpc: Box<dyn BitcoindRpc>,
     database: Arc<dyn Database>,
     override_proposal: Option<ConsensusProposal>,
@@ -357,6 +356,7 @@ impl FederationTest {
         for server in &self.servers {
             server
                 .borrow_mut()
+                .minimint
                 .consensus
                 .submit_transaction(transaction.clone())
                 .unwrap();
@@ -375,7 +375,7 @@ impl FederationTest {
             servers: self
                 .servers
                 .iter()
-                .filter(|s| peers.contains(&s.as_ref().borrow().cfg.identity))
+                .filter(|s| peers.contains(&s.as_ref().borrow().minimint.cfg.identity))
                 .map(Rc::clone)
                 .collect(),
             wallet: self.wallet.clone(),
@@ -425,7 +425,10 @@ impl FederationTest {
 
     pub fn has_dropped_peer(&self, peer: u16) -> bool {
         for server in &self.servers {
-            if !server.borrow().dropped_peers.contains(&PeerId::from(peer)) {
+            let mut s = server.borrow_mut();
+            let proposal = block_on(s.minimint.consensus.get_consensus_proposal());
+            s.dropped_peers.append(&mut proposal.drop_peers.clone());
+            if !s.dropped_peers.contains(&PeerId::from(peer)) {
                 return false;
             }
         }
@@ -465,6 +468,7 @@ impl FederationTest {
                     batch_tx.commit();
                     server
                         .borrow_mut()
+                        .minimint
                         .consensus
                         .mint
                         .apply_output(batch.transaction(), &tokens, out_point)
@@ -489,76 +493,70 @@ impl FederationTest {
         }
     }
 
-    /// Has every federation node send new consensus proposals to the HBBFT thread then process
-    /// the outcome.  Note that in the production code this happens in the opposite order however
-    /// here we avoid the confusion and concurrency that makes testing difficult.
+    /// Has every federation node send new consensus proposals then process the outcome.
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            self.send_proposals();
-            self.process_outcomes().await;
+            join_all(
+                self.servers
+                    .iter()
+                    .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
+            )
+            .await;
+            self.update_last_consensus();
         }
     }
 
-    /// Simulates sending an empty epoch which can happen in production (see run_consensus_epochs).
-    pub async fn run_empty_epoch(&self) {
-        for server in &self.servers {
-            let wallet_items = block_on(server.borrow().consensus.wallet.consensus_proposal(rng()));
-
-            let items = wallet_items
-                .into_iter()
-                .filter_map(|item| match item {
-                    WalletConsensusItem::RoundConsensus(_) => Some(ConsensusItem::Wallet(item)),
-                    _ => None,
-                })
-                .collect();
-
-            block_on(minimint::run_consensus_epoch(
-                ConsensusProposal {
-                    items,
-                    drop_peers: vec![],
-                },
-                &self.last_consensus.borrow(),
-                &server.borrow().proposal_sender,
-            ));
-        }
-        self.process_outcomes().await;
+    /// Runs consensus, but delay peers and only wait for one to complete.
+    /// Useful for testing if a peer has become disconnected.
+    pub async fn race_consensus_epoch(&self, durations: Vec<Duration>) {
+        assert_eq!(durations.len(), self.servers.len());
+        select_all(
+            self.servers
+                .iter()
+                .zip(durations)
+                .map(|(server, duration)| {
+                    Box::pin(Self::consensus_epoch(server.clone(), duration))
+                }),
+        )
+        .await;
+        self.update_last_consensus();
     }
 
-    pub fn send_proposals(&self) {
-        for server in &self.servers {
-            let mut s = server.borrow_mut();
+    // Necessary to allow servers to progress concurrently, should be fine since the same server
+    // will never run an epoch concurrently with itself.
+    #[allow(clippy::await_holding_refcell_ref)]
+    async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) {
+        tokio::time::sleep(delay).await;
+        let mut s = server.borrow_mut();
+        let consensus = s.minimint.consensus.clone();
 
-            let proposal = s
-                .override_proposal
-                .clone()
-                .unwrap_or_else(|| block_on(s.consensus.get_consensus_proposal()));
-            s.dropped_peers.append(&mut proposal.drop_peers.clone());
+        let overrider = s.override_proposal.clone();
+        let proposal = async { overrider.unwrap_or(consensus.get_consensus_proposal().await) };
+        s.dropped_peers
+            .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-            block_on(minimint::run_consensus_epoch(
-                proposal,
-                &self.last_consensus.borrow(),
-                &s.proposal_sender,
-            ));
+        s.last_consensus = s
+            .minimint
+            .run_consensus_epoch(proposal, &mut OsRng::new().unwrap())
+            .await;
+
+        for outcome in &s.last_consensus {
+            consensus.process_consensus_outcome(outcome.clone()).await;
         }
     }
 
-    pub async fn process_outcomes(&self) {
-        for server in &self.servers {
-            let consensus_outcome = block_on(server.borrow_mut().outcome_receiver.recv()).unwrap();
-            let height = server.borrow().consensus.wallet.consensus_height();
+    fn update_last_consensus(&self) {
+        let new_consensus = self
+            .servers
+            .iter()
+            .flat_map(|s| s.borrow().last_consensus.clone())
+            .max_by_key(|c| c.epoch)
+            .unwrap();
+        let mut last_consensus = self.last_consensus.borrow_mut();
 
-            let filtered_consensus =
-                FederationTest::remove_redundant_items(&consensus_outcome, height);
-
-            // only need to update last_consensus_items and print one output since consensus is always the same
-            if self.last_consensus.borrow().epoch < consensus_outcome.epoch {
-                let message = FederationTest::epoch_debug_message(&filtered_consensus);
-                warn!("{}", message);
-                *self.last_consensus.borrow_mut() = filtered_consensus;
-            }
-
-            let consensus = server.borrow().consensus.clone();
-            consensus.process_consensus_outcome(consensus_outcome).await
+        if last_consensus.is_empty() || last_consensus.epoch < new_consensus.epoch {
+            warn!("{}", Self::epoch_debug_message(&new_consensus));
+            *last_consensus = new_consensus;
         }
     }
 
@@ -571,36 +569,24 @@ impl FederationTest {
             let bitcoin_rpc = bitcoin_gen();
             let database = Arc::new(MemDatabase::new());
 
-            let MinimintServer {
-                outcome_sender,
-                proposal_receiver,
-                outcome_receiver,
-                proposal_sender,
-                mint_consensus,
-                cfg,
-            } = minimint::minimint_server_with(cfg.clone(), database.clone(), bitcoin_gen).await;
+            let minimint = MinimintServer::new_with(
+                cfg.clone(),
+                database.clone(),
+                bitcoin_gen,
+                connect_gen(cfg.identity),
+            )
+            .await;
 
-            let initial_cis = mint_consensus.get_consensus_proposal().await;
             spawn(minimint::net::api::run_server(
                 cfg.clone(),
-                mint_consensus.clone(),
-            ));
-            spawn(minimint::hbbft(
-                outcome_sender,
-                proposal_receiver,
-                connect_gen(cfg.identity),
-                cfg.clone(),
-                initial_cis,
-                OsRng::new().unwrap(),
+                minimint.consensus.clone(),
             ));
 
             Rc::new(RefCell::new(ServerTest {
-                outcome_receiver,
-                proposal_sender,
+                minimint,
                 bitcoin_rpc,
-                consensus: mint_consensus,
-                cfg,
                 database,
+                last_consensus: vec![],
                 override_proposal: None,
                 dropped_peers: vec![],
             }))
@@ -608,47 +594,19 @@ impl FederationTest {
         .await;
 
         // Consumes the empty epoch 0 outcome from all servers
-        let last_outcome = servers
-            .iter()
-            .map(|s| block_on(s.borrow_mut().outcome_receiver.recv()).unwrap())
-            .last()
-            .unwrap();
         let server_config = server_config.iter().last().unwrap().1.clone();
         let fee_consensus = server_config.fee_consensus;
         let wallet = server_config.wallet;
-        let last_consensus = Rc::new(RefCell::new(last_outcome));
+        let last_consensus = Rc::new(RefCell::new(Batch {
+            epoch: 0,
+            contributions: BTreeMap::new(),
+        }));
 
         FederationTest {
             servers,
+            last_consensus,
             fee_consensus,
             wallet,
-            last_consensus,
-        }
-    }
-
-    fn remove_redundant_items(
-        consensus: &ConsensusOutcome,
-        prev_block_height: Option<u32>,
-    ) -> ConsensusOutcome {
-        let mut contributions = BTreeMap::new();
-
-        for (peer, items) in consensus.contributions.iter() {
-            let filtered = items
-                .iter()
-                .filter(|item| match item {
-                    ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(
-                        minimint_wallet::RoundConsensusItem { block_height, .. },
-                    )) => Some(*block_height) != prev_block_height,
-                    _ => true,
-                })
-                .cloned()
-                .collect();
-            contributions.insert(*peer, filtered);
-        }
-
-        ConsensusOutcome {
-            epoch: consensus.epoch,
-            contributions,
         }
     }
 
