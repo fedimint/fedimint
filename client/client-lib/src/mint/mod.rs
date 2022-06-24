@@ -254,7 +254,7 @@ impl<'c> MintClient<'c> {
                         break;
                     }
                     // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                    Err(e) if e.is_retryable_fetch_coins() => {
+                    Err(e) if e.is_retryable() => {
                         trace!("Mint returned retryable error: {:?}", e);
                         minimint_api::task::sleep(Duration::from_secs(1)).await
                     }
@@ -402,9 +402,9 @@ pub enum MintClientError {
 impl MintClientError {
     /// Returns `true` if the error means that the queried coin output isn't ready yet but might
     /// become ready later.
-    pub fn is_retryable_fetch_coins(&self) -> bool {
+    pub fn is_retryable(&self) -> bool {
         match self {
-            MintClientError::ApiError(e) => e.is_retryable_fetch_coins(),
+            MintClientError::ApiError(e) => e.is_retryable(),
             MintClientError::OutputNotReadyYet(_) => true,
             _ => false,
         }

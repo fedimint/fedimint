@@ -248,7 +248,7 @@ impl UserClient {
     }
 
     /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
-    /// the federation too early. Use [`MintClientError::is_retryable_fetch_coins`] to determine
+    /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
     pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<(), MintClientError> {
         let mut batch = DbBatch::new();

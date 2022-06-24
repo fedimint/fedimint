@@ -65,9 +65,7 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_output_outcome(outpoint).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable_fetch_coins() => {
-                        minimint_api::task::sleep(interval).await
-                    }
+                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),
                 }
             }
@@ -106,7 +104,7 @@ pub enum ApiError {
 impl ApiError {
     /// Returns `true` if the error means that the queried coin output isn't ready yet but might
     /// become ready later.
-    pub fn is_retryable_fetch_coins(&self) -> bool {
+    pub fn is_retryable(&self) -> bool {
         match self {
             ApiError::HttpError(e) => e.status() == Some(StatusCode::NOT_FOUND),
             _ => false,
