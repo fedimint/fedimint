@@ -212,9 +212,13 @@ async fn lnpay(
 async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
     match client.fetch_all_coins().await {
         Ok(txids) => {
-            event_log
-                .add(format!("successfully fetched: {:?}", txids))
-                .await
+            //if there are active issuances accumulated they'll all be fetched at once leaving active issuances empty
+            //this is not 'deterministic' though so it can happen that client.fetch_all_coins() will return ok but with an empty vec
+            if !txids.is_empty() {
+                event_log
+                    .add(format!("successfully fetched: {:?}", txids))
+                    .await
+            }
         }
         Err(e) => {
             event_log
