@@ -5,8 +5,9 @@ use minimint_api::{OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use minimint_core::modules::ln::contracts::ContractId;
 use minimint_core::modules::ln::ContractAccount;
-use minimint_core::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
+use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use minimint_core::transaction::Transaction;
+use minimint_core::CoreError;
 use reqwest::{StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -51,7 +52,7 @@ impl<'a> dyn FederationApi + 'a {
                         outputs_len,
                         out_point.out_idx as usize,
                     ))
-                    .and_then(|output| output.try_into_variant().map_err(ApiError::WrongOutputType))
+                    .and_then(|output| output.try_into_variant().map_err(ApiError::CoreError))
             }
         }
     }
@@ -95,18 +96,18 @@ pub enum ApiError {
     TransactionError(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
     OutPointOutOfRange(usize, usize),
-    #[error("Returned output type did not match expectation: {0}")]
-    WrongOutputType(MismatchingVariant),
+    #[error("Core error: {0}")]
+    CoreError(#[from] CoreError),
     #[error("Timeout error awaiting outcome")]
     Timeout,
 }
 
 impl ApiError {
-    /// Returns `true` if the error means that the queried coin output isn't ready yet but might
-    /// become ready later.
+    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
     pub fn is_retryable(&self) -> bool {
         match self {
             ApiError::HttpError(e) => e.status() == Some(StatusCode::NOT_FOUND),
+            ApiError::CoreError(e) => e.is_retryable(),
             _ => false,
         }
     }
