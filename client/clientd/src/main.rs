@@ -1,11 +1,11 @@
 mod utils;
 
-use crate::utils::payload::PeginPayload;
+use crate::utils::payload::{LnPayPayload, PeginPayload};
 use crate::utils::responses::{
     EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
     SpendResponse,
 };
-use crate::utils::{EventLog, JsonDecodeTransaction};
+use crate::utils::{Event, EventLog, JsonDecodeTransaction};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
@@ -14,11 +14,16 @@ use clap::Parser;
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
+use mint_client::api::ApiError::HttpError;
+use mint_client::clients::user::ClientError;
+use mint_client::ln::gateway::LightningGateway;
+use mint_client::ln::LnClientError::ApiError;
 use mint_client::mint::SpendableCoin;
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
@@ -32,6 +37,7 @@ struct Config {
 }
 struct State {
     client: Arc<UserClient>,
+    gateway: Arc<LightningGateway>,
     event_log: Arc<EventLog>,
     fetch_tx: Sender<()>,
     rng: OsRng,
@@ -58,12 +64,14 @@ async fn main() {
         Box::new(db),
         Default::default(),
     ));
+    let gateway = Arc::new(cfg.gateway.clone());
     let (tx, mut rx) = mpsc::channel(1024);
     let event_log = Arc::new(EventLog::new(1024));
     let rng = OsRng::new().unwrap();
 
     let shared_state = Arc::new(State {
         client: Arc::clone(&client),
+        gateway: Arc::clone(&gateway),
         event_log: Arc::clone(&event_log),
         fetch_tx: tx,
         rng,
@@ -77,6 +85,7 @@ async fn main() {
         .route("/pegin", post(pegin))
         .route("/spend", post(spend))
         .route("/reissue", post(reissue))
+        .route("/lnpay", post(lnpay))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -184,6 +193,22 @@ async fn reissue(Extension(state): Extension<Arc<State>>, payload: Json<Coins<Sp
     });
 }
 
+//TODO: wait for https://github.com/fedimint/minimint/issues/80 and implement solution for this handler
+async fn lnpay(
+    Extension(state): Extension<Arc<State>>,
+    payload: Json<LnPayPayload>,
+) -> impl IntoResponse {
+    let client = Arc::clone(&state.client);
+    let gateway = Arc::clone(&state.gateway);
+    let rng = state.rng.clone();
+    let invoice = payload.0.bolt11;
+
+    match pay_invoice(invoice, client, gateway, rng).await {
+        Ok(_) => Json(Event::new("Success".to_string())),
+        Err(e) => Json(Event::new(format!("Error paying invoice: {:?}", e))),
+    }
+}
+
 async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
     match client.fetch_all_coins().await {
         Ok(txids) => {
@@ -197,4 +222,40 @@ async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
                 .await
         }
     };
+}
+
+async fn pay_invoice(
+    bolt11: lightning_invoice::Invoice,
+    client: Arc<UserClient>,
+    gateway: Arc<LightningGateway>,
+    mut rng: OsRng,
+) -> Result<(), ClientError> {
+    let http = reqwest::Client::new();
+
+    let (contract_id, outpoint) = client
+        .fund_outgoing_ln_contract(&*gateway, bolt11, &mut rng)
+        .await
+        .expect("Not enough coins");
+
+    client
+        .await_outgoing_contract_acceptance(outpoint)
+        .await
+        .expect("Contract wasn't accepted in time");
+
+    info!(
+        %contract_id,
+        "Funded outgoing contract, notifying gateway",
+    );
+
+    let response = http
+        .post(&format!("{}/pay_invoice", &*gateway.api))
+        .json(&contract_id)
+        .timeout(Duration::from_secs(15))
+        .send()
+        .await;
+
+    match response {
+        Ok(_) => Ok(()),
+        Err(e) => Err(ClientError::LnClientError(ApiError(HttpError(e)))),
+    }
 }

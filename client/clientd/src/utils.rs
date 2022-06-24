@@ -25,6 +25,14 @@ pub mod payload {
         pub txout_proof: TxOutProof,
         pub transaction: Transaction,
     }
+
+    //TODO: remove this and also super::serde_invoice, when lightning_invoice "serde" feature becomes available
+    #[derive(Deserialize)]
+    #[serde(transparent)]
+    pub struct LnPayPayload {
+        #[serde(with = "super::serde_invoice")]
+        pub bolt11: lightning_invoice::Invoice,
+    }
 }
 
 pub mod responses {
@@ -122,6 +130,7 @@ pub mod responses {
         }
     }
 }
+
 // Holds quantity of coins per tier
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoinsByTier {
@@ -189,6 +198,7 @@ impl EventLog {
 
 pub struct JsonDecodeTransaction(pub PeginPayload);
 //Alternative for this would be serde_from and impl from raw -> decoded
+//or TODO: rust-bitcoin transaction PR to not derive Deserialize but to impl it by hand, deciding dynamically weather it needs to be decoded first
 #[async_trait]
 impl<B> FromRequest<B> for JsonDecodeTransaction
 where
