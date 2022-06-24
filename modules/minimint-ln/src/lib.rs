@@ -36,6 +36,7 @@ use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
@@ -128,6 +129,12 @@ impl FederationModule for LightningModule {
     type TxOutputOutcome = OutputOutcome;
     type ConsensusItem = DecryptionShareCI;
     type VerificationCache = ();
+
+    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a) {
+        if self.consensus_proposal(rng).await.is_empty() {
+            std::future::pending().await
+        }
+    }
 
     async fn consensus_proposal<'a>(
         &'a self,

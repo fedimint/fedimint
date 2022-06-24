@@ -16,6 +16,7 @@ use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
+
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Sub;
@@ -92,6 +93,12 @@ impl FederationModule for Mint {
     type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
     type VerificationCache = VerificationCache;
+
+    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a) {
+        if self.consensus_proposal(rng).await.is_empty() {
+            std::future::pending().await
+        }
+    }
 
     async fn consensus_proposal<'a>(
         &'a self,

@@ -13,6 +13,7 @@ use crate::db::{
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
+use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
 use minimint_api::db::Database;
@@ -27,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
@@ -63,6 +65,9 @@ where
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Arc<dyn Database>,
+
+    // Notifies tasks when there is a new transaction
+    pub transaction_notify: Arc<Notify>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -148,6 +153,7 @@ where
             warn!("Added consensus item was already in consensus queue");
         }
 
+        self.transaction_notify.notify_one();
         Ok(())
     }
 
@@ -263,6 +269,15 @@ where
 
             self.db.apply_batch(db_batch).expect("DB error");
         }
+    }
+
+    pub async fn await_consensus_proposal(&self) {
+        select_all(vec![
+            self.wallet.await_consensus_proposal(self.rng_gen.get_rng()),
+            self.ln.await_consensus_proposal(self.rng_gen.get_rng()),
+            self.mint.await_consensus_proposal(self.rng_gen.get_rng()),
+        ])
+        .await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
