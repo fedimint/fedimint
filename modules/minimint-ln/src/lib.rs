@@ -454,7 +454,7 @@ impl FederationModule for LightningModule {
             let decrypted_preimage = if preimage.len() != 32 {
                 DecryptedPreimage::Invalid
             } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
-                if let Ok(preimage_key) = secp256k1::schnorrsig::PublicKey::from_slice(&preimage) {
+                if let Ok(preimage_key) = secp256k1::XOnlyPublicKey::from_slice(&preimage) {
                     DecryptedPreimage::Some(crate::contracts::incoming::Preimage(preimage_key))
                 } else {
                     DecryptedPreimage::Invalid

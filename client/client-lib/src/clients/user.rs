@@ -5,7 +5,7 @@ use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
-use bitcoin::schnorr::KeyPair;
+use bitcoin::util::key::KeyPair;
 use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
@@ -334,9 +334,8 @@ impl UserClient {
         description: String,
         mut rng: R,
     ) -> Result<(KeyPair, UnconfirmedInvoice), ClientError> {
-        let (payment_keypair, payment_public_key) =
-            self.context.secp.generate_schnorrsig_keypair(&mut rng);
-        let raw_payment_secret = payment_public_key.serialize();
+        let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
+        let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
 
@@ -351,7 +350,11 @@ impl UserClient {
             .current_timestamp()
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
-            .build_signed(|hash| self.context.secp.sign_recoverable(hash, &node_secret_key))?;
+            .build_signed(|hash| {
+                self.context
+                    .secp
+                    .sign_ecdsa_recoverable(hash, &node_secret_key)
+            })?;
 
         let offer_output =
             self.ln_client()

@@ -1,12 +1,12 @@
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::schnorrsig;
 
+use bitcoin::KeyPair;
 use minimint_api::Amount;
 use minimint_core::config::FeeConsensus;
 use minimint_core::transaction::{Input, Output, Transaction};
 
 pub struct TransactionBuilder {
-    keys: Vec<schnorrsig::KeyPair>,
+    keys: Vec<KeyPair>,
     pub tx: Transaction,
 }
 
@@ -24,7 +24,7 @@ impl Default for TransactionBuilder {
 }
 
 impl TransactionBuilder {
-    pub fn input(&mut self, key: &mut Vec<schnorrsig::KeyPair>, input: Input) {
+    pub fn input(&mut self, key: &mut Vec<KeyPair>, input: Input) {
         self.keys.append(key);
         self.tx.inputs.push(input);
     }

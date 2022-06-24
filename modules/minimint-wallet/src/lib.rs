@@ -17,11 +17,12 @@ use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::util::bip143::SigHashCache;
 use bitcoin::util::psbt::raw::ProprietaryKey;
-use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
+use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
+use bitcoin::util::sighash::SighashCache;
 use bitcoin::{
-    Address, AddressType, BlockHash, Network, Script, SigHashType, Transaction, TxIn, TxOut, Txid,
+    Address, AddressType, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction,
+    TxIn, TxOut, Txid,
 };
 use bitcoind::BitcoinRpcError;
 use itertools::Itertools;
@@ -33,6 +34,7 @@ use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
+use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Message;
@@ -81,7 +83,7 @@ pub struct RoundConsensusItem {
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PegOutSignatureItem {
     pub txid: Txid,
-    pub signature: Vec<secp256k1::Signature>,
+    pub signature: Vec<secp256k1::ecdsa::Signature>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -399,7 +401,7 @@ impl FederationModule for Wallet {
             let mut psbt = self
                 .create_peg_out_tx(pending_peg_outs, round_consensus)
                 .await;
-            let txid = psbt.global.unsigned_tx.txid();
+            let txid = psbt.unsigned_tx.txid();
 
             info!(
                 %txid,
@@ -426,15 +428,14 @@ impl FederationModule for Wallet {
 
                     // We drop SIGHASH_ALL, because we always use that and it is only present in the
                     // PSBT for compatibility with other tools.
-                    secp256k1::Signature::from_der(&sig[..sig.len() - 1])
+                    secp256k1::ecdsa::Signature::from_der(&sig.to_vec()[..sig.to_vec().len() - 1])
                         .expect("we serialized it ourselves that way")
                 })
                 .collect::<Vec<_>>();
 
             // Delete used UTXOs
             batch.append_from_iter(
-                psbt.global
-                    .unsigned_tx
+                psbt.unsigned_tx
                     .input
                     .iter()
                     .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
@@ -448,7 +449,7 @@ impl FederationModule for Wallet {
             );
 
             batch.append_insert_new(
-                UnsignedTransactionKey(psbt.global.unsigned_tx.txid()),
+                UnsignedTransactionKey(psbt.unsigned_tx.txid()),
                 UnsignedTransaction {
                     psbt,
                     signatures: vec![],
@@ -622,22 +623,24 @@ impl Wallet {
             ));
         }
 
-        let mut tx_hasher = SigHashCache::new(&psbt.global.unsigned_tx);
+        let mut tx_hasher = SighashCache::new(&psbt.unsigned_tx);
         for (idx, (input, signature)) in psbt
             .inputs
             .iter_mut()
             .zip(signature.signature.iter())
             .enumerate()
         {
-            let tx_hash = tx_hasher.signature_hash(
-                idx,
-                input
-                    .witness_script
-                    .as_ref()
-                    .expect("Missing witness script"),
-                input.witness_utxo.as_ref().expect("Missing UTXO").value,
-                SigHashType::All,
-            );
+            let tx_hash = tx_hasher
+                .segwit_signature_hash(
+                    idx,
+                    input
+                        .witness_script
+                        .as_ref()
+                        .expect("Missing witness script"),
+                    input.witness_utxo.as_ref().expect("Missing UTXO").value,
+                    EcdsaSighashType::All,
+                )
+                .map_err(|_| ProcessPegOutSigError::SighashError)?;
 
             let tweak = input
                 .proprietary
@@ -646,23 +649,16 @@ impl Wallet {
 
             let tweaked_peer_key = peer_key.tweak(tweak, &self.secp);
             self.secp
-                .verify(
+                .verify_ecdsa(
                     &Message::from_slice(&tx_hash[..]).unwrap(),
                     signature,
                     &tweaked_peer_key.key,
                 )
                 .map_err(|_| ProcessPegOutSigError::InvalidSignature)?;
 
-            let psbt_sig = signature
-                .serialize_der()
-                .iter()
-                .copied()
-                .chain(std::iter::once(SigHashType::All.as_u32() as u8))
-                .collect();
-
             if input
                 .partial_sigs
-                .insert(tweaked_peer_key.into(), psbt_sig)
+                .insert(tweaked_peer_key.into(), EcdsaSig::sighash_all(*signature))
                 .is_some()
             {
                 // Should never happen since peers only sign a PSBT once
@@ -688,13 +684,11 @@ impl Wallet {
             .try_into()
             .map_err(|_| ProcessPegOutSigError::MissingOrMalformedChangeTweak)?;
 
-        if let Err(error) = miniscript::psbt::finalize(psbt, &self.secp) {
+        if let Err(error) = psbt.finalize_mut(&self.secp) {
             return Err(ProcessPegOutSigError::ErrorFinalizingPsbt(error));
         }
 
-        let tx = miniscript::psbt::extract(psbt, &self.secp)
-            // This should never happen AFAIK, but I'd like to avoid DOS bugs for now
-            .map_err(ProcessPegOutSigError::ErrorFinalizingPsbt)?;
+        let tx = psbt.clone().extract_tx();
 
         Ok(PendingTransaction {
             tx,
@@ -994,7 +988,7 @@ impl<'a> StatelessWallet<'a> {
                     previous_output: utxo_key.0,
                     script_sig: Default::default(),
                     sequence: 0xFFFFFFFF,
-                    witness: vec![],
+                    witness: bitcoin::Witness::new(),
                 })
                 .collect(),
             output: outputs
@@ -1010,13 +1004,11 @@ impl<'a> StatelessWallet<'a> {
 
         // FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
         let psbt = PartiallySignedTransaction {
-            global: Global {
-                unsigned_tx: transaction,
-                version: 0,
-                xpub: Default::default(),
-                proprietary: Default::default(),
-                unknown: Default::default(),
-            },
+            unsigned_tx: transaction,
+            version: 0,
+            xpub: Default::default(),
+            proprietary: Default::default(),
+            unknown: Default::default(),
             inputs: selected_utxos
                 .into_iter()
                 .map(|(_utxo_key, utxo)| {
@@ -1034,7 +1026,10 @@ impl<'a> StatelessWallet<'a> {
                         sighash_type: None,
                         redeem_script: None,
                         witness_script: Some(
-                            self.descriptor.tweak(&utxo.tweak, self.secp).script_code(),
+                            self.descriptor
+                                .tweak(&utxo.tweak, self.secp)
+                                .script_code()
+                                .expect("Failed to tweak descriptor"),
                         ),
                         bip32_derivation: Default::default(),
                         final_script_sig: None,
@@ -1046,6 +1041,12 @@ impl<'a> StatelessWallet<'a> {
                         proprietary: vec![(proprietary_tweak_key(), utxo.tweak.to_vec())]
                             .into_iter()
                             .collect(),
+                        tap_key_sig: Default::default(),
+                        tap_script_sigs: Default::default(),
+                        tap_scripts: Default::default(),
+                        tap_key_origins: Default::default(),
+                        tap_internal_key: Default::default(),
+                        tap_merkle_root: Default::default(),
                         unknown: Default::default(),
                     }
                 })
@@ -1066,12 +1067,12 @@ impl<'a> StatelessWallet<'a> {
     }
 
     fn sign_psbt(&self, psbt: &mut PartiallySignedTransaction) {
-        let mut tx_hasher = SigHashCache::new(&psbt.global.unsigned_tx);
+        let mut tx_hasher = SighashCache::new(&psbt.unsigned_tx);
 
         for (idx, (psbt_input, _tx_input)) in psbt
             .inputs
             .iter_mut()
-            .zip(psbt.global.unsigned_tx.input.iter())
+            .zip(psbt.unsigned_tx.input.iter())
             .enumerate()
         {
             let tweaked_secret = {
@@ -1095,33 +1096,32 @@ impl<'a> StatelessWallet<'a> {
                 secret_key
             };
 
-            let tx_hash = tx_hasher.signature_hash(
-                idx,
-                psbt_input
-                    .witness_script
-                    .as_ref()
-                    .expect("Missing witness script"),
-                psbt_input
-                    .witness_utxo
-                    .as_ref()
-                    .expect("Missing UTXO")
-                    .value,
-                SigHashType::All,
-            );
+            let tx_hash = tx_hasher
+                .segwit_signature_hash(
+                    idx,
+                    psbt_input
+                        .witness_script
+                        .as_ref()
+                        .expect("Missing witness script"),
+                    psbt_input
+                        .witness_utxo
+                        .as_ref()
+                        .expect("Missing UTXO")
+                        .value,
+                    EcdsaSighashType::All,
+                )
+                .expect("Failed to create segwit sighash");
 
-            let mut signature = self
+            let signature = self
                 .secp
-                .sign(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret)
-                .serialize_der()
-                .to_vec();
-            signature.push(SigHashType::All.as_u32() as u8);
+                .sign_ecdsa(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret);
 
             psbt_input.partial_sigs.insert(
                 bitcoin::PublicKey {
                     compressed: true,
-                    key: secp256k1::PublicKey::from_secret_key(self.secp, &tweaked_secret),
+                    inner: secp256k1::PublicKey::from_secret_key(self.secp, &tweaked_secret),
                 },
-                signature,
+                EcdsaSig::sighash_all(signature),
             );
         }
     }
@@ -1182,7 +1182,7 @@ pub async fn broadcast_pending_tx(db: &Arc<dyn Database>, rpc: &dyn BitcoindRpc)
     for (_, PendingTransaction { tx, .. }) in pending_tx {
         debug!(
             tx = %tx.txid(),
-            weight = tx.get_weight(),
+            weight = tx.weight(),
             "Broadcasting peg-out",
         );
         trace!(transaction = ?tx);
@@ -1236,6 +1236,8 @@ pub enum ProcessPegOutSigError {
     UnknownTransaction(Txid),
     #[error("Expected {0} signatures, got {1}")]
     WrongSignatureCount(usize, usize),
+    #[error("Bad Sighash")]
+    SighashError,
     #[error("Malformed signature: {0}")]
     MalformedSignature(secp256k1::Error),
     #[error("Invalid signature")]
@@ -1244,8 +1246,8 @@ pub enum ProcessPegOutSigError {
     DuplicateSignature,
     #[error("Missing change tweak")]
     MissingOrMalformedChangeTweak,
-    #[error("Error finalizing PSBT {0}")]
-    ErrorFinalizingPsbt(miniscript::psbt::Error),
+    #[error("Error finalizing PSBT {0:?}")]
+    ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
 }
 
 // FIXME: make FakeFed not require Eq
@@ -1267,6 +1269,7 @@ mod tests {
     use bitcoin::{Address, Amount, OutPoint, TxOut};
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;
+    use miniscript::psbt::PsbtExt;
     use miniscript::{Descriptor, DescriptorTrait, Segwitv0};
 
     use crate::db::UTXOKey;
@@ -1327,8 +1330,8 @@ mod tests {
             &CHANGE_TWEAK,
         );
         wallet.sign_psbt(&mut psbt);
-        miniscript::psbt::finalize(&mut psbt, &ctx).unwrap();
-        let tx = miniscript::psbt::extract(&psbt, &ctx).unwrap();
+        psbt.finalize_mut(&ctx).unwrap();
+        let tx = psbt.extract_tx();
 
         tx.verify(|_| {
             Some(TxOut {

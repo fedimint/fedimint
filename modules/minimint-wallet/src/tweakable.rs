@@ -46,7 +46,7 @@ impl Contract for [u8; 32] {
     }
 }
 
-impl Contract for secp256k1::schnorrsig::PublicKey {
+impl Contract for secp256k1::XOnlyPublicKey {
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_all(&self.serialize()[..])
     }

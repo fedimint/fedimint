@@ -3,8 +3,7 @@ mod fixtures;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use bitcoin::schnorr::PublicKey;
-use bitcoin::Amount;
+use bitcoin::{Amount, KeyPair};
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
@@ -296,7 +295,7 @@ async fn receive_lightning_payment_valid_preimage() {
         .unwrap();
 
     // Check that the preimage matches user pubkey & lightning invoice preimage
-    let pubkey = PublicKey::from_keypair(&secp(), &keypair);
+    let pubkey = keypair.public_key();
     assert_eq!(pubkey, preimage.0);
     assert_eq!(&sha256(&pubkey.serialize()), invoice.payment_hash());
 
@@ -328,12 +327,12 @@ async fn receive_lightning_payment_invalid_preimage() {
     assert_eq!(gateway.user.total_coins(), starting_balance);
 
     // Manually construct offer where sha256(preimage) != hash
-    let (keypair, pubkey) = secp().generate_schnorrsig_keypair(&mut rng());
+    let kp = KeyPair::new(&secp(), &mut rng());
     let payment_hash = sha256(&[0]);
     let offer_output = user.client.ln_client().create_offer_output(
         payment_amount,
         payment_hash,
-        pubkey.serialize(),
+        kp.public_key().serialize(),
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
@@ -361,7 +360,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     // User gets error when they try to claim gateway's escrowed ecash
     let response = user
         .client
-        .claim_incoming_contract(contract_id, keypair, rng())
+        .claim_incoming_contract(contract_id, kp, rng())
         .await;
     assert!(response.is_err());
 

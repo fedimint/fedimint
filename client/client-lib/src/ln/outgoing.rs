@@ -6,7 +6,7 @@ use minimint_core::modules::ln::ContractInput;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingContractData {
-    pub recovery_key: secp256k1_zkp::schnorrsig::KeyPair,
+    pub recovery_key: bitcoin::KeyPair,
     pub contract_account: OutgoingContractAccount,
 }
 

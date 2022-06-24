@@ -8,13 +8,13 @@ edition = "2018"
 [dependencies]
 async-trait = "0.1"
 bincode = "1"
-bitcoin_hashes = "0.10"
+bitcoin_hashes = "0.10.0"
 futures = "0.3.21"
 itertools = "0.10.1"
-lightning = "0.0.106"
-lightning-invoice = "0.14.0"
+lightning = "0.0.108"
+lightning-invoice = "0.16.0"
 minimint-api = { path = "../../minimint-api" }
-secp256k1 = { version="0.20", default-features=false }
+secp256k1 = { version="0.22.1", default-features=false }
 serde = {version = "1.0.130", features = [ "derive" ] }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 thiserror = "1.0.23"

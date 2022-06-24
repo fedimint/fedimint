@@ -27,17 +27,13 @@ impl MiniscriptKey for CompressedPublicKey {
     fn to_pubkeyhash(&self) -> Self::Hash {
         (*self).clone()
     }
-
-    fn serialized_len(&self) -> usize {
-        secp256k1::constants::PUBLIC_KEY_SIZE
-    }
 }
 
 impl ToPublicKey for CompressedPublicKey {
     fn to_public_key(&self) -> PublicKey {
         PublicKey {
             compressed: true,
-            key: self.key,
+            inner: self.key,
         }
     }
 
@@ -74,7 +70,7 @@ impl From<CompressedPublicKey> for bitcoin::PublicKey {
     fn from(key: CompressedPublicKey) -> Self {
         bitcoin::PublicKey {
             compressed: true,
-            key: key.key,
+            inner: key.key,
         }
     }
 }

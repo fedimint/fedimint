@@ -6,15 +6,15 @@ edition = "2018"
 [dependencies]
 assert_matches = "1.5.0"
 async-trait = "0.1.42"
-bitcoin = "0.27.0"
-bitcoincore-rpc = "0.14.0"
+bitcoin = "0.28.1"
+bitcoincore-rpc = "0.15.0"
 cln-rpc = "0.1"
 clightningrpc = "0.2.0"
 futures = "0.3.9"
 itertools = "0.10.0"
-lightning-invoice = "0.14.0"
+lightning-invoice = "0.16.0"
 ln-gateway = { path = "../ln-gateway" }
-lightning = "0.0.106"
+lightning = "0.0.108"
 minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 minimint-ln = { path = "../modules/minimint-ln" }
