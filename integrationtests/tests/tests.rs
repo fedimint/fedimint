@@ -276,13 +276,15 @@ async fn receive_lightning_payment_valid_preimage() {
         .buy_preimage_offer(invoice.payment_hash(), &payment_amount, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
+    gateway.user.client.fetch_all_coins().await.unwrap();
     assert_eq!(
-        gateway.user.client.coins().amount(),
+        gateway.user.total_coins(),
         starting_balance - payment_amount
     );
+    user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(0));
 
     // Gateway receives decrypted preimage
@@ -303,14 +305,15 @@ async fn receive_lightning_payment_valid_preimage() {
         .claim_incoming_contract(contract_id, keypair, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Ecash tokens have been transferred from gateway to user
-    user.client.fetch_all_coins().await.unwrap();
+    gateway.user.client.fetch_all_coins().await.unwrap();
     assert_eq!(
-        gateway.user.client.coins().amount(),
+        gateway.user.total_coins(),
         starting_balance - payment_amount
     );
+    user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), payment_amount);
 }
 
@@ -344,14 +347,16 @@ async fn receive_lightning_payment_invalid_preimage() {
         .buy_preimage_offer(&payment_hash, &payment_amount, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
-    assert_eq!(user.total_coins(), sats(0));
+    gateway.user.client.fetch_all_coins().await.unwrap();
     assert_eq!(
         gateway.user.total_coins(),
         starting_balance - payment_amount
     );
+    user.client.fetch_all_coins().await.unwrap();
+    assert_eq!(user.total_coins(), sats(0));
 
     // User gets error when they try to claim gateway's escrowed ecash
     let response = user
@@ -366,14 +371,13 @@ async fn receive_lightning_payment_invalid_preimage() {
         .claim_incoming_contract(contract_id, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
-
-    // TODO: disable background_fetch for this test and fetch the coins manually
-    // gateway.client.fetch_coins(_outpoint).await.unwrap();
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Gateway has clawed back their escrowed funds
+    gateway.user.client.fetch_all_coins().await.unwrap();
+    assert_eq!(gateway.user.total_coins(), starting_balance);
+    user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(0));
-    assert_eq!(gateway.user.client.coins().amount(), starting_balance);
 }
 
 #[tokio::test(flavor = "multi_thread")]
