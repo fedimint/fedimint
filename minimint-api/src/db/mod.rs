@@ -1,4 +1,5 @@
 use crate::encoding::{Decodable, Encodable};
+use anyhow::Result;
 use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
@@ -31,30 +32,22 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
-pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>> + Send>;
+pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
 
 pub trait Database: Send + Sync {
-    fn raw_insert_entry(
-        &self,
-        key: &[u8],
-        value: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, DatabaseError>;
+    fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
-    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError>;
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
-    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError>;
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter;
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError>;
+    fn raw_apply_batch(&self, batch: DbBatch) -> Result<()>;
 }
 
 impl<'a> dyn Database + 'a {
-    pub fn insert_entry<K>(
-        &self,
-        key: &K,
-        value: &K::Value,
-    ) -> Result<Option<K::Value>, DatabaseError>
+    pub fn insert_entry<K>(&self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
@@ -71,7 +64,7 @@ impl<'a> dyn Database + 'a {
         }
     }
 
-    pub fn get_value<K>(&self, key: &K) -> Result<Option<K::Value>, DatabaseError>
+    pub fn get_value<K>(&self, key: &K) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
@@ -89,7 +82,7 @@ impl<'a> dyn Database + 'a {
         Ok(Some(K::Value::from_bytes(&value_bytes)?))
     }
 
-    pub fn remove_entry<K>(&self, key: &K) -> Result<Option<K::Value>, DatabaseError>
+    pub fn remove_entry<K>(&self, key: &K) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
@@ -110,7 +103,7 @@ impl<'a> dyn Database + 'a {
     pub fn find_by_prefix<KP>(
         &self,
         key_prefix: &KP,
-    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value), DatabaseError>>
+    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>>
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
@@ -129,7 +122,7 @@ impl<'a> dyn Database + 'a {
         })
     }
 
-    pub fn apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+    pub fn apply_batch(&self, batch: DbBatch) -> Result<()> {
         self.raw_apply_batch(batch)
     }
 }
@@ -193,12 +186,12 @@ pub enum DecodingError {
     #[error("Key had a wrong length, expected {expected} but got {found}")]
     WrongLength { expected: usize, found: usize },
     #[error("Other decoding error: {0}")]
-    Other(Box<dyn Error + Send + 'static>),
+    Other(anyhow::Error),
 }
 
 impl DecodingError {
-    pub fn other<E: Error + Send + 'static>(error: E) -> DecodingError {
-        DecodingError::Other(Box::new(error))
+    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> DecodingError {
+        DecodingError::Other(anyhow::Error::from(error))
     }
 
     pub fn wrong_prefix(expected: u8, found: u8) -> DecodingError {
@@ -208,14 +201,6 @@ impl DecodingError {
     pub fn wrong_length(expected: usize, found: usize) -> DecodingError {
         DecodingError::WrongLength { expected, found }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum DatabaseError {
-    #[error("Underlying Database Error: {0}")]
-    DbError(Box<dyn Error + Send>),
-    #[error("Decoding error: {0}")]
-    DecodingError(#[from] DecodingError),
 }
 
 #[cfg(test)]

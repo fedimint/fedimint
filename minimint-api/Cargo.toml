@@ -6,6 +6,7 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
+anyhow = "1.0.58"
 async-trait = "0.1"
 bitcoin = { version = "0.27.0", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }

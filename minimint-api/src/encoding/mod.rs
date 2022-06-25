@@ -27,7 +27,7 @@ pub trait Decodable: Sized {
 }
 
 #[derive(Debug, Error)]
-pub struct DecodeError(pub(crate) Box<dyn std::error::Error + Send + Sync>);
+pub struct DecodeError(pub(crate) anyhow::Error);
 
 macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {
@@ -230,11 +230,11 @@ impl DecodeError {
 
         impl std::error::Error for StrError {}
 
-        DecodeError(Box::new(StrError(s)))
+        DecodeError(anyhow::Error::from(StrError(s)))
     }
 
     pub fn from_err<E: std::error::Error + Send + Sync + 'static>(e: E) -> Self {
-        DecodeError(Box::new(e))
+        DecodeError(anyhow::Error::from(e))
     }
 }
 
