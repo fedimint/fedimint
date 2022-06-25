@@ -38,8 +38,9 @@ pub mod payload {
 pub mod responses {
     use serde::Serialize;
 
-    use minimint_api::{Amount, TransactionId};
+    use minimint_api::{Amount, OutPoint, TransactionId};
     use minimint_core::modules::mint::tiered::coins::Coins;
+    use minimint_core::outcome::TransactionStatus;
     use mint_client::mint::{CoinFinalizationData, SpendableCoin};
 
     use crate::utils::CoinsByTier;
@@ -80,6 +81,12 @@ pub mod responses {
     #[derive(Serialize)]
     pub struct EventsResponse {
         events: Vec<super::Event>,
+    }
+
+    #[derive(Serialize)]
+    pub struct ReissueResponse {
+        out_point: OutPoint,
+        status: TransactionStatus,
     }
 
     impl InfoResponse {
@@ -132,6 +139,12 @@ pub mod responses {
     impl EventsResponse {
         pub fn new(events: Vec<super::Event>) -> Self {
             Self { events }
+        }
+    }
+
+    impl ReissueResponse {
+        pub fn new(out_point: OutPoint, status: TransactionStatus) -> Self {
+            Self { out_point, status }
         }
     }
 }

@@ -3,7 +3,7 @@ mod utils;
 use crate::utils::payload::{LnPayPayload, PeginPayload};
 use crate::utils::responses::{
     EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
-    RpcResult, SpendResponse,
+    ReissueResponse, RpcResult, SpendResponse,
 };
 use crate::utils::{Event, EventLog, JsonDecodeTransaction};
 use axum::response::IntoResponse;
@@ -87,6 +87,7 @@ async fn main() {
         .route("/pegin", post(pegin))
         .route("/spend", post(spend))
         .route("/reissue", post(reissue))
+        .route("/reissueValidate", post(reissue_validate))
         .route("/lnpay", post(lnpay))
         .layer(
             ServiceBuilder::new()
@@ -226,6 +227,40 @@ async fn reissue(Extension(state): Extension<Arc<State>>, payload: Json<Coins<Sp
             }
         }
     });
+}
+
+async fn reissue_validate(
+    Extension(state): Extension<Arc<State>>,
+    payload: Json<Coins<SpendableCoin>>,
+) -> impl IntoResponse {
+    let client = &state.client;
+    let event_log = &state.event_log;
+    let coins = payload.0;
+    let fetch_tx = state.fetch_tx.clone();
+    let mut rng = state.rng.clone();
+    let outpoint = match client.reissue(coins, &mut rng).await {
+        Ok(outpoint) => {
+            event_log
+                .add(format!("Successful reissue, outpoint: {:?}", outpoint))
+                .await;
+            if let Err(e) = fetch_tx.send(()).await {
+                event_log
+                    .add(format!("Critical error, restart the deamon: {}", e))
+                    .await;
+            }
+            outpoint
+        }
+        Err(e) => {
+            let event = Event::new(format!("Error while reissue: {:?}", e));
+            event_log.add_event(event.clone()).await;
+            return Json(RpcResult::Failure(json!(event)));
+        }
+    };
+    //unwrap ok since this is polling=true
+    let status = client.fetch_tx_outcome(outpoint.txid, true).await.unwrap();
+    Json(RpcResult::Success(json!(ReissueResponse::new(
+        outpoint, status
+    ))))
 }
 
 //TODO: wait for https://github.com/fedimint/minimint/issues/80 and implement solution for this handler

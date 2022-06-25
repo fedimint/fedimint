@@ -23,6 +23,7 @@ use minimint_core::modules::ln::ContractOrOfferOutput;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::mint::BlindToken;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
+use minimint_core::outcome::TransactionStatus;
 use minimint_core::transaction::{Input, Output, TransactionItem};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
@@ -400,6 +401,29 @@ impl UserClient {
 
     pub fn fetch_active_issuances(&self) -> Vec<CoinFinalizationData> {
         self.mint_client().list_active_issuances().1
+    }
+
+    /// Fetches the TransactionStatus for a txid
+    /// Polling should *only* be set to true if it is anticipated that the txid is valid but has not yet been processed
+    pub async fn fetch_tx_outcome(
+        &self,
+        tx: TransactionId,
+        polling: bool,
+    ) -> Result<TransactionStatus, ClientError> {
+        //did not choose to use the MintClientError is_retryable logic because the 404 error should normaly
+        //not be retryable just in this specific case...
+        let status;
+        loop {
+            match self.context.api.fetch_tx_outcome(tx).await {
+                Ok(s) => {
+                    status = s;
+                    break;
+                }
+                Err(_e) if polling => minimint_api::task::sleep(Duration::from_secs(1)).await,
+                Err(e) => return Err(ClientError::MintApiError(e)),
+            }
+        }
+        Ok(status)
     }
 }
 
