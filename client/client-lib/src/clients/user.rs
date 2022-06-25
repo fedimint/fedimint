@@ -10,18 +10,20 @@ use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
-use minimint::config::ClientConfig;
-use minimint::modules::ln::contracts::incoming::OfferId;
-use minimint::modules::ln::contracts::{ContractId, IdentifyableContract, OutgoingContractOutcome};
-use minimint::modules::ln::ContractOrOfferOutput;
-use minimint::modules::mint::tiered::coins::Coins;
-use minimint::modules::mint::BlindToken;
-use minimint::modules::wallet::txoproof::TxOutProof;
-use minimint::transaction::{Input, Output, TransactionItem};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::{Amount, TransactionId};
 use minimint_api::{OutPoint, PeerId};
+use minimint_core::config::ClientConfig;
+use minimint_core::modules::ln::contracts::incoming::OfferId;
+use minimint_core::modules::ln::contracts::{
+    ContractId, IdentifyableContract, OutgoingContractOutcome,
+};
+use minimint_core::modules::ln::ContractOrOfferOutput;
+use minimint_core::modules::mint::tiered::coins::Coins;
+use minimint_core::modules::mint::BlindToken;
+use minimint_core::modules::wallet::txoproof::TxOutProof;
+use minimint_core::transaction::{Input, Output, TransactionItem};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use std::time::Duration;
@@ -372,7 +374,7 @@ impl UserClient {
         &self,
         invoice: UnconfirmedInvoice,
     ) -> Result<Invoice, ClientError> {
-        let timeout = tokio::time::Duration::from_secs(10);
+        let timeout = std::time::Duration::from_secs(10);
         self.context
             .api
             .await_output_outcome::<OfferId>(invoice.outpoint, timeout)
@@ -400,13 +402,13 @@ impl UserClient {
 #[derive(Error, Debug)]
 pub enum ClientError {
     #[error("Error querying federation: {0}")]
-    MintApiError(ApiError),
+    MintApiError(#[from] ApiError),
     #[error("Wallet client error: {0}")]
-    WalletClientError(WalletClientError),
+    WalletClientError(#[from] WalletClientError),
     #[error("Mint client error: {0}")]
-    MintClientError(MintClientError),
+    MintClientError(#[from] MintClientError),
     #[error("Lightning client error: {0}")]
-    LnClientError(LnClientError),
+    LnClientError(#[from] LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
     #[error("Timed out while waiting for contract to be accepted")]
@@ -414,35 +416,5 @@ pub enum ClientError {
     #[error("Error fetching offer")]
     FetchOfferError,
     #[error("Failed to create lightning invoice: {0}")]
-    InvoiceError(CreationError),
-}
-
-impl From<ApiError> for ClientError {
-    fn from(e: ApiError) -> Self {
-        ClientError::MintApiError(e)
-    }
-}
-
-impl From<WalletClientError> for ClientError {
-    fn from(e: WalletClientError) -> Self {
-        ClientError::WalletClientError(e)
-    }
-}
-
-impl From<MintClientError> for ClientError {
-    fn from(e: MintClientError) -> Self {
-        ClientError::MintClientError(e)
-    }
-}
-
-impl From<LnClientError> for ClientError {
-    fn from(e: LnClientError) -> Self {
-        ClientError::LnClientError(e)
-    }
-}
-
-impl From<CreationError> for ClientError {
-    fn from(e: CreationError) -> Self {
-        ClientError::InvoiceError(e)
-    }
+    InvoiceError(#[from] CreationError),
 }

@@ -11,17 +11,17 @@ use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::BorrowedClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use lightning_invoice::Invoice;
-use minimint::modules::ln::config::LightningModuleClientConfig;
-use minimint::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
-use minimint::modules::ln::contracts::outgoing::OutgoingContract;
-use minimint::modules::ln::contracts::{
-    Contract, ContractId, FundedContract, IdentifyableContract,
-};
-use minimint::modules::ln::{
-    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
-};
 use minimint_api::db::batch::BatchTx;
 use minimint_api::Amount;
+use minimint_core::modules::ln::config::LightningModuleClientConfig;
+use minimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
+use minimint_core::modules::ln::contracts::outgoing::OutgoingContract;
+use minimint_core::modules::ln::contracts::{
+    Contract, ContractId, FundedContract, IdentifyableContract,
+};
+use minimint_core::modules::ln::{
+    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
+};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 
@@ -181,17 +181,17 @@ mod tests {
     use crate::OwnedClientContext;
     use async_trait::async_trait;
     use lightning_invoice::Invoice;
-    use minimint::modules::ln::config::LightningModuleClientConfig;
-    use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use minimint::modules::ln::ContractOrOfferOutput;
-    use minimint::modules::ln::{ContractAccount, LightningModule};
-    use minimint::outcome::{OutputOutcome, TransactionStatus};
-    use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
+    use minimint_core::modules::ln::config::LightningModuleClientConfig;
+    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+    use minimint_core::modules::ln::ContractOrOfferOutput;
+    use minimint_core::modules::ln::{ContractAccount, LightningModule};
+    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use minimint_core::transaction::Transaction;
     use std::sync::Arc;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;

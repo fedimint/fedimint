@@ -1,0 +1,27 @@
+[package]
+name = "minimint-core"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.42"
+futures = "0.3.9"
+bincode = "1.3.1"
+bitcoin = "0.27.0"
+hex = "0.4.2"
+itertools = "0.10.0"
+minimint-api = { path = "../minimint-api" }
+minimint-derive = { path = "../minimint-derive" }
+minimint-ln = { path = "../modules/minimint-ln" }
+minimint-mint = { path = "../modules/minimint-mint" }
+minimint-wallet = { path = "../modules/minimint-wallet", default-features = false }
+rand = "0.6.5"
+secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [ "global-context", "bitcoin_hashes" ] }
+serde = { version = "1.0.118", features = [ "derive" ] }
+serde_json = "1.0.61"
+sha3 = "0.9.1"
+tbs = { path = "../crypto/tbs" }
+thiserror = "1.0.23"
+tracing ="0.1.22"

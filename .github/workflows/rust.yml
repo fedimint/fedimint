@@ -50,16 +50,11 @@ jobs:
           target: wasm32-unknown-unknown
           profile: minimal
       - uses: Swatinem/rust-cache@v1
-      - name: Build minimint-api
+      - name: Build modules/mint-client
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target wasm32-unknown-unknown --package minimint-api
-      - name: Build modules/minimint-mint
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target wasm32-unknown-unknown --package minimint-mint
+          args: --target wasm32-unknown-unknown --package mint-client
 
   build_and_integration_test:
     name: Integration Tests
@@ -81,7 +76,8 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v10
+        if: github.repository_owner == 'fedimint'
         with:
           name: fedimint
-          signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
-      - run: nix-build | cachix push fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - run: nix-build

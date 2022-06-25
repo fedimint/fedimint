@@ -5,11 +5,11 @@ authors = ["elsirion <elsirion@protonmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 async-trait = "0.1"
 bitcoin = { version = "0.27.0", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
+futures = "0.3.21"
 hex = "0.4.3"
 http-types = "2.12.0"
 minimint-derive = { path = "../minimint-derive" }
@@ -22,11 +22,16 @@ tbs = { path = "../crypto/tbs"}
 thiserror = "1.0.23"
 tracing ="0.1.22"
 
-[target.'cfg(target_arch="wasm32")'.dependencies]
+[target.'cfg(target_family="wasm")'.dependencies]
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2.0", features = [ "js" ] }
+gloo-timers = { version = "0.2.4", features = ["futures"] }
+wasm-bindgen-futures = "0.4.31"
+
+[target.'cfg(not(target_family="wasm"))'.dependencies]
+tokio = { version = "1.19.2", features = ["rt", "rt-multi-thread", "time"] }
 
 [dev-dependencies]
 tempfile = "3.3.0"

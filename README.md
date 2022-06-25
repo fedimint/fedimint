@@ -28,7 +28,7 @@ MiniMint is tested and developed using rust `stable`, you can get it through you
 MiniMint consists of three kinds of services:
 * federation member nodes (`server` binary) which make up the federation and run the consensus protocol among each other.
 * a Lightning gateway (`ln_gateway` binary) which acts as a bridge between the federation and the Lightning network allowing users to pay LN invoices with e-cash tokens.
-* user clients (`mint-client` binary) that interact with the federation nodes and the gateway
+* user clients (`mint-client-cli` binary) that interact with the federation nodes and the gateway
 
 In the following we will set up all three.
 
@@ -146,20 +146,20 @@ Take care to not request too big of a peg-in (depending on your amount tier the 
 You can view your client's holdings using the `info` command:
 
 ```
-minimint $ cargo run --bin mint-client --release -- cfg info
+minimint $ cargo run --bin mint-client-cli --release -- cfg info
     Finished release [optimized] target(s) in 0.11s
-     Running `target/release/mint-client cfg info`
-Jun 15 14:57:22.066  INFO mint_client: We own 14 coins with a total value of 9500000 msat
-Jun 15 14:57:22.066  INFO mint_client: We own 5 coins of denomination 100000 msat
-Jun 15 14:57:22.066  INFO mint_client: We own 9 coins of denomination 1000000 msat
+     Running `target/release/mint-client-cli cfg info`
+Jun 15 14:57:22.066  INFO mint_client_cli: We own 14 coins with a total value of 9500000 msat
+Jun 15 14:57:22.066  INFO mint_client_cli: We own 5 coins of denomination 100000 msat
+Jun 15 14:57:22.066  INFO mint_client_cli: We own 9 coins of denomination 1000000 msat
 ```
 
 The `spend` subcommand allows to send tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
 
 ```
-minimint $ cargo run --bin mint-client --release -- cfg spend 400000
+minimint $ cargo run --bin mint-client-cli --release -- cfg spend 400000
     Finished release [optimized] target(s) in 0.12s
-     Running `target/release/mint-client cfg spend 400000`
+     Running `target/release/mint-client-cli cfg spend 400000`
 AQAAAAAAAACghgEAAAAAAAQAAAAAAAAAA7mGus9L4ojsIsctFK7oNz5s4ozZe3pVa0S1jZ3XvSnMMAAAAAAAAACFjOG3a4vlxBOCa9fYD6qWIM2JhH9vitG0
 DXQhd9KhGYKheKADLOVXgZwOQDX0NheGP5fFEMYOfidY1FPXB1qRhrEiZKh3YVb2i922uUHoggOsZhrLpk4EGCJjuT1QUWpO8HZ9WOxD4oUv6nPNVQnKvDAA
 AAAAAAAAoXKhtm/0w8pFz7CN6xcEQUnukrNcfhc/NtRita1vvZDyX/NBiSmHZVyWx8WEloclIw0A8ljJhp+b517c1LsLJ5Z6Issf9QcV/hwAgY/RJo4DRGWD
@@ -171,15 +171,15 @@ rRj6oMC6wKoZz0jCuS5i8faLRHGZp3AMR1/xAvMglQZ9zMEDdDd7dcxwp9WpR6JfdAUJku3EGQ/FUXaQ
 A receiving client can now reissue these coins to claim them and avoid double spends:
 
 ```
-minimint $ cargo run --bin mint-client --release -- cfg reissue AQAAAAAAAACghgE…
+minimint $ cargo run --bin mint-client-cli --release -- cfg reissue AQAAAAAAAACghgE…
     Finished release [optimized] target(s) in 0.13s
-     Running `target/release/mint-client cfg reissue AQAAAAAAAACghgE…
-Jun 15 15:01:47.027  INFO mint_client: Starting reissuance transaction for 400000 msat
-Jun 15 15:01:47.040  INFO mint_client: Started reissuance 47d8f08710423c1e300854ecb6463ca6185e4b3890bbbb90fd1ff70c72e1ed18, please fetch the result later
-minimint $ cargo run --bin mint-client --release -- cfg fetch
+     Running `target/release/mint-client-cli cfg reissue AQAAAAAAAACghgE…
+Jun 15 15:01:47.027  INFO mint_client_cli: Starting reissuance transaction for 400000 msat
+Jun 15 15:01:47.040  INFO mint_client_cli: Started reissuance 47d8f08710423c1e300854ecb6463ca6185e4b3890bbbb90fd1ff70c72e1ed18, please fetch the result later
+minimint $ cargo run --bin mint-client-cli --release -- cfg fetch
     Finished release [optimized] target(s) in 0.12s
-     Running `target/release/mint-client cfg fetch`
-Jun 15 15:02:06.264  INFO mint_client: Fetched coins from issuance 47d8f08710423c1e300854ecb6463ca6185e4b3890bbbb90fd1ff70c72e1ed18
+     Running `target/release/mint-client-cli cfg fetch`
+Jun 15 15:02:06.264  INFO mint_client_cli: Fetched coins from issuance 47d8f08710423c1e300854ecb6463ca6185e4b3890bbbb90fd1ff70c72e1ed18
 ```
 
 ### Using the gateway
@@ -206,7 +206,7 @@ lightning-cli --network regtest --lightning-dir=ln2 waitinvoice test
 Pay the invoice: 
 
 ```shell
-cargo run --bin mint-client --release -- cfg ln-pay <INVOICE>
+cargo run --bin mint-client-cli --release -- cfg ln-pay <INVOICE>
 ```
 
 ### Other options
@@ -214,13 +214,13 @@ cargo run --bin mint-client --release -- cfg ln-pay <INVOICE>
 There also exist some other, more experimental commands that can be explored using the `--help` flag:
 
 ```
-minimint $ cargo run --bin mint-client --release -- --help
+minimint $ cargo run --bin mint-client-cli --release -- --help
     Finished release [optimized] target(s) in 0.12s
-     Running `target/release/mint-client --help`
-mint-client 0.1.0
+     Running `target/release/mint-client-cli --help`
+mint-client-cli 0.1.0
 
 USAGE:
-    mint-client <workdir> <SUBCOMMAND>
+    mint-client-cli <workdir> <SUBCOMMAND>
 
 FLAGS:
     -h, --help       Prints help information

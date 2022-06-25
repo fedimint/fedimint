@@ -18,8 +18,11 @@ The [Minimint federation](#Federation-Nodes) consists of nodes that are primaril
 * `modules/minimint-mint` - a blinded mint that issues e-cash
 * `modules/minimint-ln` - a Lightning payment service
 
+* `minimint-core` - common code used by both client and server. Can't be in `minimint-api` because it depends on modules
+
 The [user client](#User-Client):
-* `mint-client` - provides a client for sending transactions to the federation
+* `client/client-lib` - provides a library for sending transactions to the federation
+* `client/cli` - cli wrapper around the client library
 
 The [LN gateway](#LN-Gateway):
 * `ln-gateway` - allows a Lightning node operator to receive or pay Lightning invoices on behalf of users

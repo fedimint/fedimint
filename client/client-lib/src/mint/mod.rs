@@ -5,15 +5,15 @@ use crate::clients::transaction::TransactionBuilder;
 use crate::BorrowedClientContext;
 use bitcoin::schnorr::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use minimint::modules::mint::config::MintClientConfig;
-use minimint::modules::mint::tiered::coins::Coins;
-use minimint::modules::mint::{
-    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
-};
-use minimint::transaction::{Output, Transaction};
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
+use minimint_core::modules::mint::config::MintClientConfig;
+use minimint_core::modules::mint::tiered::coins::Coins;
+use minimint_core::modules::mint::{
+    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+};
+use minimint_core::transaction::{Output, Transaction};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
@@ -256,7 +256,7 @@ impl<'c> MintClient<'c> {
                     // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
                     Err(e) if e.is_retryable_fetch_coins() => {
                         trace!("Mint returned retryable error: {:?}", e);
-                        tokio::time::sleep(Duration::from_secs(1)).await
+                        minimint_api::task::sleep(Duration::from_secs(1)).await
                     }
                     Err(e) => return Err(e),
                 }
@@ -384,9 +384,9 @@ pub enum CoinFinalizationError {
 #[derive(Error, Debug)]
 pub enum MintClientError {
     #[error("Error querying federation: {0}")]
-    ApiError(ApiError),
+    ApiError(#[from] ApiError),
     #[error("Could not finalize issuance request: {0}")]
-    FinalizationError(CoinFinalizationError),
+    FinalizationError(#[from] CoinFinalizationError),
     #[error("The client's wallet has not enough coins or they are not in the right denomination")]
     NotEnoughCoins,
     #[error("The transaction outcome received from the mint did not contain a result for output {0} yet")]
@@ -411,18 +411,6 @@ impl MintClientError {
     }
 }
 
-impl From<ApiError> for MintClientError {
-    fn from(e: ApiError) -> Self {
-        MintClientError::ApiError(e)
-    }
-}
-
-impl From<CoinFinalizationError> for MintClientError {
-    fn from(e: CoinFinalizationError) -> Self {
-        MintClientError::FinalizationError(e)
-    }
-}
-
 impl From<InvalidAmountTierError> for CoinFinalizationError {
     fn from(e: InvalidAmountTierError) -> Self {
         CoinFinalizationError::InvalidAmountTier(e.0)
@@ -438,18 +426,18 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use futures::executor::block_on;
-    use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint::modules::ln::contracts::ContractId;
-    use minimint::modules::ln::ContractAccount;
-    use minimint::modules::mint::config::MintClientConfig;
-    use minimint::modules::mint::Mint;
-    use minimint::outcome::{OutputOutcome, TransactionStatus};
-    use minimint::transaction::Transaction;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::db::Database;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
+    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use minimint_core::modules::ln::contracts::ContractId;
+    use minimint_core::modules::ln::ContractAccount;
+    use minimint_core::modules::mint::config::MintClientConfig;
+    use minimint_core::modules::mint::Mint;
+    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use minimint_core::transaction::Transaction;
     use std::sync::Arc;
 
     type Fed = FakeFed<Mint, MintClientConfig>;

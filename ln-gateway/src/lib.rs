@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tokio::time::Instant;
 use tracing::{debug, error, instrument, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -171,7 +171,7 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
             })
             .collect::<Vec<_>>();
         futures::future::join_all(pending_fetches).await;
-        tokio::time::sleep_until(least_wait_until).await;
+        minimint_api::task::sleep_until(least_wait_until).await;
     }
 }
 
@@ -185,13 +185,7 @@ impl Drop for LnGateway {
 #[derive(Debug, Error)]
 pub enum LnGatewayError {
     #[error("Federation operation error: {0:?}")]
-    FederationError(GatewayClientError),
+    FederationError(#[from] GatewayClientError),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
-}
-
-impl From<GatewayClientError> for LnGatewayError {
-    fn from(e: GatewayClientError) -> Self {
-        LnGatewayError::FederationError(e)
-    }
 }

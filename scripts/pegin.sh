@@ -4,7 +4,7 @@ set -e
 
 # Let's define some shortcuts for bitcoind and the mint client
 BTC_CLI="bitcoin-cli -regtest -rpcconnect=127.0.0.1 -rpcuser=bitcoin -rpcpassword=bitcoin"
-CLIENT="cargo run --release --bin mint-client cfg"
+CLIENT="cargo run --release --bin mint-client-cli cfg"
 
 # Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
 # random value only known to our client.

@@ -1,12 +1,12 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use futures::{Future, StreamExt, TryFutureExt};
-use minimint::modules::ln::contracts::incoming::IncomingContractOffer;
-use minimint::modules::ln::contracts::ContractId;
-use minimint::modules::ln::ContractAccount;
-use minimint::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
-use minimint::transaction::Transaction;
 use minimint_api::{OutPoint, PeerId, TransactionId};
+use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+use minimint_core::modules::ln::contracts::ContractId;
+use minimint_core::modules::ln::ContractAccount;
+use minimint_core::outcome::{MismatchingVariant, TransactionStatus, TryIntoOutcome};
+use minimint_core::transaction::Transaction;
 use reqwest::{StatusCode, Url};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -15,7 +15,8 @@ use std::pin::Pin;
 use std::time::Duration;
 use thiserror::Error;
 
-#[async_trait]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait FederationApi: Send + Sync {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
@@ -64,12 +65,14 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_output_outcome(outpoint).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable_fetch_coins() => tokio::time::sleep(interval).await,
+                    Err(e) if e.is_retryable_fetch_coins() => {
+                        minimint_api::task::sleep(interval).await
+                    }
                     Err(e) => return Err(e),
                 }
             }
         };
-        tokio::time::timeout(timeout, poll())
+        minimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| ApiError::Timeout)?
     }
@@ -89,7 +92,7 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 #[derive(Debug, Error)]
 pub enum ApiError {
     #[error("HTTP error: {0}")]
-    HttpError(reqwest::Error),
+    HttpError(#[from] reqwest::Error),
     #[error("Accepted transaction errored on execution: {0}")]
     TransactionError(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
@@ -111,9 +114,14 @@ impl ApiError {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;
 
-#[async_trait]
+#[cfg(target_family = "wasm")]
+type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + 'a>>;
+
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl FederationApi for HttpFederationApi {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
@@ -259,11 +267,5 @@ where
             Ok(res) => res.hash(state),
             Err(e) => e.status().hash(state),
         }
-    }
-}
-
-impl From<reqwest::Error> for ApiError {
-    fn from(e: reqwest::Error) -> Self {
-        ApiError::HttpError(e)
     }
 }

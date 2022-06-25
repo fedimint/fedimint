@@ -1,6 +1,5 @@
 mod fixtures;
 
-use std::thread;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
@@ -8,6 +7,7 @@ use bitcoin::schnorr::PublicKey;
 use bitcoin::Amount;
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
+use futures::future::{join_all, Either};
 
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
@@ -15,6 +15,7 @@ use minimint::transaction::Output;
 use minimint_api::OutPoint;
 use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
+use minimint_wallet::WalletConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
 use mint_client::clients::transaction::TransactionBuilder;
 
@@ -125,7 +126,11 @@ async fn minted_coins_in_wallet_can_be_split_into_change() {
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_to_peg_out() {
     let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    fed.mint_coins_for_user(&user, sats(1500)).await;
+    // FIXME coins cannot be fetched if peer is not in the epoch
+    fed.subset_peers(&[0, 1, 2])
+        .mint_coins_for_user(&user, sats(1500))
+        .await;
+    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(5000));
 
     let peg_out_address = bitcoin.get_new_address();
@@ -149,18 +154,19 @@ async fn drop_peers_who_dont_contribute_to_peg_out() {
 }
 
 async fn drop_peer_3_during_epoch(fed: &FederationTest) {
-    // make sure we don't drop peers just for having an empty epoch
-    fed.run_empty_epoch().await;
-
     // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
     fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
     fed.subset_peers(&[0]).run_consensus_epochs(1).await;
 
-    // let peers 1,2,3 create a proposal, if peer 3 was dropped then they will wait for peer 0
-    fed.subset_peers(&[1, 2, 3]).send_proposals();
-    thread::sleep(Duration::from_millis(500));
-    fed.subset_peers(&[0]).send_proposals();
-    fed.subset_peers(&[0, 1, 2]).process_outcomes().await;
+    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
+    join_all(vec![
+        Either::Left(fed.subset_peers(&[1, 2]).run_consensus_epochs(1)),
+        Either::Right(
+            fed.subset_peers(&[0, 3])
+                .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
+        ),
+    ])
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -170,7 +176,6 @@ async fn drop_peers_who_dont_contribute_blind_sigs() {
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
     drop_peer_3_during_epoch(&fed).await;
-    fed.subset_peers(&[0]).send_proposals();
 
     user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(1000));
@@ -190,7 +195,6 @@ async fn drop_peers_who_contribute_bad_sigs() {
 
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
     drop_peer_3_during_epoch(&fed).await;
-    fed.subset_peers(&[0]).send_proposals();
 
     user.client.fetch_all_coins().await.unwrap();
     assert_eq!(user.total_coins(), sats(1000));
@@ -257,7 +261,7 @@ async fn receive_lightning_payment_valid_preimage() {
         .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(2).await; // process offer
+    fed.run_consensus_epochs(1).await; // process offer
 
     // Confirm the offer has been accepted by the federation
     let invoice = user
@@ -332,7 +336,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     builder.output(Output::LN(offer_output));
     let tx = builder.build(&secp(), &mut rng());
     fed.submit_transaction(tx);
-    fed.run_consensus_epochs(2).await; // process offer
+    fed.run_consensus_epochs(1).await; // process offer
 
     // Gateway escrows ecash to trigger preimage decryption by the federation
     let (_, contract_id) = gateway
@@ -374,7 +378,7 @@ async fn receive_lightning_payment_invalid_preimage() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() {
-    let (fed, user, _, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
 
     fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
@@ -392,8 +396,15 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
         .await;
     assert!(response.is_err());
 
+    bitcoin.mine_blocks(100); // create non-empty epoch
     fed.run_consensus_epochs(1).await; // if valid would create contract to mint coins
-    assert!(fed.last_consensus_items().is_empty())
+
+    fed.last_consensus_items().iter().for_each(|item| {
+        assert_matches!(
+            item,
+            ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(_))
+        )
+    });
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -414,4 +425,54 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     gateway.client.abort_outgoing_payment(contract_id);
     fed.run_consensus_epochs(1).await;
     assert_eq!(user.total_coins(), sats(1010));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_consensus_if_tx_submitted() {
+    let (fed, user_send, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let user_receive = user_send.new_client(&[0]);
+
+    fed.mint_coins_for_user(&user_send, sats(5000)).await;
+    let coins = user_send.client.select_and_spend_coins(sats(5000)).unwrap();
+
+    // If epochs run before the reissue tx, then there won't be any coins to fetch
+    join_all(vec![
+        Either::Left(async {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            user_receive.client.reissue(coins, rng()).await.unwrap();
+        }),
+        Either::Right(fed.run_consensus_epochs(2)),
+    ])
+    .await;
+
+    user_receive.client.fetch_all_coins().await.unwrap();
+    assert_eq!(user_receive.total_coins(), sats(5000));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_consensus_if_new_block() {
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(5000));
+    fed.mint_coins_for_user(&user, sats(1500)).await;
+
+    let peg_out_address = bitcoin.get_new_address();
+    user.peg_out(1000, &peg_out_address).await;
+    fed.run_consensus_epochs(1).await;
+
+    // If epochs run before the blocks are mined, won't be able to peg-out
+    join_all(vec![
+        Either::Left(async {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            bitcoin.mine_blocks(fed.wallet.finalty_delay as u64);
+            bitcoin.mine_blocks(minimint_wallet::MIN_PEG_OUT_URGENCY as u64 + 1);
+        }),
+        Either::Right(async { fed.run_consensus_epochs(2).await }),
+    ])
+    .await;
+
+    fed.broadcast_transactions().await;
+    assert_eq!(
+        bitcoin.mine_block_and_get_received(&peg_out_address),
+        sats(1000)
+    );
 }

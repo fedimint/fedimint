@@ -13,20 +13,22 @@ use crate::db::{
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
+use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
+use minimint_core::modules::ln::{LightningModule, LightningModuleError};
+use minimint_core::modules::mint::{Mint, MintError};
+use minimint_core::modules::wallet::{Wallet, WalletError};
 use minimint_derive::UnzipConsensus;
-use minimint_ln::{LightningModule, LightningModuleError};
-use minimint_mint::{Mint, MintError};
-use minimint_wallet::{Wallet, WalletError};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::Notify;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
@@ -63,6 +65,9 @@ where
 
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Arc<dyn Database>,
+
+    // Notifies tasks when there is a new transaction
+    pub transaction_notify: Arc<Notify>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -148,6 +153,7 @@ where
             warn!("Added consensus item was already in consensus queue");
         }
 
+        self.transaction_notify.notify_one();
         Ok(())
     }
 
@@ -263,6 +269,15 @@ where
 
             self.db.apply_batch(db_batch).expect("DB error");
         }
+    }
+
+    pub async fn await_consensus_proposal(&self) {
+        select_all(vec![
+            self.wallet.await_consensus_proposal(self.rng_gen.get_rng()),
+            self.ln.await_consensus_proposal(self.rng_gen.get_rng()),
+            self.mint.await_consensus_proposal(self.rng_gen.get_rng()),
+        ])
+        .await;
     }
 
     pub async fn get_consensus_proposal(&self) -> ConsensusProposal {
@@ -502,7 +517,7 @@ impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a Lightnin
 #[derive(Debug, Error)]
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
-    TransactionError(TransactionError),
+    TransactionError(#[from] TransactionError),
     #[error("Input coin error: {0}")]
     InputCoinError(MintError),
     #[error("Input peg-in error: {0}")]
@@ -515,10 +530,4 @@ pub enum TransactionSubmissionError {
     OutputPegOut(WalletError),
     #[error("LN contract output error: {0}")]
     ContractOutputError(LightningModuleError),
-}
-
-impl From<TransactionError> for TransactionSubmissionError {
-    fn from(e: TransactionError) -> Self {
-        TransactionSubmissionError::TransactionError(e)
-    }
 }

@@ -14,11 +14,12 @@ itertools = "0.10.1"
 lightning = "0.0.106"
 lightning-invoice = "0.14.0"
 minimint-api = { path = "../../minimint-api" }
-secp256k1 = "0.20"
+secp256k1 = { version="0.20", default-features=false }
 serde = {version = "1.0.130", features = [ "derive" ] }
-threshold_crypto = "0.3"
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 thiserror = "1.0.23"
 tracing = "0.1.29"
+rand07 = { version = "0.7", package = "rand" }
 
 [dev-dependencies]
 tokio = {version = "1.14.0", features = [ "full" ] }

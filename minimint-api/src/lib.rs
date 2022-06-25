@@ -15,6 +15,7 @@ pub mod config;
 pub mod db;
 pub mod encoding;
 pub mod module;
+pub mod task;
 
 hash_newtype!(
     TransactionId,

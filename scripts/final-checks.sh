@@ -5,8 +5,8 @@
 
 set -e
 
-cargo +nightly clippy --lib --bins --tests --examples --workspace -- -D warnings
 cargo fmt --all
+cargo clippy --lib --bins --tests --examples --workspace -- -D warnings
 
 export MINIMINT_TEST_REAL=0
 cargo test
