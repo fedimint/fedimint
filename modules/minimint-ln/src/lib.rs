@@ -445,6 +445,12 @@ impl FederationModule for LightningModule {
                 }
             };
 
+            // Delete decryption shares once we've decrypted the preimage
+            batch.append_delete(ProposeDecryptionShareKey(contract_id));
+            for (peer_id, _) in shares {
+                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer_id));
+            }
+
             let decrypted_preimage = if preimage.len() != 32 {
                 DecryptedPreimage::Invalid
             } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
