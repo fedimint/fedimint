@@ -3,7 +3,7 @@ mod utils;
 use crate::utils::payload::{LnPayPayload, PeginPayload};
 use crate::utils::responses::{
     EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
-    SpendResponse,
+    RpcResult, SpendResponse,
 };
 use crate::utils::{Event, EventLog, JsonDecodeTransaction};
 use axum::response::IntoResponse;
@@ -19,8 +19,10 @@ use mint_client::clients::user::ClientError;
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::ln::LnClientError::ApiError;
 use mint_client::mint::SpendableCoin;
+use mint_client::utils::serialize_coins;
 use mint_client::{ClientAndGatewayConfig, UserClient};
 use rand::rngs::OsRng;
+use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -144,15 +146,29 @@ async fn pegin(
     payload: JsonDecodeTransaction,
 ) -> impl IntoResponse {
     let client = &state.client;
+    let event_log = &state.event_log;
     let mut rng = state.rng.clone();
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
-    let txid = client
-        .peg_in(txout_proof, transaction, &mut rng)
-        .await
-        .unwrap(); //TODO: handle unwrap()
-    info!("Started peg-in {}, result will be fetched", txid.to_hex());
-    Json(PegInOutResponse::new(txid))
+    let txid = match client.peg_in(txout_proof, transaction, &mut rng).await {
+        Ok(txid) => {
+            let txid_hex = txid.to_hex();
+            info!("Started peg-in {}, result will be fetched", txid_hex);
+            event_log
+                .add(format!(
+                    "Started peg-in {}, result will be fetched",
+                    txid_hex
+                ))
+                .await;
+            txid
+        }
+        Err(e) => {
+            let err_res = Event::new(format!("{:?}", e));
+            event_log.add_event(err_res.clone()).await;
+            return Json(RpcResult::Failure(json!(err_res)));
+        }
+    };
+    Json(RpcResult::Success(json!(PegInOutResponse::new(txid))))
 }
 
 //TODO: wait for https://github.com/fedimint/minimint/issues/80 and implement solution for this handler
@@ -161,10 +177,29 @@ async fn spend(
     payload: Json<Amount>,
 ) -> impl IntoResponse {
     let client = &state.client;
+    let event_log = &state.event_log;
     let amount = payload.0;
 
-    let spending_coins = client.select_and_spend_coins(amount).unwrap(); //TODO: handle unwrap()
-    Json(SpendResponse::new(spending_coins))
+    let spending_coins = match client.select_and_spend_coins(amount) {
+        Ok(c) => {
+            event_log
+                .add(format!(
+                    "successfully spend coins: msat: {}, ecash: {}",
+                    amount.milli_sat,
+                    serialize_coins(&c)
+                ))
+                .await;
+            c
+        }
+        Err(e) => {
+            let err_res = Event::new(format!("{:?}", e));
+            event_log.add_event(err_res.clone()).await;
+            return Json(RpcResult::Failure(json!(err_res)));
+        }
+    };
+    Json(RpcResult::Success(json!(SpendResponse::new(
+        spending_coins
+    ))))
 }
 
 async fn reissue(Extension(state): Extension<Arc<State>>, payload: Json<Coins<SpendableCoin>>) {
@@ -200,13 +235,22 @@ async fn lnpay(
 ) -> impl IntoResponse {
     let client = Arc::clone(&state.client);
     let gateway = Arc::clone(&state.gateway);
+    let event_log = &state.event_log;
     let rng = state.rng.clone();
     let invoice = payload.0.bolt11;
 
-    match pay_invoice(invoice, client, gateway, rng).await {
-        Ok(_) => Json(Event::new("Success".to_string())),
-        Err(e) => Json(Event::new(format!("Error paying invoice: {:?}", e))),
-    }
+    return match pay_invoice(invoice, client, gateway, rng).await {
+        Ok(_) => {
+            let event = Event::new("Success".to_string());
+            event_log.add_event(event.clone()).await;
+            Json(RpcResult::Success(json!(event)))
+        }
+        Err(e) => {
+            let event = Event::new(format!("Error paying invoice: {:?}", e));
+            event_log.add_event(event.clone()).await;
+            Json(RpcResult::Failure(json!(event)))
+        }
+    };
 }
 
 async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
@@ -217,13 +261,13 @@ async fn fetch(client: Arc<UserClient>, event_log: Arc<EventLog>) {
             if !txids.is_empty() {
                 event_log
                     .add(format!("successfully fetched: {:?}", txids))
-                    .await
+                    .await;
             }
         }
         Err(e) => {
             event_log
                 .add(format!("Error while fetching: {:?}", e))
-                .await
+                .await;
         }
     };
 }

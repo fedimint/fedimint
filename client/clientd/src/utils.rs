@@ -45,6 +45,11 @@ pub mod responses {
     use crate::utils::CoinsByTier;
 
     #[derive(Serialize)]
+    pub enum RpcResult {
+        Success(serde_json::Value),
+        Failure(serde_json::Value),
+    }
+    #[derive(Serialize)]
     pub struct InfoResponse {
         coins: Vec<CoinsByTier>,
         pending: PendingResponse,
