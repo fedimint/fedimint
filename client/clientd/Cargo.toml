@@ -11,6 +11,7 @@ mint-client = { path = "../client-lib" }
 minimint-api = { path = "../../minimint-api" }
 minimint-core = { path = "../../minimint-core" }
 bitcoin_hashes = "0.10.0"
+lightning-invoice = "0.14.0"
 sled = "0.34.6"
 tokio = { version = "1.19.2", features = ["full"] }
 serde = { version = "1.0.118", features = [ "derive" ] }

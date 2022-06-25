@@ -694,6 +694,7 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "clap",
+ "lightning-invoice",
  "minimint-api",
  "minimint-core",
  "mint-client",
