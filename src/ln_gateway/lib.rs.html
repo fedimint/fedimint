@@ -362,7 +362,7 @@
                 <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">federation_client</span>.<span class="ident">clone</span>();
                 <span class="kw">async</span> <span class="kw">move</span> {
                     <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">federation_client</span>.<span class="ident">fetch_coins</span>(<span class="ident">out_point</span>).<span class="kw">await</span> {
-                        <span class="macro">error!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>);
+                        <span class="macro">debug!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>);
                     }
                 }
             })
@@ -387,5 +387,5 @@
     <span class="ident">CouldNotRoute</span>(<span class="ident">LightningError</span>),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (43347397f 2022-06-23)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (20a6f3a8a 2022-06-25)" ></div>
 </body></html>
