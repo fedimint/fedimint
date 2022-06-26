@@ -9,10 +9,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::payload::PeginPayload;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::from_hex;
-
-use crate::PeginPayload;
 
 pub mod payload {
     use bitcoin::Transaction;
@@ -38,12 +37,11 @@ pub mod payload {
 pub mod responses {
     use serde::Serialize;
 
+    use crate::CoinsByTier;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use minimint_core::modules::mint::tiered::coins::Coins;
     use minimint_core::outcome::TransactionStatus;
     use mint_client::mint::{CoinFinalizationData, SpendableCoin};
-
-    use crate::utils::CoinsByTier;
 
     #[derive(Serialize)]
     pub enum RpcResult {
@@ -234,7 +232,7 @@ where
         }
         let encoded: PeginPayloadEncoded = Json::from_request(req).await?.0;
         let transaction = from_hex(&encoded.transaction).unwrap(); //FIXME: this is bad
-        let decoded = super::PeginPayload {
+        let decoded = PeginPayload {
             txout_proof: encoded.txout_proof,
             transaction,
         };

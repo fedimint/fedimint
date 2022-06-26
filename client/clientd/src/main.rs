@@ -1,16 +1,14 @@
-mod utils;
-
-use crate::utils::payload::{LnPayPayload, PeginPayload};
-use crate::utils::responses::{
-    EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
-    ReissueResponse, RpcResult, SpendResponse,
-};
-use crate::utils::{Event, EventLog, JsonDecodeTransaction};
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
+use clientd::payload::LnPayPayload;
+use clientd::responses::{
+    EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
+    ReissueResponse, RpcResult, SpendResponse,
+};
+use clientd::{Event, EventLog, JsonDecodeTransaction};
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
