@@ -1,30 +1,25 @@
-use axum::body::HttpBody;
-use axum::extract::rejection::JsonRejection;
-use axum::extract::{FromRequest, RequestParts};
-use axum::{BoxError, Json};
+use anyhow::Result;
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::payload::PeginPayload;
-use minimint_core::modules::wallet::txoproof::TxOutProof;
-use mint_client::utils::from_hex;
+use crate::responses::RpcResult;
 
 pub mod payload {
     use bitcoin::Transaction;
-    use serde::Deserialize;
+    use serde::{Deserialize, Serialize};
 
     use minimint_core::modules::wallet::txoproof::TxOutProof;
 
-    #[derive(Deserialize, Clone, Debug)]
+    #[derive(Deserialize, Serialize, Clone, Debug)]
     pub struct PeginPayload {
         pub txout_proof: TxOutProof,
         pub transaction: Transaction,
     }
 
-    #[derive(Deserialize, Clone, Debug)]
+    #[derive(Deserialize, Serialize, Clone, Debug)]
     pub struct PegoutPayload {
         pub address: bitcoin::Address,
         #[serde(with = "bitcoin::util::amount::serde::as_sat")]
@@ -32,7 +27,7 @@ pub mod payload {
     }
 
     //TODO: remove this and also super::serde_invoice, when lightning_invoice "serde" feature becomes available
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Serialize)]
     #[serde(transparent)]
     pub struct LnPayPayload {
         #[serde(with = "super::serde_invoice")]
@@ -41,15 +36,16 @@ pub mod payload {
 }
 
 pub mod responses {
-    use serde::Serialize;
+    use serde::{Deserialize, Serialize};
 
     use crate::CoinsByTier;
     use minimint_api::{Amount, OutPoint, TransactionId};
     use minimint_core::modules::mint::tiered::coins::Coins;
     use minimint_core::outcome::TransactionStatus;
     use mint_client::mint::{CoinFinalizationData, SpendableCoin};
+    use mint_client::utils::serialize_coins;
 
-    #[derive(Serialize)]
+    #[derive(Serialize, Deserialize)]
     pub enum RpcResult {
         Success(serde_json::Value),
         Failure(serde_json::Value),
@@ -77,7 +73,7 @@ pub mod responses {
         txid: TransactionId,
     }
 
-    #[derive(Serialize)]
+    #[derive(Deserialize, Serialize)]
     pub struct SpendResponse {
         pub coins: Coins<SpendableCoin>,
     }
@@ -137,6 +133,10 @@ pub mod responses {
     impl SpendResponse {
         pub fn new(coins: Coins<SpendableCoin>) -> Self {
             Self { coins }
+        }
+
+        pub fn serialized(&self) -> String {
+            serialize_coins(&self.coins)
         }
     }
 
@@ -216,6 +216,18 @@ impl EventLog {
             .unwrap_or_else(|i| i);
         events.range(i..).cloned().collect()
     }
+}
+
+pub async fn call<P: Serialize + ?Sized>(params: &P, enpoint: &str) -> Result<RpcResult> {
+    let client = reqwest::Client::new();
+
+    let response = client
+        .post(format!("http://127.0.0.1:8081{}", enpoint))
+        .json(params)
+        .send()
+        .await?;
+
+    Ok(response.json().await?)
 }
 
 mod serde_invoice {

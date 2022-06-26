@@ -8,6 +8,7 @@ members = [
     "minimint-derive",
     "minimint-api",
     "client/cli",
+    "client/rest-client-cli",
     "client/clientd",
     "client/client-lib",
     "modules/minimint-mint",
