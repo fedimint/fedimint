@@ -162,13 +162,15 @@
 <span id="156">156</span>
 <span id="157">157</span>
 <span id="158">158</span>
+<span id="159">159</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::FederationModule</span>;
 <span class="kw">use</span> <span class="ident">minimint_ln::contracts::incoming</span>::{<span class="ident">DecryptedPreimage</span>, <span class="ident">OfferId</span>, <span class="ident">Preimage</span>};
 <span class="kw">use</span> <span class="ident">minimint_ln::contracts</span>::{<span class="ident">AccountContractOutcome</span>, <span class="ident">ContractOutcome</span>, <span class="ident">OutgoingContractOutcome</span>};
 <span class="kw">use</span> <span class="ident">minimint_ln::LightningModule</span>;
 <span class="kw">use</span> <span class="ident">minimint_mint::SigResponse</span>;
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::CoreError</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">TransactionStatus</span> {
@@ -196,11 +198,11 @@
 }
 
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">TryIntoOutcome</span>: <span class="ident">Sized</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span>;
 }
 
 <span class="kw">impl</span> <span class="ident">OutputOutcome</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">try_into_variant</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">TryIntoOutcome</span><span class="op">&gt;</span>(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">try_into_variant</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">TryIntoOutcome</span><span class="op">&gt;</span>(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="ident">T::try_into_outcome</span>(<span class="self">self</span>)
     }
 }
@@ -235,66 +237,66 @@
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MismatchingVariant</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>);
-
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">SigResponse</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
             <span class="ident">OutputOutcome::Mint</span>(<span class="ident">outcome</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">outcome</span>),
-            <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;mint&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
-            <span class="ident">OutputOutcome::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;mint&quot;</span>, <span class="string">&quot;ln&quot;</span>)),
+            <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;mint&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
+            <span class="ident">OutputOutcome::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;mint&quot;</span>, <span class="string">&quot;ln&quot;</span>)),
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> () {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
-            <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
+            <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
             <span class="ident">OutputOutcome::Wallet</span>(<span class="ident">outcome</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">outcome</span>),
-            <span class="ident">OutputOutcome::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;ln&quot;</span>)),
+            <span class="ident">OutputOutcome::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;ln&quot;</span>)),
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">minimint_ln::OutputOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
-            <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
-            <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
+            <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
+            <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
             <span class="ident">OutputOutcome::LN</span>(<span class="ident">outcome</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">outcome</span>),
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">Preimage</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
-            <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">DecryptedPreimage::Some</span>(<span class="ident">preimage</span>)),
+            <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">decrypted_preimage</span>),
             ..
         }) <span class="op">=</span> <span class="ident">common_outcome</span>
         {
-            <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>)
+            <span class="kw">match</span> <span class="ident">decrypted_preimage</span> {
+                <span class="ident">DecryptedPreimage::Some</span>(<span class="ident">preimage</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>),
+                <span class="ident">DecryptedPreimage::Pending</span> =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::PendingPreimage</span>),
+                <span class="kw">_</span> =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>)),
+            }
         } <span class="kw">else</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
+            <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">OfferId</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Offer</span> { <span class="ident">id</span> }) <span class="op">=</span> <span class="ident">common_outcome</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">id</span>)
         } <span class="kw">else</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
+            <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">AccountContractOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
             <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Account</span>(<span class="ident">o</span>),
             ..
@@ -302,13 +304,13 @@
         {
             <span class="prelude-val">Ok</span>(<span class="ident">o</span>)
         } <span class="kw">else</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::account&quot;</span>, <span class="string">&quot;other&quot;</span>))
+            <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::account&quot;</span>, <span class="string">&quot;other&quot;</span>))
         }
     }
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">OutgoingContractOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">MismatchingVariant</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
             <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Outgoing</span>(<span class="ident">o</span>),
             ..
@@ -316,7 +318,7 @@
         {
             <span class="prelude-val">Ok</span>(<span class="ident">o</span>)
         } <span class="kw">else</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">MismatchingVariant</span>(<span class="string">&quot;ln::outgoing&quot;</span>, <span class="string">&quot;other&quot;</span>))
+            <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::outgoing&quot;</span>, <span class="string">&quot;other&quot;</span>))
         }
     }
 }

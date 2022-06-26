@@ -274,7 +274,6 @@
 <span id="268">268</span>
 <span id="269">269</span>
 <span id="270">270</span>
-<span id="271">271</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">Future</span>, <span class="ident">StreamExt</span>, <span class="ident">TryFutureExt</span>};
@@ -282,8 +281,9 @@
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractAccount</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">MismatchingVariant</span>, <span class="ident">TransactionStatus</span>, <span class="ident">TryIntoOutcome</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">TransactionStatus</span>, <span class="ident">TryIntoOutcome</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::transaction::Transaction</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::CoreError</span>;
 <span class="kw">use</span> <span class="ident">reqwest</span>::{<span class="ident">StatusCode</span>, <span class="ident">Url</span>};
 <span class="kw">use</span> <span class="ident">serde::de::DeserializeOwned</span>;
 <span class="kw">use</span> <span class="ident">serde::Serialize</span>;
@@ -328,7 +328,7 @@
                         <span class="ident">outputs_len</span>,
                         <span class="ident">out_point</span>.<span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">usize</span>,
                     ))
-                    .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">output</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">try_into_variant</span>().<span class="ident">map_err</span>(<span class="ident">ApiError::WrongOutputType</span>))
+                    .<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">output</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">try_into_variant</span>().<span class="ident">map_err</span>(<span class="ident">ApiError::CoreError</span>))
             }
         }
     }
@@ -342,9 +342,7 @@
             <span class="kw">loop</span> {
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_output_outcome</span>(<span class="ident">outpoint</span>).<span class="kw">await</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable_fetch_coins</span>() =&gt; {
-                        <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>
-                    }
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
                 }
             }
@@ -374,18 +372,18 @@
     <span class="ident">TransactionError</span>(<span class="ident">String</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]</span>
     <span class="ident">OutPointOutOfRange</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Returned output type did not match expectation: {0}&quot;</span>)]</span>
-    <span class="ident">WrongOutputType</span>(<span class="ident">MismatchingVariant</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Core error: {0}&quot;</span>)]</span>
+    <span class="ident">CoreError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">CoreError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]</span>
     <span class="ident">Timeout</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">ApiError</span> {
-    <span class="doccomment">/// Returns `true` if the error means that the queried coin output isn&#39;t ready yet but might</span>
-    <span class="doccomment">/// become ready later.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable_fetch_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
         <span class="kw">match</span> <span class="self">self</span> {
             <span class="ident">ApiError::HttpError</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">status</span>() <span class="op">==</span> <span class="prelude-val">Some</span>(<span class="ident">StatusCode::NOT_FOUND</span>),
+            <span class="ident">ApiError::CoreError</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">is_retryable</span>(),
             <span class="kw">_</span> =&gt; <span class="bool-val">false</span>,
         }
     }

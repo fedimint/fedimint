@@ -16,7 +16,26 @@
 <span id="10">10</span>
 <span id="11">11</span>
 <span id="12">12</span>
-</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">modules</span> {
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">modules</span> {
     <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_ln</span> <span class="kw">as</span> <span class="ident">ln</span>;
     <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_mint</span> <span class="kw">as</span> <span class="ident">mint</span>;
     <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_wallet</span> <span class="kw">as</span> <span class="ident">wallet</span>;
@@ -28,6 +47,21 @@
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
 
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">outcome</span>;
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
+<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">CoreError</span> {
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]</span>
+    <span class="ident">MismatchingVariant</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Pending preimage decryption&quot;</span>)]</span>
+    <span class="ident">PendingPreimage</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">CoreError</span> {
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
+        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="ident">CoreError::PendingPreimage</span>)
+    }
+}
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (20a6f3a8a 2022-06-25)" ></div>
 </body></html>

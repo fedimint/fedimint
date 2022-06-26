@@ -639,7 +639,6 @@
 <span id="633">633</span>
 <span id="634">634</span>
 <span id="635">635</span>
-<span id="636">636</span>
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -896,7 +895,7 @@
                         <span class="kw">break</span>;
                     }
                     <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying</span>
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable_fetch_coins</span>() =&gt; {
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; {
                         <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, <span class="ident">e</span>);
                         <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>)).<span class="kw">await</span>
                     }
@@ -1042,11 +1041,10 @@
 }
 
 <span class="kw">impl</span> <span class="ident">MintClientError</span> {
-    <span class="doccomment">/// Returns `true` if the error means that the queried coin output isn&#39;t ready yet but might</span>
-    <span class="doccomment">/// become ready later.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable_fetch_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">MintClientError::ApiError</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">is_retryable_fetch_coins</span>(),
+            <span class="ident">MintClientError::ApiError</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">is_retryable</span>(),
             <span class="ident">MintClientError::OutputNotReadyYet</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             <span class="kw">_</span> =&gt; <span class="bool-val">false</span>,
         }

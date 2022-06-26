@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["config","MiniMint toplevel config"],["modules",""],["outcome",""],["transaction",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["CoreError",""]],"mod":[["config","MiniMint toplevel config"],["modules",""],["outcome",""],["transaction",""]]};

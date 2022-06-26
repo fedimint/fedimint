@@ -674,7 +674,7 @@
     }
 
     <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried</span>
-    <span class="doccomment">/// the federation too early. Use [`MintClientError::is_retryable_fetch_coins`] to determine</span>
+    <span class="doccomment">/// the federation too early. Use [`MintClientError::is_retryable`] to determine</span>
     <span class="doccomment">/// if the operation should be retried at a later time.</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_coins</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">MintClientError</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
