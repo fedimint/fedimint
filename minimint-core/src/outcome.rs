@@ -4,7 +4,8 @@ use minimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingCo
 use minimint_ln::LightningModule;
 use minimint_mint::SigResponse;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+use crate::CoreError;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum TransactionStatus {
@@ -32,11 +33,11 @@ pub trait Final {
 }
 
 pub trait TryIntoOutcome: Sized {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant>;
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError>;
 }
 
 impl OutputOutcome {
-    pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, MismatchingVariant> {
+    pub fn try_into_variant<T: TryIntoOutcome>(self) -> Result<T, CoreError> {
         T::try_into_outcome(self)
     }
 }
@@ -71,66 +72,66 @@ impl Final for TransactionStatus {
     }
 }
 
-#[derive(Debug, Error)]
-#[error("Mismatching outcome variant: expected {0}, got {1}")]
-pub struct MismatchingVariant(&'static str, &'static str);
-
 impl TryIntoOutcome for Option<SigResponse> {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
             OutputOutcome::Mint(outcome) => Ok(outcome),
-            OutputOutcome::Wallet(_) => Err(MismatchingVariant("mint", "wallet")),
-            OutputOutcome::LN(_) => Err(MismatchingVariant("mint", "ln")),
+            OutputOutcome::Wallet(_) => Err(CoreError::MismatchingVariant("mint", "wallet")),
+            OutputOutcome::LN(_) => Err(CoreError::MismatchingVariant("mint", "ln")),
         }
     }
 }
 
 impl TryIntoOutcome for () {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
-            OutputOutcome::Mint(_) => Err(MismatchingVariant("wallet", "mint")),
+            OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("wallet", "mint")),
             OutputOutcome::Wallet(outcome) => Ok(outcome),
-            OutputOutcome::LN(_) => Err(MismatchingVariant("wallet", "ln")),
+            OutputOutcome::LN(_) => Err(CoreError::MismatchingVariant("wallet", "ln")),
         }
     }
 }
 
 impl TryIntoOutcome for minimint_ln::OutputOutcome {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
-            OutputOutcome::Mint(_) => Err(MismatchingVariant("ln", "mint")),
-            OutputOutcome::Wallet(_) => Err(MismatchingVariant("ln", "wallet")),
+            OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("ln", "mint")),
+            OutputOutcome::Wallet(_) => Err(CoreError::MismatchingVariant("ln", "wallet")),
             OutputOutcome::LN(outcome) => Ok(outcome),
         }
     }
 }
 
 impl TryIntoOutcome for Preimage {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         if let OutputOutcome::LN(minimint_ln::OutputOutcome::Contract {
-            outcome: ContractOutcome::Incoming(DecryptedPreimage::Some(preimage)),
+            outcome: ContractOutcome::Incoming(decrypted_preimage),
             ..
         }) = common_outcome
         {
-            Ok(preimage)
+            match decrypted_preimage {
+                DecryptedPreimage::Some(preimage) => Ok(preimage),
+                DecryptedPreimage::Pending => Err(CoreError::PendingPreimage),
+                _ => Err(CoreError::MismatchingVariant("ln::incoming", "other")),
+            }
         } else {
-            Err(MismatchingVariant("ln::incoming", "other"))
+            Err(CoreError::MismatchingVariant("ln::incoming", "other"))
         }
     }
 }
 
 impl TryIntoOutcome for OfferId {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         if let OutputOutcome::LN(minimint_ln::OutputOutcome::Offer { id }) = common_outcome {
             Ok(id)
         } else {
-            Err(MismatchingVariant("ln::incoming", "other"))
+            Err(CoreError::MismatchingVariant("ln::incoming", "other"))
         }
     }
 }
 
 impl TryIntoOutcome for AccountContractOutcome {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         if let OutputOutcome::LN(minimint_ln::OutputOutcome::Contract {
             outcome: ContractOutcome::Account(o),
             ..
@@ -138,13 +139,13 @@ impl TryIntoOutcome for AccountContractOutcome {
         {
             Ok(o)
         } else {
-            Err(MismatchingVariant("ln::account", "other"))
+            Err(CoreError::MismatchingVariant("ln::account", "other"))
         }
     }
 }
 
 impl TryIntoOutcome for OutgoingContractOutcome {
-    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, MismatchingVariant> {
+    fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         if let OutputOutcome::LN(minimint_ln::OutputOutcome::Contract {
             outcome: ContractOutcome::Outgoing(o),
             ..
@@ -152,7 +153,7 @@ impl TryIntoOutcome for OutgoingContractOutcome {
         {
             Ok(o)
         } else {
-            Err(MismatchingVariant("ln::outgoing", "other"))
+            Err(CoreError::MismatchingVariant("ln::outgoing", "other"))
         }
     }
 }
