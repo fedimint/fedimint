@@ -114,30 +114,34 @@ async fn main() {
 
 async fn info(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     let client = &state.client;
-    Json(InfoResponse::new(
+    Json(RpcResult::Success(json!(InfoResponse::new(
         client.coins(),
         client.fetch_active_issuances(),
-    ))
+    ))))
 }
 
 async fn pending(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     let client = &state.client;
-    Json(PendingResponse::new(client.fetch_active_issuances()))
+    Json(RpcResult::Success(json!(PendingResponse::new(
+        client.fetch_active_issuances()
+    ))))
 }
 
 async fn pegin_address(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     let client = &state.client;
     let mut rng = state.rng.clone();
-    Json(PeginAddressResponse::new(
+    Json(RpcResult::Success(json!(PeginAddressResponse::new(
         client.get_new_pegin_address(&mut rng),
-    ))
+    ))))
 }
 
 async fn events(Extension(state): Extension<Arc<State>>, payload: Json<u64>) -> impl IntoResponse {
     let timestamp = payload.0;
     let event_log = &state.event_log;
     let queried_events = event_log.get(timestamp).await;
-    Json(EventsResponse::new(queried_events))
+    Json(RpcResult::Success(json!(EventsResponse::new(
+        queried_events
+    ))))
 }
 
 async fn pegin(
