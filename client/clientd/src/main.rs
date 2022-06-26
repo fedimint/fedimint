@@ -3,12 +3,12 @@ use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use clientd::payload::{LnPayPayload, PegoutPayload};
+use clientd::payload::{LnPayPayload, PeginPayload, PegoutPayload};
 use clientd::responses::{
     EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
     ReissueResponse, RpcResult, SpendResponse,
 };
-use clientd::{Event, EventLog, JsonDecodeTransaction};
+use clientd::{Event, EventLog};
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
@@ -147,7 +147,7 @@ async fn events(Extension(state): Extension<Arc<State>>, payload: Json<u64>) -> 
 
 async fn pegin(
     Extension(state): Extension<Arc<State>>,
-    payload: JsonDecodeTransaction,
+    payload: Json<PeginPayload>,
 ) -> impl IntoResponse {
     let client = &state.client;
     let event_log = &state.event_log;

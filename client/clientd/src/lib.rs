@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use axum::body::HttpBody;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRequest, RequestParts};
@@ -216,34 +215,6 @@ impl EventLog {
             .binary_search_by_key(&timestamp, |event| event.timestamp)
             .unwrap_or_else(|i| i);
         events.range(i..).cloned().collect()
-    }
-}
-
-pub struct JsonDecodeTransaction(pub PeginPayload);
-//Alternative for this would be serde_from and impl from raw -> decoded
-//or TODO: rust-bitcoin transaction PR to not derive Deserialize but to impl it by hand, deciding dynamically weather it needs to be decoded first
-#[async_trait]
-impl<B> FromRequest<B> for JsonDecodeTransaction
-where
-    B: HttpBody + Send,
-    B::Data: Send,
-    B::Error: Into<BoxError>,
-{
-    type Rejection = JsonRejection;
-
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        #[derive(Deserialize, Clone, Debug)]
-        pub struct PeginPayloadEncoded {
-            pub txout_proof: TxOutProof,
-            pub transaction: String,
-        }
-        let encoded: PeginPayloadEncoded = Json::from_request(req).await?.0;
-        let transaction = from_hex(&encoded.transaction).unwrap(); //FIXME: this is bad
-        let decoded = PeginPayload {
-            txout_proof: encoded.txout_proof,
-            transaction,
-        };
-        Ok(Self(decoded))
     }
 }
 

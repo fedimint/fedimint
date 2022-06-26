@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1.56"
 mint-client = { path = "../client-lib" }
 minimint-api = { path = "../../minimint-api" }
 minimint-core = { path = "../../minimint-core" }
