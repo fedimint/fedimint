@@ -25,6 +25,13 @@ pub mod payload {
         pub transaction: Transaction,
     }
 
+    #[derive(Deserialize, Clone, Debug)]
+    pub struct PegoutPayload {
+        pub address: bitcoin::Address,
+        #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+        pub amount: bitcoin::Amount,
+    }
+
     //TODO: remove this and also super::serde_invoice, when lightning_invoice "serde" feature becomes available
     #[derive(Deserialize)]
     #[serde(transparent)]

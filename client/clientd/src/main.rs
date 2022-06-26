@@ -3,7 +3,7 @@ use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use clientd::payload::LnPayPayload;
+use clientd::payload::{LnPayPayload, PegoutPayload};
 use clientd::responses::{
     EventsResponse, InfoResponse, PegInOutResponse, PeginAddressResponse, PendingResponse,
     ReissueResponse, RpcResult, SpendResponse,
@@ -83,6 +83,7 @@ async fn main() {
         .route("/getPeginAdress", post(pegin_address))
         .route("/getEvents", post(events))
         .route("/pegin", post(pegin))
+        .route("/pegout", post(pegout))
         .route("/spend", post(spend))
         .route("/reissue", post(reissue))
         .route("/reissueValidate", post(reissue_validate))
@@ -162,6 +163,33 @@ async fn pegin(
                     "Started peg-in {}, result will be fetched",
                     txid_hex
                 ))
+                .await;
+            txid
+        }
+        Err(e) => {
+            let err_res = Event::new(format!("{:?}", e));
+            event_log.add_event(err_res.clone()).await;
+            return Json(RpcResult::Failure(json!(err_res)));
+        }
+    };
+    Json(RpcResult::Success(json!(PegInOutResponse::new(txid))))
+}
+
+async fn pegout(
+    Extension(state): Extension<Arc<State>>,
+    payload: Json<PegoutPayload>,
+) -> impl IntoResponse {
+    let client = &state.client;
+    let event_log = &state.event_log;
+    let mut rng = state.rng.clone();
+    let address = payload.0.address;
+    let amt = payload.0.amount;
+    let txid = match client.peg_out(amt, address, &mut rng).await {
+        Ok(txid) => {
+            let txid_hex = txid.to_hex();
+            info!("Pegged out {} with txid: {}", amt, txid_hex);
+            event_log
+                .add(format!("Pegged out {} with txid: {}", amt, txid_hex))
                 .await;
             txid
         }
