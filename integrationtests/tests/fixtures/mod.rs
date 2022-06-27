@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::env;
-use std::fmt::Write;
 use std::iter::repeat;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -24,7 +23,8 @@ use minimint_api::task::spawn;
 use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tokio::time::timeout;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use fake::{FakeBitcoinTest, FakeLightningTest};
@@ -36,21 +36,18 @@ use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal};
 use minimint::net::connect::mock::MockNetwork;
 use minimint::net::connect::{Connector, InsecureTcpConnector};
 use minimint::net::peers::PeerConnector;
-use minimint::transaction::{Input, Output};
-use minimint::MinimintServer;
+use minimint::transaction::Output;
+use minimint::{consensus, MinimintServer};
 use minimint_api::config::GenerateConfig;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::mem_impl::MemDatabase;
 use minimint_api::db::Database;
 use minimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
-use minimint_ln::contracts::Contract;
-use minimint_ln::{ContractOrOfferOutput, ContractOutput};
-use minimint_mint::PartiallySignedRequest;
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::config::WalletConfig;
 use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
-use minimint_wallet::{SpendableUTXO, WalletConsensusItem};
+use minimint_wallet::SpendableUTXO;
 use mint_client::api::HttpFederationApi;
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
@@ -98,7 +95,7 @@ pub async fn fixtures(
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,tide=error")),
+                    .unwrap_or_else(|_| EnvFilter::new("info,tide=error,minimint::consensus=warn")),
             )
             .init();
     }
@@ -496,12 +493,19 @@ impl FederationTest {
     /// Has every federation node send new consensus proposals then process the outcome.
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            join_all(
+            let consensus = join_all(
                 self.servers
                     .iter()
                     .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
-            )
-            .await;
+            );
+            if (timeout(Duration::from_secs(15), consensus).await).is_err() {
+                let proposals: Vec<ConsensusProposal> = self
+                    .servers
+                    .iter()
+                    .map(|s| block_on(s.borrow().minimint.consensus.get_consensus_proposal()))
+                    .collect();
+                panic!("Timed out waiting for consensus, try reducing epochs if proposals are empty: {:?}", proposals);
+            }
             self.update_last_consensus();
         }
     }
@@ -555,7 +559,7 @@ impl FederationTest {
         let mut last_consensus = self.last_consensus.borrow_mut();
 
         if last_consensus.is_empty() || last_consensus.epoch < new_consensus.epoch {
-            warn!("{}", Self::epoch_debug_message(&new_consensus));
+            info!("{}", consensus::debug::epoch_message(&new_consensus));
             *last_consensus = new_consensus;
         }
     }
@@ -607,90 +611,6 @@ impl FederationTest {
             last_consensus,
             fee_consensus,
             wallet,
-        }
-    }
-
-    // outputs a useful debug message for epochs indicating what happened
-    fn epoch_debug_message(consensus: &ConsensusOutcome) -> String {
-        let peers = consensus.contributions.keys();
-        let mut debug = format!("\n- Epoch: {} {:?} -", consensus.epoch, peers);
-
-        for (peer, items) in consensus.contributions.iter() {
-            for item in items {
-                let item_debug = Self::item_debug_message(item);
-                write!(debug, "\n  Peer {}: {}", peer, item_debug).unwrap();
-            }
-        }
-        debug
-    }
-
-    fn item_debug_message(item: &ConsensusItem) -> String {
-        match item {
-            ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(
-                minimint_wallet::RoundConsensusItem { block_height, .. },
-            )) => format!("Wallet Block Height {}", block_height),
-            ConsensusItem::Wallet(WalletConsensusItem::PegOutSignature(
-                minimint_wallet::PegOutSignatureItem { txid, .. },
-            )) => format!("Wallet Peg Out PSBT {:.8}", txid),
-            ConsensusItem::Mint(PartiallySignedRequest {
-                out_point,
-                partial_signature,
-            }) => {
-                format!(
-                    "Mint Signed Coins {} with TxId {:.8}",
-                    partial_signature.0.amount(),
-                    out_point.txid
-                )
-            }
-            ConsensusItem::LN(minimint_ln::DecryptionShareCI { contract_id, .. }) => {
-                format!("LN Decrytion Share for contract {:.8}", contract_id)
-            }
-            ConsensusItem::Transaction(minimint::transaction::Transaction {
-                inputs,
-                outputs,
-                ..
-            }) => {
-                let mut tx_debug = "Transaction".to_string();
-                for input in inputs.iter() {
-                    let input_debug = match input {
-                        Input::Mint(t) => format!("Mint Coins {}", t.amount()),
-                        Input::Wallet(t) => {
-                            format!("Wallet PegIn with TxId {:.8}", t.outpoint().txid)
-                        }
-                        Input::LN(t) => {
-                            format!("LN Contract {} with id {:.8}", t.amount, t.contract_id)
-                        }
-                    };
-                    write!(tx_debug, "\n    Input: {}", input_debug).unwrap();
-                }
-                for output in outputs.iter() {
-                    let output_debug = match output {
-                        Output::Mint(t) => format!("Mint Coins {}", t.amount()),
-                        Output::Wallet(t) => {
-                            format!("Wallet PegOut {} to address {:.8}", t.amount, t.recipient)
-                        }
-                        Output::LN(ContractOrOfferOutput::Offer(o)) => {
-                            format!("LN Offer for {} with hash {:.8}", o.amount, o.hash)
-                        }
-                        Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
-                            amount,
-                            contract,
-                        })) => match contract {
-                            Contract::Account(a) => {
-                                format!("LN Account Contract for {} key {:.8}", amount, a.key)
-                            }
-                            Contract::Incoming(a) => {
-                                format!("LN Incoming Contract for {} hash {:.8}", amount, a.hash)
-                            }
-                            Contract::Outgoing(a) => {
-                                format!("LN Outgoing Contract for {} hash {:.8}", amount, a.hash)
-                            }
-                        },
-                    };
-                    write!(tx_debug, "\n    Output: {}", output_debug).unwrap();
-                }
-                tx_debug
-            }
         }
     }
 }

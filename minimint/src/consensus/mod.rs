@@ -1,6 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
 mod conflictfilter;
+pub mod debug;
 mod interconnect;
 
 use crate::config::ServerConfig;
@@ -29,7 +30,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Notify;
-use tracing::{debug, error, info_span, instrument, trace, warn};
+use tracing::{debug, error, info, info_span, instrument, trace, warn};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
 pub enum ConsensusItem {
@@ -159,6 +160,7 @@ where
 
     #[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]
     pub async fn process_consensus_outcome(&self, consensus_outcome: ConsensusOutcome) {
+        info!("{}", debug::epoch_message(&consensus_outcome));
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
