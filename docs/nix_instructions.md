@@ -1,8 +1,15 @@
 ### Working with Nix
 
+These are the [official docs](https://nix.dev/tutorials/install-nix)
+
 To install nix:
 ```shell
 sh <(curl -L https://nixos.org/nix/install) --no-daemon
+```
+
+To install nix on macOS:
+```shell
+sh <(curl -L https://nixos.org/nix/install) --darwin-use-unencrypted-nix-store-volume --daemon
 ```
 
 Clone the repository:
