@@ -8,11 +8,14 @@ use bitcoin::Amount;
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
+use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
 use minimint::transaction::Output;
 use minimint_api::OutPoint;
+use minimint_ln::contracts::incoming::PreimageDecryptionShare;
+use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use minimint_wallet::WalletConsensusItem;
@@ -123,8 +126,24 @@ async fn minted_coins_in_wallet_can_be_split_into_change() {
     );
 }
 
+async fn drop_peer_3_during_epoch(fed: &FederationTest) {
+    // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
+    fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
+    fed.subset_peers(&[0]).run_consensus_epochs(1).await;
+
+    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
+    join_all(vec![
+        Either::Left(fed.subset_peers(&[1, 2]).run_consensus_epochs(1)),
+        Either::Right(
+            fed.subset_peers(&[0, 3])
+                .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
+        ),
+    ])
+    .await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_dont_contribute_to_peg_out() {
+async fn drop_peers_who_dont_contribute_peg_out_psbts() {
     let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
     // FIXME coins cannot be fetched if peer is not in the epoch
     fed.subset_peers(&[0, 1, 2])
@@ -153,20 +172,53 @@ async fn drop_peers_who_dont_contribute_to_peg_out() {
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
-async fn drop_peer_3_during_epoch(fed: &FederationTest) {
-    // ensure that peers 1,2,3 create an epoch, so they can see peer 3's bad proposal
-    fed.subset_peers(&[1, 2, 3]).run_consensus_epochs(1).await;
-    fed.subset_peers(&[0]).run_consensus_epochs(1).await;
+#[tokio::test(flavor = "multi_thread")]
+async fn drop_peers_who_dont_contribute_decryption_shares() {
+    let (fed, user, _, gateway, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let payment_amount = sats(100);
+    // FIXME coins cannot be fetched if peer is not in the epoch
+    fed.subset_peers(&[0, 1, 2])
+        .mint_coins_for_user(&gateway.user, sats(100))
+        .await;
+    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
 
-    // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
-    join_all(vec![
-        Either::Left(fed.subset_peers(&[1, 2]).run_consensus_epochs(1)),
-        Either::Right(
-            fed.subset_peers(&[0, 3])
-                .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
-        ),
-    ])
-    .await;
+    let (keypair, unconfirmed_invoice) = user
+        .client
+        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(1).await; // create offer
+
+    let (_, contract_id) = gateway
+        .server
+        .buy_preimage_offer(
+            unconfirmed_invoice.invoice.payment_hash(),
+            &payment_amount,
+            rng(),
+        )
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(1).await; // pay for offer
+
+    // propose bad decryption share
+    let share = SecretKeyShare::default()
+        .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
+    fed.subset_peers(&[3])
+        .override_proposal(vec![ConsensusItem::LN(DecryptionShareCI {
+            contract_id,
+            share: PreimageDecryptionShare(share),
+        })]);
+    drop_peer_3_during_epoch(&fed).await; // preimage decryption
+
+    user.client
+        .claim_incoming_contract(contract_id, keypair, rng())
+        .await
+        .unwrap();
+    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint coins, sign coins
+
+    user.client.fetch_all_coins().await.unwrap();
+    assert_eq!(user.total_coins(), payment_amount);
+    assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
 #[tokio::test(flavor = "multi_thread")]

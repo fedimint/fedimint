@@ -1924,6 +1924,7 @@ dependencies = [
  "mint-client",
  "rand 0.6.5",
  "serde",
+ "threshold_crypto 0.4.0",
  "tokio",
  "tracing",
  "tracing-subscriber",
