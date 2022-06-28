@@ -8,7 +8,7 @@ pkgs.mkShell {
     rustc
     cargo
     rust-analyzer
-    bitcoin
+    bitcoind
     clightning
     jq
     procps
