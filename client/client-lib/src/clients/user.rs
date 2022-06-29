@@ -47,9 +47,9 @@ pub struct UserClient {
 /// Invoice whose "offer" hasn't yet been accepted by federation
 pub struct UnconfirmedInvoice {
     /// The invoice itself
-    invoice: Invoice,
+    pub invoice: Invoice,
     /// The outpoint which creates the "offer" this invoice depends on
-    outpoint: OutPoint,
+    pub outpoint: OutPoint,
 }
 
 impl UserClient {

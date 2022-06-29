@@ -35,7 +35,8 @@ use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::ops::Sub;
 
 use std::sync::Arc;
 use thiserror::Error;
@@ -155,39 +156,15 @@ impl FederationModule for LightningModule {
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        batch.append_from_iter(consensus_items.into_iter().filter_map(
-            |(peer, decryption_share)| {
-                let span = info_span!("process decryption share", %peer);
-                let _guard = span.enter();
-                let contract: ContractAccount = self
-                    .get_contract_account(decryption_share.contract_id)
-                    .or_else(|| {
-                        warn!("Received decryption share fot non-incoming contract");
-                        None
-                    })?;
-                let incoming_contract = match contract.contract {
-                    FundedContract::Incoming(incoming) => incoming.contract,
-                    _ => {
-                        warn!("Received decryption share fot non-incoming contract");
-                        return None;
-                    }
-                };
+        batch.append_from_iter(consensus_items.into_iter().map(|(peer, decryption_share)| {
+            let span = info_span!("process decryption share", %peer);
+            let _guard = span.enter();
 
-                if !self.validate_decryption_share(
-                    peer,
-                    &decryption_share.share,
-                    &incoming_contract.encrypted_preimage,
-                ) {
-                    warn!("Received invalid decryption share");
-                    return None;
-                }
-
-                Some(BatchItem::insert_new(
-                    AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                    decryption_share.share,
-                ))
-            },
-        ));
+            BatchItem::insert_new(
+                AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                decryption_share.share,
+            )
+        }));
         batch.commit();
     }
 
@@ -355,14 +332,14 @@ impl FederationModule for LightningModule {
                         .expect("DB error")
                         .expect("offer exists if output is valid");
 
-                    let deryption_share = self
+                    let decryption_share = self
                         .cfg
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
                     batch.append_insert_new(
                         ProposeDecryptionShareKey(contract.contract.contract_id()),
-                        PreimageDecryptionShare(deryption_share),
+                        PreimageDecryptionShare(decryption_share),
                     );
                     batch.append_delete(OfferKey(offer.hash));
                 }
@@ -384,12 +361,12 @@ impl FederationModule for LightningModule {
     #[instrument(skip_all)]
     async fn end_consensus_epoch<'a>(
         &'a self,
-        _consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &HashSet<PeerId>,
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Decrypt preimages
-        let preimage_decraption_shares = self
+        let preimage_decryption_shares = self
             .db
             .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
             .map(|res| {
@@ -398,13 +375,45 @@ impl FederationModule for LightningModule {
             })
             .into_group_map();
 
-        for (contract_id, shares) in preimage_decraption_shares {
+        let mut bad_peers = vec![];
+        for (contract_id, shares) in preimage_decryption_shares {
+            let peers: Vec<PeerId> = shares.iter().map(|(peer, _)| *peer).collect();
             let span = info_span!("decrypt_preimage", %contract_id);
             let _gaurd = span.enter();
 
-            if shares.len() < self.cfg.threshold {
-                trace!(
-                    shares = %shares.len(),
+            let incoming_contract = match self.get_contract_account(contract_id) {
+                Some(ContractAccount {
+                    contract: FundedContract::Incoming(incoming),
+                    ..
+                }) => incoming.contract,
+                _ => {
+                    warn!("Received decryption share for non-existent incoming contract");
+                    for peer in peers {
+                        batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                    }
+                    continue;
+                }
+            };
+
+            let valid_shares: HashMap<PeerId, PreimageDecryptionShare> = shares
+                .into_iter()
+                .filter(|(peer, share)| {
+                    self.validate_decryption_share(
+                        *peer,
+                        share,
+                        &incoming_contract.encrypted_preimage,
+                    )
+                })
+                .collect();
+
+            for peer in consensus_peers.sub(&valid_shares.keys().cloned().collect()) {
+                bad_peers.push(peer);
+                warn!("{} did not contribute valid decryption shares", peer);
+            }
+
+            if valid_shares.len() < self.cfg.threshold {
+                warn!(
+                    valid_shares = %valid_shares.len(),
                     shares_needed = %self.cfg.threshold,
                     "Too few decryption shares"
                 );
@@ -432,7 +441,7 @@ impl FederationModule for LightningModule {
             }
 
             let preimage = match self.cfg.threshold_pub_keys.decrypt(
-                shares
+                valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), &share.0)),
                 &incoming_contract.encrypted_preimage.0,
@@ -447,8 +456,8 @@ impl FederationModule for LightningModule {
 
             // Delete decryption shares once we've decrypted the preimage
             batch.append_delete(ProposeDecryptionShareKey(contract_id));
-            for (peer_id, _) in shares {
-                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer_id));
+            for peer in peers {
+                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
             }
 
             let decrypted_preimage = if preimage.len() != 32 {
@@ -499,8 +508,7 @@ impl FederationModule for LightningModule {
         }
         batch.commit();
 
-        // FIXME should use to drop non-contributing peers
-        vec![]
+        bad_peers
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
