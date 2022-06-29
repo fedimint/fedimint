@@ -474,9 +474,9 @@
 <span class="doccomment">/// Invoice whose &quot;offer&quot; hasn&#39;t yet been accepted by federation</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnconfirmedInvoice</span> {
     <span class="doccomment">/// The invoice itself</span>
-    <span class="ident">invoice</span>: <span class="ident">Invoice</span>,
+    <span class="kw">pub</span> <span class="ident">invoice</span>: <span class="ident">Invoice</span>,
     <span class="doccomment">/// The outpoint which creates the &quot;offer&quot; this invoice depends on</span>
-    <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
+    <span class="kw">pub</span> <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">UserClient</span> {
