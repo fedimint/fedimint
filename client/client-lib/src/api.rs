@@ -84,6 +84,7 @@ impl<'a> dyn FederationApi + 'a {
 pub struct HttpFederationApi {
     federation_member_api_hosts: Vec<(PeerId, Url)>,
     http_client: reqwest::Client,
+    max_evil: usize,
 }
 
 pub type Result<T> = std::result::Result<T, ApiError>;
@@ -148,10 +149,11 @@ impl FederationApi for HttpFederationApi {
 
 impl HttpFederationApi {
     /// Creates a new API client
-    pub fn new(members: Vec<(PeerId, Url)>) -> HttpFederationApi {
+    pub fn new(max_evil: usize, members: Vec<(PeerId, Url)>) -> HttpFederationApi {
         HttpFederationApi {
             federation_member_api_hosts: members,
             http_client: Default::default(),
+            max_evil,
         }
     }
 
@@ -205,8 +207,10 @@ impl HttpFederationApi {
     }
 
     // TODO: check for consistency of replies, needs epoch-versioned API replies
+    // TODO: Make the HTTP requests asynchronous so we don't get stuck on a single peer
     /// This function is used to run the same HTTP request against multiple endpoint belonging to
-    /// different federation members and returns the first success or if none occurs the last error.
+    /// different federation members and returns a success if the minimum threshold of peers
+    /// return success, otherwise it will return an error.
     async fn parallel_http_op<'a, T, F>(&'a self, make_request: F) -> Result<T>
     where
         F: Fn(&'a reqwest::Client, PeerId, &'a Url) -> ParHttpFuture<'a, T>,
@@ -216,9 +220,16 @@ impl HttpFederationApi {
             .then(|(id, member)| make_request(&self.http_client, *id, member));
 
         let mut error = None;
+        let mut successes = 0;
         while let Some((_member_id, result)) = requests.next().await {
             match result {
-                Ok(res) => return Ok(res),
+                Ok(res) => {
+                    if successes == self.max_evil {
+                        return Ok(res);
+                    } else {
+                        successes += 1;
+                    }
+                }
                 Err(e) => error = Some(e),
             };
         }

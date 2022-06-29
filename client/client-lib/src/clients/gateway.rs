@@ -46,6 +46,7 @@ pub struct PaymentParameters {
 impl GatewayClient {
     pub fn new(cfg: GatewayClientConfig, db: Box<dyn Database>) -> Self {
         let api = api::HttpFederationApi::new(
+            cfg.common.max_evil,
             cfg.common
                 .api_endpoints
                 .iter()

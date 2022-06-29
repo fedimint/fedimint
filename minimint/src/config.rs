@@ -119,6 +119,7 @@ impl GenerateConfig for ServerConfig {
             .collect();
 
         let client_config = ClientConfig {
+            max_evil,
             api_endpoints: peers
                 .iter()
                 .map(|&peer| {

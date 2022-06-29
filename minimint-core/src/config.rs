@@ -12,6 +12,7 @@ pub struct ClientConfig {
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
     pub fee_consensus: FeeConsensus,
+    pub max_evil: usize,
 }
 
 // TODO: get rid of it here, modules should govern their oen fees

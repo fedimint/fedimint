@@ -55,6 +55,7 @@ pub struct UnconfirmedInvoice {
 impl UserClient {
     pub fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
         let api = api::HttpFederationApi::new(
+            cfg.max_evil,
             cfg.api_endpoints
                 .iter()
                 .enumerate()

@@ -281,6 +281,7 @@ impl UserTest {
 
     fn new(config: ClientConfig, peers: Vec<PeerId>) -> Self {
         let api = Box::new(HttpFederationApi::new(
+            config.max_evil,
             config
                 .api_endpoints
                 .iter()
