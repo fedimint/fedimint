@@ -23,7 +23,6 @@ use bitcoin::util::psbt::{Global, Input, PartiallySignedTransaction};
 use bitcoin::{
     Address, AddressType, BlockHash, Network, Script, SigHashType, Transaction, TxIn, TxOut, Txid,
 };
-use bitcoind::BitcoinRpcError;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
@@ -1219,7 +1218,7 @@ pub enum WalletError {
     #[error("Connected bitcoind is on wrong network, expected {0}, got {1}")]
     WrongNetwork(Network, Network),
     #[error("Error querying bitcoind: {0}")]
-    RpcError(#[from] BitcoinRpcError),
+    RpcError(#[from] anyhow::Error),
     #[error("Unknown bitcoin network: {0}")]
     UnknownNetwork(String),
     #[error("Unknown block hash in peg-in proof: {0}")]

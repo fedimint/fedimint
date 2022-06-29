@@ -1797,6 +1797,7 @@ dependencies = [
 name = "minimint-api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitcoin",
  "bitcoin_hashes",
@@ -1933,6 +1934,7 @@ dependencies = [
 name = "minimint-wallet"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
@@ -1975,6 +1977,7 @@ dependencies = [
 name = "mint-client"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.13.0",
  "bincode",
