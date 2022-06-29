@@ -274,6 +274,17 @@
 <span id="268">268</span>
 <span id="269">269</span>
 <span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">Future</span>, <span class="ident">StreamExt</span>, <span class="ident">TryFutureExt</span>};
@@ -360,6 +371,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">HttpFederationApi</span> {
     <span class="ident">federation_member_api_hosts</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">Url</span>)<span class="op">&gt;</span>,
     <span class="ident">http_client</span>: <span class="ident">reqwest::Client</span>,
+    <span class="ident">max_evil</span>: <span class="ident">usize</span>,
 }
 
 <span class="kw">pub</span> <span class="kw">type</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">ApiError</span><span class="op">&gt;</span>;
@@ -424,10 +436,11 @@
 
 <span class="kw">impl</span> <span class="ident">HttpFederationApi</span> {
     <span class="doccomment">/// Creates a new API client</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">Url</span>)<span class="op">&gt;</span>) -&gt; <span class="ident">HttpFederationApi</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">Url</span>)<span class="op">&gt;</span>) -&gt; <span class="ident">HttpFederationApi</span> {
         <span class="ident">HttpFederationApi</span> {
             <span class="ident">federation_member_api_hosts</span>: <span class="ident">members</span>,
             <span class="ident">http_client</span>: <span class="ident">Default::default</span>(),
+            <span class="ident">max_evil</span>,
         }
     }
 
@@ -481,8 +494,10 @@
     }
 
     <span class="comment">// TODO: check for consistency of replies, needs epoch-versioned API replies</span>
+    <span class="comment">// TODO: Make the HTTP requests asynchronous so we don&#39;t get stuck on a single peer</span>
     <span class="doccomment">/// This function is used to run the same HTTP request against multiple endpoint belonging to</span>
-    <span class="doccomment">/// different federation members and returns the first success or if none occurs the last error.</span>
+    <span class="doccomment">/// different federation members and returns a success if the minimum threshold of peers</span>
+    <span class="doccomment">/// return success, otherwise it will return an error.</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">parallel_http_op</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">make_request</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">reqwest::Client</span>, <span class="ident">PeerId</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Url</span>) -&gt; <span class="ident">ParHttpFuture</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span><span class="op">&gt;</span>,
@@ -492,9 +507,16 @@
             .<span class="ident">then</span>(<span class="op">|</span>(<span class="ident">id</span>, <span class="ident">member</span>)<span class="op">|</span> <span class="ident">make_request</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">http_client</span>, <span class="kw-2">*</span><span class="ident">id</span>, <span class="ident">member</span>));
 
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">error</span> <span class="op">=</span> <span class="prelude-val">None</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">successes</span> <span class="op">=</span> <span class="number">0</span>;
         <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">_member_id</span>, <span class="ident">result</span>)) <span class="op">=</span> <span class="ident">requests</span>.<span class="ident">next</span>().<span class="kw">await</span> {
             <span class="kw">match</span> <span class="ident">result</span> {
-                <span class="prelude-val">Ok</span>(<span class="ident">res</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">res</span>),
+                <span class="prelude-val">Ok</span>(<span class="ident">res</span>) =&gt; {
+                    <span class="kw">if</span> <span class="ident">successes</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">max_evil</span> {
+                        <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">res</span>);
+                    } <span class="kw">else</span> {
+                        <span class="ident">successes</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+                    }
+                }
                 <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="ident">error</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">e</span>),
             };
         }
@@ -545,5 +567,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (2f3ddd9f5 2022-06-27)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (830880640 2022-06-28)" ></div>
 </body></html>

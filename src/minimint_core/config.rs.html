@@ -60,6 +60,7 @@
 <span id="54">54</span>
 <span id="55">55</span>
 <span id="56">56</span>
+<span id="57">57</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_ln::config::LightningModuleClientConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_mint::config::MintClientConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_wallet::config::WalletClientConfig</span>;
@@ -74,6 +75,7 @@
     <span class="kw">pub</span> <span class="ident">wallet</span>: <span class="ident">WalletClientConfig</span>,
     <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">LightningModuleClientConfig</span>,
     <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
+    <span class="kw">pub</span> <span class="ident">max_evil</span>: <span class="ident">usize</span>,
 }
 
 <span class="comment">// TODO: get rid of it here, modules should govern their oen fees</span>
@@ -117,5 +119,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (2f3ddd9f5 2022-06-27)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (830880640 2022-06-28)" ></div>
 </body></html>
