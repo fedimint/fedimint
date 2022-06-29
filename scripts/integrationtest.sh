@@ -2,6 +2,7 @@
 
 POLL_INTERVAL=1
 CONFIRMATION_TIME=10
+NUM_PEERS=3
 
 # Fail instantly if anything goes wrong and log executed commands
 set -euxo pipefail
@@ -59,7 +60,7 @@ export MINIMINT_TEST_DIR=$TMP_DIR
 cargo test -p minimint-tests -- --test-threads=1
 
 # Generate federation, gateway and client config
-$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
+$BIN_DIR/configgen -- $CFG_DIR $NUM_PEERS 4000 5000 1000 10000 100000 1000000 10000000
 LN1_PUB_KEY="$($LN1 getinfo | jq -r '.id')"
 $BIN_DIR/gw_configgen -- $CFG_DIR "$LN1_DIR/regtest/lightning-rpc" $LN1_PUB_KEY
 
@@ -82,7 +83,7 @@ mine_blocks 10
 # FIXME: make db path configurable to avoid cd-ing here
 # Start the federation members inside the temporary directory
 cd $TMP_DIR
-for ((ID=0; ID<4; ID++)); do
+for ((ID=0; ID<NUM_PEERS; ID++)); do
   echo "starting mint $ID"
   ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
 done
@@ -90,7 +91,7 @@ MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
 
 function await_block_sync() {
   EXPECTED_BLOCK_HEIGHT="$(( $($BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $CONFIRMATION_TIME ))"
-  for ((ID=0; ID<4; ID++)); do
+  for ((ID=0; ID<NUM_PEERS; ID++)); do
     MINT_API_URL="http://127.0.0.1:500$ID"
     until [ "$(curl $MINT_API_URL/wallet/block_height)" == "$EXPECTED_BLOCK_HEIGHT" ]; do
       sleep $POLL_INTERVAL
