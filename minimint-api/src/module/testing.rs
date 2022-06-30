@@ -197,9 +197,9 @@ struct FakeInterconnect(
         dyn Fn(
             &'static str,
             String,
-            http_types::Method,
+            http::Method,
             serde_json::Value,
-        ) -> http_types::Result<http_types::Response>,
+        ) -> http::Result<http::Response>,
     >,
 );
 
@@ -208,10 +208,10 @@ impl FakeInterconnect {
         FakeInterconnect(Box::new(move |module, path, method, _data| {
             assert_eq!(module, "wallet");
             assert_eq!(path, "/block_height");
-            assert_eq!(method, http::Method::Get);
+            assert_eq!(method, http::Method::GET);
 
             let height = bh.load(Ordering::Relaxed);
-            Ok(http::Body::from_json(&height)
+            Ok(http::Response::json(&height)
                 .expect("Error encoding fake block height")
                 .into())
         }))

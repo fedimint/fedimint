@@ -526,7 +526,7 @@ impl FederationModule for LightningModule {
             ApiEndpoint {
                 path_spec: "/account/:contract_id",
                 params: &["contract_id"],
-                method: http::Method::Get,
+                method: http::Method::GET,
                 handler: |module, params, _body| {
                     let contract_id: ContractId = match params
                         .get("contract_id")
@@ -534,32 +534,31 @@ impl FederationModule for LightningModule {
                         .parse()
                     {
                         Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
+                        Err(_) => return Ok(http::StatusCode::BAD_REQUEST.into()),
                     };
 
-                    let contract_account = module
-                        .get_contract_account(contract_id)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
+                    let contract_account = match module.get_contract_account(contract_id) {
+                        Some(c) => c,
+                        None => return Ok(http::StatusCode::NOT_FOUND.into()),
+                    };
 
                     debug!(%contract_id, "Sending contract account info");
-                    let body = http::Body::from_json(&contract_account).expect("encoding error");
-                    Ok(body.into())
+                    Ok(http::Response::json(&contract_account).expect("encoding error"))
                 },
             },
             ApiEndpoint {
                 path_spec: "/offers",
                 params: &[],
-                method: http::Method::Get,
+                method: http::Method::GET,
                 handler: |module, _params, _body| {
                     let offers = module.get_offers();
-                    let body = http::Body::from_json(&offers).expect("encoding error");
-                    Ok(body.into())
+                    Ok(http::Response::json(&offers).expect("encoding error"))
                 },
             },
             ApiEndpoint {
                 path_spec: "/offer/:payment_hash",
                 params: &["payment_hash"],
-                method: http::Method::Get,
+                method: http::Method::GET,
                 handler: |module, params, _body| {
                     let payment_hash: bitcoin_hashes::sha256::Hash = match params
                         .get("payment_hash")
@@ -567,16 +566,16 @@ impl FederationModule for LightningModule {
                         .parse()
                     {
                         Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
+                        Err(_) => return Ok(http::StatusCode::BAD_REQUEST.into()),
                     };
 
-                    let offer = module
-                        .get_offer(payment_hash)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
+                    let offer = match module.get_offer(payment_hash) {
+                        Some(o) => o,
+                        None => return Ok(http::StatusCode::NOT_FOUND.into()),
+                    };
 
                     debug!(%payment_hash, "Sending offer info");
-                    let body = http::Body::from_json(&offer).expect("encoding error");
-                    Ok(body.into())
+                    Ok(http::Response::json(&offer).expect("encoding error"))
                 },
             },
         ]
@@ -626,18 +625,17 @@ impl LightningModule {
 fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
-    futures::executor::block_on(
-        interconnect
-            .call(
-                "wallet",
-                "/block_height".to_owned(),
-                http::Method::Get,
-                Default::default(),
-            )
-            .expect("Wallet module not present or malfunctioning!")
-            .body_json(),
-    )
-    .expect("Malformed block height response from wallet module!")
+    interconnect
+        .call(
+            "wallet",
+            "/block_height".to_owned(),
+            http::Method::GET,
+            Default::default(),
+        )
+        .expect("Wallet module not present or malfunctioning!")
+        .body_json()
+        .unwrap() // body is fresh, cannot be taken
+        .expect("Malformed block height response from wallet module!")
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

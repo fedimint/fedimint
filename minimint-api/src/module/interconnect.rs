@@ -1,3 +1,5 @@
+use super::http;
+
 /// Provides an interface to call APIs of other modules
 pub trait ModuleInterconect {
     /// Simulates a HTTP call to an API endpoint of another module. Unless an actual HTTP call this
@@ -8,7 +10,7 @@ pub trait ModuleInterconect {
         &self,
         module: &'static str,
         path: String,
-        method: http_types::Method,
+        method: http::Method,
         data: serde_json::Value,
-    ) -> http_types::Result<http_types::Response>;
+    ) -> http::Result<http::Response>;
 }

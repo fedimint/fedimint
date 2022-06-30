@@ -1,3 +1,4 @@
+pub mod http;
 pub mod interconnect;
 pub mod testing;
 
@@ -10,7 +11,6 @@ use secp256k1_zkp::XOnlyPublicKey;
 use std::collections::{HashMap, HashSet};
 
 use crate::module::interconnect::ModuleInterconect;
-pub use http_types as http;
 
 pub struct InputMeta<'a> {
     pub amount: Amount,
@@ -18,7 +18,7 @@ pub struct InputMeta<'a> {
 }
 
 /// Map of URL parameters and their values.
-pub type Params<'a> = HashMap<&'static str, &'a str>;
+pub type Params<'a> = HashMap<&'a str, &'a str>;
 
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
@@ -30,12 +30,12 @@ pub struct ApiEndpoint<M> {
     /// List of parameter names used in `path_spec`. // TODO: maybe use lazy_static instead?
     pub params: &'static [&'static str],
     /// HTTP method that the API endpoint expects
-    pub method: http_types::Method,
+    pub method: http::Method,
     /// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
     ///   * URL parameter map
     ///   * Request body parsed into JSON `[Value](serde_json::Value)`
-    pub handler: fn(&M, Params, serde_json::Value) -> http_types::Result<http_types::Response>,
+    pub handler: fn(&M, Params, serde_json::Value) -> http::Result<http::Response>,
 }
 
 #[async_trait(?Send)]

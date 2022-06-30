@@ -26,7 +26,7 @@ where
             "wallet" => call_internal(&self.minimint.wallet, path, method, data),
             "mint" => call_internal(&self.minimint.mint, path, method, data),
             "ln" => call_internal(&self.minimint.ln, path, method, data),
-            _ => Err(http::Error::from_str(404, "Module not found")),
+            _ => Ok(http::StatusCode::NOT_FOUND.into()),
         }
     }
 }
@@ -37,11 +37,14 @@ fn call_internal<M: FederationModule + 'static>(
     method: Method,
     data: Value,
 ) -> http::Result<Response> {
-    let endpoint = module
+    let endpoint = match module
         .api_endpoints()
         .iter()
         .find(|endpoint| endpoint.method == method && endpoint.path_spec == path)
-        .ok_or_else(|| http::Error::from_str(404, "Endpoint not found"))?;
+    {
+        Some(e) => e,
+        None => return Ok(http::StatusCode::NOT_FOUND.into()),
+    };
 
     // FIXME: implement parameter handling
     assert!(

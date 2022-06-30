@@ -521,13 +521,12 @@ impl FederationModule for Wallet {
         &[ApiEndpoint {
             path_spec: "/block_height",
             params: &[],
-            method: http::Method::Get,
+            method: http::Method::GET,
             handler: |module, _params, _val| {
                 let block_height = module.consensus_height().unwrap_or(0);
 
                 debug!(block_height, "Sending consensus");
-                let body = http::Body::from_json(&block_height).expect("encoding error");
-                Ok(body.into())
+                Ok(http::Response::json(&block_height).expect("encoding error"))
             },
         }]
     }
