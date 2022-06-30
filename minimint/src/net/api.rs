@@ -97,10 +97,11 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
             params: &[],
             method: http::Method::Put,
             handler: |minimint, _params, transaction| {
-                let transaction: Transaction = match serde_json::from_value(transaction) {
-                    Ok(t) => t,
-                    Err(_) => return Ok(http::Response::new(400)),
-                };
+                let transaction: Transaction =
+                    match serde_json::from_slice(&serde_json::to_vec(&transaction).unwrap()) {
+                        Ok(t) => t,
+                        Err(_) => return Ok(http::Response::new(400)),
+                    };
                 let tx_id = transaction.tx_hash();
 
                 minimint
