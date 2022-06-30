@@ -516,6 +516,12 @@ impl<R: RngCore + CryptoRng> AsRef<LightningModule> for MinimintConsensus<R> {
     }
 }
 
+impl<R: RngCore + CryptoRng> AsRef<MinimintConsensus<R>> for MinimintConsensus<R> {
+    fn as_ref(&self) -> &MinimintConsensus<R> {
+        self
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum TransactionSubmissionError {
     #[error("High level transaction error: {0}")]
