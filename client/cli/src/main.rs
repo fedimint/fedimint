@@ -143,10 +143,11 @@ async fn main() {
             client.peg_out(satoshis, address, &mut rng).await.unwrap();
         }
         Command::LnPay { bolt11 } => {
+            let gateway = cfg.gateway.expect("No gateway configured in client.json");
             let http = reqwest::Client::new();
 
             let (contract_id, outpoint) = client
-                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
+                .fund_outgoing_ln_contract(&gateway, bolt11, &mut rng)
                 .await
                 .expect("Not enough coins");
 
@@ -160,7 +161,7 @@ async fn main() {
                 "Funded outgoing contract, notifying gateway",
             );
 
-            http.post(&format!("{}/pay_invoice", cfg.gateway.api))
+            http.post(&format!("{}/pay_invoice", gateway.api))
                 .json(&contract_id)
                 .timeout(Duration::from_secs(15))
                 .send()
@@ -171,8 +172,9 @@ async fn main() {
             amount,
             description,
         } => {
+            let gateway = cfg.gateway.expect("No gateway configured in client.json");
             let (_, unconfirmed_invoice) = client
-                .create_unconfirmed_invoice(amount, description, &cfg.gateway, &mut rng)
+                .create_unconfirmed_invoice(amount, description, &gateway, &mut rng)
                 .await
                 .expect("Couldn't create invoice");
             let invoice = client

@@ -7,7 +7,10 @@ use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
 use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
 use minimint_api::{Amount, OutPoint};
-use mint_client::clients::gateway::{GatewayClient, GatewayClientError};
+use mint_client::{
+    clients::gateway::{GatewayClient, GatewayClientError},
+    ln::gateway::LightningGateway,
+};
 use rand::{CryptoRng, RngCore};
 use std::{
     sync::Arc,
@@ -29,6 +32,7 @@ pub enum GatewayRequest {
         ),
     ),
     PayInvoice((ContractId, oneshot::Sender<Result<(), LnGatewayError>>)),
+    Info(oneshot::Sender<LightningGateway>),
 }
 
 pub type SharedLnGateway = Arc<Mutex<Option<LnGateway>>>;
@@ -48,7 +52,9 @@ impl LnGateway {
         receiver: mpsc::Receiver<GatewayRequest>,
     ) -> Self {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
-        let webserver = tokio::spawn(run_webserver(sender));
+        // TODO: spawn this from config url
+        let api = federation_client.config().api;
+        let webserver = tokio::spawn(run_webserver(sender, api));
         LnGateway {
             federation_client,
             ln_client,
@@ -203,6 +209,15 @@ impl LnGateway {
                     GatewayRequest::PayInvoice((contract_id, sender)) => {
                         let result = self.handle_pay_invoice_msg(contract_id).await;
                         sender.send(result).expect("couldn't send over channel");
+                    }
+                    GatewayRequest::Info(sender) => {
+                        let config = self.federation_client.config();
+                        let gw = LightningGateway {
+                            mint_pub_key: config.redeem_key.public_key(),
+                            node_pub_key: config.node_pub_key,
+                            api: config.api,
+                        };
+                        sender.send(gw).expect("couldn't send over channel");
                     }
                 }
             }

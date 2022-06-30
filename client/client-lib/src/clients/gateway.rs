@@ -28,12 +28,14 @@ pub struct GatewayClient {
     context: OwnedClientContext<GatewayClientConfig>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayClientConfig {
     pub common: ClientConfig,
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
+    pub api: String,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
 }
 
 #[derive(Debug)]
@@ -59,6 +61,10 @@ impl GatewayClient {
                 .collect(),
         );
         Self::new_with_api(cfg, db, Box::new(api))
+    }
+
+    pub fn config(&self) -> GatewayClientConfig {
+        self.context.config.clone()
     }
 
     pub fn new_with_api(
@@ -311,7 +317,7 @@ impl GatewayClient {
         Ok(self
             .context
             .api
-            .await_output_outcome::<Preimage>(outpoint, Duration::from_secs(20))
+            .await_output_outcome::<Preimage>(outpoint, Duration::from_secs(10))
             .await?)
     }
 

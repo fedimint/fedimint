@@ -214,6 +214,8 @@ impl GatewayTest {
             common: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
+            node_pub_key,
+            api: "".to_string(),
         };
 
         let keys = LightningGateway {

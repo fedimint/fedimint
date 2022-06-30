@@ -1,13 +1,12 @@
 use clap::Parser;
 use cln_plugin::{options, Builder, Error, Plugin};
+use cln_rpc::model::requests::GetinfoRequest;
 use cln_rpc::ClnRpc;
 use ln_gateway::cln::HtlcAccepted;
 use ln_gateway::{GatewayRequest, LnGateway, LnGatewayError};
 use minimint::config::load_from_file;
 use minimint::modules::ln::contracts::incoming::Preimage;
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
-use mint_client::ln::gateway::LightningGateway;
-use mint_client::ClientAndGatewayConfig;
 use secp256k1::KeyPair;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -35,41 +34,27 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     let ctx = secp256k1::Secp256k1::new();
     let kp_fed = KeyPair::new(&ctx, &mut rng);
 
+    let result = ln_client
+        .call(cln_rpc::Request::Getinfo(GetinfoRequest {}))
+        .await;
+    let node_pub_key = match result {
+        Ok(cln_rpc::Response::Getinfo(get_info)) => {
+            secp256k1::PublicKey::from_slice(&get_info.id.to_vec())
+                .expect("Couldn't deserialize node pubkey")
+        }
+        _ => panic!("Couldn't fetch gateway node pubkey"),
+    };
     let gateway_cfg = GatewayClientConfig {
         common: federation_client_cfg.clone(),
         redeem_key: kp_fed,
         timelock_delta: 10,
+        node_pub_key,
+        api: String::from("http://127.0.0.1:8080"),
     };
 
     let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
     let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
     serde_json::to_writer_pretty(gw_cfg_file, &gateway_cfg).unwrap();
-
-    let node_pub_key_bytes = match ln_client
-        .call(cln_rpc::Request::Getinfo(
-            cln_rpc::model::requests::GetinfoRequest {},
-        ))
-        .await
-    {
-        Ok(cln_rpc::Response::Getinfo(r)) => r.id,
-        Ok(_) => panic!("Core lightning sent wrong message"),
-        Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
-    };
-    let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
-
-    let client_cfg = ClientAndGatewayConfig {
-        client: federation_client_cfg,
-        gateway: LightningGateway {
-            mint_pub_key: kp_fed.public_key(),
-            node_pub_key,
-            api: "http://127.0.0.1:8080".to_string(),
-        },
-    };
-
-    let client_cfg_file_path: PathBuf = workdir.join("client.json");
-    let client_cfg_file =
-        std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
-    serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }
 
 /// Loads configs if they exist, generates them if not
@@ -112,6 +97,10 @@ async fn initialize_gateway(
     let federation_client = Arc::new(GatewayClient::new(gw_client_cfg, Box::new(db)));
     let ln_client = Box::new(Mutex::new(ln_client));
 
+    // TODO:
+    // - node pubkey
+    // - url
+    plugin.configuration();
     LnGateway::new(federation_client, ln_client, sender, receiver).await
 }
 

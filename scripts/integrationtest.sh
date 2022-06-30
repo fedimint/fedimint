@@ -42,7 +42,7 @@ until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
 done
 
 # Create federation config (required by gateway plugin)
-$BIN_DIR/configgen -- $CFG_DIR 4 4000 5000 1000 10000 100000 1000000 10000000
+$BIN_DIR/configgen $CFG_DIR federation 4 4000 5000 1000 10000 100000 1000000 10000000
 
 # Start lightning nodes. Lightning gateway is run as core-lightning plugin.
 lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR \
@@ -86,6 +86,9 @@ for ((ID=0; ID<4; ID++)); do
   echo "starting mint $ID"
   ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
 done
+
+# Create client config
+$BIN_DIR/configgen $CFG_DIR client 127.0.0.1:8080
 MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
 
 function await_block_sync() {
