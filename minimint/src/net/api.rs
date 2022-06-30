@@ -1,11 +1,14 @@
 use crate::config::ServerConfig;
 use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
-use minimint_api::{FederationModule, TransactionId};
+use minimint_api::{
+    module::{http, ApiEndpoint},
+    FederationModule, TransactionId,
+};
 use std::fmt::Formatter;
 use std::sync::Arc;
-use tide::{Body, Request, Response, Server};
-use tracing::{debug, instrument, trace};
+use tide::{Body, Request, Server};
+use tracing::debug;
 
 #[derive(Clone)]
 struct State {
@@ -23,12 +26,23 @@ pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand:
         minimint: minimint.clone(),
     };
     let mut server = tide::with_state(state);
-    server.at("/transaction").put(submit_transaction);
-    server.at("/transaction/:txid").get(fetch_outcome);
 
-    attach_module_endpoints(&mut server, &minimint.wallet);
-    attach_module_endpoints(&mut server, &minimint.mint);
-    attach_module_endpoints(&mut server, &minimint.ln);
+    attach_endpoints(&mut server, server_endpoints(), None);
+    attach_endpoints(
+        &mut server,
+        minimint.wallet.api_endpoints(),
+        Some(minimint.wallet.api_base_name()),
+    );
+    attach_endpoints(
+        &mut server,
+        minimint.mint.api_endpoints(),
+        Some(minimint.mint.api_base_name()),
+    );
+    attach_endpoints(
+        &mut server,
+        minimint.ln.api_endpoints(),
+        Some(minimint.ln.api_base_name()),
+    );
 
     server
         .listen(&cfg.api_bind_addr)
@@ -36,26 +50,29 @@ pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand:
         .expect("Could not start API server");
 }
 
-fn attach_module_endpoints<M>(server: &mut Server<State>, module: &M)
-where
-    M: FederationModule + 'static,
+fn attach_endpoints<M>(
+    server: &mut Server<State>,
+    endpoints: &'static [ApiEndpoint<M>],
+    base_name: Option<&str>,
+) where
     MinimintConsensus<rand::rngs::OsRng>: AsRef<M>,
 {
-    for endpoint in module.api_endpoints() {
-        // Check that params are actually defined in path spec so that there will be no errors at
-        // runtime.
+    for endpoint in endpoints {
         for param in endpoint.params {
             assert!(
                 endpoint.path_spec.contains(&format!(":{}", param)),
                 "Module defined API endpoint with faulty path spec"
             );
         }
-
-        let path = format!("/{}{}", module.api_base_name(), endpoint.path_spec);
+        let path = if let Some(base_name) = base_name {
+            format!("/{}{}", base_name, endpoint.path_spec)
+        } else {
+            endpoint.path_spec.to_string()
+        };
         server
             .at(&path)
             .method(endpoint.method, move |mut req: Request<State>| async move {
-                debug!(endpoint = %req.url(), "Module endpoint request");
+                debug!(endpoint = %req.url(), "Endpoint request");
                 let data: serde_json::Value = req.body_json().await.unwrap_or_default();
                 let params = endpoint
                     .params
@@ -73,38 +90,50 @@ where
     }
 }
 
-#[instrument(skip_all)]
-async fn submit_transaction(mut req: Request<State>) -> tide::Result {
-    trace!(?req, "Received API request");
-    let transaction: Transaction = req.body_json().await?;
-    let tx_id = transaction.tx_hash();
-    debug!("Sending peg-in request to consensus");
-    req.state()
-        .minimint
-        .submit_transaction(transaction)
-        .expect("Could not submit sign request to consensus");
+fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] {
+    &[
+        ApiEndpoint {
+            path_spec: "/transaction",
+            params: &[],
+            method: http::Method::Put,
+            handler: |minimint, _params, transaction| {
+                let transaction: Transaction = match serde_json::from_value(transaction) {
+                    Ok(t) => t,
+                    Err(_) => return Ok(http::Response::new(400)),
+                };
+                let tx_id = transaction.tx_hash();
 
-    // TODO: give feedback in case of error
-    let body = Body::from_json(&tx_id).expect("encoding error");
-    Ok(body.into())
-}
+                minimint
+                    .submit_transaction(transaction)
+                    .expect("Could not submit sign request to consensus");
 
-#[instrument(skip_all)]
-async fn fetch_outcome(req: Request<State>) -> tide::Result {
-    let tx_hash: TransactionId = match req.param("txid").expect("Request id not supplied").parse() {
-        Ok(id) => id,
-        Err(_) => return Ok(Response::new(400)),
-    };
+                // TODO: give feedback in case of error
+                let body = Body::from_json(&tx_id).expect("encoding error");
+                Ok(body.into())
+            },
+        },
+        ApiEndpoint {
+            path_spec: "/transaction/:txid",
+            params: &["txid"],
+            method: http::Method::Get,
+            handler: |minimint, params, _body| {
+                let tx_hash: TransactionId =
+                    match params.get("txid").expect("Request id not supplied").parse() {
+                        Ok(id) => id,
+                        Err(_) => return Ok(http::Response::new(400)),
+                    };
 
-    debug!(transaction = %tx_hash, "Recieved request");
+                debug!(transaction = %tx_hash, "Recieved request");
 
-    let tx_status = req
-        .state()
-        .minimint
-        .transaction_status(tx_hash)
-        .ok_or_else(|| tide::Error::from_str(404, "Not found"))?;
+                let tx_status = match minimint.transaction_status(tx_hash) {
+                    Some(t) => t,
+                    None => return Ok(http::Response::new(404)),
+                };
 
-    debug!(transaction = %tx_hash, "Sending outcome");
-    let body = Body::from_json(&tx_status).expect("encoding error");
-    Ok(body.into())
+                debug!(transaction = %tx_hash, "Sending outcome");
+                let body = Body::from_json(&tx_status).expect("encoding error");
+                Ok(body.into())
+            },
+        },
+    ]
 }
