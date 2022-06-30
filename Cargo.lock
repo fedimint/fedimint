@@ -2882,7 +2882,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp"
 version = "0.6.0"
-source = "git+https://github.com/sanket1729/rust-secp256k1-zkp/?branch=pr29#7ac346460b8d4f40b3b70fa8fcb242e52cc68533"
+source = "git+https://github.com/fedimint/rust-secp256k1-zkp/?branch=sanket-pr#7ac346460b8d4f40b3b70fa8fcb242e52cc68533"
 dependencies = [
  "rand 0.6.5",
  "secp256k1",
@@ -2893,7 +2893,7 @@ dependencies = [
 [[package]]
 name = "secp256k1-zkp-sys"
 version = "0.6.0"
-source = "git+https://github.com/sanket1729/rust-secp256k1-zkp/?branch=pr29#7ac346460b8d4f40b3b70fa8fcb242e52cc68533"
+source = "git+https://github.com/fedimint/rust-secp256k1-zkp/?branch=sanket-pr#7ac346460b8d4f40b3b70fa8fcb242e52cc68533"
 dependencies = [
  "cc",
  "secp256k1-sys",
