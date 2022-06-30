@@ -51,16 +51,13 @@ impl<'c> LnClient<'c> {
             Amount::from_msat(contract_amount_msat)
         };
 
-        let user_sk = secp256k1_zkp::schnorrsig::KeyPair::new(self.context.secp, &mut rng);
+        let user_sk = bitcoin::KeyPair::new(self.context.secp, &mut rng);
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
             gateway_key: gateway.mint_pub_key,
             timelock,
-            user_key: secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-                self.context.secp,
-                &user_sk,
-            ),
+            user_key: user_sk.public_key(),
             invoice: invoice.to_string(),
         };
 
@@ -129,7 +126,7 @@ impl<'c> LnClient<'c> {
     pub fn create_refund_outgoing_contract_input<'a>(
         &self,
         contract_data: &'a OutgoingContractData,
-    ) -> (&'a secp256k1_zkp::schnorrsig::KeyPair, ContractInput) {
+    ) -> (&'a bitcoin::KeyPair, ContractInput) {
         (
             &contract_data.recovery_key,
             contract_data.contract_account.refund(),
@@ -275,7 +272,6 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn test_outgoing() {
         let mut rng = rand::thread_rng();
-        let ctx = secp256k1_zkp::Secp256k1::new();
         let (fed, client_context) = new_mint_and_client().await;
 
         let client = LnClient {
@@ -298,8 +294,7 @@ mod tests {
                 .unwrap();
         let invoice_amt_msat = invoice.amount_milli_satoshis().unwrap();
         let gateway = {
-            let mint_pub_key =
-                secp256k1_zkp::schnorrsig::PublicKey::from_slice(&[42; 32][..]).unwrap();
+            let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
             let node_pub_key = secp256k1_zkp::PublicKey::from_slice(&[2; 33][..]).unwrap();
             LightningGateway {
                 mint_pub_key,
@@ -365,7 +360,7 @@ mod tests {
         fed.lock().await.set_block_height(timelock as u64);
 
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
-        let refund_pk = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, refund_key);
+        let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key);
         assert_eq!(meta.keys, vec![refund_pk]);
         assert_eq!(meta.amount, expected_amount);
 

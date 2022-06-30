@@ -1,5 +1,6 @@
 use crate::BorrowedClientContext;
 use bitcoin::Address;
+use bitcoin::KeyPair;
 use db::PegInKey;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::Amount;
@@ -8,9 +9,8 @@ use minimint_core::modules::wallet::config::WalletClientConfig;
 use minimint_core::modules::wallet::tweakable::Tweakable;
 use minimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 use minimint_core::modules::wallet::PegOut;
-use miniscript::DescriptorTrait;
+use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::schnorrsig::KeyPair;
 use thiserror::Error;
 use tracing::debug;
 
@@ -29,9 +29,8 @@ impl<'c> WalletClient<'c> {
         mut batch: BatchTx<'_>,
         mut rng: R,
     ) -> Address {
-        let peg_in_sec_key = secp256k1_zkp::schnorrsig::KeyPair::new(self.context.secp, &mut rng);
-        let peg_in_pub_key =
-            secp256k1_zkp::schnorrsig::PublicKey::from_keypair(self.context.secp, &peg_in_sec_key);
+        let peg_in_keypair = bitcoin::KeyPair::new(self.context.secp, &mut rng);
+        let peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&peg_in_keypair);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -49,7 +48,7 @@ impl<'c> WalletClient<'c> {
             PegInKey {
                 peg_in_script: script,
             },
-            peg_in_sec_key.serialize_secret(),
+            peg_in_keypair.secret_bytes(),
         );
 
         batch.commit();
@@ -76,21 +75,15 @@ impl<'c> WalletClient<'c> {
                     .map(|tweak_secret| (idx, tweak_secret))
             })
             .ok_or(WalletClientError::NoMatchingPegInFound)?;
-        let secret_tweak_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-            self.context.secp,
-            &secret_tweak_key_bytes,
-        )
-        .expect("sec key was generated and saved by us");
-        let public_tweak_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            self.context.secp,
-            &secret_tweak_key,
-        );
+        let secret_tweak_key =
+            bitcoin::KeyPair::from_seckey_slice(self.context.secp, &secret_tweak_key_bytes)
+                .expect("sec key was generated and saved by us");
 
         let peg_in_proof = PegInProof::new(
             txout_proof,
             btc_transaction,
             output_idx as u32,
-            public_tweak_key,
+            secret_tweak_key.public_key(),
         )
         .map_err(WalletClientError::PegInProofError)?;
 

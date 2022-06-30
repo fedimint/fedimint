@@ -5,7 +5,7 @@ use mint_client::clients::gateway::GatewayClientConfig;
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::ClientAndGatewayConfig;
 use rand::thread_rng;
-use secp256k1::PublicKey;
+use secp256k1::{KeyPair, PublicKey};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -24,12 +24,12 @@ fn main() {
     let mut rng = thread_rng();
     let ctx = secp256k1::Secp256k1::new();
 
-    let (sk_fed, pk_fed) = ctx.generate_schnorrsig_keypair(&mut rng);
+    let kp = KeyPair::new(&ctx, &mut rng);
 
     let gateway_cfg = LnGatewayConfig {
         federation_client: GatewayClientConfig {
             common: federation_client_cfg.clone(),
-            redeem_key: sk_fed,
+            redeem_key: kp,
             timelock_delta: 10,
         },
         ln_socket: opts.ln_rpc_path,
@@ -42,7 +42,7 @@ fn main() {
     let client_cfg = ClientAndGatewayConfig {
         client: federation_client_cfg,
         gateway: LightningGateway {
-            mint_pub_key: pk_fed,
+            mint_pub_key: kp.public_key(),
             node_pub_key: opts.ln_node_pub_key,
             api: "http://127.0.0.1:8080".to_string(),
         },

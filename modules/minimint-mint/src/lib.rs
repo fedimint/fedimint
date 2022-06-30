@@ -75,7 +75,7 @@ pub struct Coin(pub CoinNonce, pub tbs::Signature);
 /// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
 /// spent coin's spending keys to avoid mint frontrunning.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct CoinNonce(pub secp256k1_zkp::schnorrsig::PublicKey);
+pub struct CoinNonce(pub secp256k1_zkp::XOnlyPublicKey);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindToken(pub tbs::BlindedMessage);
@@ -601,7 +601,7 @@ impl Coin {
     }
 
     /// Access the nonce as the public key to the spend key
-    pub fn spend_key(&self) -> &secp256k1_zkp::schnorrsig::PublicKey {
+    pub fn spend_key(&self) -> &secp256k1_zkp::XOnlyPublicKey {
         &self.0 .0
     }
 }

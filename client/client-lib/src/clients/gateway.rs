@@ -32,7 +32,7 @@ pub struct GatewayClient {
 pub struct GatewayClientConfig {
     pub common: ClientConfig,
     #[serde(with = "serde_keypair")]
-    pub redeem_key: secp256k1_zkp::schnorrsig::KeyPair,
+    pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
 }
 
@@ -107,10 +107,8 @@ impl GatewayClient {
         &self,
         account: &OutgoingContractAccount,
     ) -> Result<PaymentParameters> {
-        let our_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &self.context.secp,
-            &self.context.config.redeem_key,
-        );
+        let our_pub_key =
+            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
 
         if account.contract.gateway_key != our_pub_key {
             return Err(GatewayClientError::NotOurKey);
@@ -242,10 +240,8 @@ impl GatewayClient {
             .create_coin_input(batch.transaction(), offer.amount)?;
 
         // Outputs
-        let our_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            &self.context.secp,
-            &self.context.config.redeem_key,
-        );
+        let our_pub_key =
+            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
         let contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -444,7 +440,7 @@ mod db {
 }
 
 pub mod serde_keypair {
-    use secp256k1_zkp::schnorrsig::KeyPair;
+    use bitcoin::KeyPair;
     use secp256k1_zkp::SecretKey;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

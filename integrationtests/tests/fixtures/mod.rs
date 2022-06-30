@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
@@ -205,16 +206,16 @@ impl GatewayTest {
     ) -> Self {
         let mut rng = OsRng::new().unwrap();
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let (secret_key_fed, public_key_fed) = ctx.generate_schnorrsig_keypair(&mut rng);
+        let kp = KeyPair::new(&ctx, &mut rng);
 
         let federation_client = GatewayClientConfig {
             common: client_config.clone(),
-            redeem_key: secret_key_fed,
+            redeem_key: kp,
             timelock_delta: 10,
         };
 
         let keys = LightningGateway {
-            mint_pub_key: public_key_fed,
+            mint_pub_key: kp.public_key(),
             node_pub_key,
             api: "".to_string(),
         };

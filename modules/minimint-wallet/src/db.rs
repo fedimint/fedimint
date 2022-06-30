@@ -4,7 +4,7 @@ use crate::{
 use bitcoin::{BlockHash, OutPoint, Txid};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
-use secp256k1::Signature;
+use secp256k1::ecdsa::Signature;
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;

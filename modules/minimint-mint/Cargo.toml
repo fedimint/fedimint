@@ -15,7 +15,7 @@ minimint-api = { path = "../../minimint-api" }
 minimint-derive = { path = "../../minimint-derive" }
 rand = "0.6"
 rayon = "1.5.0"
-secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp", branch = "minimint", features = [  ] }
+secp256k1-zkp = "0.6.0"
 serde = { version = "1.0.118", features = [ "derive" ] }
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.23"

@@ -15,6 +15,7 @@ use minimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
 };
+use secp256k1::KeyPair;
 use std::sync::Arc;
 
 #[test_log::test(tokio::test)]
@@ -29,8 +30,11 @@ async fn test_account() {
     )
     .await;
 
-    let (_sk, pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
-    let contract = Contract::Account(AccountContract { key: pk });
+    let ctx = secp256k1::Secp256k1::new();
+    let kp = KeyPair::new(&ctx, &mut rng);
+    let contract = Contract::Account(AccountContract {
+        key: kp.public_key(),
+    });
 
     let account_output = ContractOrOfferOutput::Contract(ContractOutput {
         amount: Amount::from_sat(42),
@@ -56,7 +60,7 @@ async fn test_account() {
         witness: None,
     };
     let meta = fed.verify_input(&account_input).unwrap();
-    assert_eq!(meta.keys, vec![pk]);
+    assert_eq!(meta.keys, vec![kp.public_key()]);
 
     fed.consensus_round(&[account_input.clone()], &[]).await;
 
@@ -75,8 +79,9 @@ async fn test_outgoing() {
     )
     .await;
 
-    let (_, gw_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
-    let (_, user_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
+    let ctx = secp256k1::Secp256k1::new();
+    let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
+    let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let preimage = [42u8; 32];
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
 
@@ -150,8 +155,9 @@ async fn test_incoming() {
     )
     .await;
 
-    let (_, gw_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
-    let (_, user_pk) = secp256k1::SECP256K1.generate_schnorrsig_keypair(&mut rng);
+    let ctx = secp256k1::Secp256k1::new();
+    let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
+    let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
 
     let preimage = user_pk.serialize();
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
