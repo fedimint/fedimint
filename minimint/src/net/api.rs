@@ -39,7 +39,7 @@ pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand:
 fn attach_module_endpoints<M>(server: &mut Server<State>, module: &M)
 where
     M: FederationModule + 'static,
-    for<'a> &'a M: From<&'a MinimintConsensus<rand::rngs::OsRng>>,
+    MinimintConsensus<rand::rngs::OsRng>: AsRef<M>,
 {
     for endpoint in module.api_endpoints() {
         // Check that params are actually defined in path spec so that there will be no errors at
@@ -67,7 +67,7 @@ where
                         (*param, value)
                     })
                     .collect();
-                let module: &M = req.state().minimint.as_ref().into();
+                let module: &M = req.state().minimint.as_ref().as_ref();
                 (endpoint.handler)(module, params, data)
             });
     }

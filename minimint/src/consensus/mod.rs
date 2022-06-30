@@ -498,21 +498,21 @@ where
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a Wallet {
-    fn from(fed: &'a MinimintConsensus<R>) -> Self {
-        &fed.wallet
+impl<R: RngCore + CryptoRng> AsRef<Wallet> for MinimintConsensus<R> {
+    fn as_ref(&self) -> &Wallet {
+        &self.wallet
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a Mint {
-    fn from(fed: &'a MinimintConsensus<R>) -> Self {
-        &fed.mint
+impl<R: RngCore + CryptoRng> AsRef<Mint> for MinimintConsensus<R> {
+    fn as_ref(&self) -> &Mint {
+        &self.mint
     }
 }
 
-impl<'a, R: RngCore + CryptoRng> From<&'a MinimintConsensus<R>> for &'a LightningModule {
-    fn from(fed: &'a MinimintConsensus<R>) -> Self {
-        &fed.ln
+impl<R: RngCore + CryptoRng> AsRef<LightningModule> for MinimintConsensus<R> {
+    fn as_ref(&self) -> &LightningModule {
+        &self.ln
     }
 }
 
