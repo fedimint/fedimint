@@ -1344,6 +1344,9 @@
 <span id="1338">1338</span>
 <span id="1339">1339</span>
 <span id="1340">1340</span>
+<span id="1341">1341</span>
+<span id="1342">1342</span>
+<span id="1343">1343</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
 
@@ -1363,11 +1366,12 @@
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::hashes</span>::{<span class="ident">sha256</span>, <span class="ident">Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>, <span class="ident">HashEngine</span>, <span class="ident">Hmac</span>, <span class="ident">HmacEngine</span>};
 <span class="kw">use</span> <span class="ident">bitcoin::secp256k1</span>::{<span class="ident">All</span>, <span class="ident">Secp256k1</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::util::bip143::SigHashCache</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::util::psbt::raw::ProprietaryKey</span>;
-<span class="kw">use</span> <span class="ident">bitcoin::util::psbt</span>::{<span class="ident">Global</span>, <span class="ident">Input</span>, <span class="ident">PartiallySignedTransaction</span>};
+<span class="kw">use</span> <span class="ident">bitcoin::util::psbt</span>::{<span class="ident">Input</span>, <span class="ident">PartiallySignedTransaction</span>};
+<span class="kw">use</span> <span class="ident">bitcoin::util::sighash::SighashCache</span>;
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{
-    <span class="ident">Address</span>, <span class="ident">AddressType</span>, <span class="ident">BlockHash</span>, <span class="ident">Network</span>, <span class="ident">Script</span>, <span class="ident">SigHashType</span>, <span class="ident">Transaction</span>, <span class="ident">TxIn</span>, <span class="ident">TxOut</span>, <span class="ident">Txid</span>,
+    <span class="ident">Address</span>, <span class="ident">AddressType</span>, <span class="ident">BlockHash</span>, <span class="ident">EcdsaSig</span>, <span class="ident">EcdsaSighashType</span>, <span class="ident">Network</span>, <span class="ident">Script</span>, <span class="ident">Transaction</span>,
+    <span class="ident">TxIn</span>, <span class="ident">TxOut</span>, <span class="ident">Txid</span>,
 };
 <span class="kw">use</span> <span class="ident">itertools::Itertools</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};
@@ -1378,6 +1382,7 @@
 <span class="kw">use</span> <span class="ident">minimint_api::module::ApiEndpoint</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">InputMeta</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
 <span class="kw">use</span> <span class="ident">minimint_derive::UnzipConsensus</span>;
+<span class="kw">use</span> <span class="ident">miniscript::psbt::PsbtExt</span>;
 <span class="kw">use</span> <span class="ident">miniscript</span>::{<span class="ident">Descriptor</span>, <span class="ident">DescriptorTrait</span>, <span class="ident">TranslatePk2</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">Rng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">secp256k1::Message</span>;
@@ -1426,7 +1431,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutSignatureItem</span> {
     <span class="kw">pub</span> <span class="ident">txid</span>: <span class="ident">Txid</span>,
-    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1::Signature</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1::ecdsa::Signature</span><span class="op">&gt;</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -1744,7 +1749,7 @@
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="self">self</span>
                 .<span class="ident">create_peg_out_tx</span>(<span class="ident">pending_peg_outs</span>, <span class="ident">round_consensus</span>)
                 .<span class="kw">await</span>;
-            <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">global</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
+            <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
 
             <span class="macro">info!</span>(
                 <span class="op">%</span><span class="ident">txid</span>,
@@ -1771,15 +1776,14 @@
 
                     <span class="comment">// We drop SIGHASH_ALL, because we always use that and it is only present in the</span>
                     <span class="comment">// PSBT for compatibility with other tools.</span>
-                    <span class="ident">secp256k1::Signature::from_der</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>[..<span class="ident">sig</span>.<span class="ident">len</span>() <span class="op">-</span> <span class="number">1</span>])
+                    <span class="ident">secp256k1::ecdsa::Signature::from_der</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="ident">to_vec</span>()[..<span class="ident">sig</span>.<span class="ident">to_vec</span>().<span class="ident">len</span>() <span class="op">-</span> <span class="number">1</span>])
                         .<span class="ident">expect</span>(<span class="string">&quot;we serialized it ourselves that way&quot;</span>)
                 })
                 .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
 
             <span class="comment">// Delete used UTXOs</span>
             <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(
-                <span class="ident">psbt</span>.<span class="ident">global</span>
-                    .<span class="ident">unsigned_tx</span>
+                <span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>
                     .<span class="ident">input</span>
                     .<span class="ident">iter</span>()
                     .<span class="ident">map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="ident">BatchItem::delete</span>(<span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">previous_output</span>))),
@@ -1793,7 +1797,7 @@
             );
 
             <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-                <span class="ident">UnsignedTransactionKey</span>(<span class="ident">psbt</span>.<span class="ident">global</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>()),
+                <span class="ident">UnsignedTransactionKey</span>(<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>()),
                 <span class="ident">UnsignedTransaction</span> {
                     <span class="ident">psbt</span>,
                     <span class="ident">signatures</span>: <span class="macro">vec!</span>[],
@@ -1967,22 +1971,24 @@
             ));
         }
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SigHashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">global</span>.<span class="ident">unsigned_tx</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
         <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">input</span>, <span class="ident">signature</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
             .<span class="ident">inputs</span>
             .<span class="ident">iter_mut</span>()
             .<span class="ident">zip</span>(<span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">iter</span>())
             .<span class="ident">enumerate</span>()
         {
-            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>.<span class="ident">signature_hash</span>(
-                <span class="ident">idx</span>,
-                <span class="ident">input</span>
-                    .<span class="ident">witness_script</span>
-                    .<span class="ident">as_ref</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
-                <span class="ident">input</span>.<span class="ident">witness_utxo</span>.<span class="ident">as_ref</span>().<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>).<span class="ident">value</span>,
-                <span class="ident">SigHashType::All</span>,
-            );
+            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>
+                .<span class="ident">segwit_signature_hash</span>(
+                    <span class="ident">idx</span>,
+                    <span class="ident">input</span>
+                        .<span class="ident">witness_script</span>
+                        .<span class="ident">as_ref</span>()
+                        .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
+                    <span class="ident">input</span>.<span class="ident">witness_utxo</span>.<span class="ident">as_ref</span>().<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>).<span class="ident">value</span>,
+                    <span class="ident">EcdsaSighashType::All</span>,
+                )
+                .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::SighashError</span>)<span class="question-mark">?</span>;
 
             <span class="kw">let</span> <span class="ident">tweak</span> <span class="op">=</span> <span class="ident">input</span>
                 .<span class="ident">proprietary</span>
@@ -1991,23 +1997,16 @@
 
             <span class="kw">let</span> <span class="ident">tweaked_peer_key</span> <span class="op">=</span> <span class="ident">peer_key</span>.<span class="ident">tweak</span>(<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>);
             <span class="self">self</span>.<span class="ident">secp</span>
-                .<span class="ident">verify</span>(
+                .<span class="ident">verify_ecdsa</span>(
                     <span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(),
                     <span class="ident">signature</span>,
                     <span class="kw-2">&amp;</span><span class="ident">tweaked_peer_key</span>.<span class="ident">key</span>,
                 )
                 .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::InvalidSignature</span>)<span class="question-mark">?</span>;
 
-            <span class="kw">let</span> <span class="ident">psbt_sig</span> <span class="op">=</span> <span class="ident">signature</span>
-                .<span class="ident">serialize_der</span>()
-                .<span class="ident">iter</span>()
-                .<span class="ident">copied</span>()
-                .<span class="ident">chain</span>(<span class="ident">std::iter::once</span>(<span class="ident">SigHashType::All</span>.<span class="ident">as_u32</span>() <span class="kw">as</span> <span class="ident">u8</span>))
-                .<span class="ident">collect</span>();
-
             <span class="kw">if</span> <span class="ident">input</span>
                 .<span class="ident">partial_sigs</span>
-                .<span class="ident">insert</span>(<span class="ident">tweaked_peer_key</span>.<span class="ident">into</span>(), <span class="ident">psbt_sig</span>)
+                .<span class="ident">insert</span>(<span class="ident">tweaked_peer_key</span>.<span class="ident">into</span>(), <span class="ident">EcdsaSig::sighash_all</span>(<span class="kw-2">*</span><span class="ident">signature</span>))
                 .<span class="ident">is_some</span>()
             {
                 <span class="comment">// Should never happen since peers only sign a PSBT once</span>
@@ -2033,13 +2032,11 @@
             .<span class="ident">try_into</span>()
             .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) <span class="op">=</span> <span class="ident">miniscript::psbt::finalize</span>(<span class="ident">psbt</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>) {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">finalize_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>) {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::ErrorFinalizingPsbt</span>(<span class="ident">error</span>));
         }
 
-        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">miniscript::psbt::extract</span>(<span class="ident">psbt</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>)
-            <span class="comment">// This should never happen AFAIK, but I&#39;d like to avoid DOS bugs for now</span>
-            .<span class="ident">map_err</span>(<span class="ident">ProcessPegOutSigError::ErrorFinalizingPsbt</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">clone</span>().<span class="ident">extract_tx</span>();
 
         <span class="prelude-val">Ok</span>(<span class="ident">PendingTransaction</span> {
             <span class="ident">tx</span>,
@@ -2339,7 +2336,7 @@
                     <span class="ident">previous_output</span>: <span class="ident">utxo_key</span>.<span class="number">0</span>,
                     <span class="ident">script_sig</span>: <span class="ident">Default::default</span>(),
                     <span class="ident">sequence</span>: <span class="number">0xFFFFFFFF</span>,
-                    <span class="ident">witness</span>: <span class="macro">vec!</span>[],
+                    <span class="ident">witness</span>: <span class="ident">bitcoin::Witness::new</span>(),
                 })
                 .<span class="ident">collect</span>(),
             <span class="ident">output</span>: <span class="ident">outputs</span>
@@ -2355,13 +2352,11 @@
 
         <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization</span>
         <span class="kw">let</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="ident">PartiallySignedTransaction</span> {
-            <span class="ident">global</span>: <span class="ident">Global</span> {
-                <span class="ident">unsigned_tx</span>: <span class="ident">transaction</span>,
-                <span class="ident">version</span>: <span class="number">0</span>,
-                <span class="ident">xpub</span>: <span class="ident">Default::default</span>(),
-                <span class="ident">proprietary</span>: <span class="ident">Default::default</span>(),
-                <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
-            },
+            <span class="ident">unsigned_tx</span>: <span class="ident">transaction</span>,
+            <span class="ident">version</span>: <span class="number">0</span>,
+            <span class="ident">xpub</span>: <span class="ident">Default::default</span>(),
+            <span class="ident">proprietary</span>: <span class="ident">Default::default</span>(),
+            <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
             <span class="ident">inputs</span>: <span class="ident">selected_utxos</span>
                 .<span class="ident">into_iter</span>()
                 .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">_utxo_key</span>, <span class="ident">utxo</span>)<span class="op">|</span> {
@@ -2379,7 +2374,10 @@
                         <span class="ident">sighash_type</span>: <span class="prelude-val">None</span>,
                         <span class="ident">redeem_script</span>: <span class="prelude-val">None</span>,
                         <span class="ident">witness_script</span>: <span class="prelude-val">Some</span>(
-                            <span class="self">self</span>.<span class="ident">descriptor</span>.<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">utxo</span>.<span class="ident">tweak</span>, <span class="self">self</span>.<span class="ident">secp</span>).<span class="ident">script_code</span>(),
+                            <span class="self">self</span>.<span class="ident">descriptor</span>
+                                .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">utxo</span>.<span class="ident">tweak</span>, <span class="self">self</span>.<span class="ident">secp</span>)
+                                .<span class="ident">script_code</span>()
+                                .<span class="ident">expect</span>(<span class="string">&quot;Failed to tweak descriptor&quot;</span>),
                         ),
                         <span class="ident">bip32_derivation</span>: <span class="ident">Default::default</span>(),
                         <span class="ident">final_script_sig</span>: <span class="prelude-val">None</span>,
@@ -2391,6 +2389,12 @@
                         <span class="ident">proprietary</span>: <span class="macro">vec!</span>[(<span class="ident">proprietary_tweak_key</span>(), <span class="ident">utxo</span>.<span class="ident">tweak</span>.<span class="ident">to_vec</span>())]
                             .<span class="ident">into_iter</span>()
                             .<span class="ident">collect</span>(),
+                        <span class="ident">tap_key_sig</span>: <span class="ident">Default::default</span>(),
+                        <span class="ident">tap_script_sigs</span>: <span class="ident">Default::default</span>(),
+                        <span class="ident">tap_scripts</span>: <span class="ident">Default::default</span>(),
+                        <span class="ident">tap_key_origins</span>: <span class="ident">Default::default</span>(),
+                        <span class="ident">tap_internal_key</span>: <span class="ident">Default::default</span>(),
+                        <span class="ident">tap_merkle_root</span>: <span class="ident">Default::default</span>(),
                         <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
                     }
                 })
@@ -2411,12 +2415,12 @@
     }
 
     <span class="kw">fn</span> <span class="ident">sign_psbt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SigHashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">global</span>.<span class="ident">unsigned_tx</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
 
         <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">psbt_input</span>, <span class="ident">_tx_input</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
             .<span class="ident">inputs</span>
             .<span class="ident">iter_mut</span>()
-            .<span class="ident">zip</span>(<span class="ident">psbt</span>.<span class="ident">global</span>.<span class="ident">unsigned_tx</span>.<span class="ident">input</span>.<span class="ident">iter</span>())
+            .<span class="ident">zip</span>(<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">input</span>.<span class="ident">iter</span>())
             .<span class="ident">enumerate</span>()
         {
             <span class="kw">let</span> <span class="ident">tweaked_secret</span> <span class="op">=</span> {
@@ -2440,33 +2444,32 @@
                 <span class="ident">secret_key</span>
             };
 
-            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>.<span class="ident">signature_hash</span>(
-                <span class="ident">idx</span>,
-                <span class="ident">psbt_input</span>
-                    .<span class="ident">witness_script</span>
-                    .<span class="ident">as_ref</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
-                <span class="ident">psbt_input</span>
-                    .<span class="ident">witness_utxo</span>
-                    .<span class="ident">as_ref</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>)
-                    .<span class="ident">value</span>,
-                <span class="ident">SigHashType::All</span>,
-            );
+            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>
+                .<span class="ident">segwit_signature_hash</span>(
+                    <span class="ident">idx</span>,
+                    <span class="ident">psbt_input</span>
+                        .<span class="ident">witness_script</span>
+                        .<span class="ident">as_ref</span>()
+                        .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
+                    <span class="ident">psbt_input</span>
+                        .<span class="ident">witness_utxo</span>
+                        .<span class="ident">as_ref</span>()
+                        .<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>)
+                        .<span class="ident">value</span>,
+                    <span class="ident">EcdsaSighashType::All</span>,
+                )
+                .<span class="ident">expect</span>(<span class="string">&quot;Failed to create segwit sighash&quot;</span>);
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">signature</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">signature</span> <span class="op">=</span> <span class="self">self</span>
                 .<span class="ident">secp</span>
-                .<span class="ident">sign</span>(<span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(), <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>)
-                .<span class="ident">serialize_der</span>()
-                .<span class="ident">to_vec</span>();
-            <span class="ident">signature</span>.<span class="ident">push</span>(<span class="ident">SigHashType::All</span>.<span class="ident">as_u32</span>() <span class="kw">as</span> <span class="ident">u8</span>);
+                .<span class="ident">sign_ecdsa</span>(<span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(), <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>);
 
             <span class="ident">psbt_input</span>.<span class="ident">partial_sigs</span>.<span class="ident">insert</span>(
                 <span class="ident">bitcoin::PublicKey</span> {
                     <span class="ident">compressed</span>: <span class="bool-val">true</span>,
-                    <span class="ident">key</span>: <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>),
+                    <span class="ident">inner</span>: <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>),
                 },
-                <span class="ident">signature</span>,
+                <span class="ident">EcdsaSig::sighash_all</span>(<span class="ident">signature</span>),
             );
         }
     }
@@ -2527,7 +2530,7 @@
     <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">PendingTransaction</span> { <span class="ident">tx</span>, .. }) <span class="kw">in</span> <span class="ident">pending_tx</span> {
         <span class="macro">debug!</span>(
             <span class="ident">tx</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx</span>.<span class="ident">txid</span>(),
-            <span class="ident">weight</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">get_weight</span>(),
+            <span class="ident">weight</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">weight</span>(),
             <span class="string">&quot;Broadcasting peg-out&quot;</span>,
         );
         <span class="macro">trace!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">tx</span>);
@@ -2581,6 +2584,8 @@
     <span class="ident">UnknownTransaction</span>(<span class="ident">Txid</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Expected {0} signatures, got {1}&quot;</span>)]</span>
     <span class="ident">WrongSignatureCount</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Bad Sighash&quot;</span>)]</span>
+    <span class="ident">SighashError</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Malformed signature: {0}&quot;</span>)]</span>
     <span class="ident">MalformedSignature</span>(<span class="ident">secp256k1::Error</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid signature&quot;</span>)]</span>
@@ -2589,8 +2594,8 @@
     <span class="ident">DuplicateSignature</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Missing change tweak&quot;</span>)]</span>
     <span class="ident">MissingOrMalformedChangeTweak</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error finalizing PSBT {0}&quot;</span>)]</span>
-    <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">miniscript::psbt::Error</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]</span>
+    <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">miniscript::psbt::Error</span><span class="op">&gt;</span>),
 }
 
 <span class="comment">// FIXME: make FakeFed not require Eq</span>
@@ -2612,6 +2617,7 @@
     <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TxOut</span>};
     <span class="kw">use</span> <span class="ident">miniscript::descriptor::Wsh</span>;
     <span class="kw">use</span> <span class="ident">miniscript::policy::Concrete</span>;
+    <span class="kw">use</span> <span class="ident">miniscript::psbt::PsbtExt</span>;
     <span class="kw">use</span> <span class="ident">miniscript</span>::{<span class="ident">Descriptor</span>, <span class="ident">DescriptorTrait</span>, <span class="ident">Segwitv0</span>};
 
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::UTXOKey</span>;
@@ -2672,8 +2678,8 @@
             <span class="kw-2">&amp;</span><span class="ident">CHANGE_TWEAK</span>,
         );
         <span class="ident">wallet</span>.<span class="ident">sign_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>);
-        <span class="ident">miniscript::psbt::finalize</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="kw-2">&amp;</span><span class="ident">ctx</span>).<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">miniscript::psbt::extract</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>, <span class="kw-2">&amp;</span><span class="ident">ctx</span>).<span class="ident">unwrap</span>();
+        <span class="ident">psbt</span>.<span class="ident">finalize_mut</span>(<span class="kw-2">&amp;</span><span class="ident">ctx</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">extract_tx</span>();
 
         <span class="ident">tx</span>.<span class="ident">verify</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> {
             <span class="prelude-val">Some</span>(<span class="ident">TxOut</span> {

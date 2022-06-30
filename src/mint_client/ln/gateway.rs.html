@@ -18,7 +18,7 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGateway</span> {
-    <span class="kw">pub</span> <span class="ident">mint_pub_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+    <span class="kw">pub</span> <span class="ident">mint_pub_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
     <span class="kw">pub</span> <span class="ident">node_pub_key</span>: <span class="ident">secp256k1::PublicKey</span>,
     <span class="kw">pub</span> <span class="ident">api</span>: <span class="ident">String</span>,
 }

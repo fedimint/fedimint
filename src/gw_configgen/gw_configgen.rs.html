@@ -66,7 +66,7 @@
 <span class="kw">use</span> <span class="ident">mint_client::ln::gateway::LightningGateway</span>;
 <span class="kw">use</span> <span class="ident">mint_client::ClientAndGatewayConfig</span>;
 <span class="kw">use</span> <span class="ident">rand::thread_rng</span>;
-<span class="kw">use</span> <span class="ident">secp256k1::PublicKey</span>;
+<span class="kw">use</span> <span class="ident">secp256k1</span>::{<span class="ident">KeyPair</span>, <span class="ident">PublicKey</span>};
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
@@ -85,12 +85,12 @@
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">thread_rng</span>();
     <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1::Secp256k1::new</span>();
 
-    <span class="kw">let</span> (<span class="ident">sk_fed</span>, <span class="ident">pk_fed</span>) <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">generate_schnorrsig_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+    <span class="kw">let</span> <span class="ident">kp</span> <span class="op">=</span> <span class="ident">KeyPair::new</span>(<span class="kw-2">&amp;</span><span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
 
     <span class="kw">let</span> <span class="ident">gateway_cfg</span> <span class="op">=</span> <span class="ident">LnGatewayConfig</span> {
         <span class="ident">federation_client</span>: <span class="ident">GatewayClientConfig</span> {
             <span class="ident">common</span>: <span class="ident">federation_client_cfg</span>.<span class="ident">clone</span>(),
-            <span class="ident">redeem_key</span>: <span class="ident">sk_fed</span>,
+            <span class="ident">redeem_key</span>: <span class="ident">kp</span>,
             <span class="ident">timelock_delta</span>: <span class="number">10</span>,
         },
         <span class="ident">ln_socket</span>: <span class="ident">opts</span>.<span class="ident">ln_rpc_path</span>,
@@ -103,7 +103,7 @@
     <span class="kw">let</span> <span class="ident">client_cfg</span> <span class="op">=</span> <span class="ident">ClientAndGatewayConfig</span> {
         <span class="ident">client</span>: <span class="ident">federation_client_cfg</span>,
         <span class="ident">gateway</span>: <span class="ident">LightningGateway</span> {
-            <span class="ident">mint_pub_key</span>: <span class="ident">pk_fed</span>,
+            <span class="ident">mint_pub_key</span>: <span class="ident">kp</span>.<span class="ident">public_key</span>(),
             <span class="ident">node_pub_key</span>: <span class="ident">opts</span>.<span class="ident">ln_node_pub_key</span>,
             <span class="ident">api</span>: <span class="string">&quot;http://127.0.0.1:8080&quot;</span>.<span class="ident">to_string</span>(),
         },

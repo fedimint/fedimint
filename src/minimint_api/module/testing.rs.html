@@ -257,7 +257,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TestInputMeta</span> {
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">keys</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::schnorrsig::PublicKey</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">keys</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::XOnlyPublicKey</span><span class="op">&gt;</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span>, <span class="ident">CC</span><span class="op">&gt;</span> <span class="ident">FakeFed</span><span class="op">&lt;</span><span class="ident">M</span>, <span class="ident">CC</span><span class="op">&gt;</span>

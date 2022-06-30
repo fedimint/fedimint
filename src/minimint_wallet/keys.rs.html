@@ -80,10 +80,6 @@
 <span id="74">74</span>
 <span id="75">75</span>
 <span id="76">76</span>
-<span id="77">77</span>
-<span id="78">78</span>
-<span id="79">79</span>
-<span id="80">80</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::tweakable</span>::{<span class="ident">Contract</span>, <span class="ident">Tweakable</span>};
 <span class="kw">use</span> <span class="ident">bitcoin::hashes::Hash</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::secp256k1</span>::{<span class="ident">Secp256k1</span>, <span class="ident">Verification</span>};
@@ -113,17 +109,13 @@
     <span class="kw">fn</span> <span class="ident">to_pubkeyhash</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="self">Self</span>::Hash</span> {
         (<span class="kw-2">*</span><span class="self">self</span>).<span class="ident">clone</span>()
     }
-
-    <span class="kw">fn</span> <span class="ident">serialized_len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> {
-        <span class="ident">secp256k1::constants::PUBLIC_KEY_SIZE</span>
-    }
 }
 
 <span class="kw">impl</span> <span class="ident">ToPublicKey</span> <span class="kw">for</span> <span class="ident">CompressedPublicKey</span> {
     <span class="kw">fn</span> <span class="ident">to_public_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">PublicKey</span> {
         <span class="ident">PublicKey</span> {
             <span class="ident">compressed</span>: <span class="bool-val">true</span>,
-            <span class="ident">key</span>: <span class="self">self</span>.<span class="ident">key</span>,
+            <span class="ident">inner</span>: <span class="self">self</span>.<span class="ident">key</span>,
         }
     }
 
@@ -160,7 +152,7 @@
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">key</span>: <span class="ident">CompressedPublicKey</span>) -&gt; <span class="self">Self</span> {
         <span class="ident">bitcoin::PublicKey</span> {
             <span class="ident">compressed</span>: <span class="bool-val">true</span>,
-            <span class="ident">key</span>: <span class="ident">key</span>.<span class="ident">key</span>,
+            <span class="ident">inner</span>: <span class="ident">key</span>.<span class="ident">key</span>,
         }
     }
 }

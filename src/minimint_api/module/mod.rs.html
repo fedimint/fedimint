@@ -167,7 +167,7 @@
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">rand::CryptoRng</span>;
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::rand::RngCore</span>;
-<span class="kw">use</span> <span class="ident">secp256k1_zkp::schnorrsig</span>;
+<span class="kw">use</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span>;
 <span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::interconnect::ModuleInterconect</span>;
@@ -175,7 +175,7 @@
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">puk_keys</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">schnorrsig::PublicKey</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">puk_keys</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">XOnlyPublicKey</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
 }
 
 <span class="doccomment">/// Map of URL parameters and their values.</span>

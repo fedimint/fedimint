@@ -348,7 +348,7 @@
     <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
     <span class="comment">// Check that the idx is in range</span>
     <span class="ident">output_idx</span>: <span class="ident">u32</span>,
-    <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+    <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
@@ -416,7 +416,7 @@
         <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
         <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
         <span class="ident">output_idx</span>: <span class="ident">u32</span>,
-        <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+        <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span><span class="op">&gt;</span> {
         <span class="comment">// TODO: remove redundancy with serde validation</span>
         <span class="kw">if</span> <span class="op">!</span><span class="ident">txout_proof</span>.<span class="ident">contains_tx</span>(<span class="ident">transaction</span>.<span class="ident">txid</span>()) {
@@ -468,11 +468,11 @@
         <span class="self">self</span>.<span class="ident">txout_proof</span>.<span class="ident">block</span>()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">tweak_contract_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1::schnorrsig::PublicKey</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">tweak_contract_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1::XOnlyPublicKey</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">tweak_contract_key</span>
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">identity</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="ident">secp256k1::schnorrsig::PublicKey</span>, <span class="ident">bitcoin::Txid</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">identity</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="ident">secp256k1::XOnlyPublicKey</span>, <span class="ident">bitcoin::Txid</span>) {
         (<span class="self">self</span>.<span class="ident">tweak_contract_key</span>, <span class="self">self</span>.<span class="ident">transaction</span>.<span class="ident">txid</span>())
     }
 
@@ -583,7 +583,7 @@
             <span class="ident">txout_proof</span>: <span class="ident">TxOutProof::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
             <span class="ident">transaction</span>: <span class="ident">Transaction::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
             <span class="ident">output_idx</span>: <span class="ident">u32::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
-            <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
+            <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
         };
 
         <span class="ident">validate_peg_in_proof</span>(<span class="kw-2">&amp;</span><span class="ident">slf</span>).<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)<span class="question-mark">?</span>;

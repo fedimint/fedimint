@@ -224,7 +224,7 @@
     <span class="doccomment">/// the contract, allowing the offer creator to redeem their money.</span>
     <span class="kw">pub</span> <span class="ident">decrypted_preimage</span>: <span class="ident">DecryptedPreimage</span>,
     <span class="doccomment">/// Key that can unlock contract in case the decrypted preimage was invalid</span>
-    <span class="kw">pub</span> <span class="ident">gateway_key</span>: <span class="ident">secp256k1::schnorrsig::PublicKey</span>,
+    <span class="kw">pub</span> <span class="ident">gateway_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
 }
 
 <span class="doccomment">/// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it&#39;s creation. Since</span>
@@ -261,7 +261,7 @@
 <span class="doccomment">/// A preimage in the context of incoming contracts. In this context it is a public key chosen</span>
 <span class="doccomment">/// by the creator of the [`IncomingContractOffer`].</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Preimage</span>(<span class="kw">pub</span> <span class="ident">secp256k1::schnorrsig::PublicKey</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Preimage</span>(<span class="kw">pub</span> <span class="ident">secp256k1::XOnlyPublicKey</span>);
 
 <span class="doccomment">/// Threshold-encrypted [`Preimage`]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>

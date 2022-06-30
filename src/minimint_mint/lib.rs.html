@@ -955,7 +955,7 @@
 <span class="doccomment">/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the</span>
 <span class="doccomment">/// spent coin&#39;s spending keys to avoid mint frontrunning.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">CoinNonce</span>(<span class="kw">pub</span> <span class="ident">secp256k1_zkp::schnorrsig::PublicKey</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">CoinNonce</span>(<span class="kw">pub</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span>);
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BlindToken</span>(<span class="kw">pub</span> <span class="ident">tbs::BlindedMessage</span>);
@@ -1481,7 +1481,7 @@
     }
 
     <span class="doccomment">/// Access the nonce as the public key to the spend key</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spend_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::schnorrsig::PublicKey</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spend_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::XOnlyPublicKey</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span> .<span class="number">0</span>
     }
 }

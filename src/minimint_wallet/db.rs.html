@@ -133,7 +133,7 @@
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">BlockHash</span>, <span class="ident">OutPoint</span>, <span class="ident">Txid</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">secp256k1::Signature</span>;
+<span class="kw">use</span> <span class="ident">secp256k1::ecdsa::Signature</span>;
 
 <span class="kw">const</span> <span class="ident">DB_PREFIX_BLOCK_HASH</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x30</span>;
 <span class="kw">const</span> <span class="ident">DB_PREFIX_UTXO</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x31</span>;

@@ -169,13 +169,13 @@
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_core::config</span>::<span class="kw-2">*</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::peers</span>::{<span class="ident">ConnectionConfig</span>, <span class="ident">NetworkConfig</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::secp256k1::rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">hbbft::crypto::serde_impl::SerdeSecret</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::config::LightningModuleConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::config::MintConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::config::WalletConfig</span>;
+<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
 <span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;

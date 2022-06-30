@@ -62,14 +62,14 @@
 <span id="56">56</span>
 <span id="57">57</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">secp256k1_zkp::schnorrsig</span>;
 
+<span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::config::FeeConsensus</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::transaction</span>::{<span class="ident">Input</span>, <span class="ident">Output</span>, <span class="ident">Transaction</span>};
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TransactionBuilder</span> {
-    <span class="ident">keys</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">schnorrsig::KeyPair</span><span class="op">&gt;</span>,
+    <span class="ident">keys</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">KeyPair</span><span class="op">&gt;</span>,
     <span class="kw">pub</span> <span class="ident">tx</span>: <span class="ident">Transaction</span>,
 }
 
@@ -87,7 +87,7 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TransactionBuilder</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">schnorrsig::KeyPair</span><span class="op">&gt;</span>, <span class="ident">input</span>: <span class="ident">Input</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">KeyPair</span><span class="op">&gt;</span>, <span class="ident">input</span>: <span class="ident">Input</span>) {
         <span class="self">self</span>.<span class="ident">keys</span>.<span class="ident">append</span>(<span class="ident">key</span>);
         <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">push</span>(<span class="ident">input</span>);
     }
