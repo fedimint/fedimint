@@ -4,13 +4,19 @@ use crate::config::ServerConfig;
 use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
 use minimint_api::{
-    module::{http, ApiEndpoint},
+    module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
+use minimint_core::outcome::TransactionStatus;
 use std::fmt::Formatter;
 use std::sync::Arc;
-use tide::{Body, Request, Server};
 use tracing::debug;
+
+use jsonrpsee::{
+    types::{error::CallError, ErrorObject},
+    ws_server::WsServerBuilder,
+    RpcModule,
+};
 
 #[derive(Clone)]
 struct State {
@@ -27,116 +33,100 @@ pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand:
     let state = State {
         minimint: minimint.clone(),
     };
-    let mut server = tide::with_state(state);
+    let mut rpc_module = RpcModule::new(state);
 
-    attach_endpoints(&mut server, server_endpoints(), None);
+    attach_endpoints(&mut rpc_module, server_endpoints(), None);
     attach_endpoints(
-        &mut server,
+        &mut rpc_module,
         minimint.wallet.api_endpoints(),
         Some(minimint.wallet.api_base_name()),
     );
     attach_endpoints(
-        &mut server,
+        &mut rpc_module,
         minimint.mint.api_endpoints(),
         Some(minimint.mint.api_base_name()),
     );
     attach_endpoints(
-        &mut server,
+        &mut rpc_module,
         minimint.ln.api_endpoints(),
         Some(minimint.ln.api_base_name()),
     );
 
-    server
-        .listen(&cfg.api_bind_addr)
+    let server = WsServerBuilder::new()
+        .build(&cfg.api_bind_addr)
         .await
         .expect("Could not start API server");
+
+    server
+        .start(rpc_module)
+        .expect("Could not start API server")
+        .await;
 }
 
 fn attach_endpoints<M>(
-    server: &mut Server<State>,
+    rpc_module: &mut RpcModule<State>,
     endpoints: &'static [ApiEndpoint<M>],
     base_name: Option<&str>,
 ) where
     MinimintConsensus<rand::rngs::OsRng>: AsRef<M>,
+    M: Sync,
 {
     for endpoint in endpoints {
-        for param in endpoint.params {
-            assert!(
-                endpoint.path_spec.contains(&format!(":{}", param)),
-                "Module defined API endpoint with faulty path spec"
-            );
-        }
+        let endpoint: &'static ApiEndpoint<M> = endpoint;
         let path = if let Some(base_name) = base_name {
-            format!("/{}{}", base_name, endpoint.path_spec)
+            // This memory leak is fine because it only happens on server startup
+            // and path has to live till the end of program anyways.
+            Box::leak(format!("/{}{}", base_name, endpoint.path).into_boxed_str())
         } else {
-            endpoint.path_spec.to_string()
+            endpoint.path
         };
-        server
-            .at(&path)
-            .method(endpoint.method, move |mut req: Request<State>| async move {
-                debug!(endpoint = %req.url(), "Endpoint request");
-                let data: serde_json::Value = req.body_json().await.unwrap_or_default();
-                let params = endpoint
-                    .params
-                    .iter()
-                    .map(|param| {
-                        let value = req
-                            .param(param)
-                            .expect("We previously checked the param exists in the path spec");
-                        (*param, value)
-                    })
-                    .collect();
-                let module: &M = req.state().minimint.as_ref().as_ref();
-                (endpoint.handler)(module, params, data)
-            });
+        rpc_module
+            .register_async_method(path, move |params, state| {
+                Box::pin(async move {
+                    let params = params.one::<serde_json::Value>()?;
+                    (endpoint.handler)((*state.minimint).as_ref(), params)
+                        .await
+                        .map_err(|e| {
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                e.code, e.message, None::<()>,
+                            )))
+                        })
+                })
+            })
+            .expect("Failed to register async method");
     }
 }
 
 fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] {
-    &[
-        ApiEndpoint {
-            path_spec: "/transaction",
-            params: &[],
-            method: http::Method::Put,
-            handler: |minimint, _params, transaction| {
-                let transaction: Transaction =
-                    match serde_json::from_slice(&serde_json::to_vec(&transaction).unwrap()) {
-                        Ok(t) => t,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
+    const ENDPOINTS: &[ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] = &[
+        api_endpoint! {
+            "/transaction",
+            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
+                // deserializing Transaction from json Value always fails
+                // we need to convert it to string first
+                let string = serde_json::to_string(&transaction).expect("encoding error");
+                let transaction: Transaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let tx_id = transaction.tx_hash();
 
                 minimint
                     .submit_transaction(transaction)
                     .expect("Could not submit sign request to consensus");
 
-                // TODO: give feedback in case of error
-                let body = Body::from_json(&tx_id).expect("encoding error");
-                Ok(body.into())
-            },
+                Ok(tx_id)
+            }
         },
-        ApiEndpoint {
-            path_spec: "/transaction/:txid",
-            params: &["txid"],
-            method: http::Method::Get,
-            handler: |minimint, params, _body| {
-                let tx_hash: TransactionId =
-                    match params.get("txid").expect("Request id not supplied").parse() {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
-
+        api_endpoint! {
+            "/fetch_transaction",
+            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
-                let tx_status = match minimint.transaction_status(tx_hash) {
-                    Some(t) => t,
-                    None => return Ok(http::Response::new(404)),
-                };
+                let tx_status = minimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
-                let body = Body::from_json(&tx_status).expect("encoding error");
-                Ok(body.into())
-            },
+                Ok(tx_status)
+            }
         },
-    ]
+    ];
+
+    ENDPOINTS
 }

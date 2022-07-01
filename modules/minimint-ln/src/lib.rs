@@ -27,12 +27,13 @@ use crate::db::{
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use itertools::Itertools;
+
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::module::audit::Audit;
 use minimint_api::module::interconnect::ModuleInterconect;
-use minimint_api::module::{http, ApiEndpoint};
+use minimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
@@ -530,64 +531,33 @@ impl FederationModule for LightningModule {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[
-            ApiEndpoint {
-                path_spec: "/account/:contract_id",
-                params: &["contract_id"],
-                method: http::Method::Get,
-                handler: |module, params, _body| {
-                    let contract_id: ContractId = match params
-                        .get("contract_id")
-                        .expect("Contract id not supplied")
-                        .parse()
-                    {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
-
-                    let contract_account = module
+        const ENDPOINTS: &[ApiEndpoint<LightningModule>] = &[
+            api_endpoint! {
+                "/account",
+                async |module: &LightningModule, contract_id: ContractId| -> ContractAccount {
+                    module
                         .get_contract_account(contract_id)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
-
-                    debug!(%contract_id, "Sending contract account info");
-                    let body = http::Body::from_json(&contract_account).expect("encoding error");
-                    Ok(body.into())
-                },
+                        .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
+                }
             },
-            ApiEndpoint {
-                path_spec: "/offers",
-                params: &[],
-                method: http::Method::Get,
-                handler: |module, _params, _body| {
-                    let offers = module.get_offers();
-                    let body = http::Body::from_json(&offers).expect("encoding error");
-                    Ok(body.into())
-                },
+            api_endpoint! {
+                "/offers",
+                async |module: &LightningModule, _params: ()| -> Vec<IncomingContractOffer> {
+                    Ok(module.get_offers())
+                }
             },
-            ApiEndpoint {
-                path_spec: "/offer/:payment_hash",
-                params: &["payment_hash"],
-                method: http::Method::Get,
-                handler: |module, params, _body| {
-                    let payment_hash: bitcoin_hashes::sha256::Hash = match params
-                        .get("payment_hash")
-                        .expect("Contract id not supplied")
-                        .parse()
-                    {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
+            api_endpoint! {
+                "/offer",
+                async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                let offer = module
+                    .get_offer(payment_hash)
+                    .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
-                    let offer = module
-                        .get_offer(payment_hash)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
-
-                    debug!(%payment_hash, "Sending offer info");
-                    let body = http::Body::from_json(&offer).expect("encoding error");
-                    Ok(body.into())
-                },
-            },
-        ]
+                debug!(%payment_hash, "Sending offer info");
+                Ok(offer)
+            } },
+        ];
+        ENDPOINTS
     }
 }
 
@@ -634,18 +604,14 @@ impl LightningModule {
 fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
-    futures::executor::block_on(
-        interconnect
-            .call(
-                "wallet",
-                "/block_height".to_owned(),
-                http::Method::Get,
-                Default::default(),
-            )
-            .expect("Wallet module not present or malfunctioning!")
-            .body_json(),
-    )
-    .expect("Malformed block height response from wallet module!")
+    let body = futures::executor::block_on(interconnect.call(
+        "wallet",
+        "/block_height".to_owned(),
+        Default::default(),
+    ))
+    .expect("Wallet module not present or malfunctioning!");
+
+    serde_json::from_value(body).expect("Malformed block height response from wallet module!")
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

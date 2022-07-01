@@ -1,7 +1,8 @@
 use crate::consensus::MinimintConsensus;
-use minimint_api::module::http;
-use minimint_api::module::http::{Method, Response};
+use async_trait::async_trait;
+
 use minimint_api::module::interconnect::ModuleInterconect;
+use minimint_api::module::ApiError;
 use minimint_api::FederationModule;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
@@ -11,43 +12,36 @@ pub struct MinimintInterconnect<'a, R: RngCore + CryptoRng> {
     pub minimint: &'a MinimintConsensus<R>,
 }
 
+#[async_trait]
 impl<'a, R> ModuleInterconect for MinimintInterconnect<'a, R>
 where
     R: RngCore + CryptoRng,
 {
-    fn call(
+    async fn call(
         &self,
         module: &'static str,
         path: String,
-        method: Method,
         data: Value,
-    ) -> http::Result<Response> {
+    ) -> Result<Value, ApiError> {
         match module {
-            "wallet" => call_internal(&self.minimint.wallet, path, method, data),
-            "mint" => call_internal(&self.minimint.mint, path, method, data),
-            "ln" => call_internal(&self.minimint.ln, path, method, data),
-            _ => Err(http::Error::from_str(404, "Module not found")),
+            "wallet" => call_internal(&self.minimint.wallet, path, data).await,
+            "mint" => call_internal(&self.minimint.mint, path, data).await,
+            "ln" => call_internal(&self.minimint.ln, path, data).await,
+            _ => Err(ApiError::not_found(String::from("Module not found"))),
         }
     }
 }
 
-fn call_internal<M: FederationModule + 'static>(
+async fn call_internal<M: FederationModule + 'static>(
     module: &M,
     path: String,
-    method: Method,
     data: Value,
-) -> http::Result<Response> {
+) -> Result<serde_json::Value, ApiError> {
     let endpoint = module
         .api_endpoints()
         .iter()
-        .find(|endpoint| endpoint.method == method && endpoint.path_spec == path)
-        .ok_or_else(|| http::Error::from_str(404, "Endpoint not found"))?;
+        .find(|endpoint| endpoint.path == path)
+        .ok_or_else(|| ApiError::not_found(String::from("Method not found")))?;
 
-    // FIXME: implement parameter handling
-    assert!(
-        endpoint.params.is_empty(),
-        "Interconnect does not support parameter parsing yet!"
-    );
-
-    (endpoint.handler)(module, Default::default(), data)
+    (endpoint.handler)(module, data).await
 }
