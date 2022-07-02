@@ -43,6 +43,7 @@ use minimint_api::config::GenerateConfig;
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::mem_impl::MemDatabase;
 use minimint_api::db::Database;
+
 use minimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::config::WalletConfig;
@@ -312,8 +313,9 @@ impl UserTest {
 pub struct FederationTest {
     servers: Vec<Rc<RefCell<ServerTest>>>,
     last_consensus: Rc<RefCell<ConsensusOutcome>>,
+    max_balance_sheet: Rc<RefCell<i64>>,
     pub wallet: WalletConfig,
-    pub fee_consensus: FeeConsensus,
+    pub fees: FeeConsensus,
 }
 
 struct ServerTest {
@@ -378,9 +380,19 @@ impl FederationTest {
                 .map(Rc::clone)
                 .collect(),
             wallet: self.wallet.clone(),
-            fee_consensus: self.fee_consensus.clone(),
+            fees: self.fees.clone(),
             last_consensus: self.last_consensus.clone(),
+            max_balance_sheet: self.max_balance_sheet.clone(),
         }
+    }
+
+    /// Mines a UTXO then mints coins for user, assuring that the balance sheet of the federation
+    /// nets out to zero.
+    pub async fn mine_and_mint(&self, user: &UserTest, bitcoin: &dyn BitcoinTest, amount: Amount) {
+        assert_eq!(amount.milli_sat % 1000, 0);
+        let sats = bitcoin::Amount::from_sat(amount.milli_sat / 1000);
+        self.mine_spendable_utxo(user, bitcoin, sats);
+        self.mint_coins_for_user(user, amount).await;
     }
 
     /// Inserts coins directly into the databases of federation nodes, runs consensus to sign them
@@ -391,6 +403,7 @@ impl FederationTest {
         user.client.fetch_all_coins().await.unwrap();
     }
 
+    /// Mines a UTXO owned by the federation.
     pub fn mine_spendable_utxo(
         &self,
         user: &UserTest,
@@ -422,6 +435,13 @@ impl FederationTest {
         }
     }
 
+    /// Returns the maximum the fed's balance sheet has reached during the test.
+    pub fn max_balance_sheet(&self) -> u64 {
+        assert!(*self.max_balance_sheet.borrow() >= 0);
+        *self.max_balance_sheet.borrow() as u64
+    }
+
+    /// Returns true if all fed members have dropped this peer
     pub fn has_dropped_peer(&self, peer: u16) -> bool {
         for server in &self.servers {
             let mut s = server.borrow_mut();
@@ -559,9 +579,20 @@ impl FederationTest {
             .max_by_key(|c| c.epoch)
             .unwrap();
         let mut last_consensus = self.last_consensus.borrow_mut();
+        let audit = self
+            .servers
+            .first()
+            .unwrap()
+            .borrow()
+            .minimint
+            .consensus
+            .audit();
 
         if last_consensus.is_empty() || last_consensus.epoch < new_consensus.epoch {
             info!("{}", consensus::debug::epoch_message(&new_consensus));
+            info!("\n{}", audit);
+            let bs = std::cmp::max(*self.max_balance_sheet.borrow(), audit.sum().milli_sat);
+            *self.max_balance_sheet.borrow_mut() = bs;
             *last_consensus = new_consensus;
         }
     }
@@ -601,17 +632,18 @@ impl FederationTest {
 
         // Consumes the empty epoch 0 outcome from all servers
         let server_config = server_config.iter().last().unwrap().1.clone();
-        let fee_consensus = server_config.fee_consensus;
         let wallet = server_config.wallet;
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),
         }));
+        let max_balance_sheet = Rc::new(RefCell::new(0));
 
         FederationTest {
             servers,
+            max_balance_sheet,
             last_consensus,
-            fee_consensus,
+            fees: server_config.fee_consensus,
             wallet,
         }
     }

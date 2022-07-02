@@ -1,3 +1,4 @@
+pub mod audit;
 pub mod interconnect;
 pub mod testing;
 
@@ -9,6 +10,7 @@ use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::XOnlyPublicKey;
 use std::collections::{HashMap, HashSet};
 
+use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
 pub use http_types as http;
 
@@ -141,6 +143,12 @@ pub trait FederationModule: Sized {
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
     fn output_status(&self, out_point: crate::OutPoint) -> Option<Self::TxOutputOutcome>;
+
+    /// Queries the database and returns all assets and liabilities of the module.
+    ///
+    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
+    /// and consensus should halt.
+    fn audit(&self, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///

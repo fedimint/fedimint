@@ -19,6 +19,7 @@ use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::audit::Audit;
 use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::{LightningModule, LightningModuleError};
 use minimint_core::modules::mint::{Mint, MintError};
@@ -271,6 +272,14 @@ where
 
             self.db.apply_batch(db_batch).expect("DB error");
         }
+
+        let audit = self.audit();
+        if audit.sum().milli_sat < 0 {
+            panic!(
+                "Balance sheet of the fed has gone negative, this should never happen! {}",
+                audit
+            )
+        }
     }
 
     pub async fn await_consensus_proposal(&self) {
@@ -491,6 +500,14 @@ where
             wallet: wallet_cache,
             ln: ln_cache,
         }
+    }
+
+    pub fn audit(&self) -> Audit {
+        let mut audit = Audit::default();
+        self.mint.audit(&mut audit);
+        self.ln.audit(&mut audit);
+        self.wallet.audit(&mut audit);
+        audit
     }
 
     fn build_interconnect(&self) -> MinimintInterconnect<R> {

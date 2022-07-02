@@ -21,8 +21,8 @@ use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
 use bitcoin::{
-    Address, AddressType, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script, Transaction,
-    TxIn, TxOut, Txid,
+    Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
+    Transaction, TxIn, TxOut, Txid,
 };
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
@@ -40,6 +40,7 @@ use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use std::ops::Sub;
 
+use minimint_api::module::audit::Audit;
 use minimint_api::task::sleep;
 use std::time::Duration;
 use thiserror::Error;
@@ -119,6 +120,7 @@ pub struct PendingPegOut {
 pub struct PendingTransaction {
     pub tx: Transaction,
     pub tweak: [u8; 32],
+    pub change: bitcoin::Amount,
 }
 
 /// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
@@ -126,6 +128,7 @@ pub struct PendingTransaction {
 pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
+    pub change: bitcoin::Amount,
 }
 
 struct StatelessWallet<'a> {
@@ -397,7 +400,7 @@ impl FederationModule for Wallet {
         );
 
         if urgency > MIN_PEG_OUT_URGENCY {
-            let mut psbt = self
+            let (mut psbt, change) = self
                 .create_peg_out_tx(pending_peg_outs, round_consensus)
                 .await;
             let txid = psbt.unsigned_tx.txid();
@@ -452,6 +455,9 @@ impl FederationModule for Wallet {
                 UnsignedTransaction {
                     psbt,
                     signatures: vec![],
+                    change: change
+                        .map(|c| c.amount)
+                        .unwrap_or_else(|| Amount::from_sat(0)),
                 },
             );
             batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
@@ -470,6 +476,7 @@ impl FederationModule for Wallet {
             let UnsignedTransaction {
                 mut psbt,
                 signatures,
+                change,
             } = unsigned;
 
             let signers: HashSet<PeerId> = signatures
@@ -490,7 +497,7 @@ impl FederationModule for Wallet {
                 drop_peers.push(peer);
             }
 
-            match self.finalize_peg_out_psbt(&mut psbt) {
+            match self.finalize_peg_out_psbt(&mut psbt, change) {
                 Ok(pending_tx) => {
                     // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
                     // extracted tx for periodic transmission and to accept the change into our wallet
@@ -511,6 +518,21 @@ impl FederationModule for Wallet {
     fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
         // TODO: return BTC tx id once included in peg-out tx
         Some(())
+    }
+
+    fn audit(&self, audit: &mut Audit) {
+        audit.add_items(&self.db, &UTXOPrefixKey, |_, v| {
+            v.amount.as_sat() as i64 * 1000
+        });
+        audit.add_items(&self.db, &PendingPegOutPrefixKey, |_, v| {
+            v.amount.as_sat() as i64 * -1000
+        });
+        audit.add_items(&self.db, &UnsignedTransactionPrefixKey, |_, v| {
+            v.change.as_sat() as i64 * 1000
+        });
+        audit.add_items(&self.db, &PendingTransactionPrefixKey, |_, v| {
+            v.change.as_sat() as i64 * 1000
+        });
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -670,6 +692,7 @@ impl Wallet {
     fn finalize_peg_out_psbt(
         &self,
         psbt: &mut PartiallySignedTransaction,
+        change: Amount,
     ) -> Result<PendingTransaction, ProcessPegOutSigError> {
         // We need to save the change output's tweak key to be able to access the funds later on.
         // The tweak is extracted here because the psbt is moved next and not available anymore
@@ -692,6 +715,7 @@ impl Wallet {
         Ok(PendingTransaction {
             tx,
             tweak: change_tweak,
+            change,
         })
     }
 
@@ -849,9 +873,9 @@ impl Wallet {
         &self,
         pending_peg_outs: Vec<PendingPegOut>,
         consensus: RoundConsensus,
-    ) -> PartiallySignedTransaction {
+    ) -> (PartiallySignedTransaction, Option<PendingPegOut>) {
         let wallet = self.offline_wallet();
-        let mut psbt = wallet.create_tx(
+        let (mut psbt, change) = wallet.create_tx(
             pending_peg_outs,
             self.available_utxos(),
             consensus.fee_rate,
@@ -859,7 +883,7 @@ impl Wallet {
         );
         // TODO: extract sigs and do stuff?!
         wallet.sign_psbt(&mut psbt);
-        psbt
+        (psbt, change)
     }
 
     fn available_utxos(&self) -> Vec<(UTXOKey, SpendableUTXO)> {
@@ -894,7 +918,7 @@ impl<'a> StatelessWallet<'a> {
         mut utxos: Vec<(UTXOKey, SpendableUTXO)>,
         feerate: Feerate,
         change_tweak: &[u8],
-    ) -> PartiallySignedTransaction {
+    ) -> (PartiallySignedTransaction, Option<PendingPegOut>) {
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
         //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
@@ -1053,7 +1077,7 @@ impl<'a> StatelessWallet<'a> {
             outputs: outputs
                 .iter()
                 .map(|_| Default::default())
-                .chain(change_output.map(|_| {
+                .chain(change_output.clone().map(|_| {
                     let mut cout = bitcoin::util::psbt::Output::default();
                     cout.proprietary
                         .insert(proprietary_tweak_key(), change_tweak.to_vec());
@@ -1062,7 +1086,7 @@ impl<'a> StatelessWallet<'a> {
                 .collect(),
         };
 
-        psbt
+        (psbt, change_output)
     }
 
     fn sign_psbt(&self, psbt: &mut PartiallySignedTransaction) {
@@ -1322,7 +1346,7 @@ mod tests {
             },
         )];
 
-        let mut psbt = wallet.create_tx(
+        let (mut psbt, _) = wallet.create_tx(
             peg_outs,
             utxos,
             Feerate { sats_per_kvb: 4000 },

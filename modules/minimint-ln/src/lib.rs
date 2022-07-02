@@ -20,8 +20,9 @@ use crate::contracts::{
     Contract, ContractId, ContractOutcome, FundedContract, IdentifyableContract,
 };
 use crate::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractUpdateKey,
-    OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
+    ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
+    ProposeDecryptionShareKeyPrefix,
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
@@ -29,6 +30,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::audit::Audit;
 use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::{http, ApiEndpoint};
 use minimint_api::{Amount, FederationModule, PeerId};
@@ -515,6 +517,12 @@ impl FederationModule for LightningModule {
         self.db
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
+    }
+
+    fn audit(&self, audit: &mut Audit) {
+        audit.add_items(&self.db, &ContractKeyPrefix, |_, v| {
+            -(v.amount.milli_sat as i64)
+        });
     }
 
     fn api_base_name(&self) -> &'static str {
