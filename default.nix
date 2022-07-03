@@ -13,6 +13,7 @@ in naersk.buildPackage {
       pkgs.pkg-config
       pkgs.perl
   ];
+gitSubmodules = true;
   shellHook =
   ''
     SRC_DIR="$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"

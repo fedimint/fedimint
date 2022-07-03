@@ -90,6 +90,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-22.05
       - uses: cachix/cachix-action@v10
+        if: github.repository_owner == 'fedimint'
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
