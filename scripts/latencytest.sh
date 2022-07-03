@@ -2,7 +2,7 @@
 
 POLL_INTERVAL=1
 CONFIRMATION_TIME=10
-FED_SIZE=$1
+FED_SIZE=${1:-4}
 
 # Fail instantly if anything goes wrong and log executed commands
 set -e
