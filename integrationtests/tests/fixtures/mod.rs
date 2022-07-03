@@ -308,6 +308,15 @@ impl UserTest {
             database,
         }
     }
+
+    pub async fn assert_total_coins(&self, amount: Amount) {
+        self.client.fetch_all_coins().await.unwrap();
+        assert_eq!(self.total_coins(), amount);
+    }
+    pub async fn assert_coin_amounts(&self, amounts: Vec<Amount>) {
+        self.client.fetch_all_coins().await.unwrap();
+        assert_eq!(self.coin_amounts(), amounts);
+    }
 }
 
 pub struct FederationTest {
