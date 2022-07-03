@@ -1,14 +1,15 @@
 use crate::config::MintConfig;
 use crate::db::{
-    NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
-    ReceivedPartialSignatureKey, ReceivedPartialSignatureKeyOutputPrefix,
-    ReceivedPartialSignaturesKeyPrefix,
+    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
+    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
 };
 use async_trait::async_trait;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::audit::Audit;
 use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
@@ -200,11 +201,13 @@ impl FederationModule for Mint {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        batch.append_from_iter(
-            input
-                .iter()
-                .map(|(_, coin)| BatchItem::insert_new(NonceKey(coin.0.clone()), ())),
-        );
+        batch.append_from_iter(input.iter().flat_map(|(amount, coin)| {
+            let key = NonceKey(coin.0.clone());
+            vec![
+                BatchItem::insert_new(key.clone(), ()),
+                BatchItem::insert_new(MintAuditItemKey::Redemption(key), amount),
+            ]
+        }));
         batch.commit();
 
         Ok(meta)
@@ -240,7 +243,7 @@ impl FederationModule for Mint {
             },
             partial_sig,
         );
-
+        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.amount());
         batch.commit();
         Ok(output.amount())
     }
@@ -313,6 +316,23 @@ impl FederationModule for Mint {
             .copied()
             .collect();
 
+        let mut redemptions = Amount::from_sat(0);
+        let mut issuances = Amount::from_sat(0);
+        self.db
+            .find_by_prefix(&MintAuditItemKeyPrefix)
+            .for_each(|res| {
+                let (key, amount) = res.expect("DB error");
+                match key {
+                    MintAuditItemKey::Issuance(_) => issuances += amount,
+                    MintAuditItemKey::IssuanceTotal => issuances += amount,
+                    MintAuditItemKey::Redemption(_) => redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
+                }
+                batch.append_delete(key);
+            });
+        batch.append_insert(MintAuditItemKey::IssuanceTotal, issuances);
+        batch.append_insert(MintAuditItemKey::RedemptionTotal, redemptions);
+
         batch.append_from_accumulators(par_batches.into_iter().map(|(batch, _)| batch));
         batch.commit();
 
@@ -346,6 +366,15 @@ impl FederationModule for Mint {
         } else {
             None
         }
+    }
+
+    fn audit(&self, audit: &mut Audit) {
+        audit.add_items(&self.db, &MintAuditItemKeyPrefix, |k, v| match k {
+            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+        });
     }
 
     fn api_base_name(&self) -> &'static str {

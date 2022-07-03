@@ -67,7 +67,7 @@ impl GenerateConfig for WalletConfig {
                         .collect(),
                     peg_in_key: *sk,
                     finalty_delay: 10,
-                    default_fee: Feerate { sats_per_kvb: 2000 },
+                    default_fee: Feerate { sats_per_kvb: 1000 },
                     btc_rpc_address: "127.0.0.1:18443".to_string(),
                     btc_rpc_user: "bitcoin".to_string(),
                     btc_rpc_pass: "bitcoin".to_string(),

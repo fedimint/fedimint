@@ -29,19 +29,19 @@ fn item_message(item: &ConsensusItem) -> String {
         ConsensusItem::Wallet(WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
             txid,
             ..
-        })) => format!("Wallet Peg Out PSBT {:.8}", txid),
+        })) => format!("Wallet Peg Out PSBT {}", txid),
         ConsensusItem::Mint(PartiallySignedRequest {
             out_point,
             partial_signature,
         }) => {
             format!(
-                "Mint Signed Coins {} with TxId {:.8}",
+                "Mint Signed Coins {} with TxId {}",
                 partial_signature.0.amount(),
                 out_point.txid
             )
         }
         ConsensusItem::LN(DecryptionShareCI { contract_id, .. }) => {
-            format!("LN Decrytion Share for contract {:.8}", contract_id)
+            format!("LN Decrytion Share for contract {}", contract_id)
         }
         ConsensusItem::Transaction(Transaction {
             inputs, outputs, ..
@@ -51,10 +51,10 @@ fn item_message(item: &ConsensusItem) -> String {
                 let input_debug = match input {
                     Input::Mint(t) => format!("Mint Coins {}", t.amount()),
                     Input::Wallet(t) => {
-                        format!("Wallet PegIn with TxId {:.8}", t.outpoint().txid)
+                        format!("Wallet PegIn with TxId {}", t.outpoint().txid)
                     }
                     Input::LN(t) => {
-                        format!("LN Contract {} with id {:.8}", t.amount, t.contract_id)
+                        format!("LN Contract {} with id {}", t.amount, t.contract_id)
                     }
                 };
                 write!(tx_debug, "\n    Input: {}", input_debug).unwrap();
@@ -63,23 +63,23 @@ fn item_message(item: &ConsensusItem) -> String {
                 let output_debug = match output {
                     Output::Mint(t) => format!("Mint Coins {}", t.amount()),
                     Output::Wallet(t) => {
-                        format!("Wallet PegOut {} to address {:.8}", t.amount, t.recipient)
+                        format!("Wallet PegOut {} to address {}", t.amount, t.recipient)
                     }
                     Output::LN(ContractOrOfferOutput::Offer(o)) => {
-                        format!("LN Offer for {} with hash {:.8}", o.amount, o.hash)
+                        format!("LN Offer for {} with hash {}", o.amount, o.hash)
                     }
                     Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
                         amount,
                         contract,
                     })) => match contract {
                         Contract::Account(a) => {
-                            format!("LN Account Contract for {} key {:.8}", amount, a.key)
+                            format!("LN Account Contract for {} key {}", amount, a.key)
                         }
                         Contract::Incoming(a) => {
-                            format!("LN Incoming Contract for {} hash {:.8}", amount, a.hash)
+                            format!("LN Incoming Contract for {} hash {}", amount, a.hash)
                         }
                         Contract::Outgoing(a) => {
-                            format!("LN Outgoing Contract for {} hash {:.8}", amount, a.hash)
+                            format!("LN Outgoing Contract for {} hash {}", amount, a.hash)
                         }
                     },
                 };

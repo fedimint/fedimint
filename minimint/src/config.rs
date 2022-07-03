@@ -89,9 +89,9 @@ impl GenerateConfig for ServerConfig {
 
         let fee_consensus = FeeConsensus {
             fee_coin_spend_abs: minimint_api::Amount::ZERO,
-            fee_peg_in_abs: minimint_api::Amount::from_sat(500),
+            fee_peg_in_abs: minimint_api::Amount::from_sat(1000),
             fee_coin_issuance_abs: minimint_api::Amount::ZERO,
-            fee_peg_out_abs: minimint_api::Amount::from_sat(500),
+            fee_peg_out_abs: minimint_api::Amount::from_sat(1000),
             fee_contract_input: minimint_api::Amount::ZERO,
             fee_contract_output: minimint_api::Amount::ZERO,
         };
