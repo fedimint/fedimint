@@ -37,8 +37,7 @@ async fn peg_in_and_peg_out_with_fees() {
 
     user.client.peg_in(proof, tx, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // peg in epoch + partial sigs epoch
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), after_peg_in);
+    user.assert_total_coins(after_peg_in).await;
 
     let peg_out_address = bitcoin.get_new_address();
     user.peg_out(PEG_OUT_AMOUNT, &peg_out_address).await;
@@ -46,7 +45,6 @@ async fn peg_in_and_peg_out_with_fees() {
 
     bitcoin.mine_blocks(minimint_wallet::MIN_PEG_OUT_URGENCY as u64 + 1);
     fed.run_consensus_epochs(2).await; // block height epoch + peg out signing epoch
-    user.client.fetch_all_coins().await.unwrap();
     assert_matches!(
         fed.last_consensus_items().first(),
         Some(ConsensusItem::Wallet(PegOutSignature(_)))
@@ -57,8 +55,8 @@ async fn peg_in_and_peg_out_with_fees() {
         bitcoin.mine_block_and_get_received(&peg_out_address),
         sats(PEG_OUT_AMOUNT)
     );
+    user.assert_total_coins(after_peg_out).await;
     let fees = fed.fees.fee_peg_in_abs + fed.fees.fee_peg_out_abs;
-    assert_eq!(user.total_coins(), after_peg_out);
     assert_eq!(fed.max_balance_sheet(), fees.milli_sat);
 }
 
@@ -72,12 +70,11 @@ async fn minted_coins_can_be_exchanged_between_users() {
     assert_eq!(user_receive.total_coins(), sats(0));
 
     let coins = user_send.client.select_and_spend_coins(sats(3000)).unwrap();
-    let outpoint = user_receive.client.reissue(coins, rng()).await.unwrap();
+    user_receive.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    user_receive.client.fetch_coins(outpoint).await.unwrap();
-    assert_eq!(user_send.total_coins(), sats(2000));
-    assert_eq!(user_receive.total_coins(), sats(3000));
+    user_send.assert_total_coins(sats(2000)).await;
+    user_receive.assert_total_coins(sats(3000)).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -117,16 +114,13 @@ async fn minted_coins_in_wallet_can_be_split_into_change() {
             block_on(user_send.client.pay_for_coins(coins, rng())).unwrap()
         });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
-    user_receive.client.fetch_all_coins().await.unwrap();
-    user_send.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        user_receive.coin_amounts(),
-        vec![sats(100), sats(100), sats(100), sats(100)]
-    );
-    assert_eq!(
-        user_send.coin_amounts(),
-        vec![sats(100), sats(100), sats(500)]
-    );
+
+    user_receive
+        .assert_coin_amounts(vec![sats(100), sats(100), sats(100), sats(100)])
+        .await;
+    user_send
+        .assert_coin_amounts(vec![sats(100), sats(100), sats(500)])
+        .await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -222,8 +216,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
         .unwrap();
     fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint coins, sign coins
 
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), payment_amount);
+    user.assert_total_coins(payment_amount).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
@@ -237,8 +230,7 @@ async fn drop_peers_who_dont_contribute_blind_sigs() {
     fed.subset_peers(&[3]).override_proposal(vec![]);
     drop_peer_3_during_epoch(&fed).await;
 
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(2000));
+    user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
@@ -257,8 +249,7 @@ async fn drop_peers_who_contribute_bad_sigs() {
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
     drop_peer_3_during_epoch(&fed).await;
 
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(2000));
+    user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
@@ -301,9 +292,8 @@ async fn lightning_gateway_pays_invoice() {
         .await_outgoing_contract_claimed(contract_id, outpoint)
         .await
         .unwrap();
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(2000 - 1010));
-    assert_eq!(gateway.user.client.coins().amount(), sats(1010));
+    user.assert_total_coins(sats(2000 - 1010)).await;
+    gateway.user.assert_total_coins(sats(1010)).await;
     assert_eq!(lightning.amount_sent(), sats(1000));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
@@ -342,13 +332,11 @@ async fn receive_lightning_payment_valid_preimage() {
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
-    gateway.user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        gateway.user.total_coins(),
-        starting_balance - payment_amount
-    );
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(0));
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(sats(0)).await;
 
     // Gateway receives decrypted preimage
     let outpoint = OutPoint { txid, out_idx: 0 };
@@ -371,13 +359,11 @@ async fn receive_lightning_payment_valid_preimage() {
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Ecash tokens have been transferred from gateway to user
-    gateway.user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        gateway.user.total_coins(),
-        starting_balance - payment_amount
-    );
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), payment_amount);
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(payment_amount).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -414,13 +400,11 @@ async fn receive_lightning_payment_invalid_preimage() {
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
-    gateway.user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        gateway.user.total_coins(),
-        starting_balance - payment_amount
-    );
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(0));
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(sats(0)).await;
 
     // User gets error when they try to claim gateway's escrowed ecash
     let response = user
@@ -438,10 +422,8 @@ async fn receive_lightning_payment_invalid_preimage() {
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Gateway has clawed back their escrowed funds
-    gateway.user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(gateway.user.total_coins(), starting_balance);
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(0));
+    gateway.user.assert_total_coins(starting_balance).await;
+    user.assert_total_coins(sats(0)).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -516,8 +498,7 @@ async fn runs_consensus_if_tx_submitted() {
     ])
     .await;
 
-    user_receive.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user_receive.total_coins(), sats(5000));
+    user_receive.assert_total_coins(sats(5000)).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
