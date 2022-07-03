@@ -545,6 +545,23 @@
 <span id="539">539</span>
 <span id="540">540</span>
 <span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+<span id="553">553</span>
+<span id="554">554</span>
+<span id="555">555</span>
+<span id="556">556</span>
+<span id="557">557</span>
+<span id="558">558</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
 
 <span class="kw">mod</span> <span class="ident">conflictfilter</span>;
@@ -566,6 +583,7 @@
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
+<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">LightningModule</span>, <span class="ident">LightningModuleError</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint</span>::{<span class="ident">Mint</span>, <span class="ident">MintError</span>};
@@ -818,6 +836,14 @@
 
             <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
         }
+
+        <span class="kw">let</span> <span class="ident">audit</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">audit</span>();
+        <span class="kw">if</span> <span class="ident">audit</span>.<span class="ident">sum</span>().<span class="ident">milli_sat</span> <span class="op">&lt;</span> <span class="number">0</span> {
+            <span class="macro">panic!</span>(
+                <span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {}&quot;</span>,
+                <span class="ident">audit</span>
+            )
+        }
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -1040,6 +1066,14 @@
         }
     }
 
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Audit</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">audit</span> <span class="op">=</span> <span class="ident">Audit::default</span>();
+        <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
+        <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
+        <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
+        <span class="ident">audit</span>
+    }
+
     <span class="kw">fn</span> <span class="ident">build_interconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MinimintInterconnect</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
         <span class="ident">MinimintInterconnect</span> { <span class="ident">minimint</span>: <span class="self">self</span> }
     }
@@ -1087,5 +1121,5 @@
     <span class="ident">ContractOutputError</span>(<span class="ident">LightningModuleError</span>),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7425fb293 2022-06-30)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (f2d93935f 2022-07-02)" ></div>
 </body></html>

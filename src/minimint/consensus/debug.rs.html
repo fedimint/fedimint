@@ -126,19 +126,19 @@
         <span class="ident">ConsensusItem::Wallet</span>(<span class="ident">WalletConsensusItem::PegOutSignature</span>(<span class="ident">PegOutSignatureItem</span> {
             <span class="ident">txid</span>,
             ..
-        })) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Wallet Peg Out PSBT {:.8}&quot;</span>, <span class="ident">txid</span>),
+        })) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Wallet Peg Out PSBT {}&quot;</span>, <span class="ident">txid</span>),
         <span class="ident">ConsensusItem::Mint</span>(<span class="ident">PartiallySignedRequest</span> {
             <span class="ident">out_point</span>,
             <span class="ident">partial_signature</span>,
         }) =&gt; {
             <span class="macro">format!</span>(
-                <span class="string">&quot;Mint Signed Coins {} with TxId {:.8}&quot;</span>,
+                <span class="string">&quot;Mint Signed Coins {} with TxId {}&quot;</span>,
                 <span class="ident">partial_signature</span>.<span class="number">0</span>.<span class="ident">amount</span>(),
                 <span class="ident">out_point</span>.<span class="ident">txid</span>
             )
         }
         <span class="ident">ConsensusItem::LN</span>(<span class="ident">DecryptionShareCI</span> { <span class="ident">contract_id</span>, .. }) =&gt; {
-            <span class="macro">format!</span>(<span class="string">&quot;LN Decrytion Share for contract {:.8}&quot;</span>, <span class="ident">contract_id</span>)
+            <span class="macro">format!</span>(<span class="string">&quot;LN Decrytion Share for contract {}&quot;</span>, <span class="ident">contract_id</span>)
         }
         <span class="ident">ConsensusItem::Transaction</span>(<span class="ident">Transaction</span> {
             <span class="ident">inputs</span>, <span class="ident">outputs</span>, ..
@@ -148,10 +148,10 @@
                 <span class="kw">let</span> <span class="ident">input_debug</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">input</span> {
                     <span class="ident">Input::Mint</span>(<span class="ident">t</span>) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Mint Coins {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>()),
                     <span class="ident">Input::Wallet</span>(<span class="ident">t</span>) =&gt; {
-                        <span class="macro">format!</span>(<span class="string">&quot;Wallet PegIn with TxId {:.8}&quot;</span>, <span class="ident">t</span>.<span class="ident">outpoint</span>().<span class="ident">txid</span>)
+                        <span class="macro">format!</span>(<span class="string">&quot;Wallet PegIn with TxId {}&quot;</span>, <span class="ident">t</span>.<span class="ident">outpoint</span>().<span class="ident">txid</span>)
                     }
                     <span class="ident">Input::LN</span>(<span class="ident">t</span>) =&gt; {
-                        <span class="macro">format!</span>(<span class="string">&quot;LN Contract {} with id {:.8}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>, <span class="ident">t</span>.<span class="ident">contract_id</span>)
+                        <span class="macro">format!</span>(<span class="string">&quot;LN Contract {} with id {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>, <span class="ident">t</span>.<span class="ident">contract_id</span>)
                     }
                 };
                 <span class="macro">write!</span>(<span class="ident">tx_debug</span>, <span class="string">&quot;\n    Input: {}&quot;</span>, <span class="ident">input_debug</span>).<span class="ident">unwrap</span>();
@@ -160,23 +160,23 @@
                 <span class="kw">let</span> <span class="ident">output_debug</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">output</span> {
                     <span class="ident">Output::Mint</span>(<span class="ident">t</span>) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Mint Coins {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>()),
                     <span class="ident">Output::Wallet</span>(<span class="ident">t</span>) =&gt; {
-                        <span class="macro">format!</span>(<span class="string">&quot;Wallet PegOut {} to address {:.8}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>, <span class="ident">t</span>.<span class="ident">recipient</span>)
+                        <span class="macro">format!</span>(<span class="string">&quot;Wallet PegOut {} to address {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>, <span class="ident">t</span>.<span class="ident">recipient</span>)
                     }
                     <span class="ident">Output::LN</span>(<span class="ident">ContractOrOfferOutput::Offer</span>(<span class="ident">o</span>)) =&gt; {
-                        <span class="macro">format!</span>(<span class="string">&quot;LN Offer for {} with hash {:.8}&quot;</span>, <span class="ident">o</span>.<span class="ident">amount</span>, <span class="ident">o</span>.<span class="ident">hash</span>)
+                        <span class="macro">format!</span>(<span class="string">&quot;LN Offer for {} with hash {}&quot;</span>, <span class="ident">o</span>.<span class="ident">amount</span>, <span class="ident">o</span>.<span class="ident">hash</span>)
                     }
                     <span class="ident">Output::LN</span>(<span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">ContractOutput</span> {
                         <span class="ident">amount</span>,
                         <span class="ident">contract</span>,
                     })) =&gt; <span class="kw">match</span> <span class="ident">contract</span> {
                         <span class="ident">Contract::Account</span>(<span class="ident">a</span>) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Account Contract for {} key {:.8}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">key</span>)
+                            <span class="macro">format!</span>(<span class="string">&quot;LN Account Contract for {} key {}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">key</span>)
                         }
                         <span class="ident">Contract::Incoming</span>(<span class="ident">a</span>) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Incoming Contract for {} hash {:.8}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">hash</span>)
+                            <span class="macro">format!</span>(<span class="string">&quot;LN Incoming Contract for {} hash {}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">hash</span>)
                         }
                         <span class="ident">Contract::Outgoing</span>(<span class="ident">a</span>) =&gt; {
-                            <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing Contract for {} hash {:.8}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">hash</span>)
+                            <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing Contract for {} hash {}&quot;</span>, <span class="ident">amount</span>, <span class="ident">a</span>.<span class="ident">hash</span>)
                         }
                     },
                 };
@@ -187,5 +187,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7425fb293 2022-06-30)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (f2d93935f 2022-07-02)" ></div>
 </body></html>

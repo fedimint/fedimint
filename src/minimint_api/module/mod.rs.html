@@ -159,7 +159,16 @@
 <span id="153">153</span>
 <span id="154">154</span>
 <span id="155">155</span>
-</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">interconnect</span>;
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">audit</span>;
+<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">interconnect</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">testing</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::batch::BatchTx</span>;
@@ -170,6 +179,7 @@
 <span class="kw">use</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span>;
 <span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::audit::Audit</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::interconnect::ModuleInterconect</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">http_types</span> <span class="kw">as</span> <span class="ident">http</span>;
 
@@ -303,6 +313,12 @@
     <span class="doccomment">/// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.</span>
     <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident"><span class="kw">crate</span>::OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span>;
 
+    <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Summing over all modules, if liabilities &gt; assets then an error has occurred in the database</span>
+    <span class="doccomment">/// and consensus should halt.</span>
+    <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>);
+
     <span class="doccomment">/// Defines the prefix for API endpoints defined by the module.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// E.g. if the module&#39;s base path is `foo` and it defines API endpoints `bar` and `baz` then</span>
@@ -315,5 +331,5 @@
     <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>];
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7425fb293 2022-06-30)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (f2d93935f 2022-07-02)" ></div>
 </body></html>

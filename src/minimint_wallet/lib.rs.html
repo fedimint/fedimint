@@ -1347,6 +1347,30 @@
 <span id="1341">1341</span>
 <span id="1342">1342</span>
 <span id="1343">1343</span>
+<span id="1344">1344</span>
+<span id="1345">1345</span>
+<span id="1346">1346</span>
+<span id="1347">1347</span>
+<span id="1348">1348</span>
+<span id="1349">1349</span>
+<span id="1350">1350</span>
+<span id="1351">1351</span>
+<span id="1352">1352</span>
+<span id="1353">1353</span>
+<span id="1354">1354</span>
+<span id="1355">1355</span>
+<span id="1356">1356</span>
+<span id="1357">1357</span>
+<span id="1358">1358</span>
+<span id="1359">1359</span>
+<span id="1360">1360</span>
+<span id="1361">1361</span>
+<span id="1362">1362</span>
+<span id="1363">1363</span>
+<span id="1364">1364</span>
+<span id="1365">1365</span>
+<span id="1366">1366</span>
+<span id="1367">1367</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
 <span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
 
@@ -1370,8 +1394,8 @@
 <span class="kw">use</span> <span class="ident">bitcoin::util::psbt</span>::{<span class="ident">Input</span>, <span class="ident">PartiallySignedTransaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin::util::sighash::SighashCache</span>;
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{
-    <span class="ident">Address</span>, <span class="ident">AddressType</span>, <span class="ident">BlockHash</span>, <span class="ident">EcdsaSig</span>, <span class="ident">EcdsaSighashType</span>, <span class="ident">Network</span>, <span class="ident">Script</span>, <span class="ident">Transaction</span>,
-    <span class="ident">TxIn</span>, <span class="ident">TxOut</span>, <span class="ident">Txid</span>,
+    <span class="ident">Address</span>, <span class="ident">AddressType</span>, <span class="ident">Amount</span>, <span class="ident">BlockHash</span>, <span class="ident">EcdsaSig</span>, <span class="ident">EcdsaSighashType</span>, <span class="ident">Network</span>, <span class="ident">Script</span>,
+    <span class="ident">Transaction</span>, <span class="ident">TxIn</span>, <span class="ident">TxOut</span>, <span class="ident">Txid</span>,
 };
 <span class="kw">use</span> <span class="ident">itertools::Itertools</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};
@@ -1389,6 +1413,7 @@
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
 <span class="kw">use</span> <span class="ident">std::ops::Sub</span>;
 
+<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::task::sleep</span>;
 <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
@@ -1468,6 +1493,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingTransaction</span> {
     <span class="kw">pub</span> <span class="ident">tx</span>: <span class="ident">Transaction</span>,
     <span class="kw">pub</span> <span class="ident">tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
+    <span class="kw">pub</span> <span class="ident">change</span>: <span class="ident">bitcoin::Amount</span>,
 }
 
 <span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`</span>
@@ -1475,6 +1501,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransaction</span> {
     <span class="kw">pub</span> <span class="ident">psbt</span>: <span class="ident">PartiallySignedTransaction</span>,
     <span class="kw">pub</span> <span class="ident">signatures</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)<span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">change</span>: <span class="ident">bitcoin::Amount</span>,
 }
 
 <span class="kw">struct</span> <span class="ident">StatelessWallet</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
@@ -1746,7 +1773,7 @@
         );
 
         <span class="kw">if</span> <span class="ident">urgency</span> <span class="op">&gt;</span> <span class="ident">MIN_PEG_OUT_URGENCY</span> {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">psbt</span>, <span class="ident">change</span>) <span class="op">=</span> <span class="self">self</span>
                 .<span class="ident">create_peg_out_tx</span>(<span class="ident">pending_peg_outs</span>, <span class="ident">round_consensus</span>)
                 .<span class="kw">await</span>;
             <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
@@ -1801,6 +1828,9 @@
                 <span class="ident">UnsignedTransaction</span> {
                     <span class="ident">psbt</span>,
                     <span class="ident">signatures</span>: <span class="macro">vec!</span>[],
+                    <span class="ident">change</span>: <span class="ident">change</span>
+                        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">c</span><span class="op">|</span> <span class="ident">c</span>.<span class="ident">amount</span>)
+                        .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Amount::from_sat</span>(<span class="number">0</span>)),
                 },
             );
             <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">PegOutTxSignatureCI</span>(<span class="ident">txid</span>), <span class="ident">sigs</span>);
@@ -1819,6 +1849,7 @@
             <span class="kw">let</span> <span class="ident">UnsignedTransaction</span> {
                 <span class="kw-2">mut</span> <span class="ident">psbt</span>,
                 <span class="ident">signatures</span>,
+                <span class="ident">change</span>,
             } <span class="op">=</span> <span class="ident">unsigned</span>;
 
             <span class="kw">let</span> <span class="ident">signers</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">signatures</span>
@@ -1839,7 +1870,7 @@
                 <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
             }
 
-            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">finalize_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>) {
+            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">finalize_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="ident">change</span>) {
                 <span class="prelude-val">Ok</span>(<span class="ident">pending_tx</span>) =&gt; {
                     <span class="comment">// We were able to finalize the transaction, so we will delete the PSBT and instead keep the</span>
                     <span class="comment">// extracted tx for periodic transmission and to accept the change into our wallet</span>
@@ -1860,6 +1891,21 @@
     <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {
         <span class="comment">// TODO: return BTC tx id once included in peg-out tx</span>
         <span class="prelude-val">Some</span>(())
+    }
+
+    <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
+            <span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        });
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">PendingPegOutPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
+            <span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="op">-</span><span class="number">1000</span>
+        });
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
+            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        });
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
+            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        });
     }
 
     <span class="kw">fn</span> <span class="ident">api_base_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> {
@@ -2019,6 +2065,7 @@
     <span class="kw">fn</span> <span class="ident">finalize_peg_out_psbt</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>,
+        <span class="ident">change</span>: <span class="ident">Amount</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PendingTransaction</span>, <span class="ident">ProcessPegOutSigError</span><span class="op">&gt;</span> {
         <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds later on.</span>
         <span class="comment">// The tweak is extracted here because the psbt is moved next and not available anymore</span>
@@ -2041,6 +2088,7 @@
         <span class="prelude-val">Ok</span>(<span class="ident">PendingTransaction</span> {
             <span class="ident">tx</span>,
             <span class="ident">tweak</span>: <span class="ident">change_tweak</span>,
+            <span class="ident">change</span>,
         })
     }
 
@@ -2198,9 +2246,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">pending_peg_outs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PendingPegOut</span><span class="op">&gt;</span>,
         <span class="ident">consensus</span>: <span class="ident">RoundConsensus</span>,
-    ) -&gt; <span class="ident">PartiallySignedTransaction</span> {
+    ) -&gt; (<span class="ident">PartiallySignedTransaction</span>, <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PendingPegOut</span><span class="op">&gt;</span>) {
         <span class="kw">let</span> <span class="ident">wallet</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">offline_wallet</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="ident">wallet</span>.<span class="ident">create_tx</span>(
+        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">psbt</span>, <span class="ident">change</span>) <span class="op">=</span> <span class="ident">wallet</span>.<span class="ident">create_tx</span>(
             <span class="ident">pending_peg_outs</span>,
             <span class="self">self</span>.<span class="ident">available_utxos</span>(),
             <span class="ident">consensus</span>.<span class="ident">fee_rate</span>,
@@ -2208,7 +2256,7 @@
         );
         <span class="comment">// TODO: extract sigs and do stuff?!</span>
         <span class="ident">wallet</span>.<span class="ident">sign_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>);
-        <span class="ident">psbt</span>
+        (<span class="ident">psbt</span>, <span class="ident">change</span>)
     }
 
     <span class="kw">fn</span> <span class="ident">available_utxos</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)<span class="op">&gt;</span> {
@@ -2243,7 +2291,7 @@
         <span class="kw-2">mut</span> <span class="ident">utxos</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)<span class="op">&gt;</span>,
         <span class="ident">feerate</span>: <span class="ident">Feerate</span>,
         <span class="ident">change_tweak</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>],
-    ) -&gt; <span class="ident">PartiallySignedTransaction</span> {
+    ) -&gt; (<span class="ident">PartiallySignedTransaction</span>, <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PendingPegOut</span><span class="op">&gt;</span>) {
         <span class="comment">// When building a transaction we need to take care of two things:</span>
         <span class="comment">//  * We need enough input amount to fund all outputs</span>
         <span class="comment">//  * We need to keep an eye on the tx weight so we can factor the fees into out calculation</span>
@@ -2402,7 +2450,7 @@
             <span class="ident">outputs</span>: <span class="ident">outputs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">map</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Default::default</span>())
-                .<span class="ident">chain</span>(<span class="ident">change_output</span>.<span class="ident">map</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> {
+                .<span class="ident">chain</span>(<span class="ident">change_output</span>.<span class="ident">clone</span>().<span class="ident">map</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> {
                     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cout</span> <span class="op">=</span> <span class="ident">bitcoin::util::psbt::Output::default</span>();
                     <span class="ident">cout</span>.<span class="ident">proprietary</span>
                         .<span class="ident">insert</span>(<span class="ident">proprietary_tweak_key</span>(), <span class="ident">change_tweak</span>.<span class="ident">to_vec</span>());
@@ -2411,7 +2459,7 @@
                 .<span class="ident">collect</span>(),
         };
 
-        <span class="ident">psbt</span>
+        (<span class="ident">psbt</span>, <span class="ident">change_output</span>)
     }
 
     <span class="kw">fn</span> <span class="ident">sign_psbt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>) {
@@ -2671,7 +2719,7 @@
             },
         )];
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="ident">wallet</span>.<span class="ident">create_tx</span>(
+        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">psbt</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">wallet</span>.<span class="ident">create_tx</span>(
             <span class="ident">peg_outs</span>,
             <span class="ident">utxos</span>,
             <span class="ident">Feerate</span> { <span class="ident">sats_per_kvb</span>: <span class="number">4000</span> },
@@ -2691,5 +2739,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7425fb293 2022-06-30)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (f2d93935f 2022-07-02)" ></div>
 </body></html>
