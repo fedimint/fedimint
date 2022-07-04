@@ -9,10 +9,13 @@ in naersk.buildPackage {
   version = "ci";
   src = builtins.filterSource (p: t: lib.cleanSourceFilter p t && baseNameOf p != "target") ./.;
   buildInputs = [
+      pkgs.clang
+      pkgs.git
       pkgs.openssl
       pkgs.pkg-config
       pkgs.perl
   ];
-gitSubmodules = true;
-  
+  gitSubmodules = true;
+  LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+
 }

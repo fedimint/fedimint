@@ -8,6 +8,8 @@ use tracing::trace;
 
 pub mod batch;
 pub mod mem_impl;
+#[cfg(feature = "rocksdb")]
+mod rocksdb_impl;
 pub mod sled_impl;
 
 pub trait DatabaseKeyPrefixConst {

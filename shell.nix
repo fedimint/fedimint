@@ -18,6 +18,7 @@ in
 pkgs.mkShell {
   packages = with pkgs; [
     bc
+    clang
     openssl
     pkg-config
     perl
@@ -42,5 +43,6 @@ pkgs.mkShell {
     # filter out global cargo installation so it doesn't interfere
     PATH="$(echo $PATH | sed "s/:[^:]*\.cargo[^:]*//g")"
   '';
+  LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
 }
 
