@@ -2,18 +2,18 @@
 
 POLL_INTERVAL=1
 CONFIRMATION_TIME=10
+PID_FILE=.pid
 
 # Fail instantly if anything goes wrong and log executed commands
 set -euxo pipefail
 
-# Clean up before exit
-function cleanup {
-  pkill server
-  pkill ln_gateway
-  pkill lightningd
-  pkill bitcoind
+function kill_child_processes {
+  while read pid; do
+    kill $pid || true
+  done <$PID_FILE
+  rm $PID_FILE
 }
-trap cleanup EXIT
+trap kill_child_processes EXIT
 
 SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
 
@@ -36,6 +36,7 @@ BIN_DIR="$SRC_DIR/target/release"
 
 # Start bitcoind and wait for it to become ready
 bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$BTC_DIR &
+echo $! >> $PID_FILE
 BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 until [ "$($BTC_CLIENT getblockchaininfo | jq -r '.chain')" == "regtest" ]; do
   sleep $POLL_INTERVAL
@@ -43,7 +44,9 @@ done
 
 # Start lightning nodes
 lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
+echo $! >> $PID_FILE
 lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR --addr=127.0.0.1:9001 &
+echo $! >> $PID_FILE
 until [ -e $LN1_DIR/regtest/lightning-rpc ]; do
     sleep $POLL_INTERVAL
 done
@@ -86,6 +89,7 @@ cd $TMP_DIR
 for ((ID=0; ID<4; ID++)); do
   echo "starting mint $ID"
   ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
+  echo $! >> $PID_FILE
 done
 MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
 
