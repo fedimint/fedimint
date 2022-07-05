@@ -5,6 +5,9 @@ let
   } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
     NIX_CFLAGS_COMPILE="-Wno-stringop-truncation";
   });
+  bitcoind-patch-darwin = pkgs.bitcoind.overrideAttrs (oldAttrs: {
+    doCheck = !(pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64);
+  });
 in
 pkgs.mkShell {
   packages = with pkgs; [
@@ -14,7 +17,7 @@ pkgs.mkShell {
     rustc
     cargo
     rust-analyzer
-    bitcoind
+    bitcoind-patch-darwin
     clightning-dev
     jq
     procps
