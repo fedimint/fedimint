@@ -108,7 +108,7 @@ ADDRESS="$(bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin getnewaddr
 bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin generatetoaddress 200 "$ADDRESS"
 ```
 
-Send your gateway Ligtning node some funds:
+Send your gateway Lightning node some funds:
 
 ```shell
 # Get address from gateway lightning node (we'll call it LN_ADDRESS)
@@ -154,7 +154,7 @@ Jun 15 14:57:22.066  INFO mint_client_cli: We own 5 coins of denomination 100000
 Jun 15 14:57:22.066  INFO mint_client_cli: We own 9 coins of denomination 1000000 msat
 ```
 
-The `spend` subcommand allows to send tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
+The `spend` subcommand allows sending tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
 
 ```
 minimint $ cargo run --bin mint-client-cli --release -- cfg spend 400000
