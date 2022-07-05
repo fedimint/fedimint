@@ -78,6 +78,7 @@ LN2_PUB_KEY="$($LN2 getinfo | jq -r '.id')"
 $LN1 connect $LN2_PUB_KEY@127.0.0.1:9001
 until $LN1 fundchannel $LN2_PUB_KEY 0.1btc; do sleep $POLL_INTERVAL; done
 mine_blocks 10
+until [[ $($LN1 listpeers | jq -r ".peers[] | select(.id == \"$LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
 
 # FIXME: make db path configurable to avoid cd-ing here
 # Start the federation members inside the temporary directory
