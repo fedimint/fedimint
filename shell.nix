@@ -1,5 +1,14 @@
 { pkgs ? import <nixpkgs> {}}:
-
+let
+  clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
+    configureFlags = [ "--enable-developer" "--disable-valgrind" ];
+  } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+    NIX_CFLAGS_COMPILE="-Wno-stringop-truncation";
+  });
+  bitcoind-patch-darwin = pkgs.bitcoind.overrideAttrs (oldAttrs: {
+    doCheck = !(pkgs.stdenv.isDarwin && pkgs.stdenv.isAarch64);
+  });
+in
 pkgs.mkShell {
   packages = with pkgs; [
     openssl
@@ -8,8 +17,8 @@ pkgs.mkShell {
     rustc
     cargo
     rust-analyzer
-    bitcoind
-    clightning
+    bitcoind-patch-darwin
+    clightning-dev
     jq
     procps
   ] ++ lib.optionals stdenv.isDarwin [
