@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # Runs a test to determine the latency of certain user actions
 
-set -e
-export FED_SIZE=${1:-4}
+set -eu
+FED_SIZE=${1:-4}
 export RUST_LOG=error,ln_gateway=off
 export PEG_IN_AMOUNT=0.00099999
 
+source ./scripts/build.sh $FED_SIZE
 source ./scripts/setup-tests.sh
-source ./scripts/build.sh
-source ./scripts/start-fed.sh
-source ./scripts/start-gateway.sh
-source ./scripts/pegin.sh
+./scripts/start-fed.sh
+./scripts/start-gateway.sh
+./scripts/pegin.sh
 
 #### BEGIN TESTS ####
+echo "Running with fed size $FED_SIZE"
 
 # reissue
 time for i in {1..10}

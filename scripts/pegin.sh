@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 # Calls the CLI to peg into the federation
 
-set -e
+set -euxo pipefail
 
 # Let's define some shortcuts for bitcoind and the mint client
 POLL_INTERVAL=1
-BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
-FED_SIZE=${2:-1}
-
-if [ -z $PEG_IN_AMOUNT ]; then echo "PEG_IN_AMOUNT must be defined" && exit 1; fi
-if [ -z $MINT_CLIENT ]; then echo "MINT_CLIENT must be set" && exit 1; fi
-if [ -z $CFG_DIR ]; then echo "CFG_DIR must be set" && exit 1; fi
 
 CONFIRMATION_TIME=$(cat $CFG_DIR/server-0.json | jq -r '.wallet.finalty_delay')
 echo "Pegging in $PEG_IN_AMOUNT with confirmation time $CONFIRMATION_TIME"

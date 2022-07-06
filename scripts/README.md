@@ -1,6 +1,6 @@
 # Shell Scripts
 Here you can find scripts for running and testing Minimint:
-* `build.sh` - Builds the rust executables
+* `build.sh` - Builds the rust executables and sets environment variables
 * `setup-tests.sh` - Starts Bitcoin and 2 LN nodes, opening a channel between the LN nodes
 * `start-fed.sh` - Generates the configs and starts the federation nodes
 * `start-gateway.sh` - Generates the configs and starts the LN gateway server

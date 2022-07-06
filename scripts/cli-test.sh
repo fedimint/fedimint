@@ -5,10 +5,10 @@ set -euxo pipefail
 export RUST_LOG=info
 export PEG_IN_AMOUNT=0.00099999
 
-source ./scripts/setup-tests.sh
 source ./scripts/build.sh
-source ./scripts/start-fed.sh
-source ./scripts/start-gateway.sh
+source ./scripts/setup-tests.sh
+./scripts/start-fed.sh
+./scripts/start-gateway.sh
 source ./scripts/pegin.sh
 
 #### BEGIN TESTS ####
