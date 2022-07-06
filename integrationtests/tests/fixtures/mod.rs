@@ -124,8 +124,7 @@ pub async fn fixtures(
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");
             let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone(), &bitcoin)
-                    .await;
+                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
             let lightning_rpc = Mutex::new(
                 ClnRpc::new(socket_gateway.clone())
                     .await

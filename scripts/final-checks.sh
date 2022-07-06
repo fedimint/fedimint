@@ -12,5 +12,8 @@ export MINIMINT_TEST_REAL=0
 cargo test
 
 export MINIMINT_TEST_REAL=1
-export MINIMINT_TEST_DIR=$PWD/it/
-cargo test -p minimint-tests -- --test-threads=1
+./scripts/rust-tests.sh
+./scripts/cli-test.sh
+sleep 3
+
+echo "CLI test exit status $?"

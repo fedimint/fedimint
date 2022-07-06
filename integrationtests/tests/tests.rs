@@ -294,6 +294,8 @@ async fn lightning_gateway_pays_invoice() {
         .unwrap();
     user.assert_total_coins(sats(2000 - 1010)).await;
     gateway.user.assert_total_coins(sats(1010)).await;
+
+    tokio::time::sleep(Duration::from_millis(500)).await; // FIXME need to wait for listfunds to update
     assert_eq!(lightning.amount_sent(), sats(1000));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
