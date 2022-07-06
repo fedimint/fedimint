@@ -5,7 +5,8 @@ name: CI
 jobs:
   build_and_unit_test:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -40,7 +41,8 @@ jobs:
           args: --all -- --check
   build_wasm:
     name: Build (wasm32)
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -57,7 +59,8 @@ jobs:
           args: --target wasm32-unknown-unknown --package mint-client
   build_and_cli_test:
     name: CLI Tests
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - uses: Swatinem/rust-cache@v1
@@ -72,7 +75,8 @@ jobs:
         run: nix-shell --command ./scripts/cli-test.sh
   build_and_integration_test:
     name: Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
       - uses: Swatinem/rust-cache@v1
@@ -87,7 +91,8 @@ jobs:
         run: nix-shell --command ./scripts/rust-tests.sh
   nix-build_test:
     name: Nix-Build Tests
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2.4.0
       - uses: cachix/install-nix-action@v16
@@ -100,7 +105,8 @@ jobs:
       - run: nix-build
   nix-flake:
     name: Nix-flake Tests
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2.4.0
       - uses: cachix/install-nix-action@v16
