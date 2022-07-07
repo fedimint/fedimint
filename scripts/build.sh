@@ -35,7 +35,7 @@ export MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
 
 # Alias clients
 alias ln1="\$LN1"
-alias ln2="\$LN1"
+alias ln2="\$LN2"
 alias btc_client="\$BTC_CLIENT"
 alias mint_client="\$MINT_CLIENT"
 
