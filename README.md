@@ -8,10 +8,11 @@ MiniMint is a federated [Chaumian e-cash](https://en.wikipedia.org/wiki/Ecash) m
 
 If you want to learn more about the general idea go to [fedimint.org](https://fedimint.org/), beyond a high level explanation you can also find links to talks and blog posts at the bottom of the page.
 
-Visit our [Discord channels](https://discord.gg/JEdvZ8fv) to discuss general questions, development issues, and specific integrations.
+Visit our [Telegram group](https://t.me/fedimint) for high-level discussions (no codebase questions please).
 
 To get started with development have a look at the:
-* [GitHub Issues](https://github.com/fedimint/minimint/issues): things to fix, planned features, longer term architectural choices, etc.
+* [Developer discord](https://discord.gg/JEdvZ8fv) - only for programming questions and discussing the codebase
+* [GitHub Issues](https://github.com/fedimint/minimint/issues) - things to fix, planned features, longer term architectural choices, etc.
 * [Architecture](docs/architecture.md) - high-level description of the codebase and design
 * [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
 * [Scripts](scripts/README.md) - useful scripts for running the tests and federation
