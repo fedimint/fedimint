@@ -132,6 +132,8 @@ pub async fn fixtures(
             );
             let connect_gen = |peer| InsecureTcpConnector::new(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+            // give some time for server to spawn
+            tokio::time::sleep(Duration::from_millis(100)).await;
             let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
@@ -151,6 +153,8 @@ pub async fn fixtures(
             let net_ref = &net;
             let connect_gen = move |peer| net_ref.connector(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+            // give some time for server to spawn
+            tokio::time::sleep(Duration::from_millis(100)).await;
             let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
