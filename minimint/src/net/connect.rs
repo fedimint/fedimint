@@ -1,3 +1,5 @@
+//! Provides an abstract network connection interface and multiple implementations
+
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 use async_trait::async_trait;
 use futures::Stream;
@@ -8,18 +10,32 @@ use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
+/// Shared [`Connector`] trait object
 pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
+
+/// Owned [`Connector`] trait object
 pub type AnyConnector<M> = Box<dyn Connector<M> + Send + Sync + Unpin + 'static>;
+
+/// Result of a connection opening future
 pub type ConnectResult<M> = Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>;
+
+/// Owned trait object type for incoming connection listeners
 pub type ConnectionListener<M> =
     Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>;
 
+/// Allows to connect to peers and to listen for incoming connections
+///
+/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted
+/// for production deployments.
 #[async_trait]
 pub trait Connector<M> {
+    /// Connect to a `destination`
     async fn connect_framed(&self, destination: String) -> ConnectResult<M>;
 
+    /// Listen for incoming connections on `bind_addr`
     async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error>;
 
+    /// Transform this concrete `Connector` into an owned trait object version of itself
     fn to_any(self) -> AnyConnector<M>
     where
         Self: Sized + Send + Sync + Unpin + 'static,
@@ -28,6 +44,7 @@ pub trait Connector<M> {
     }
 }
 
+/// TCP connector without encryption or authentication, **not suitable for production deployments**
 pub struct InsecureTcpConnector {
     our_id: PeerId,
 }
@@ -89,6 +106,7 @@ where
     Ok(PeerId::from(u16::from_le_bytes(peer_id)))
 }
 
+/// Fake network stack used in tests
 #[allow(unused_imports)]
 pub mod mock {
     use crate::net::connect::{do_handshake, ConnectResult, Connector};
