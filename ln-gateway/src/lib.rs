@@ -1,32 +1,27 @@
-pub mod cln;
-pub mod ln;
-pub mod webserver;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
-use crate::ln::{LightningError, LnRpc};
 use bitcoin_hashes::sha256::Hash;
-use cln::HtlcAccepted;
-use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-use minimint_api::{Amount, OutPoint};
-use mint_client::clients::gateway::{GatewayClient, GatewayClientError};
 use rand::{CryptoRng, RngCore};
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
-use webserver::run_webserver;
 
-#[derive(Debug)]
-pub enum GatewayRequest {
-    HtlcAccepted(
-        (
-            HtlcAccepted,
-            oneshot::Sender<Result<Preimage, LnGatewayError>>,
-        ),
-    ),
-    PayInvoice((ContractId, oneshot::Sender<Result<(), LnGatewayError>>)),
+use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
+use minimint_api::{db::Database, Amount, OutPoint, TransactionId};
+use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig, GatewayClientError};
+
+use crate::ln::{LightningError, LnRpc};
+
+pub mod ln;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LnGatewayConfig {
+    pub federation_client: GatewayClientConfig,
+    pub ln_socket: PathBuf,
 }
 
 pub struct LnGateway {
@@ -204,6 +199,21 @@ impl LnGateway {
             }
 
             minimint_api::task::sleep_until(least_wait_until).await;
+        }
+/// This function runs as a background process fetching issued token signatures and driving forward
+/// payments which were interrupted during execution.
+#[instrument(skip_all)]
+async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc<dyn LnRpc>) {
+    // TODO: also try to drive forward payments that were interrupted
+    loop {
+        let least_wait_until = Instant::now() + Duration::from_millis(100);
+        let active_issuances = federation_client.list_fetchable_coins();
+        if active_issuances.is_empty() {
+            minimint_api::task::sleep_until(least_wait_until).await;
+            continue;
+        }
+        if let Err(e) = federation_client.fetch_all_coins().await {
+            debug!(error = %e, "Fetching coins failed");
         }
     }
 }

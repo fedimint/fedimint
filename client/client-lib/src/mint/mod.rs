@@ -1,12 +1,9 @@
-use std::time::Duration;
+pub mod db;
 
+use crate::api::ApiError;
+use crate::clients::transaction::TransactionBuilder;
+use crate::BorrowedClientContext;
 use bitcoin::KeyPair;
-use rand::{CryptoRng, Rng, RngCore};
-use secp256k1_zkp::{Secp256k1, Signing};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-use tracing::{debug, trace};
-
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
@@ -17,13 +14,13 @@ use minimint_core::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
 use minimint_core::transaction::{Output, Transaction};
+use rand::{CryptoRng, Rng, RngCore};
+use secp256k1_zkp::{Secp256k1, Signing};
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
-
-use crate::api::ApiError;
-use crate::clients::transaction::TransactionBuilder;
-use crate::BorrowedClientContext;
-
-mod db;
+use thiserror::Error;
+use tracing::{debug, trace};
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -36,8 +33,7 @@ pub struct MintClient<'c> {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
-    spend_key: [u8; 32],
-    // FIXME: either make KeyPair Serializable or add secret key newtype
+    spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
     /// Nonce belonging to the secret key
     nonce: CoinNonce,
     /// Key to unblind the blind signature supplied by the mint for this coin

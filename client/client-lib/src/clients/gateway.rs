@@ -1,10 +1,15 @@
 use std::time::Duration;
 
+use crate::api::{ApiError, FederationApi};
+use crate::clients::gateway::db::{
+    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
+};
+use crate::clients::transaction::TransactionBuilder;
+use crate::ln::outgoing::OutgoingContractAccount;
+use crate::ln::{LnClient, LnClientError};
+use crate::mint::{CoinFinalizationData, MintClient, MintClientError};
+use crate::{api, OwnedClientContext};
 use lightning_invoice::Invoice;
-use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
 use minimint_api::{Amount, OutPoint, PeerId, TransactionId};
@@ -15,16 +20,9 @@ use minimint_core::modules::ln::contracts::{
 };
 use minimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput};
 use minimint_core::transaction::Input;
-
-use crate::api::{ApiError, FederationApi};
-use crate::clients::gateway::db::{
-    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
-};
-use crate::clients::transaction::TransactionBuilder;
-use crate::ln::outgoing::OutgoingContractAccount;
-use crate::ln::{LnClient, LnClientError};
-use crate::mint::{CoinFinalizationData, MintClient, MintClientError};
-use crate::{api, OwnedClientContext};
+use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub struct GatewayClient {
     context: OwnedClientContext<GatewayClientConfig>,
@@ -348,19 +346,15 @@ impl GatewayClient {
         self.mint_client().list_active_issuances()
     }
 
-    /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
-    /// the federation too early. Use [`MintClientError::is_retryable`] to determine
-    /// if the operation should be retried at a later time.
-    pub async fn fetch_coins<'a>(
-        &self,
-        outpoint: OutPoint,
-    ) -> std::result::Result<(), MintClientError> {
+    /// Tries to fetch all active e-cash tokens by searching the DB by [`crate::mint::db::OutputFinalizationKeyPrefix`].
+    pub async fn fetch_all_coins<'a>(&self) -> std::result::Result<Vec<OutPoint>, MintClientError> {
         let mut batch = DbBatch::new();
-        self.mint_client()
-            .fetch_coins(batch.transaction(), outpoint)
+        let res = self
+            .mint_client()
+            .fetch_all_coins(batch.transaction())
             .await?;
         self.context.db.apply_batch(batch).expect("DB error");
-        Ok(())
+        Ok(res)
     }
 }
 
