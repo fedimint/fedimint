@@ -1,3 +1,5 @@
+//! Adapter that implements a message based protocol on top of a stream based one
+
 use bytes::{Buf, BufMut, BytesMut};
 use futures::{Sink, Stream};
 use std::convert::TryInto;
@@ -11,12 +13,14 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
 use tracing::{error, trace};
 
-/// Trait object that contains a framed transport connection
+/// Owned [`FramedTransport`] trait object
 pub type AnyFramedTransport<M> = Box<dyn FramedTransport<M> + Send + Unpin + 'static>;
 
+/// A bidirectional framed transport adapter that can be split into its read and write half
 pub trait FramedTransport<T>:
     Sink<T, Error = anyhow::Error> + Stream<Item = Result<T, anyhow::Error>>
 {
+    /// Split the framed transport into read and write half
     fn borrow_split(
         &mut self,
     ) -> (
@@ -24,6 +28,7 @@ pub trait FramedTransport<T>:
         &'_ mut (dyn Stream<Item = Result<T, anyhow::Error>> + Send + Unpin),
     );
 
+    /// Transforms concrete `FramedTransport` object into an owned trait object
     fn to_any(self) -> AnyFramedTransport<T>
     where
         Self: Sized + Send + Unpin + 'static,

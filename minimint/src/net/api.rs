@@ -1,3 +1,5 @@
+//! Implements the client API through which users interact with the federation
+
 use crate::config::ServerConfig;
 use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
