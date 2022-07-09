@@ -53,8 +53,8 @@ pub struct UnconfirmedInvoice {
 }
 
 impl UserClient {
-    pub fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
-        let api = api::HttpFederationApi::new(
+    pub async fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
+        let api = api::WsFederationApi::new(
             cfg.max_evil,
             cfg.api_endpoints
                 .iter()
@@ -65,7 +65,8 @@ impl UserClient {
                     (peer_id, url)
                 })
                 .collect(),
-        );
+        )
+        .await;
         Self::new_with_api(cfg, db, Box::new(api), secp)
     }
 

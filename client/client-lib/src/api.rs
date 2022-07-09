@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use futures::{Future, StreamExt, TryFutureExt};
+use futures::StreamExt;
+use jsonrpsee_core::client::ClientT;
+use jsonrpsee_core::Error as JsonRpcError;
+use jsonrpsee_types::error::CallError as RpcCallError;
 use minimint_api::{OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use minimint_core::modules::ln::contracts::ContractId;
@@ -8,11 +11,7 @@ use minimint_core::modules::ln::ContractAccount;
 use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use minimint_core::transaction::Transaction;
 use minimint_core::CoreError;
-use reqwest::{StatusCode, Url};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use std::hash::{Hash, Hasher};
-use std::pin::Pin;
+
 use std::time::Duration;
 use thiserror::Error;
 
@@ -81,9 +80,8 @@ impl<'a> dyn FederationApi + 'a {
 /// Mint API client that will try to run queries against all `members` expecting equal
 /// results from at least `min_eq_results` of them. Members that return differing results are
 /// returned as a member faults list.
-pub struct HttpFederationApi {
-    federation_member_api_hosts: Vec<(PeerId, Url)>,
-    http_client: reqwest::Client,
+pub struct WsFederationApi<C> {
+    clients: Vec<(PeerId, C)>,
     max_evil: usize,
 }
 
@@ -91,8 +89,8 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 
 #[derive(Debug, Error)]
 pub enum ApiError {
-    #[error("HTTP error: {0}")]
-    HttpError(#[from] reqwest::Error),
+    #[error("Rpc error: {0}")]
+    RpcError(#[from] JsonRpcError),
     #[error("Accepted transaction errored on execution: {0}")]
     TransactionError(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
@@ -107,121 +105,82 @@ impl ApiError {
     /// Returns `true` if queried outpoint isn't ready yet but may become ready later
     pub fn is_retryable(&self) -> bool {
         match self {
-            ApiError::HttpError(e) => e.status() == Some(StatusCode::NOT_FOUND),
+            ApiError::RpcError(JsonRpcError::Call(RpcCallError::Custom(e))) => e.code() == 404,
             ApiError::CoreError(e) => e.is_retryable(),
             _ => false,
         }
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
-type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + Send + 'a>>;
-
-#[cfg(target_family = "wasm")]
-type ParHttpFuture<'a, T> = Pin<Box<dyn Future<Output = (PeerId, reqwest::Result<T>)> + 'a>>;
-
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl FederationApi for HttpFederationApi {
+impl<C: ClientT + Send + Sync> FederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
-        self.get(&format!("/transaction/{}", tx)).await
+        self.request("/fetch_transaction", tx).await
     }
 
     /// Submit a transaction to all federtion members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         // TODO: check the id is correct
-        self.put("/transaction", tx).await
+        self.request("/transaction", tx).await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
-        self.get(&format!("/ln/account/{}", contract)).await
+        self.request("/ln/account", contract).await
     }
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
-        self.get("/wallet/block_height").await
+        self.request("/wallet/block_height", ()).await
     }
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
-        self.get(&format!("/ln/offer/{}", payment_hash)).await
+        self.request("/ln/offer", payment_hash).await
     }
 }
 
-impl HttpFederationApi {
+#[cfg(not(target_family = "wasm"))]
+use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+
+#[cfg(target_family = "wasm")]
+use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+
+impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(max_evil: usize, members: Vec<(PeerId, Url)>) -> HttpFederationApi {
-        HttpFederationApi {
-            federation_member_api_hosts: members,
-            http_client: Default::default(),
+    pub async fn new(max_evil: usize, members: Vec<(PeerId, String)>) -> Self {
+        WsFederationApi {
+            clients: futures::stream::iter(members)
+                .then(|(peer, url)| async move {
+                    // TODO: reconnect to peers on disconnect
+                    (
+                        peer,
+                        WsClientBuilder::default()
+                            .build(url)
+                            .await
+                            .expect("unable to connect to server"),
+                    )
+                })
+                .collect()
+                .await,
             max_evil,
         }
     }
+}
 
-    /// Send a GET request to all federation members and make sure that there is consensus about the
-    /// return value between members.
-    ///
-    /// # Panics
-    /// If `api_endpoint` is not a valid relative URL.
-    pub async fn get<T>(&self, api_endpoint: &str) -> Result<T>
-    where
-        T: serde::de::DeserializeOwned + Eq + Hash,
-    {
-        self.parallel_http_op(|http_client, id, base_url| {
-            Box::pin(async move {
-                let request_url = base_url.join(api_endpoint).expect("Invalid API endpoint");
-                let response = http_client
-                    .get(request_url)
-                    .send()
-                    .and_then(|resp| async { resp.error_for_status()?.json().await })
-                    .await;
-                (id, response)
-            })
-        })
-        .await
-    }
-
-    /// Send a PUT request to all federation members and make sure that there is consensus about the
-    /// return value between members.
-    ///
-    /// # Panics
-    /// If `api_endpoint` is not a valid relative URL.
-    pub async fn put<S, R>(&self, api_endpoint: &str, data: S) -> Result<R>
-    where
-        S: Serialize + Clone + Send + Sync,
-        R: DeserializeOwned + Eq + Hash,
-    {
-        self.parallel_http_op(|http_client, id, base_url| {
-            let cloned_data = data.clone();
-            Box::pin(async move {
-                let request_url = base_url.join(api_endpoint).expect("Invalid API endpoint");
-                let response = http_client
-                    .put(request_url)
-                    .json(&cloned_data)
-                    .send()
-                    .and_then(|resp| resp.json())
-                    .await;
-                (id, response)
-            })
-        })
-        .await
-    }
-
-    // TODO: check for consistency of replies, needs epoch-versioned API replies
-    // TODO: Make the HTTP requests asynchronous so we don't get stuck on a single peer
-    /// This function is used to run the same HTTP request against multiple endpoint belonging to
-    /// different federation members and returns a success if the minimum threshold of peers
-    /// return success, otherwise it will return an error.
-    async fn parallel_http_op<'a, T, F>(&'a self, make_request: F) -> Result<T>
-    where
-        F: Fn(&'a reqwest::Client, PeerId, &'a Url) -> ParHttpFuture<'a, T>,
-        T: serde::de::DeserializeOwned + Eq + Hash,
-    {
-        let mut requests = futures::stream::iter(self.federation_member_api_hosts.iter())
-            .then(|(id, member)| make_request(&self.http_client, *id, member));
+impl<C: ClientT> WsFederationApi<C> {
+    pub async fn request<P: serde::Serialize, R: serde::de::DeserializeOwned>(
+        &self,
+        method: &str,
+        param: P,
+    ) -> Result<R> {
+        let params = [serde_json::to_value(param).expect("encoding error")];
+        let mut requests = futures::stream::iter(&self.clients).then(|(_id, client)| {
+            client.request::<R>(method, Some(jsonrpsee_types::ParamsSer::ArrayRef(&params)))
+        });
 
         let mut error = None;
         let mut successes = 0;
-        while let Some((_member_id, result)) = requests.next().await {
+        while let Some(result) = requests.next().await {
             match result {
                 Ok(res) => {
                     if successes == self.max_evil {
@@ -234,48 +193,8 @@ impl HttpFederationApi {
             };
         }
 
-        Err(ApiError::HttpError(
+        Err(ApiError::RpcError(
             error.expect("If there was no success there has to be an error"),
         ))
-    }
-}
-
-fn result_eq<T: PartialEq>(a: &reqwest::Result<T>, b: &reqwest::Result<T>) -> bool {
-    match (a, b) {
-        (Ok(a), Ok(b)) => a == b,
-        (Err(a), Err(b)) => {
-            if a.is_status() && b.is_status() {
-                a.status() == b.status()
-            } else {
-                false
-            }
-        }
-        (_, _) => false,
-    }
-}
-
-#[derive(Debug)]
-struct ResultWrapper<T>(reqwest::Result<T>);
-
-impl<T> PartialEq for ResultWrapper<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        result_eq(&self.0, &other.0)
-    }
-}
-
-impl<T> Eq for ResultWrapper<T> where T: Eq + PartialEq {}
-
-impl<T> Hash for ResultWrapper<T>
-where
-    T: Hash,
-{
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match &self.0 {
-            Ok(res) => res.hash(state),
-            Err(e) => e.status().hash(state),
-        }
     }
 }

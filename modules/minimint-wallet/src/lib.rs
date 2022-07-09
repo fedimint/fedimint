@@ -28,7 +28,7 @@ use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::module::http;
+use minimint_api::module::api_endpoint;
 use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
@@ -60,7 +60,7 @@ pub const CONFIRMATION_TARGET: u16 = 24;
 
 /// The urgency of doing a peg-out is defined as the sum over all pending peg-outs of the amount of
 /// BTC blocks that have been mined since the peg-out was created. E.g. 10 transactions, each
-/// waiting for 10 blocks, would cross a minimum urgency threshold of 100.  
+/// waiting for 10 blocks, would cross a minimum urgency threshold of 100.
 pub const MIN_PEG_OUT_URGENCY: u32 = 100;
 
 pub type PartialSig = Vec<u8>;
@@ -540,18 +540,14 @@ impl FederationModule for Wallet {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[ApiEndpoint {
-            path_spec: "/block_height",
-            params: &[],
-            method: http::Method::Get,
-            handler: |module, _params, _val| {
-                let block_height = module.consensus_height().unwrap_or(0);
+        const ENDPOINTS: &[ApiEndpoint<Wallet>] = &[api_endpoint! {
+            "/block_height",
+            async |module: &Wallet, _params: ()| -> u32 {
+                Ok(module.consensus_height().unwrap_or(0))
+            }
 
-                debug!(block_height, "Sending consensus");
-                let body = http::Body::from_json(&block_height).expect("encoding error");
-                Ok(body.into())
-            },
-        }]
+        }];
+        ENDPOINTS
     }
 }
 
@@ -950,7 +946,7 @@ impl<'a> StatelessWallet<'a> {
         let max_input_weight = self
             .descriptor
             .max_satisfaction_weight()
-            .expect("is satisfyable") + 
+            .expect("is satisfyable") +
             128 + // TxOutHash
             16 + // TxOutIndex
             16; // sequence

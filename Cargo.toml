@@ -14,6 +14,7 @@ members = [
     "modules/minimint-wallet",
     "integrationtests",
 ]
+resolver = "2"
 
 [patch.crates-io]
 bitcoin_hashes = { version = "0.10.0", git = 'https://github.com/fedimint/bitcoin_hashes', branch = 'minimint' }

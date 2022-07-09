@@ -33,7 +33,7 @@ impl LnGateway {
             federation_client,
             ln_socket,
         } = cfg;
-        let federation_client = GatewayClient::new(federation_client, db);
+        let federation_client = GatewayClient::new(federation_client, db).await;
         let ln_client = cln_rpc::ClnRpc::new(ln_socket)
             .await
             .expect("connect to ln_socket");

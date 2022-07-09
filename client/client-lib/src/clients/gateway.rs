@@ -44,8 +44,8 @@ pub struct PaymentParameters {
 }
 
 impl GatewayClient {
-    pub fn new(cfg: GatewayClientConfig, db: Box<dyn Database>) -> Self {
-        let api = api::HttpFederationApi::new(
+    pub async fn new(cfg: GatewayClientConfig, db: Box<dyn Database>) -> Self {
+        let api = api::WsFederationApi::new(
             cfg.common.max_evil,
             cfg.common
                 .api_endpoints
@@ -57,7 +57,8 @@ impl GatewayClient {
                     (peer_id, url)
                 })
                 .collect(),
-        );
+        )
+        .await;
         Self::new_with_api(cfg, db, Box::new(api))
     }
 

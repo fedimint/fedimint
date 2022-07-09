@@ -86,7 +86,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let client = UserClient::new(cfg.client, Box::new(db), Default::default()).await;
 
     match opts.command {
         Command::PegInAddress => {
