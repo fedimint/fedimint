@@ -144,7 +144,11 @@
 <span id="138">138</span>
 <span id="139">139</span>
 <span id="140">140</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;
+<span id="141">141</span>
+<span id="142">142</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation</span>
+
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::MinimintConsensus</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::Transaction</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{

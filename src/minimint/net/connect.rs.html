@@ -259,7 +259,27 @@
 <span id="253">253</span>
 <span id="254">254</span>
 <span id="255">255</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">AnyFramedTransport</span>, <span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+</pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations</span>
+
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">AnyFramedTransport</span>, <span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">futures::Stream</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
@@ -269,18 +289,32 @@
 <span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncRead</span>, <span class="ident">AsyncReadExt</span>, <span class="ident">AsyncWrite</span>, <span class="ident">AsyncWriteExt</span>};
 <span class="kw">use</span> <span class="ident">tokio::net</span>::{<span class="ident">TcpListener</span>, <span class="ident">TcpStream</span>};
 
+<span class="doccomment">/// Shared [`Connector`] trait object</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
+
+<span class="doccomment">/// Owned [`Connector`] trait object</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
+
+<span class="doccomment">/// Result of a connection opening future</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>), <span class="ident">anyhow::Error</span><span class="op">&gt;</span>;
+
+<span class="doccomment">/// Owned trait object type for incoming connection listeners</span>
 <span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span>
     <span class="ident">Pin</span><span class="op">&lt;</span><span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span><span class="op">&gt;</span>;
 
+<span class="doccomment">/// Allows to connect to peers and to listen for incoming connections</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted</span>
+<span class="doccomment">/// for production deployments.</span>
 <span class="attribute">#[<span class="ident">async_trait</span>]</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Connect to a `destination`</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>) -&gt; <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>;
 
+    <span class="doccomment">/// Listen for incoming connections on `bind_addr`</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>;
 
+    <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself</span>
     <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>
     <span class="kw">where</span>
         <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
@@ -289,6 +323,7 @@
     }
 }
 
+<span class="doccomment">/// TCP connector without encryption or authentication, **not suitable for production deployments**</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InsecureTcpConnector</span> {
     <span class="ident">our_id</span>: <span class="ident">PeerId</span>,
 }
@@ -350,6 +385,7 @@
     <span class="prelude-val">Ok</span>(<span class="ident">PeerId::from</span>(<span class="ident">u16::from_le_bytes</span>(<span class="ident">peer_id</span>)))
 }
 
+<span class="doccomment">/// Fake network stack used in tests</span>
 <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unused_imports</span>)]</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mock</span> {
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">do_handshake</span>, <span class="ident">ConnectResult</span>, <span class="ident">Connector</span>};
