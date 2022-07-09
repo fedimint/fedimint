@@ -1795,6 +1795,7 @@ dependencies = [
  "gloo-timers",
  "hex",
  "http-types",
+ "lightning-invoice",
  "minimint-derive",
  "rand 0.6.5",
  "secp256k1-zkp",
