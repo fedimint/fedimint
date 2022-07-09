@@ -5,10 +5,9 @@ pub mod testing;
 use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
+use bitcoin::secp256k1::{rand::RngCore, XOnlyPublicKey};
 use futures::future::BoxFuture;
 use rand::CryptoRng;
-use secp256k1_zkp::rand::RngCore;
-use secp256k1_zkp::XOnlyPublicKey;
 use std::collections::HashSet;
 
 use crate::module::audit::Audit;

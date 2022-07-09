@@ -4,6 +4,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use minimint_api::encoding::{Decodable, DecodeError, Encodable};
 use minimint_api::OutPoint;
+use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use std::io::Error;
 
@@ -56,7 +57,7 @@ pub struct IncomingContract {
     /// the contract, allowing the offer creator to redeem their money.
     pub decrypted_preimage: DecryptedPreimage,
     /// Key that can unlock contract in case the decrypted preimage was invalid
-    pub gateway_key: secp256k1::XOnlyPublicKey,
+    pub gateway_key: XOnlyPublicKey,
 }
 
 /// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it's creation. Since
@@ -93,7 +94,7 @@ hash_newtype!(
 /// A preimage in the context of incoming contracts. In this context it is a public key chosen
 /// by the creator of the [`IncomingContractOffer`].
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Preimage(pub secp256k1::XOnlyPublicKey);
+pub struct Preimage(pub XOnlyPublicKey);
 
 /// Threshold-encrypted [`Preimage`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]

@@ -8,14 +8,13 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.58"
 async-trait = "0.1"
-bitcoin = { version = "0.28.1", features = [ "rand", "serde" ] }
+bitcoin = { version = "0.28.1", features = [ "rand", "serde", "use-serde"] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.16.0"
 minimint-derive = { path = "../minimint-derive" }
 rand = "0.6.0"
-secp256k1-zkp = { version = "0.6.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.79"
 sled = "0.34"

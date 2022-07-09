@@ -8,6 +8,7 @@ use minimint_api::{
     FederationModule, TransactionId,
 };
 use minimint_core::outcome::TransactionStatus;
+use rand::rngs::OsRng;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use tracing::debug;
@@ -20,7 +21,7 @@ use jsonrpsee::{
 
 #[derive(Clone)]
 struct State {
-    minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>,
+    minimint: Arc<MinimintConsensus<OsRng>>,
 }
 
 impl std::fmt::Debug for State {
@@ -29,7 +30,7 @@ impl std::fmt::Debug for State {
     }
 }
 
-pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>) {
+pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<OsRng>>) {
     let state = State {
         minimint: minimint.clone(),
     };
@@ -68,7 +69,7 @@ fn attach_endpoints<M>(
     endpoints: &'static [ApiEndpoint<M>],
     base_name: Option<&str>,
 ) where
-    MinimintConsensus<rand::rngs::OsRng>: AsRef<M>,
+    MinimintConsensus<OsRng>: AsRef<M>,
     M: Sync,
 {
     for endpoint in endpoints {
@@ -97,11 +98,11 @@ fn attach_endpoints<M>(
     }
 }
 
-fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] {
-    const ENDPOINTS: &[ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] = &[
+fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<OsRng>>] {
+    const ENDPOINTS: &[ApiEndpoint<MinimintConsensus<OsRng>>] = &[
         api_endpoint! {
             "/transaction",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
+            async |minimint: &MinimintConsensus<OsRng>, transaction: serde_json::Value| -> TransactionId {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 let string = serde_json::to_string(&transaction).expect("encoding error");
@@ -117,7 +118,7 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
         },
         api_endpoint! {
             "/fetch_transaction",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
+            async |minimint: &MinimintConsensus<OsRng>, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
                 let tx_status = minimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;

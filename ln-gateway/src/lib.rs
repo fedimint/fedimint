@@ -2,6 +2,8 @@ pub mod ln;
 
 use crate::ln::{LightningError, LnRpc};
 use bitcoin_hashes::sha256::Hash;
+use cln_rpc::ClnRpc;
+use futures::{executor, future};
 use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
 use minimint_api::{db::Database, Amount, OutPoint, TransactionId};
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig, GatewayClientError};
@@ -34,9 +36,7 @@ impl LnGateway {
             ln_socket,
         } = cfg;
         let federation_client = GatewayClient::new(federation_client, db).await;
-        let ln_client = cln_rpc::ClnRpc::new(ln_socket)
-            .await
-            .expect("connect to ln_socket");
+        let ln_client = ClnRpc::new(ln_socket).await.expect("connect to ln_socket");
         let ln_client = Mutex::new(ln_client);
 
         Self::new(Arc::new(federation_client), Box::new(ln_client)).await
@@ -170,7 +170,7 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
                 }
             })
             .collect::<Vec<_>>();
-        futures::future::join_all(pending_fetches).await;
+        future::join_all(pending_fetches).await;
         minimint_api::task::sleep_until(least_wait_until).await;
     }
 }
@@ -178,7 +178,7 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
 impl Drop for LnGateway {
     fn drop(&mut self) {
         self.fetcher.abort();
-        assert!(futures::executor::block_on(&mut self.fetcher).is_err());
+        assert!(executor::block_on(&mut self.fetcher).is_err());
     }
 }
 

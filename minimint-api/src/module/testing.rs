@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+use bitcoin::secp256k1::XOnlyPublicKey;
+use rand::rngs::OsRng;
 
 use crate::config::GenerateConfig;
 use crate::db::batch::DbBatch;
@@ -24,7 +26,7 @@ pub struct FakeFed<M, CC> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct TestInputMeta {
     pub amount: Amount,
-    pub keys: Vec<secp256k1_zkp::XOnlyPublicKey>,
+    pub keys: Vec<XOnlyPublicKey>,
 }
 
 impl<M, CC> FakeFed<M, CC>
@@ -49,7 +51,7 @@ where
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
         let (server_cfg, client_cfg) =
-            C::trusted_dealer_gen(&peers, max_evil, params, rand::rngs::OsRng::new().unwrap());
+            C::trusted_dealer_gen(&peers, max_evil, params, OsRng::new().unwrap());
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {
@@ -99,7 +101,7 @@ where
     ) where
         <M as FederationModule>::TxInput: Send + Sync,
     {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = OsRng::new().unwrap();
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         // TODO: only include some of the proposals for realism

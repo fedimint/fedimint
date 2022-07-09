@@ -177,6 +177,8 @@ mod tests {
     use crate::ln::LnClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
+    use bitcoin::secp256k1::{PublicKey, XOnlyPublicKey};
+    use bitcoin_hashes::sha256;
     use lightning_invoice::Invoice;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
@@ -238,7 +240,7 @@ mod tests {
 
         async fn fetch_offer(
             &self,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
+            _payment_hash: sha256::Hash,
         ) -> crate::api::Result<IncomingContractOffer> {
             unimplemented!();
         }
@@ -263,7 +265,7 @@ mod tests {
             config: fed.lock().await.client_cfg().clone(),
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
-            secp: secp256k1_zkp::Secp256k1::new(),
+            secp: bitcoin::secp256k1::Secp256k1::new(),
         };
 
         (fed, client_context)
@@ -294,8 +296,8 @@ mod tests {
                 .unwrap();
         let invoice_amt_msat = invoice.amount_milli_satoshis().unwrap();
         let gateway = {
-            let mint_pub_key = secp256k1_zkp::XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
-            let node_pub_key = secp256k1_zkp::PublicKey::from_slice(&[2; 33][..]).unwrap();
+            let mint_pub_key = XOnlyPublicKey::from_slice(&[42; 32][..]).unwrap();
+            let node_pub_key = PublicKey::from_slice(&[2; 33][..]).unwrap();
             LightningGateway {
                 mint_pub_key,
                 node_pub_key,
@@ -360,7 +362,7 @@ mod tests {
         fed.lock().await.set_block_height(timelock as u64);
 
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
-        let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key);
+        let refund_pk = XOnlyPublicKey::from_keypair(refund_key);
         assert_eq!(meta.keys, vec![refund_pk]);
         assert_eq!(meta.amount, expected_amount);
 

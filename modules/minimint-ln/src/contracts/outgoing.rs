@@ -1,6 +1,7 @@
 use crate::contracts::{ContractId, IdentifyableContract};
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash};
 use minimint_api::encoding::{Decodable, Encodable};
+use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 
 /// Specialized smart contract for outgoing payments.
@@ -11,13 +12,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutgoingContract {
     /// Hash that can be used to spend the output before the timelock expires
-    pub hash: bitcoin_hashes::sha256::Hash,
+    pub hash: sha256::Hash,
     /// Public key of the LN gateway allowed to claim the HTLC before the timelock expires
-    pub gateway_key: secp256k1::XOnlyPublicKey,
+    pub gateway_key: XOnlyPublicKey,
     /// Block height at which the money will be spendable by the pubkey
     pub timelock: u32,
     /// Public key of the user that can claim the money back after the timelock expires
-    pub user_key: secp256k1::XOnlyPublicKey,
+    pub user_key: XOnlyPublicKey,
     // FIXME: use pruned, privacy friendly version without description etc.
     /// Invoice containing metadata on how to obtain the preimage
     pub invoice: String,

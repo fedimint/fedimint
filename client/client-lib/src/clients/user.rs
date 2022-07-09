@@ -5,9 +5,10 @@ use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
 use crate::{api, OwnedClientContext};
+use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::key::KeyPair;
 use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
@@ -25,7 +26,6 @@ use minimint_core::modules::mint::BlindToken;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use minimint_core::transaction::{Input, Output, TransactionItem};
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::{All, Secp256k1};
 use std::time::Duration;
 use thiserror::Error;
 
@@ -338,7 +338,7 @@ impl UserClient {
     ) -> Result<(KeyPair, UnconfirmedInvoice), ClientError> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
-        let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
+        let payment_hash = sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
 
         // Temporary lightning node pubkey

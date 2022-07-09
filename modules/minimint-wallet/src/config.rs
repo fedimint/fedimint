@@ -1,5 +1,6 @@
 use crate::keys::CompressedPublicKey;
 use crate::{Feerate, PegInDescriptor};
+use bitcoin::secp256k1::{SecretKey, Secp256k1};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use minimint_api::config::GenerateConfig;
@@ -13,7 +14,7 @@ pub struct WalletConfig {
     pub network: Network,
     pub peg_in_descriptor: PegInDescriptor,
     pub peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey>,
-    pub peg_in_key: secp256k1::SecretKey,
+    pub peg_in_key: SecretKey,
     pub finalty_delay: u32,
     pub default_fee: Feerate,
     pub btc_rpc_address: String,
@@ -37,7 +38,7 @@ impl GenerateConfig for WalletConfig {
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let secp = secp256k1::Secp256k1::new();
+        let secp = Secp256k1::new();
 
         let btc_pegin_keys = peers
             .iter()

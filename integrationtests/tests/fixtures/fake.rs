@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use bitcoin::hash_types::Txid;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{PublicKey, SecretKey};
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
     secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, Transaction, TxOut,
@@ -18,6 +18,7 @@ use minimint_api::Amount;
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::Feerate;
+use miniscript::ToPublicKey;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
@@ -172,10 +173,10 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     fn get_new_address(&self) -> Address {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = Secp256k1::new();
         let (_, public_key) = ctx.generate_keypair(&mut OsRng::new().unwrap());
-
-        Address::p2wpkh(&bitcoin::PublicKey::new(public_key), Network::Regtest).unwrap()
+        let public_key = public_key.to_public_key();
+        Address::p2wpkh(&public_key, Network::Regtest).unwrap()
     }
 
     fn mine_block_and_get_received(&self, address: &Address) -> Amount {

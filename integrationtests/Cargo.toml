@@ -20,6 +20,7 @@ minimint-api = { path = "../minimint-api" }
 minimint-ln = { path = "../modules/minimint-ln" }
 minimint-mint = { path = "../modules/minimint-mint" }
 minimint-wallet = { path = "../modules/minimint-wallet" }
+miniscript = { version = "7.0.0", features = [ "compiler", "use-serde" ] }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6.5"
 serde = { version = "1.0.118", features = [ "derive" ] }

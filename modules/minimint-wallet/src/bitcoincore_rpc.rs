@@ -3,13 +3,13 @@ use crate::{bitcoind::BitcoindRpc, Feerate};
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::{Auth, RpcApi, Client};
 use tracing::warn;
 
 pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
     move || -> Box<dyn BitcoindRpc> {
         Box::new(
-            bitcoincore_rpc::Client::new(
+            Client::new(
                 &cfg.btc_rpc_address,
                 Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
             )
@@ -19,7 +19,7 @@ pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
 }
 
 #[async_trait]
-impl BitcoindRpc for bitcoincore_rpc::Client {
+impl BitcoindRpc for Client {
     async fn get_network(&self) -> Network {
         let network = minimint_api::task::block_in_place(|| self.get_blockchain_info())
             .expect("Bitcoind returned an error");
@@ -37,12 +37,12 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
     }
 
     async fn get_block_hash(&self, height: u64) -> BlockHash {
-        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block_hash(self, height))
+        minimint_api::task::block_in_place(|| RpcApi::get_block_hash(self, height))
             .expect("Bitcoind returned an error")
     }
 
     async fn get_block(&self, hash: &BlockHash) -> Block {
-        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block(self, hash))
+        minimint_api::task::block_in_place(|| RpcApi::get_block(self, hash))
             .expect("Bitcoind returned an error")
     }
 

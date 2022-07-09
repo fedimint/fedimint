@@ -15,8 +15,8 @@ use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
-use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
-use bitcoin::secp256k1::{All, Secp256k1};
+use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
+use bitcoin::secp256k1::{ecdsa, All, Message, PublicKey, Secp256k1, SecretKey, self};
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
@@ -34,9 +34,8 @@ use minimint_api::module::ApiEndpoint;
 use minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use minimint_derive::UnzipConsensus;
 use miniscript::psbt::PsbtExt;
-use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+use miniscript::{Descriptor, DescriptorTrait, ToPublicKey, TranslatePk2};
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use std::ops::Sub;
 
@@ -83,7 +82,7 @@ pub struct RoundConsensusItem {
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PegOutSignatureItem {
     pub txid: Txid,
-    pub signature: Vec<secp256k1::ecdsa::Signature>,
+    pub signature: Vec<ecdsa::Signature>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -133,8 +132,8 @@ pub struct UnsignedTransaction {
 
 struct StatelessWallet<'a> {
     descriptor: &'a Descriptor<CompressedPublicKey>,
-    secret_key: &'a secp256k1::SecretKey,
-    secp: &'a secp256k1::Secp256k1<secp256k1::All>,
+    secret_key: &'a SecretKey,
+    secp: &'a Secp256k1<All>,
 }
 
 #[derive(
@@ -430,7 +429,7 @@ impl FederationModule for Wallet {
 
                     // We drop SIGHASH_ALL, because we always use that and it is only present in the
                     // PSBT for compatibility with other tools.
-                    secp256k1::ecdsa::Signature::from_der(&sig.to_vec()[..sig.to_vec().len() - 1])
+                    ecdsa::Signature::from_der(&sig.to_vec()[..sig.to_vec().len() - 1])
                         .expect("we serialized it ourselves that way")
                 })
                 .collect::<Vec<_>>();
@@ -1101,7 +1100,7 @@ impl<'a> StatelessWallet<'a> {
                     .proprietary
                     .get(&proprietary_tweak_key())
                     .expect("Malformed PSBT: expected tweak");
-                let pub_key = secp256k1::PublicKey::from_secret_key(self.secp, &secret_key);
+                let pub_key = PublicKey::from_secret_key(self.secp, &secret_key);
 
                 let tweak = {
                     let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
@@ -1135,13 +1134,10 @@ impl<'a> StatelessWallet<'a> {
                 .secp
                 .sign_ecdsa(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret);
 
-            psbt_input.partial_sigs.insert(
-                bitcoin::PublicKey {
-                    compressed: true,
-                    inner: secp256k1::PublicKey::from_secret_key(self.secp, &tweaked_secret),
-                },
-                EcdsaSig::sighash_all(signature),
-            );
+            let pubkey = PublicKey::from_secret_key(self.secp, &tweaked_secret);
+            psbt_input
+                .partial_sigs
+                .insert(pubkey.to_public_key(), EcdsaSig::sighash_all(signature));
         }
     }
 
@@ -1285,11 +1281,13 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::hashes::Hash as BitcoinHash;
+    use bitcoin::secp256k1::Secp256k1;
     use bitcoin::{Address, Amount, OutPoint, TxOut};
     use miniscript::descriptor::Wsh;
     use miniscript::policy::Concrete;
     use miniscript::psbt::PsbtExt;
     use miniscript::{Descriptor, DescriptorTrait, Segwitv0};
+    use rand::rngs::OsRng;
 
     use crate::db::UTXOKey;
     use crate::keys::CompressedPublicKey;
@@ -1302,8 +1300,8 @@ mod tests {
     fn sign_tx() {
         const CHANGE_TWEAK: [u8; 32] = [42u8; 32];
 
-        let ctx = secp256k1::Secp256k1::new();
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let ctx = Secp256k1::new();
+        let mut rng = OsRng::new().unwrap();
         let (sec_key, pub_key) = ctx.generate_keypair(&mut rng);
 
         let descriptor = Descriptor::Wsh(

@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use async_trait::async_trait;
-use cln_rpc::model::requests::PayRequest;
+use cln_rpc::{model::requests::PayRequest, ClnRpc, Request, Response, RpcError};
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
@@ -20,7 +20,7 @@ pub trait LnRpc: Send + Sync + 'static {
 pub struct LightningError(Option<i32>);
 
 #[async_trait]
-impl LnRpc for Mutex<cln_rpc::ClnRpc> {
+impl LnRpc for Mutex<ClnRpc> {
     #[instrument(name = "LnRpc::pay", skip(self))]
     async fn pay(
         &self,
@@ -33,7 +33,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         let pay_result = self
             .lock()
             .await
-            .call(cln_rpc::Request::Pay(PayRequest {
+            .call(Request::Pay(PayRequest {
                 bolt11: invoice.to_string(),
                 msatoshi: None,
                 label: None,
@@ -50,12 +50,12 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
             .await;
 
         match pay_result {
-            Ok(cln_rpc::Response::Pay(pay_success)) => {
+            Ok(Response::Pay(pay_success)) => {
                 debug!("Successfully paid invoice");
                 Ok(pay_success.payment_preimage.to_vec().try_into().unwrap())
             }
             Ok(_) => unreachable!("unexpected response from C-lightning"),
-            Err(cln_rpc::RpcError { code, message }) => {
+            Err(RpcError { code, message }) => {
                 if let Some(code) = code {
                     debug!(%code, %message, "c-lightning pay returned error");
                 } else {

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use bitcoin_hashes::sha256;
 use futures::StreamExt;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
@@ -29,7 +29,7 @@ pub trait FederationApi: Send + Sync {
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount>;
 
     /// Fetch preimage offer for incoming lightning payments
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer>;
+    async fn fetch_offer(&self, payment_hash: sha256::Hash) -> Result<IncomingContractOffer>;
 
     /// Fetch the current consensus block height (trailing actual block height)
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
@@ -134,7 +134,7 @@ impl<C: ClientT + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request("/wallet/block_height", ()).await
     }
 
-    async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
+    async fn fetch_offer(&self, payment_hash: sha256::Hash) -> Result<IncomingContractOffer> {
         self.request("/ln/offer", payment_hash).await
     }
 }

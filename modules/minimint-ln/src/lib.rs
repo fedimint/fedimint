@@ -25,7 +25,7 @@ use crate::db::{
     ProposeDecryptionShareKeyPrefix,
 };
 use async_trait::async_trait;
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash};
 use itertools::Itertools;
 
 use minimint_api::db::batch::{BatchItem, BatchTx};
@@ -37,6 +37,7 @@ use minimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
+use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
@@ -465,8 +466,8 @@ impl FederationModule for LightningModule {
 
             let decrypted_preimage = if preimage.len() != 32 {
                 DecryptedPreimage::Invalid
-            } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
-                if let Ok(preimage_key) = secp256k1::XOnlyPublicKey::from_slice(&preimage) {
+            } else if incoming_contract.hash == sha256::Hash::hash(&preimage) {
+                if let Ok(preimage_key) = XOnlyPublicKey::from_slice(&preimage) {
                     DecryptedPreimage::Some(crate::contracts::incoming::Preimage(preimage_key))
                 } else {
                     DecryptedPreimage::Invalid
@@ -548,7 +549,7 @@ impl FederationModule for LightningModule {
             },
             api_endpoint! {
                 "/offer",
-                async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                async |module: &LightningModule, payment_hash: sha256::Hash| -> IncomingContractOffer {
                 let offer = module
                     .get_offer(payment_hash)
                     .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
@@ -578,10 +579,7 @@ impl LightningModule {
             .verify_decryption_share(&share.0, &message.0)
     }
 
-    pub fn get_offer(
-        &self,
-        payment_hash: bitcoin_hashes::sha256::Hash,
-    ) -> Option<IncomingContractOffer> {
+    pub fn get_offer(&self, payment_hash: sha256::Hash) -> Option<IncomingContractOffer> {
         self.db
             .get_value(&OfferKey(payment_hash))
             .expect("DB error")
@@ -635,5 +633,5 @@ pub enum LightningModuleError {
     )]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
-    NoOffer(secp256k1::hashes::sha256::Hash),
+    NoOffer(sha256::Hash),
 }

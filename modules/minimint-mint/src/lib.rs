@@ -15,6 +15,7 @@ use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+use secp256k1_zkp::XOnlyPublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -76,7 +77,7 @@ pub struct Coin(pub CoinNonce, pub tbs::Signature);
 /// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
 /// spent coin's spending keys to avoid mint frontrunning.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct CoinNonce(pub secp256k1_zkp::XOnlyPublicKey);
+pub struct CoinNonce(pub XOnlyPublicKey);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindToken(pub tbs::BlindedMessage);
@@ -630,7 +631,7 @@ impl Coin {
     }
 
     /// Access the nonce as the public key to the spend key
-    pub fn spend_key(&self) -> &secp256k1_zkp::XOnlyPublicKey {
+    pub fn spend_key(&self) -> &XOnlyPublicKey {
         &self.0 .0
     }
 }

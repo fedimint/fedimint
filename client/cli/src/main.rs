@@ -8,6 +8,7 @@ use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
 use mint_client::{ClientAndGatewayConfig, UserClient};
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -84,7 +85,7 @@ async fn main() {
         .open_tree("mint-client")
         .unwrap();
 
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let mut rng = OsRng::new().unwrap();
 
     let client = UserClient::new(cfg.client, Box::new(db), Default::default()).await;
 

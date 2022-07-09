@@ -7,6 +7,7 @@ pub mod wallet;
 
 use crate::api::FederationApi;
 use crate::ln::gateway::LightningGateway;
+use bitcoin::secp256k1::{All, Secp256k1};
 pub use clients::user::UserClient;
 use minimint_api::db::Database;
 use minimint_core::config::ClientConfig;
@@ -16,14 +17,14 @@ pub struct BorrowedClientContext<'a, C> {
     config: &'a C,
     db: &'a dyn Database,
     api: &'a dyn FederationApi,
-    secp: &'a secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+    secp: &'a Secp256k1<All>,
 }
 
 struct OwnedClientContext<C> {
     config: C,
     db: Box<dyn Database>,
     api: Box<dyn FederationApi>,
-    secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+    secp: Secp256k1<All>,
 }
 
 impl<CO> OwnedClientContext<CO> {

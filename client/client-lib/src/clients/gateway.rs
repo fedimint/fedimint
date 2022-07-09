@@ -21,6 +21,7 @@ use minimint_core::modules::ln::contracts::{
 use minimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput};
 use minimint_core::transaction::Input;
 use rand::{CryptoRng, RngCore};
+use bitcoin::secp256k1::{KeyPair, Secp256k1, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -32,7 +33,7 @@ pub struct GatewayClient {
 pub struct GatewayClientConfig {
     pub common: ClientConfig,
     #[serde(with = "serde_keypair")]
-    pub redeem_key: bitcoin::KeyPair,
+    pub redeem_key: KeyPair,
     pub timelock_delta: u64,
 }
 
@@ -72,7 +73,7 @@ impl GatewayClient {
                 config,
                 db,
                 api,
-                secp: secp256k1_zkp::Secp256k1::new(),
+                secp: Secp256k1::new(),
             },
         }
     }
@@ -108,8 +109,7 @@ impl GatewayClient {
         &self,
         account: &OutgoingContractAccount,
     ) -> Result<PaymentParameters> {
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
 
         if account.contract.gateway_key != our_pub_key {
             return Err(GatewayClientError::NotOurKey);
@@ -223,7 +223,7 @@ impl GatewayClient {
 
     pub async fn buy_preimage_offer(
         &self,
-        payment_hash: &bitcoin_hashes::sha256::Hash,
+        payment_hash: &bitcoin::hashes::sha256::Hash,
         amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
     ) -> Result<(minimint_api::TransactionId, ContractId)> {
@@ -241,8 +241,7 @@ impl GatewayClient {
             .create_coin_input(batch.transaction(), offer.amount)?;
 
         // Outputs
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
         let contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -441,8 +440,7 @@ mod db {
 }
 
 pub mod serde_keypair {
-    use bitcoin::KeyPair;
-    use secp256k1_zkp::SecretKey;
+    use bitcoin::secp256k1::{KeyPair, SecretKey, SECP256K1};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     #[allow(missing_docs)]
@@ -460,9 +458,6 @@ pub mod serde_keypair {
     {
         let secret_key = SecretKey::deserialize(deserializer)?;
 
-        Ok(KeyPair::from_secret_key(
-            secp256k1_zkp::SECP256K1,
-            secret_key,
-        ))
+        Ok(KeyPair::from_secret_key(SECP256K1, secret_key))
     }
 }

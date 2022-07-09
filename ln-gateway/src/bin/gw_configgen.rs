@@ -5,7 +5,7 @@ use mint_client::clients::gateway::GatewayClientConfig;
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::ClientAndGatewayConfig;
 use rand::thread_rng;
-use secp256k1::{KeyPair, PublicKey};
+use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -22,7 +22,7 @@ fn main() {
         load_from_file(&federation_client_cfg_path);
 
     let mut rng = thread_rng();
-    let ctx = secp256k1::Secp256k1::new();
+    let ctx = Secp256k1::new();
 
     let kp = KeyPair::new(&ctx, &mut rng);
 

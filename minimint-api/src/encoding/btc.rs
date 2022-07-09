@@ -1,5 +1,5 @@
 use crate::encoding::{Decodable, DecodeError, Encodable};
-use bitcoin::hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash};
 use std::io::Error;
 
 macro_rules! impl_encode_decode_bridge {
@@ -65,34 +65,31 @@ impl Decodable for bitcoin::Address {
     }
 }
 
-impl Encodable for bitcoin::hashes::sha256::Hash {
+impl Encodable for sha256::Hash {
     fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
         self.into_inner().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin::hashes::sha256::Hash {
+impl Decodable for sha256::Hash {
     fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
-        Ok(bitcoin::hashes::sha256::Hash::from_inner(
-            Decodable::consensus_decode(d)?,
-        ))
+        Ok(sha256::Hash::from_inner(Decodable::consensus_decode(d)?))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::encoding::{Decodable, Encodable};
-    use bitcoin::hashes::Hash as BitcoinHash;
+    use bitcoin_hashes::{sha256, Hash};
     use std::io::Cursor;
     use std::str::FromStr;
 
     #[test_log::test]
     fn sha256_roundtrip() {
-        let hash = bitcoin::hashes::sha256::Hash::hash(b"Hello world!");
+        let hash = sha256::Hash::hash(b"Hello world!");
         let mut encoded = Vec::new();
         hash.consensus_encode(&mut encoded).unwrap();
-        let hash_decoded =
-            bitcoin::hashes::sha256::Hash::consensus_decode(Cursor::new(encoded)).unwrap();
+        let hash_decoded = sha256::Hash::consensus_decode(Cursor::new(encoded)).unwrap();
         assert_eq!(hash, hash_decoded);
     }
 

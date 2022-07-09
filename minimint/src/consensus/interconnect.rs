@@ -5,7 +5,7 @@ use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiError;
 use minimint_api::FederationModule;
 use rand::CryptoRng;
-use secp256k1_zkp::rand::RngCore;
+use secp256k1::rand::RngCore;
 use serde_json::Value;
 
 pub struct MinimintInterconnect<'a, R: RngCore + CryptoRng> {

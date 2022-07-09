@@ -1,6 +1,6 @@
 use crate::config::FeeConsensus;
 use bitcoin::hashes::Hash as BitcoinHash;
-use bitcoin::XOnlyPublicKey;
+use bitcoin::secp256k1::XOnlyPublicKey;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, FederationModule, TransactionId};
 use rand::Rng;

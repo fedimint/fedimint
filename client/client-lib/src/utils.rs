@@ -1,4 +1,5 @@
 use crate::mint::SpendableCoin;
+use bitcoin::Denomination::Satoshi;
 use minimint_api::encoding::Decodable;
 use minimint_core::modules::mint::tiered::coins::Coins;
 
@@ -20,5 +21,5 @@ pub fn from_hex<D: Decodable>(s: &str) -> Result<D, anyhow::Error> {
 pub fn parse_bitcoin_amount(
     s: &str,
 ) -> Result<bitcoin::Amount, bitcoin::util::amount::ParseAmountError> {
-    bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+    bitcoin::Amount::from_str_in(s, Satoshi)
 }

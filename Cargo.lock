@@ -1966,7 +1966,7 @@ dependencies = [
  "opentelemetry-jaeger",
  "rand 0.6.5",
  "rayon",
- "secp256k1-zkp",
+ "secp256k1",
  "serde",
  "serde_json",
  "sha3",
@@ -1995,7 +1995,6 @@ dependencies = [
  "lightning-invoice",
  "minimint-derive",
  "rand 0.6.5",
- "secp256k1-zkp",
  "serde",
  "serde_json",
  "sled",
@@ -2110,6 +2109,7 @@ dependencies = [
  "minimint-ln",
  "minimint-mint",
  "minimint-wallet",
+ "miniscript",
  "mint-client",
  "rand 0.6.5",
  "serde",
@@ -2133,7 +2133,6 @@ dependencies = [
  "minimint-derive",
  "miniscript",
  "rand 0.6.5",
- "secp256k1",
  "serde",
  "test-log",
  "thiserror",
@@ -2184,7 +2183,6 @@ dependencies = [
  "minimint-core",
  "miniscript",
  "rand 0.6.5",
- "secp256k1-zkp",
  "serde",
  "serde_json",
  "tbs",
@@ -3155,7 +3153,6 @@ dependencies = [
  "rand 0.6.5",
  "secp256k1",
  "secp256k1-zkp-sys",
- "serde",
 ]
 
 [[package]]

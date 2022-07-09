@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::NetworkInfo;
+use minimint_core::modules::mint::Mint;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use tokio::sync::Notify;
@@ -87,7 +88,7 @@ impl MinimintServer {
         let threshold = cfg.peers.len() - cfg.max_faulty();
 
         let mint =
-            minimint_core::modules::mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
+            Mint::new(cfg.mint.clone(), threshold, database.clone());
 
         let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
             .await

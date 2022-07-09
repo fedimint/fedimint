@@ -1,6 +1,6 @@
 use crate::BorrowedClientContext;
+use bitcoin::secp256k1::{KeyPair, XOnlyPublicKey};
 use bitcoin::Address;
-use bitcoin::KeyPair;
 use db::PegInKey;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::Amount;
@@ -29,8 +29,8 @@ impl<'c> WalletClient<'c> {
         mut batch: BatchTx<'_>,
         mut rng: R,
     ) -> Address {
-        let peg_in_keypair = bitcoin::KeyPair::new(self.context.secp, &mut rng);
-        let peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&peg_in_keypair);
+        let peg_in_keypair = KeyPair::new(self.context.secp, &mut rng);
+        let peg_in_pub_key = XOnlyPublicKey::from_keypair(&peg_in_keypair);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -76,7 +76,7 @@ impl<'c> WalletClient<'c> {
             })
             .ok_or(WalletClientError::NoMatchingPegInFound)?;
         let secret_tweak_key =
-            bitcoin::KeyPair::from_seckey_slice(self.context.secp, &secret_tweak_key_bytes)
+            KeyPair::from_seckey_slice(self.context.secp, &secret_tweak_key_bytes)
                 .expect("sec key was generated and saved by us");
 
         let peg_in_proof = PegInProof::new(
@@ -102,11 +102,7 @@ impl<'c> WalletClient<'c> {
         Ok((secret_tweak_key, peg_in_proof))
     }
 
-    pub fn create_pegout_output(
-        &self,
-        amount: bitcoin::Amount,
-        recipient: bitcoin::Address,
-    ) -> PegOut {
+    pub fn create_pegout_output(&self, amount: bitcoin::Amount, recipient: Address) -> PegOut {
         PegOut { recipient, amount }
     }
 }
@@ -131,6 +127,8 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::Address;
 
+    use bitcoin::secp256k1::Secp256k1;
+    use bitcoin_hashes::sha256;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{Amount, OutPoint, TransactionId};
@@ -187,7 +185,7 @@ mod tests {
 
         async fn fetch_offer(
             &self,
-            _payment_hash: bitcoin::hashes::sha256::Hash,
+            _payment_hash: sha256::Hash,
         ) -> crate::api::Result<IncomingContractOffer> {
             unimplemented!();
         }
@@ -226,7 +224,7 @@ mod tests {
             config: fed.lock().await.client_cfg().clone(),
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
-            secp: secp256k1_zkp::Secp256k1::new(),
+            secp: Secp256k1::new(),
         };
 
         (fed, client, btc_rpc_controller)

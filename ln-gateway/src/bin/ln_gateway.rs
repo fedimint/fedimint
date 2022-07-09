@@ -2,6 +2,7 @@ use clap::Parser;
 use ln_gateway::{LnGateway, LnGatewayConfig};
 use minimint::config::load_from_file;
 use minimint::modules::ln::contracts::ContractId;
+use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tide::Response;
@@ -20,7 +21,7 @@ struct Opts {
 
 #[instrument(skip_all, err)]
 async fn pay_invoice(mut req: tide::Request<State>) -> tide::Result {
-    let rng = rand::rngs::OsRng::new().unwrap();
+    let rng = OsRng::new().unwrap();
     let contract_id: ContractId = req.body_json().await?;
     let State { ref gateway } = req.state();
 

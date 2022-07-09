@@ -1,4 +1,4 @@
-use bitcoin_hashes::Hash as BitcoinHash;
+use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};
 use minimint_ln::config::LightningModuleClientConfig;
@@ -15,12 +15,13 @@ use minimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
     OutputOutcome,
 };
-use secp256k1::KeyPair;
+use secp256k1::rand::rngs::OsRng;
+use secp256k1::{KeyPair, Secp256k1};
 use std::sync::Arc;
 
 #[test_log::test(tokio::test)]
 async fn test_account() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = OsRng::new().unwrap();
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -30,7 +31,7 @@ async fn test_account() {
     )
     .await;
 
-    let ctx = secp256k1::Secp256k1::new();
+    let ctx = Secp256k1::new();
     let kp = KeyPair::new(&ctx, &mut rng);
     let contract = Contract::Account(AccountContract {
         key: kp.public_key(),
@@ -69,7 +70,7 @@ async fn test_account() {
 
 #[test_log::test(tokio::test)]
 async fn test_outgoing() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = OsRng::new().unwrap();
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -79,11 +80,11 @@ async fn test_outgoing() {
     )
     .await;
 
-    let ctx = secp256k1::Secp256k1::new();
+    let ctx = Secp256k1::new();
     let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let preimage = [42u8; 32];
-    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
+    let hash = sha256::Hash::hash(&preimage);
 
     let contract = Contract::Outgoing(OutgoingContract {
         hash,
@@ -145,7 +146,7 @@ async fn test_outgoing() {
 
 #[test_log::test(tokio::test)]
 async fn test_incoming() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = OsRng::new().unwrap();
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -155,12 +156,12 @@ async fn test_incoming() {
     )
     .await;
 
-    let ctx = secp256k1::Secp256k1::new();
+    let ctx = Secp256k1::new();
     let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
 
     let preimage = user_pk.serialize();
-    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
+    let hash = sha256::Hash::hash(&preimage);
 
     let offer = IncomingContractOffer {
         amount: Amount::from_sat(42),

@@ -11,6 +11,8 @@ use std::time::Duration;
 
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
+use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use futures::executor::block_on;
@@ -206,10 +208,10 @@ impl GatewayTest {
     async fn new(
         ln_client: Box<dyn LnRpc>,
         client_config: ClientConfig,
-        node_pub_key: secp256k1::PublicKey,
+        node_pub_key: PublicKey,
     ) -> Self {
         let mut rng = OsRng::new().unwrap();
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
         let federation_client = GatewayClientConfig {

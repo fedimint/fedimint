@@ -1,18 +1,17 @@
 use crate::tweakable::{Contract, Tweakable};
 use bitcoin::hashes::Hash;
-use bitcoin::secp256k1::{Secp256k1, Verification};
-use bitcoin::PublicKey;
+use bitcoin::secp256k1::{PublicKey, Secp256k1, Verification};
 use miniscript::{MiniscriptKey, ToPublicKey};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct CompressedPublicKey {
-    pub key: secp256k1::PublicKey,
+    pub key: PublicKey,
 }
 
 impl CompressedPublicKey {
-    pub fn new(key: secp256k1::PublicKey) -> Self {
+    pub fn new(key: PublicKey) -> Self {
         CompressedPublicKey { key }
     }
 }
@@ -30,11 +29,8 @@ impl MiniscriptKey for CompressedPublicKey {
 }
 
 impl ToPublicKey for CompressedPublicKey {
-    fn to_public_key(&self) -> PublicKey {
-        PublicKey {
-            compressed: true,
-            inner: self.key,
-        }
+    fn to_public_key(&self) -> bitcoin::PublicKey {
+        self.key.to_public_key()
     }
 
     fn hash_to_hash160(hash: &Self::Hash) -> bitcoin::hashes::hash160::Hash {
@@ -49,11 +45,11 @@ impl std::fmt::Display for CompressedPublicKey {
 }
 
 impl FromStr for CompressedPublicKey {
-    type Err = secp256k1::Error;
+    type Err = bitcoin::secp256k1::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(CompressedPublicKey {
-            key: secp256k1::PublicKey::from_str(s)?,
+            key: PublicKey::from_str(s)?,
         })
     }
 }
@@ -66,11 +62,14 @@ impl Tweakable for CompressedPublicKey {
     }
 }
 
-impl From<CompressedPublicKey> for bitcoin::PublicKey {
+impl From<CompressedPublicKey> for PublicKey {
     fn from(key: CompressedPublicKey) -> Self {
-        bitcoin::PublicKey {
-            compressed: true,
-            inner: key.key,
-        }
+        key.key
+    }
+}
+
+impl Into<bitcoin::PublicKey> for CompressedPublicKey {
+    fn into(self) -> bitcoin::PublicKey {
+        self.key.to_public_key()
     }
 }
