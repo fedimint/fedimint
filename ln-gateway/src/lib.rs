@@ -207,13 +207,15 @@ async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc
     // TODO: also try to drive forward payments that were interrupted
     loop {
         let least_wait_until = Instant::now() + Duration::from_millis(100);
-        let active_issuances = federation_client.list_fetchable_coins();
-        if active_issuances.is_empty() {
-            minimint_api::task::sleep_until(least_wait_until).await;
-            continue;
-        }
-        if let Err(e) = federation_client.fetch_all_coins().await {
-            debug!(error = %e, "Fetching coins failed");
+        match federation_client.fetch_all_coins().await {
+            Ok(o) if o.is_empty() => {
+                minimint_api::task::sleep_until(least_wait_until).await;
+            }
+            Err(e) => {
+                debug!(error = %e, "Fetching coins failed");
+                minimint_api::task::sleep_until(least_wait_until).await;
+            }
+            _ => (),
         }
     }
 }

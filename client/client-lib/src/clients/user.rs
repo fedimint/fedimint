@@ -256,13 +256,7 @@ impl UserClient {
     }
 
     pub async fn fetch_all_coins<'a>(&self) -> Result<Vec<OutPoint>, MintClientError> {
-        let mut batch = DbBatch::new();
-        let res = self
-            .mint_client()
-            .fetch_all_coins(batch.transaction())
-            .await?;
-        self.context.db.apply_batch(batch).expect("DB error");
-        Ok(res)
+        self.mint_client().fetch_all_coins().await
     }
 
     pub fn coins(&self) -> Coins<SpendableCoin> {

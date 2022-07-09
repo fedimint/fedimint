@@ -1,11 +1,13 @@
-pub mod db;
+mod db;
 
 use crate::api::ApiError;
 use crate::clients::transaction::TransactionBuilder;
 use crate::BorrowedClientContext;
 use bitcoin::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use minimint_api::db::batch::{BatchItem, BatchTx};
+use futures::stream::FuturesUnordered;
+use futures::TryStreamExt;
+use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
 use minimint_core::modules::mint::config::MintClientConfig;
@@ -233,34 +235,33 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
-    pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<OutPoint>> {
+    pub async fn fetch_all_coins(&self) -> Result<Vec<OutPoint>> {
         let active_issuances = self.list_active_issuances();
         if active_issuances.is_empty() {
             return Ok(Vec::new());
         }
 
-        let mut out_points = vec![];
-        for (active_out_point, _) in active_issuances {
-            loop {
-                match self
-                    .fetch_coins(batch.subtransaction(), active_out_point)
-                    .await
-                {
-                    Ok(()) => {
-                        out_points.push(active_out_point);
-                        break;
+        let stream = active_issuances
+            .into_iter()
+            .map(|(out_point, _)| async move {
+                let mut batch = DbBatch::new();
+                loop {
+                    match self.fetch_coins(batch.transaction(), out_point).await {
+                        Ok(_) => {
+                            self.context.db.apply_batch(batch).expect("DB error");
+                            return Ok(out_point);
+                        }
+                        // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                        Err(e) if e.is_retryable() => {
+                            trace!("Mint returned retryable error: {:?}", e);
+                            minimint_api::task::sleep(Duration::from_secs(1)).await
+                        }
+                        Err(e) => return Err(e),
                     }
-                    // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                    Err(e) if e.is_retryable() => {
-                        trace!("Mint returned retryable error: {:?}", e);
-                        minimint_api::task::sleep(Duration::from_secs(1)).await
-                    }
-                    Err(e) => return Err(e),
                 }
-            }
-        }
-        batch.commit();
-        Ok(out_points)
+            })
+            .collect::<FuturesUnordered<_>>();
+        stream.try_collect().await
     }
 }
 
@@ -530,9 +531,7 @@ mod tests {
         });
         client_db.apply_batch(batch).unwrap();
 
-        let mut batch = DbBatch::new();
-        client.fetch_all_coins(batch.transaction()).await.unwrap();
-        client_db.apply_batch(batch).unwrap();
+        client.fetch_all_coins().await.unwrap();
     }
 
     #[test_log::test(tokio::test)]

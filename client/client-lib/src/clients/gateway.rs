@@ -346,15 +346,9 @@ impl GatewayClient {
         self.mint_client().list_active_issuances()
     }
 
-    /// Tries to fetch all active e-cash tokens by searching the DB by [`crate::mint::db::OutputFinalizationKeyPrefix`].
+    /// Tries to fetch all active e-cash tokens by searching the DB with the OutputFinalizationKeyPrefix
     pub async fn fetch_all_coins<'a>(&self) -> std::result::Result<Vec<OutPoint>, MintClientError> {
-        let mut batch = DbBatch::new();
-        let res = self
-            .mint_client()
-            .fetch_all_coins(batch.transaction())
-            .await?;
-        self.context.db.apply_batch(batch).expect("DB error");
-        Ok(res)
+        self.mint_client().fetch_all_coins().await
     }
 }
 
