@@ -18,19 +18,23 @@
 <span id="12">12</span>
 <span id="13">13</span>
 <span id="14">14</span>
-</pre><pre class="rust"><code><span class="doccomment">/// Provides an interface to call APIs of other modules</span>
+<span id="15">15</span>
+<span id="16">16</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
+
+<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::ApiError</span>;
+
+<span class="doccomment">/// Provides an interface to call APIs of other modules</span>
+<span class="attribute">#[<span class="ident">async_trait</span>]</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">ModuleInterconect</span> {
-    <span class="doccomment">/// Simulates a HTTP call to an API endpoint of another module. Unless an actual HTTP call this</span>
-    <span class="doccomment">/// should be infallible though (except for invalid requests) and has lower latency.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// **CAUTION**: does not support URL parameters yet</span>
-    <span class="kw">fn</span> <span class="ident">call</span>(
+    <span class="doccomment">/// Simulates a call to an API endpoint of another module.</span>
+    <span class="doccomment">/// This has lower latency.</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
         <span class="ident">path</span>: <span class="ident">String</span>,
-        <span class="ident">method</span>: <span class="ident">http_types::Method</span>,
         <span class="ident">data</span>: <span class="ident">serde_json::Value</span>,
-    ) -&gt; <span class="ident">http_types::Result</span><span class="op">&lt;</span><span class="ident">http_types::Response</span><span class="op">&gt;</span>;
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span><span class="op">&gt;</span>;
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (06754d885 2022-07-08)" ></div>

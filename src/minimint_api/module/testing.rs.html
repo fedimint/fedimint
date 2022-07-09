@@ -233,13 +233,13 @@
 <span id="227">227</span>
 <span id="228">228</span>
 <span id="229">229</span>
-<span id="230">230</span>
-<span id="231">231</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::GenerateConfig</span>;
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
+
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::GenerateConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::batch::DbBatch</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::mem_impl::MemDatabase</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::Database</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::http</span>;
+
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::interconnect::ModuleInterconect</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Amount</span>, <span class="ident">FederationModule</span>, <span class="ident">InputMeta</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
 <span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
@@ -247,6 +247,8 @@
 <span class="kw">use</span> <span class="ident">std::future::Future</span>;
 <span class="kw">use</span> <span class="ident">std::sync::atomic</span>::{<span class="ident">AtomicU64</span>, <span class="ident">Ordering</span>};
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+
+<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::ApiError</span>;
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FakeFed</span><span class="op">&lt;</span><span class="ident">M</span>, <span class="ident">CC</span><span class="op">&gt;</span> {
     <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">M</span>, <span class="ident">MemDatabase</span>)<span class="op">&gt;</span>,
@@ -431,39 +433,33 @@
 
 <span class="kw">struct</span> <span class="ident">FakeInterconnect</span>(
     <span class="ident">Box</span><span class="op">&lt;</span>
-        <span class="kw">dyn</span> <span class="ident">Fn</span>(
-            <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
-            <span class="ident">String</span>,
-            <span class="ident">http_types::Method</span>,
-            <span class="ident">serde_json::Value</span>,
-        ) -&gt; <span class="ident">http_types::Result</span><span class="op">&lt;</span><span class="ident">http_types::Response</span><span class="op">&gt;</span>,
+        <span class="kw">dyn</span> <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="ident">String</span>, <span class="ident">serde_json::Value</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span><span class="op">&gt;</span>
+            <span class="op">+</span> <span class="ident">Sync</span>
+            <span class="op">+</span> <span class="ident">Send</span>,
     <span class="op">&gt;</span>,
 );
 
 <span class="kw">impl</span> <span class="ident">FakeInterconnect</span> {
     <span class="kw">fn</span> <span class="ident">new_block_height_responder</span>(<span class="ident">bh</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">AtomicU64</span><span class="op">&gt;</span>) -&gt; <span class="ident">FakeInterconnect</span> {
-        <span class="ident">FakeInterconnect</span>(<span class="ident">Box::new</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">module</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">_data</span><span class="op">|</span> {
+        <span class="ident">FakeInterconnect</span>(<span class="ident">Box::new</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">module</span>, <span class="ident">path</span>, <span class="ident">_data</span><span class="op">|</span> {
             <span class="macro">assert_eq!</span>(<span class="ident">module</span>, <span class="string">&quot;wallet&quot;</span>);
             <span class="macro">assert_eq!</span>(<span class="ident">path</span>, <span class="string">&quot;/block_height&quot;</span>);
-            <span class="macro">assert_eq!</span>(<span class="ident">method</span>, <span class="ident">http::Method::Get</span>);
 
             <span class="kw">let</span> <span class="ident">height</span> <span class="op">=</span> <span class="ident">bh</span>.<span class="ident">load</span>(<span class="ident">Ordering::Relaxed</span>);
-            <span class="prelude-val">Ok</span>(<span class="ident">http::Body::from_json</span>(<span class="kw-2">&amp;</span><span class="ident">height</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;Error encoding fake block height&quot;</span>)
-                .<span class="ident">into</span>())
+            <span class="prelude-val">Ok</span>(<span class="ident">serde_json::to_value</span>(<span class="ident">height</span>).<span class="ident">expect</span>(<span class="string">&quot;encoding error&quot;</span>))
         }))
     }
 }
 
+<span class="attribute">#[<span class="ident">async_trait</span>]</span>
 <span class="kw">impl</span> <span class="ident">ModuleInterconect</span> <span class="kw">for</span> <span class="ident">FakeInterconnect</span> {
-    <span class="kw">fn</span> <span class="ident">call</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
         <span class="ident">path</span>: <span class="ident">String</span>,
-        <span class="ident">method</span>: <span class="ident">http::Method</span>,
         <span class="ident">data</span>: <span class="ident">serde_json::Value</span>,
-    ) -&gt; <span class="ident">http::Result</span><span class="op">&lt;</span><span class="ident">http::Response</span><span class="op">&gt;</span> {
-        (<span class="self">self</span>.<span class="number">0</span>)(<span class="ident">module</span>, <span class="ident">path</span>, <span class="ident">method</span>, <span class="ident">data</span>)
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span><span class="op">&gt;</span> {
+        (<span class="self">self</span>.<span class="number">0</span>)(<span class="ident">module</span>, <span class="ident">path</span>, <span class="ident">data</span>)
     }
 }
 </code></pre></div>

@@ -230,7 +230,7 @@
             <span class="ident">federation_client</span>,
             <span class="ident">ln_socket</span>,
         } <span class="op">=</span> <span class="ident">cfg</span>;
-        <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">GatewayClient::new</span>(<span class="ident">federation_client</span>, <span class="ident">db</span>);
+        <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">GatewayClient::new</span>(<span class="ident">federation_client</span>, <span class="ident">db</span>).<span class="kw">await</span>;
         <span class="kw">let</span> <span class="ident">ln_client</span> <span class="op">=</span> <span class="ident">cln_rpc::ClnRpc::new</span>(<span class="ident">ln_socket</span>)
             .<span class="kw">await</span>
             .<span class="ident">expect</span>(<span class="string">&quot;connect to ln_socket&quot;</span>);

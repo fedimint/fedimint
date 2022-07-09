@@ -3,5 +3,6 @@ implementors["configgen"] = [{"text":"impl Args for <a class=\"struct\" href=\"c
 implementors["gw_configgen"] = [{"text":"impl Args for <a class=\"struct\" href=\"gw_configgen/struct.Opts.html\" title=\"struct gw_configgen::Opts\">Opts</a>","synthetic":false,"types":["gw_configgen::Opts"]}];
 implementors["ln_gateway"] = [{"text":"impl Args for <a class=\"struct\" href=\"ln_gateway/struct.Opts.html\" title=\"struct ln_gateway::Opts\">Opts</a>","synthetic":false,"types":["ln_gateway::Opts"]}];
 implementors["mint_client_cli"] = [{"text":"impl Args for <a class=\"struct\" href=\"mint_client_cli/struct.Options.html\" title=\"struct mint_client_cli::Options\">Options</a>","synthetic":false,"types":["mint_client_cli::Options"]}];
+implementors["mint_rpc_client"] = [{"text":"impl Args for <a class=\"struct\" href=\"mint_rpc_client/struct.ApiCall.html\" title=\"struct mint_rpc_client::ApiCall\">ApiCall</a>","synthetic":false,"types":["mint_rpc_client::ApiCall"]}];
 implementors["server"] = [{"text":"impl Args for <a class=\"struct\" href=\"server/struct.ServerOpts.html\" title=\"struct server::ServerOpts\">ServerOpts</a>","synthetic":false,"types":["server::ServerOpts"]}];
 if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

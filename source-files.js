@@ -11,6 +11,7 @@ sourcesIndex["minimint_mint"] = {"name":"","dirs":[{"name":"tiered","files":["co
 sourcesIndex["minimint_wallet"] = {"name":"","files":["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]};
 sourcesIndex["mint_client"] = {"name":"","dirs":[{"name":"clients","files":["gateway.rs","mod.rs","transaction.rs","user.rs"]},{"name":"ln","files":["db.rs","gateway.rs","incoming.rs","mod.rs","outgoing.rs"]},{"name":"mint","files":["db.rs","mod.rs"]},{"name":"wallet","files":["db.rs","mod.rs"]}],"files":["api.rs","lib.rs","utils.rs"]};
 sourcesIndex["mint_client_cli"] = {"name":"","files":["main.rs"]};
+sourcesIndex["mint_rpc_client"] = {"name":"","files":["mint-rpc-client.rs"]};
 sourcesIndex["server"] = {"name":"","files":["server.rs"]};
 sourcesIndex["tbs"] = {"name":"","dirs":[{"name":"serde_impl","files":["mod.rs","scalar.rs"]}],"files":["hash.rs","lib.rs","poly.rs"]};
 createSourceSidebar();
