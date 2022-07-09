@@ -1,7 +1,6 @@
 use crate::api::{ApiError, FederationApi};
 use crate::clients::transaction::TransactionBuilder;
 use crate::ln::gateway::LightningGateway;
-use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
@@ -247,16 +246,16 @@ impl UserClient {
     /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
     /// the federation too early. Use [`MintClientError::is_retryable`] to determine
     /// if the operation should be retried at a later time.
-    pub async fn fetch_coins<'a>(&self, outpoint: OutPoint) -> Result<(), MintClientError> {
+    pub async fn fetch_coins<'a>(&self, out_point: OutPoint) -> Result<(), MintClientError> {
         let mut batch = DbBatch::new();
         self.mint_client()
-            .fetch_coins(batch.transaction(), outpoint)
+            .fetch_coins(batch.transaction(), out_point)
             .await?;
         self.context.db.apply_batch(batch).expect("DB error");
         Ok(())
     }
 
-    pub async fn fetch_all_coins<'a>(&self) -> Result<Vec<TransactionId>, MintClientError> {
+    pub async fn fetch_all_coins<'a>(&self) -> Result<Vec<OutPoint>, MintClientError> {
         let mut batch = DbBatch::new();
         let res = self
             .mint_client()

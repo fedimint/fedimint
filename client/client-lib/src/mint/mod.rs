@@ -1,9 +1,12 @@
-mod db;
+use std::time::Duration;
 
-use crate::api::ApiError;
-use crate::clients::transaction::TransactionBuilder;
-use crate::BorrowedClientContext;
 use bitcoin::KeyPair;
+use rand::{CryptoRng, Rng, RngCore};
+use secp256k1_zkp::{Secp256k1, Signing};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tracing::{debug, trace};
+
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::encoding::{Decodable, Encodable};
@@ -14,13 +17,13 @@ use minimint_core::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
 use minimint_core::transaction::{Output, Transaction};
-use rand::{CryptoRng, Rng, RngCore};
-use secp256k1_zkp::{Secp256k1, Signing};
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
-use thiserror::Error;
-use tracing::{debug, trace};
+
+use crate::api::ApiError;
+use crate::clients::transaction::TransactionBuilder;
+use crate::BorrowedClientContext;
+
+mod db;
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -33,7 +36,8 @@ pub struct MintClient<'c> {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
-    spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
+    spend_key: [u8; 32],
+    // FIXME: either make KeyPair Serializable or add secret key newtype
     /// Nonce belonging to the secret key
     nonce: CoinNonce,
     /// Key to unblind the blind signature supplied by the mint for this coin
@@ -185,11 +189,11 @@ impl<'c> MintClient<'c> {
         batch.commit();
     }
 
-    pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, outpoint: OutPoint) -> Result<()> {
+    pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, out_point: OutPoint) -> Result<()> {
         let issuance = self
             .context
             .db
-            .get_value(&OutputFinalizationKey(outpoint))
+            .get_value(&OutputFinalizationKey(out_point))
             .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
                 CoinFinalizationError::UnknownIssuance,
@@ -198,9 +202,9 @@ impl<'c> MintClient<'c> {
         let bsig = self
             .context
             .api
-            .fetch_output_outcome::<Option<SigResponse>>(outpoint)
+            .fetch_output_outcome::<Option<SigResponse>>(out_point)
             .await?
-            .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
+            .ok_or(MintClientError::OutputNotReadyYet(out_point))?;
 
         let coins = issuance.finalize(bsig, &self.context.config.tbs_pks)?;
 
@@ -216,36 +220,38 @@ impl<'c> MintClient<'c> {
                     BatchItem::insert_new(key, value)
                 }),
         );
-        batch.append_delete(OutputFinalizationKey(outpoint));
+        batch.append_delete(OutputFinalizationKey(out_point));
         batch.commit();
 
         Ok(())
     }
 
-    pub fn list_active_issuances(&self) -> Vec<OutPoint> {
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
         self.context
             .db
             .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .map(|res| res.expect("DB error").0 .0)
+            .map(|res| {
+                let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
+                (outpoint, cfd)
+            })
             .collect()
     }
 
-    // FIXME: remove
-    pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<TransactionId>> {
-        let active_issuances = self
-            .context
-            .db
-            .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .expect("DB error");
+    pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<OutPoint>> {
+        let active_issuances = self.list_active_issuances();
+        if active_issuances.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        // TODO: return out points instead
-        let mut tx_ids = vec![];
-        for (OutputFinalizationKey(out_point), _) in active_issuances {
+        let mut out_points = vec![];
+        for (active_out_point, _) in active_issuances {
             loop {
-                match self.fetch_coins(batch.subtransaction(), out_point).await {
+                match self
+                    .fetch_coins(batch.subtransaction(), active_out_point)
+                    .await
+                {
                     Ok(()) => {
-                        tx_ids.push(out_point.txid);
+                        out_points.push(active_out_point);
                         break;
                     }
                     // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
@@ -258,7 +264,7 @@ impl<'c> MintClient<'c> {
             }
         }
         batch.commit();
-        Ok(tx_ids)
+        Ok(out_points)
     }
 }
 
@@ -410,13 +416,12 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::FederationApi;
+    use std::sync::Arc;
 
-    use crate::mint::MintClient;
-    use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use futures::executor::block_on;
+
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::db::Database;
@@ -429,7 +434,10 @@ mod tests {
     use minimint_core::modules::mint::Mint;
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;
-    use std::sync::Arc;
+
+    use crate::api::FederationApi;
+    use crate::mint::MintClient;
+    use crate::OwnedClientContext;
 
     type Fed = FakeFed<Mint, MintClientConfig>;
 

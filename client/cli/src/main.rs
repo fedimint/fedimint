@@ -1,6 +1,13 @@
+use std::path::PathBuf;
+use std::time::Duration;
+
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
+use serde::{Deserialize, Serialize};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
+
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
@@ -8,11 +15,6 @@ use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
 use mint_client::{ClientAndGatewayConfig, UserClient};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::time::Duration;
-use tracing::{error, info};
-use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
 struct Options {
@@ -127,8 +129,8 @@ async fn main() {
             };
         }
         Command::Fetch => {
-            for id in client.fetch_all_coins().await.unwrap() {
-                info!(issuance = %id.to_hex(), "Fetched coins");
+            for out_point in client.fetch_all_coins().await.unwrap() {
+                info!(issuance = %out_point.txid.to_hex(), "Fetched coins");
             }
         }
         Command::Info => {

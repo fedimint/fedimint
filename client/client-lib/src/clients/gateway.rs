@@ -1,15 +1,10 @@
 use std::time::Duration;
 
-use crate::api::{ApiError, FederationApi};
-use crate::clients::gateway::db::{
-    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
-};
-use crate::clients::transaction::TransactionBuilder;
-use crate::ln::outgoing::OutgoingContractAccount;
-use crate::ln::{LnClient, LnClientError};
-use crate::mint::{MintClient, MintClientError};
-use crate::{api, OwnedClientContext};
 use lightning_invoice::Invoice;
+use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
 use minimint_api::db::batch::DbBatch;
 use minimint_api::db::Database;
 use minimint_api::{Amount, OutPoint, PeerId, TransactionId};
@@ -20,9 +15,16 @@ use minimint_core::modules::ln::contracts::{
 };
 use minimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput};
 use minimint_core::transaction::Input;
-use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+use crate::api::{ApiError, FederationApi};
+use crate::clients::gateway::db::{
+    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
+};
+use crate::clients::transaction::TransactionBuilder;
+use crate::ln::outgoing::OutgoingContractAccount;
+use crate::ln::{LnClient, LnClientError};
+use crate::mint::{CoinFinalizationData, MintClient, MintClientError};
+use crate::{api, OwnedClientContext};
 
 pub struct GatewayClient {
     context: OwnedClientContext<GatewayClientConfig>,
@@ -342,7 +344,7 @@ impl GatewayClient {
         Ok(())
     }
 
-    pub fn list_fetchable_coins(&self) -> Vec<OutPoint> {
+    pub fn list_fetchable_coins(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
         self.mint_client().list_active_issuances()
     }
 
@@ -397,11 +399,12 @@ pub enum GatewayClientError {
 }
 
 mod db {
-    use crate::ln::outgoing::OutgoingContractAccount;
     use minimint_api::db::DatabaseKeyPrefixConst;
     use minimint_api::encoding::{Decodable, Encodable};
     use minimint_core::modules::ln::contracts::ContractId;
     use minimint_core::transaction::Transaction;
+
+    use crate::ln::outgoing::OutgoingContractAccount;
 
     const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x50;
     const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x51;
