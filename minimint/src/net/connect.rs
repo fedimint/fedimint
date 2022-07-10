@@ -1,6 +1,7 @@
 //! Provides an abstract network connection interface and multiple implementations
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::Stream;
 use minimint_api::PeerId;
@@ -30,7 +31,7 @@ pub type ConnectionListener<M> =
 #[async_trait]
 pub trait Connector<M> {
     /// Connect to a `destination`
-    async fn connect_framed(&self, destination: String) -> ConnectResult<M>;
+    async fn connect_framed(&self, destination: String, peer: PeerId) -> ConnectResult<M>;
 
     /// Listen for incoming connections on `bind_addr`
     async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error>;
@@ -60,10 +61,18 @@ impl<M> Connector<M> for InsecureTcpConnector
 where
     M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
 {
-    async fn connect_framed(&self, destination: String) -> ConnectResult<M> {
+    async fn connect_framed(&self, destination: String, peer: PeerId) -> ConnectResult<M> {
         let mut connection = TcpStream::connect(destination).await?;
-        let peer = do_handshake(self.our_id, &mut connection).await?;
-        Ok((peer, Box::new(BidiFramed::new_from_tcp(connection))))
+        let handshake_peer = do_handshake(self.our_id, &mut connection).await?;
+
+        if handshake_peer != peer {
+            return Err(anyhow!("Got wrong peer id in handshake"));
+        }
+
+        Ok((
+            handshake_peer,
+            Box::new(BidiFramed::new_from_tcp(connection)),
+        ))
     }
 
     async fn listen(
@@ -154,7 +163,7 @@ pub mod mock {
     where
         M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
     {
-        async fn connect_framed(&self, destination: String) -> ConnectResult<M> {
+        async fn connect_framed(&self, destination: String, _peer: PeerId) -> ConnectResult<M> {
             let mut clients_lock = self.clients.lock().await;
             if let Some(client) = clients_lock.get_mut(&destination) {
                 let (mut stream_our, stream_theirs) = tokio::io::duplex(43_689);
@@ -211,9 +220,10 @@ pub mod mock {
         let mut listener = Connector::<u64>::listen(&conn_a, "a".into()).await.unwrap();
         let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
 
-        let (auth_peer_b, mut conn_b) = Connector::<u64>::connect_framed(&conn_b, "a".into())
-            .await
-            .unwrap();
+        let (auth_peer_b, mut conn_b) =
+            Connector::<u64>::connect_framed(&conn_b, "a".into(), peer_a)
+                .await
+                .unwrap();
         let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
 
         assert_eq!(auth_peer_a, peer_b);
@@ -248,9 +258,10 @@ pub mod mock {
             .unwrap();
         let conn_a_fut = tokio::spawn(async move { listener.next().await.unwrap().unwrap() });
 
-        let (auth_peer_b, mut conn_b) = Connector::<Vec<u8>>::connect_framed(&conn_b, "a".into())
-            .await
-            .unwrap();
+        let (auth_peer_b, mut conn_b) =
+            Connector::<Vec<u8>>::connect_framed(&conn_b, "a".into(), peer_a)
+                .await
+                .unwrap();
         let (auth_peer_a, mut conn_a) = conn_a_fut.await.unwrap();
 
         assert_eq!(auth_peer_a, peer_b);

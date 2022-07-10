@@ -495,7 +495,7 @@ where
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
         debug!("Trying to reconnect");
         let addr = &self.cfg.addr;
-        let (connected_peer, conn) = self.connect.connect_framed(addr.clone()).await?;
+        let (connected_peer, conn) = self.connect.connect_framed(addr.clone(), self.peer).await?;
 
         if connected_peer == self.peer {
             Ok(conn)
