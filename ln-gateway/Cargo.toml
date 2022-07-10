@@ -9,6 +9,7 @@ edition = "2018"
 async-std = { version = "1.6.0", features = ["attributes", "tokio1"] }
 async-trait = "0.1.52"
 bitcoin_hashes = "0.10.0"
+bitcoin = { version = "0.28.1", features = ["serde", "use-serde"] }
 cln-rpc = "0.1"
 cln-plugin = "0.1"
 futures = "0.3.21"

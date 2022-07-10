@@ -3,13 +3,19 @@ pub mod ln;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
+use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
+use futures::Future;
 use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-use minimint_api::{Amount, OutPoint};
+use minimint::modules::wallet::txoproof::TxOutProof;
+use minimint_api::{Amount, OutPoint, TransactionId};
+use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient};
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Deserializer};
 use std::{
+    io::Cursor,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -19,12 +25,89 @@ use tracing::{debug, error, instrument, warn};
 use webserver::run_webserver;
 
 #[derive(Debug)]
+pub struct BalancePayload;
+
+#[derive(Debug)]
+pub struct DepositAddressPayload;
+
+#[derive(Debug, Deserialize)]
+pub struct DepositPayload(
+    TxOutProof,
+    #[serde(deserialize_with = "serde_hex_deserialize")] Transaction,
+);
+
+#[derive(Debug, Deserialize)]
+pub struct WithdrawPayload(
+    Address,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount,
+);
+
+#[derive(Debug)]
 pub enum GatewayRequest {
-    HtlcAccepted(
-        HtlcAccepted,
-        oneshot::Sender<Result<Preimage, LnGatewayError>>,
-    ),
-    PayInvoice(ContractId, oneshot::Sender<Result<(), LnGatewayError>>),
+    HtlcAccepted(GatewayRequestInner<HtlcAccepted>),
+    PayInvoice(GatewayRequestInner<ContractId>),
+    Balance(GatewayRequestInner<BalancePayload>),
+    DepositAddress(GatewayRequestInner<DepositAddressPayload>),
+    Deposit(GatewayRequestInner<DepositPayload>),
+    Withdraw(GatewayRequestInner<WithdrawPayload>),
+}
+
+#[derive(Debug)]
+pub struct GatewayRequestInner<R: GatewayRequestTrait> {
+    request: R,
+    sender: oneshot::Sender<Result<R::Response, LnGatewayError>>,
+}
+
+pub trait GatewayRequestTrait {
+    type Response;
+
+    fn to_enum(
+        self,
+        sender: oneshot::Sender<Result<Self::Response, LnGatewayError>>,
+    ) -> GatewayRequest;
+}
+
+macro_rules! impl_gateway_request_trait {
+    ($req:ty, $res:ty, $variant:expr) => {
+        impl GatewayRequestTrait for $req {
+            type Response = $res;
+            fn to_enum(
+                self,
+                sender: oneshot::Sender<Result<Self::Response, LnGatewayError>>,
+            ) -> GatewayRequest {
+                $variant(GatewayRequestInner {
+                    request: self,
+                    sender,
+                })
+            }
+        }
+    };
+}
+impl_gateway_request_trait!(HtlcAccepted, Preimage, GatewayRequest::HtlcAccepted);
+impl_gateway_request_trait!(ContractId, (), GatewayRequest::PayInvoice);
+impl_gateway_request_trait!(BalancePayload, Amount, GatewayRequest::Balance);
+impl_gateway_request_trait!(
+    DepositAddressPayload,
+    Address,
+    GatewayRequest::DepositAddress
+);
+impl_gateway_request_trait!(DepositPayload, TransactionId, GatewayRequest::Deposit);
+impl_gateway_request_trait!(WithdrawPayload, TransactionId, GatewayRequest::Withdraw);
+
+impl<T> GatewayRequestInner<T>
+where
+    T: GatewayRequestTrait,
+    T::Response: std::fmt::Debug,
+{
+    async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response, LnGatewayError>>>(
+        self,
+        handler: F,
+    ) {
+        let result = handler(self.request).await;
+        self.sender
+            .send(result)
+            .expect("couldn't send over channel");
+    }
 }
 
 pub struct LnGateway {
@@ -166,37 +249,74 @@ impl LnGateway {
         Ok(preimage)
     }
 
+    async fn handle_balance_msg(&self) -> Result<Amount, LnGatewayError> {
+        self.federation_client.fetch_all_coins().await?;
+        Ok(self.federation_client.coins().amount())
+    }
+    async fn handle_address_msg(&self) -> Result<Address, LnGatewayError> {
+        let mut rng = rand::rngs::OsRng::new().unwrap();
+        Ok(self.federation_client.get_new_pegin_address(&mut rng))
+    }
+
+    async fn handle_deposit_msg(
+        &self,
+        deposit: DepositPayload,
+    ) -> Result<TransactionId, LnGatewayError> {
+        let rng = rand::rngs::OsRng::new().unwrap();
+        self.federation_client
+            .peg_in(deposit.0, deposit.1, rng)
+            .await
+            .map_err(LnGatewayError::ClientError)
+    }
+
+    async fn handle_withdraw_msg(
+        &self,
+        withdraw: WithdrawPayload,
+    ) -> Result<TransactionId, LnGatewayError> {
+        let rng = rand::rngs::OsRng::new().unwrap();
+        self.federation_client
+            .peg_out(withdraw.1, withdraw.0, rng)
+            .await
+            .map_err(LnGatewayError::ClientError)
+    }
+
     pub async fn run(&mut self) -> Result<(), LnGatewayError> {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
-            let pending_fetches = self
-                .federation_client
-                .list_fetchable_coins()
-                .into_iter()
-                .map(|out_point| {
-                    // TODO: get rid of cloning
-                    let federation_client = self.federation_client.clone();
-                    async move {
-                        if let Err(e) = federation_client.fetch_coins(out_point).await {
-                            debug!(error = %e, "Fetching coins failed");
-                        }
-                    }
-                })
-                .collect::<Vec<_>>();
-            futures::future::join_all(pending_fetches).await;
+            if let Err(e) = self.federation_client.fetch_all_coins().await {
+                debug!(error = %e, "Fetching coins failed")
+            };
 
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::HtlcAccepted(htlc_accepted, sender) => {
-                        let result = self.handle_htlc_incoming_msg(htlc_accepted).await;
-                        sender.send(result).expect("couldn't send over channel");
+                    GatewayRequest::HtlcAccepted(inner) => {
+                        inner
+                            .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
+                            .await;
                     }
-                    GatewayRequest::PayInvoice(contract_id, sender) => {
-                        let result = self.handle_pay_invoice_msg(contract_id).await;
-                        sender.send(result).expect("couldn't send over channel");
+                    GatewayRequest::PayInvoice(inner) => {
+                        inner
+                            .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
+                            .await;
+                    }
+                    GatewayRequest::Balance(inner) => {
+                        inner.handle(|_| self.handle_balance_msg()).await;
+                    }
+                    GatewayRequest::DepositAddress(inner) => {
+                        inner.handle(|_| self.handle_address_msg()).await;
+                    }
+                    GatewayRequest::Deposit(inner) => {
+                        inner
+                            .handle(|deposit| self.handle_deposit_msg(deposit))
+                            .await;
+                    }
+                    GatewayRequest::Withdraw(inner) => {
+                        inner
+                            .handle(|withdraw| self.handle_withdraw_msg(withdraw))
+                            .await;
                     }
                 }
             }
@@ -219,4 +339,21 @@ pub enum LnGatewayError {
     ClientError(#[from] ClientError),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
+    #[error("Mint client error: {0:?}")]
+    MintClientE(#[from] MintClientError),
+}
+
+pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
+    d: D,
+) -> Result<T, D::Error> {
+    if d.is_human_readable() {
+        let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
+            .map_err(serde::de::Error::custom)?;
+        T::consensus_decode(Cursor::new(&bytes))
+            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    } else {
+        let bytes: Vec<u8> = Deserialize::deserialize(d)?;
+        T::consensus_decode(Cursor::new(&bytes))
+            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    }
 }
