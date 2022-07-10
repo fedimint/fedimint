@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use futures::StreamExt;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
+use minimint_api::task::{RwLock, RwLockWriteGuard};
 use minimint_api::{OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use minimint_core::modules::ln::contracts::ContractId;
@@ -11,6 +11,13 @@ use minimint_core::modules::ln::ContractAccount;
 use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use minimint_core::transaction::Transaction;
 use minimint_core::CoreError;
+use tracing::{error, instrument, warn};
+
+#[cfg(not(target_family = "wasm"))]
+use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+
+#[cfg(target_family = "wasm")]
+use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
 use std::time::Duration;
 use thiserror::Error;
@@ -76,13 +83,20 @@ impl<'a> dyn FederationApi + 'a {
     }
 }
 
-#[derive(Debug, Clone)]
 /// Mint API client that will try to run queries against all `members` expecting equal
 /// results from at least `min_eq_results` of them. Members that return differing results are
 /// returned as a member faults list.
-pub struct WsFederationApi<C> {
-    clients: Vec<(PeerId, C)>,
+#[derive(Debug)]
+pub struct WsFederationApi<C = WsClient> {
+    members: Vec<FederationMember<C>>,
     max_evil: usize,
+}
+
+#[derive(Debug)]
+struct FederationMember<C> {
+    url: String,
+    peer_id: PeerId,
+    client: RwLock<Option<C>>,
 }
 
 pub type Result<T> = std::result::Result<T, ApiError>;
@@ -114,7 +128,7 @@ impl ApiError {
 
 #[cfg_attr(target_family = "wasm", async_trait(?Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<C: ClientT + Send + Sync> FederationApi for WsFederationApi<C> {
+impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
         self.request("/fetch_transaction", tx).await
@@ -139,49 +153,112 @@ impl<C: ClientT + Send + Sync> FederationApi for WsFederationApi<C> {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
-use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+#[async_trait]
+pub trait JsonRpcClient: ClientT + Sized {
+    async fn connect(url: &str) -> std::result::Result<Self, JsonRpcError>;
+    fn is_connected(&self) -> bool;
+}
 
-#[cfg(target_family = "wasm")]
-use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+#[async_trait]
+impl JsonRpcClient for WsClient {
+    async fn connect(url: &str) -> std::result::Result<Self, JsonRpcError> {
+        WsClientBuilder::default().build(url).await
+    }
+
+    fn is_connected(&self) -> bool {
+        self.is_connected()
+    }
+}
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
     pub async fn new(max_evil: usize, members: Vec<(PeerId, String)>) -> Self {
+        Self::new_with_client(max_evil, members).await
+    }
+}
+
+impl<C> WsFederationApi<C> {
+    /// Creates a new API client
+    pub async fn new_with_client(max_evil: usize, members: Vec<(PeerId, String)>) -> Self {
         WsFederationApi {
-            clients: futures::stream::iter(members)
-                .then(|(peer, url)| async move {
-                    // TODO: reconnect to peers on disconnect
-                    (
-                        peer,
-                        WsClientBuilder::default()
-                            .build(url)
-                            .await
-                            .expect("unable to connect to server"),
-                    )
+            members: members
+                .into_iter()
+                .map(|(peer_id, url)| FederationMember {
+                    peer_id,
+                    url,
+                    client: RwLock::new(None),
                 })
-                .collect()
-                .await,
+                .collect(),
             max_evil,
         }
     }
 }
 
-impl<C: ClientT> WsFederationApi<C> {
+impl<C: JsonRpcClient> FederationMember<C> {
+    #[instrument(fields(peer = %self.peer_id), skip_all, err)]
+    pub async fn request<R>(
+        &self,
+        method: &str,
+        params: &[serde_json::Value],
+    ) -> std::result::Result<R, JsonRpcError>
+    where
+        R: serde::de::DeserializeOwned,
+    {
+        let params = Some(jsonrpsee_types::ParamsSer::ArrayRef(params));
+        let rclient = self.client.read().await;
+        match &*rclient {
+            Some(client) if client.is_connected() => {
+                return client.request::<R>(method, params).await;
+            }
+            _ => {}
+        };
+
+        warn!("web socket not connected, reconnecting");
+
+        drop(rclient);
+        let mut wclient = self.client.write().await;
+        match &*wclient {
+            Some(client) if client.is_connected() => {
+                // other task has already connected it
+                let rclient = RwLockWriteGuard::downgrade(wclient);
+                rclient.as_ref().unwrap().request::<R>(method, params).await
+            }
+            _ => {
+                // write lock is acquired before creating a new client
+                // so only one task will try to create a new client
+                match C::connect(&self.url).await {
+                    Ok(client) => {
+                        *wclient = Some(client);
+                        // drop the write lock before making the request
+                        let rclient = RwLockWriteGuard::downgrade(wclient);
+                        rclient.as_ref().unwrap().request::<R>(method, params).await
+                    }
+                    Err(err) => {
+                        error!(%err, "unable to connect to server");
+                        Err(err)
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<C: JsonRpcClient> WsFederationApi<C> {
     pub async fn request<P: serde::Serialize, R: serde::de::DeserializeOwned>(
         &self,
         method: &str,
         param: P,
     ) -> Result<R> {
         let params = [serde_json::to_value(param).expect("encoding error")];
-        let mut requests = futures::stream::iter(&self.clients).then(|(_id, client)| {
-            client.request::<R>(method, Some(jsonrpsee_types::ParamsSer::ArrayRef(&params)))
-        });
+        let requests = self
+            .members
+            .iter()
+            .map(|member| Box::pin(member.request(method, &params)));
 
         let mut error = None;
         let mut successes = 0;
-        while let Some(result) = requests.next().await {
-            match result {
+        for request in requests {
+            match request.await {
                 Ok(res) => {
                     if successes == self.max_evil {
                         return Ok(res);

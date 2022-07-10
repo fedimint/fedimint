@@ -1985,6 +1985,7 @@ name = "minimint-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-lock",
  "async-trait",
  "bitcoin",
  "bitcoin_hashes",

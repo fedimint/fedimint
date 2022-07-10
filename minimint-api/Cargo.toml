@@ -24,6 +24,7 @@ thiserror = "1.0.23"
 tracing ="0.1.22"
 
 [target.'cfg(target_family="wasm")'.dependencies]
+async-lock = "2.5"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support

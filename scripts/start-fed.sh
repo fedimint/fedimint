@@ -12,5 +12,3 @@ for ((ID=SKIPPED_SERVERS; ID<FED_SIZE; ID++)); do
   ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
   echo $! >> $PID_FILE
 done
-# give some time for servers to start
-sleep 1s
