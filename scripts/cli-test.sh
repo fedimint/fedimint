@@ -8,7 +8,6 @@ export PEG_IN_AMOUNT=0.00099999
 source ./scripts/build.sh
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
-./scripts/start-gateway.sh
 source ./scripts/pegin.sh
 
 #### BEGIN TESTS ####
@@ -37,3 +36,9 @@ $MINT_CLIENT ln-pay $INVOICE
 INVOICE_RESULT="$($LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
+
+# incoming lightning
+INVOICE="$($MINT_CLIENT ln-invoice 100000 'integration test')"
+INVOICE_RESULT=$($LN2 pay $INVOICE)
+INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
+[[ "$INVOICE_STATUS" = "complete" ]]

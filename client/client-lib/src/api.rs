@@ -62,6 +62,7 @@ impl<'a> dyn FederationApi + 'a {
             }
         }
     }
+
     pub async fn await_output_outcome<T: TryIntoOutcome + Send>(
         &self,
         outpoint: OutPoint,
@@ -71,6 +72,46 @@ impl<'a> dyn FederationApi + 'a {
             let interval = Duration::from_secs(1);
             loop {
                 match self.fetch_output_outcome(outpoint).await {
+                    Ok(t) => return Ok(t),
+                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
+                    Err(e) => return Err(e),
+                }
+            }
+        };
+        minimint_api::task::timeout(timeout, poll())
+            .await
+            .map_err(|_| ApiError::Timeout)?
+    }
+
+    pub async fn await_offer(
+        &self,
+        payment_hash: Sha256Hash,
+        timeout: Duration,
+    ) -> Result<IncomingContractOffer> {
+        let poll = || async {
+            let interval = Duration::from_millis(100);
+            loop {
+                match self.fetch_offer(payment_hash).await {
+                    Ok(t) => return Ok(t),
+                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
+                    Err(e) => return Err(e),
+                }
+            }
+        };
+        minimint_api::task::timeout(timeout, poll())
+            .await
+            .map_err(|_| ApiError::Timeout)?
+    }
+
+    pub async fn await_contract(
+        &self,
+        contract_id: ContractId,
+        timeout: Duration,
+    ) -> Result<ContractAccount> {
+        let poll = || async {
+            let interval = Duration::from_millis(100);
+            loop {
+                match self.fetch_contract(contract_id).await {
                     Ok(t) => return Ok(t),
                     Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),

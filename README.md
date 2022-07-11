@@ -53,17 +53,11 @@ In order to test locally we need Bitcoin running in [RegTest mode](https://devel
 ```shell
 source ./scripts/setup-tests.sh
 ```
-This starts `bitcoind` and 2 instances of `lightningd` with a channel between them for testing Lightning.
+This starts `bitcoind` and 2 instances of `lightningd` with a channel between them for testing Lightning -- one of them running a "lightning gateway" as a Core Lightning [plugin](https://lightning.readthedocs.io/PLUGINS.html).
 
 Now we can start the federation with:
 ```shell
 bash ./scripts/start-fed.sh
-```
-The federation will connect to your local Bitcoin node and bind to ports starting at `127.0.0.1:5000` listening for clients to submit transactions.
-
-If you wish to run the Lightning gateway to test sending and receiving over the Lightning network run:
-```shell
-bash ./scripts/start-gateway.sh
 ```
 
 In order to clean-up these processes you can either `exit` the shell or run `kill_minimint_processes`.
@@ -139,6 +133,25 @@ $ ln2 listinvoices test
 }
 ```
 
+Create our own invoice:
+```shell
+$ mint_client ln-invoice 1000 "description"
+lnbcrt1u1p3vcp...
+```
+
+Have `ln2` pay it:
+
+```shell
+$ ln2 pay lnbcrt1u1p3vcp...
+```
+
+Have mint client check that payment succeeded, fetch coins, and display new balances:
+
+```shell
+$ mint_client wait-invoice lnbcrt1u1p3vcp... 
+$ mint_client fetch
+$ mint_client info
+```
 
 ### Other options
 
@@ -163,13 +176,14 @@ SUBCOMMANDS:
     help              Print this message or the help of the given subcommand(s)
     info              Display wallet info (holdings, tiers)
     ln-pay            Pay a lightning invoice via a gateway
+    ln-invoice        Create a lightning invoice to receive payment via gateway
     peg-in            Issue tokens in exchange for a peg-in proof (not yet implemented, just
                           creates coins)
     peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed
     peg-out           Withdraw funds from the federation
     reissue           Reissue tokens received from a third party to avoid double spends
     spend             Prepare coins to send to a third party as a payment
-
+    wait-invoice      Wait for incoming invoice to be paid
 ```
 
 # Contributing
