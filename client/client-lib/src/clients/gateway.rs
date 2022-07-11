@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use crate::api::{ApiError, FederationApi};
-use crate::clients::gateway::db::{
-    OutgoingPaymentClaimKey, OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
-};
 use crate::clients::transaction::TransactionBuilder;
+use crate::ln::db::{
+    OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
+    OutgoingPaymentClaimKeyPrefix,
+};
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError};
@@ -161,7 +162,7 @@ impl GatewayClient {
         self.context
             .db
             .insert_entry(
-                &db::OutgoingPaymentKey(contract.contract.contract_id()),
+                &OutgoingContractAccountKey(contract.contract.contract_id()),
                 &contract,
             )
             .expect("DB error");
@@ -171,7 +172,7 @@ impl GatewayClient {
     pub fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
         self.context
             .db
-            .find_by_prefix(&db::OutgoingPaymentKeyPrefix)
+            .find_by_prefix(&OutgoingContractAccountKeyPrefix)
             .map(|res| res.expect("DB error").1)
             .collect()
     }
@@ -181,7 +182,7 @@ impl GatewayClient {
         // FIXME: implement abort by gateway to give funds back to user prematurely
         self.context
             .db
-            .remove_entry(&db::OutgoingPaymentKey(contract_id))
+            .remove_entry(&OutgoingContractAccountKey(contract_id))
             .expect("DB error");
     }
 
@@ -211,7 +212,7 @@ impl GatewayClient {
         let txid = final_tx.tx_hash();
 
         batch.autocommit(|batch| {
-            batch.append_delete(OutgoingPaymentKey(contract_id));
+            batch.append_delete(OutgoingContractAccountKey(contract_id));
             batch.append_insert(OutgoingPaymentClaimKey(contract_id), final_tx.clone());
         });
 
@@ -267,7 +268,7 @@ impl GatewayClient {
         let txid = self.context.api.submit_transaction(tx).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
-        // TODO: Save this contract in DB
+        // FIXME: Save this contract in DB
 
         self.context.db.apply_batch(batch).expect("DB error");
 
@@ -394,53 +395,6 @@ pub enum GatewayClientError {
     InvalidTransaction(String),
     #[error("Invalid preimage")]
     InvalidPreimage,
-}
-
-mod db {
-    use crate::ln::outgoing::OutgoingContractAccount;
-    use minimint_api::db::DatabaseKeyPrefixConst;
-    use minimint_api::encoding::{Decodable, Encodable};
-    use minimint_core::modules::ln::contracts::ContractId;
-    use minimint_core::transaction::Transaction;
-
-    const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x50;
-    const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x51;
-
-    #[derive(Debug, Encodable, Decodable)]
-    pub struct OutgoingPaymentKey(pub ContractId);
-
-    impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
-        const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
-        type Key = Self;
-        type Value = OutgoingContractAccount;
-    }
-
-    #[derive(Debug, Encodable, Decodable)]
-    pub struct OutgoingPaymentKeyPrefix;
-
-    impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
-        const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
-        type Key = OutgoingPaymentKey;
-        type Value = OutgoingContractAccount;
-    }
-
-    #[derive(Debug, Encodable, Decodable)]
-    pub struct OutgoingPaymentClaimKey(pub ContractId);
-
-    impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
-        const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
-        type Key = Self;
-        type Value = Transaction;
-    }
-
-    #[derive(Debug, Encodable, Decodable)]
-    pub struct OutgoingPaymentClaimKeyPrefix;
-
-    impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
-        const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
-        type Key = OutgoingPaymentClaimKey;
-        type Value = Transaction;
-    }
 }
 
 pub mod serde_keypair {

@@ -1,4 +1,5 @@
-mod db;
+// TODO: once user and mint client are merged, make this private again
+pub mod db;
 pub mod gateway;
 pub mod incoming;
 pub mod outgoing;

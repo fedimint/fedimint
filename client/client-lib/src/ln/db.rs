@@ -2,11 +2,15 @@ use crate::ln::outgoing::OutgoingContractData;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_core::modules::ln::contracts::ContractId;
+use minimint_core::transaction::Transaction;
 
 use super::incoming::ConfirmedInvoice;
+use super::outgoing::OutgoingContractAccount;
 
-const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x40;
-const DB_PREFIX_CONFIRMED_INVOICE: u8 = 0x45;
+const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x23;
+const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x24;
+const DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = 0x25;
+const DB_PREFIX_CONFIRMED_INVOICE: u8 = 0x26;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKey(pub ContractId);
@@ -24,6 +28,42 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
     type Key = OutgoingPaymentKey;
     type Value = OutgoingContractData;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingPaymentClaimKey(pub ContractId);
+
+impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    type Key = Self;
+    type Value = Transaction;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingPaymentClaimKeyPrefix;
+
+impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    type Key = OutgoingPaymentClaimKey;
+    type Value = Transaction;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingContractAccountKey(pub ContractId);
+
+impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    type Key = Self;
+    type Value = OutgoingContractAccount;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct OutgoingContractAccountKeyPrefix;
+
+impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    type Key = OutgoingContractAccountKey;
+    type Value = OutgoingContractAccount;
 }
 
 #[derive(Debug, Encodable, Decodable)]
