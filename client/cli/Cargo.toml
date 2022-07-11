@@ -9,7 +9,7 @@ edition = "2021"
 bitcoin = "0.28.1"
 bitcoin_hashes = "0.10.0"
 clap = { version = "3.1.18", features = ["derive"] }
-lightning-invoice = "0.16.0"
+lightning-invoice = "0.17.0"
 mint-client = { path = "../client-lib" }
 minimint-api = { path = "../../minimint-api" }
 minimint-core = { path = "../../minimint-core" }

@@ -12,7 +12,7 @@ bitcoin = { version = "0.28.1", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
 futures = "0.3.21"
 hex = "0.4.3"
-lightning-invoice = "0.16.0"
+lightning-invoice = "0.17.0"
 minimint-derive = { path = "../minimint-derive" }
 rand = "0.6.0"
 secp256k1-zkp = { version = "0.6.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
