@@ -119,7 +119,7 @@ async fn htlc_accepted_handler(
     let gw_sender = { plugin.state().lock().await.clone() };
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
     gw_sender
-        .send(GatewayRequest::HtlcAccepted((htlc_accepted, htlc_sender)))
+        .send(GatewayRequest::HtlcAccepted(htlc_accepted, htlc_sender))
         .await
         .expect("failed to send over channel");
     let preimage = htlc_receiver.await.unwrap()?;
