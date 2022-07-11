@@ -88,9 +88,11 @@ async fn minted_coins_cannot_double_spent_with_different_nodes() {
     let out3 = user3.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    // FIXME is this the correct behavior, that the first one goes through?
-    assert!(user2.client.fetch_coins(out2).await.is_ok());
-    assert!(user3.client.fetch_coins(out3).await.is_err());
+    assert!(
+        user2.client.fetch_coins(out2).await.is_err()
+            || user3.client.fetch_coins(out3).await.is_err()
+    ); //no double spend
+    assert_eq!(user2.total_coins() + user3.total_coins(), sats(2000));
     assert_eq!(user2.total_coins(), sats(2000));
     assert_eq!(user3.total_coins(), sats(0));
     assert_eq!(fed.max_balance_sheet(), 0);
