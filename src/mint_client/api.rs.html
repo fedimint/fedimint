@@ -508,6 +508,47 @@
 <span id="502">502</span>
 <span id="503">503</span>
 <span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+<span id="536">536</span>
+<span id="537">537</span>
+<span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
+<span id="541">541</span>
+<span id="542">542</span>
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">jsonrpsee_core::client::ClientT</span>;
@@ -572,6 +613,7 @@
             }
         }
     }
+
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_output_outcome</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">TryIntoOutcome</span> <span class="op">+</span> <span class="ident">Send</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
@@ -581,6 +623,46 @@
             <span class="kw">let</span> <span class="ident">interval</span> <span class="op">=</span> <span class="ident">Duration::from_secs</span>(<span class="number">1</span>);
             <span class="kw">loop</span> {
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_output_outcome</span>(<span class="ident">outpoint</span>).<span class="kw">await</span> {
+                    <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+                }
+            }
+        };
+        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">timeout</span>, <span class="ident">poll</span>())
+            .<span class="kw">await</span>
+            .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ApiError::Timeout</span>)<span class="question-mark">?</span>
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_offer</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">payment_hash</span>: <span class="ident">Sha256Hash</span>,
+        <span class="ident">timeout</span>: <span class="ident">Duration</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">poll</span> <span class="op">=</span> <span class="op">|</span><span class="op">|</span> <span class="kw">async</span> {
+            <span class="kw">let</span> <span class="ident">interval</span> <span class="op">=</span> <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
+            <span class="kw">loop</span> {
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_offer</span>(<span class="ident">payment_hash</span>).<span class="kw">await</span> {
+                    <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+                }
+            }
+        };
+        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">timeout</span>, <span class="ident">poll</span>())
+            .<span class="kw">await</span>
+            .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ApiError::Timeout</span>)<span class="question-mark">?</span>
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_contract</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
+        <span class="ident">timeout</span>: <span class="ident">Duration</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ContractAccount</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">poll</span> <span class="op">=</span> <span class="op">|</span><span class="op">|</span> <span class="kw">async</span> {
+            <span class="kw">let</span> <span class="ident">interval</span> <span class="op">=</span> <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
+            <span class="kw">loop</span> {
+                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
                     <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),

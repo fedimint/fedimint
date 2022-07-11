@@ -172,6 +172,33 @@
 <span id="166">166</span>
 <span id="167">167</span>
 <span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::hex::ToHex</span>;
 <span class="kw">use</span> <span class="ident">clap::Parser</span>;
@@ -232,6 +259,12 @@
 
     <span class="doccomment">/// Display wallet info (holdings, tiers)</span>
     <span class="ident">Info</span>,
+
+    <span class="doccomment">/// Create a lightning invoice to receive payment via gateway</span>
+    <span class="ident">LnInvoice</span> { <span class="ident">amount</span>: <span class="ident">Amount</span>, <span class="ident">description</span>: <span class="ident">String</span> },
+
+    <span class="doccomment">/// Wait for incoming invoice to be paid</span>
+    <span class="ident">WaitInvoice</span> { <span class="ident">invoice</span>: <span class="ident">lightning_invoice::Invoice</span> },
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
@@ -301,13 +334,13 @@
         }
         <span class="ident">Command::Info</span> =&gt; {
             <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="ident">client</span>.<span class="ident">coins</span>();
-            <span class="macro">info!</span>(
+            <span class="macro">println!</span>(
                 <span class="string">&quot;We own {} coins with a total value of {}&quot;</span>,
                 <span class="ident">coins</span>.<span class="ident">coin_count</span>(),
                 <span class="ident">coins</span>.<span class="ident">amount</span>()
             );
             <span class="kw">for</span> (<span class="ident">amount</span>, <span class="ident">coins</span>) <span class="kw">in</span> <span class="ident">coins</span>.<span class="ident">coins</span> {
-                <span class="macro">info!</span>(<span class="string">&quot;We own {} coins of denomination {}&quot;</span>, <span class="ident">coins</span>.<span class="ident">len</span>(), <span class="ident">amount</span>);
+                <span class="macro">println!</span>(<span class="string">&quot;We own {} coins of denomination {}&quot;</span>, <span class="ident">coins</span>.<span class="ident">len</span>(), <span class="ident">amount</span>);
             }
         }
         <span class="ident">Command::PegOut</span> { <span class="ident">address</span>, <span class="ident">satoshis</span> } =&gt; {
@@ -337,6 +370,27 @@
                 .<span class="ident">send</span>()
                 .<span class="kw">await</span>
                 .<span class="ident">unwrap</span>();
+        }
+        <span class="ident">Command::LnInvoice</span> {
+            <span class="ident">amount</span>,
+            <span class="ident">description</span>,
+        } =&gt; {
+            <span class="kw">let</span> <span class="ident">confirmed_invoice</span> <span class="op">=</span> <span class="ident">client</span>
+                .<span class="ident">generate_invoice</span>(<span class="ident">amount</span>, <span class="ident">description</span>, <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">gateway</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+                .<span class="kw">await</span>
+                .<span class="ident">expect</span>(<span class="string">&quot;Couldn&#39;t create invoice&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">confirmed_invoice</span>.<span class="ident">invoice</span>)
+        }
+        <span class="ident">Command::WaitInvoice</span> { <span class="ident">invoice</span> } =&gt; {
+            <span class="kw">let</span> <span class="ident">contract_id</span> <span class="op">=</span> (<span class="kw-2">*</span><span class="ident">invoice</span>.<span class="ident">payment_hash</span>()).<span class="ident">into</span>();
+            <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">client</span>
+                .<span class="ident">claim_incoming_contract</span>(<span class="ident">contract_id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+                .<span class="kw">await</span>
+                .<span class="ident">expect</span>(<span class="string">&quot;Timeout waiting for invoice payment&quot;</span>);
+            <span class="macro">println!</span>(
+                <span class="string">&quot;Paid in minimint transaction {}. Call &#39;fetch&#39; to get your coins.&quot;</span>,
+                <span class="ident">outpoint</span>.<span class="ident">txid</span>
+            );
         }
     }
 }

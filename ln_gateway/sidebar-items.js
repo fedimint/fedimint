@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["main",""],["pay_invoice",""]],"struct":[["Opts",""],["State",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["generate_config","Create [`gateway.json`] and [`client.json`] config files"],["htlc_accepted_handler","Handle core-lightning “htlc_accepted” events by attempting to buy this preimage from the federation and completing the payment"],["initialize_gateway","Loads configs if they exist, generates them if not Initializes [`LnGateway`] and runs it’s main event loop"],["main",""]],"type":[["PluginState",""]]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":[["DB_PREFIX_OUTGOING_PAYMENT",""]],"struct":[["OutgoingPaymentKey",""],["OutgoingPaymentKeyPrefix",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["DB_PREFIX_CONFIRMED_INVOICE",""],["DB_PREFIX_OUTGOING_PAYMENT",""]],"struct":[["ConfirmedInvoiceKey",""],["ConfirmedInvoiceKeyPrefix",""],["OutgoingPaymentKey",""],["OutgoingPaymentKeyPrefix",""]]};
