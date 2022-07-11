@@ -9,7 +9,9 @@ use futures::future::BoxFuture;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::XOnlyPublicKey;
+use std::any::Any;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
@@ -113,7 +115,7 @@ macro_rules! __api_endpoint {
 pub use __api_endpoint as api_endpoint;
 
 /// Definition of an API endpoint defined by a module `M`.
-pub struct ApiEndpoint<M> {
+pub struct ApiEndpoint<M: ?Sized> {
     /// Path under which the API endpoint can be reached. It should start with a `/`
     /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`
     /// depending on the module name returned by `[FedertionModule::api_base_name]`.
@@ -245,4 +247,96 @@ pub trait FederationModule: Sized {
     /// to users as well as to other modules. They thus should be deterministic, only dependant on
     /// their input and the current epoch.
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>];
+}
+
+type DynConsensusItem = Arc<dyn Any>;
+type DynTxInput = serde_json::Value;
+type DynTxOutput = serde_json::Value;
+type DynTxOutputOutcome = serde_json::Value;
+type DynVerificationCache = Box<dyn Any>;
+type DynError = anyhow::Error;
+type DynApiEndpoint = ApiEndpoint<dyn Any>;
+trait DynCryptoRng: RngCore + CryptoRng {}
+
+// Object safe module
+#[async_trait(?Send)]
+trait DynModule {
+    async fn await_consensus_proposal<'a>(&'a self, rng: &mut (dyn DynCryptoRng + 'a));
+
+    async fn consensus_proposal<'a>(
+        &'a self,
+        rng: &mut (dyn DynCryptoRng + 'a),
+    ) -> Vec<DynConsensusItem>;
+
+    async fn begin_consensus_epoch<'a>(
+        &'a self,
+        batch: BatchTx<'a>,
+        consensus_items: Vec<(PeerId, DynConsensusItem)>,
+        rng: &mut (dyn DynCryptoRng + 'a),
+    );
+
+    fn build_verification_cache<'a>(
+        &'a self,
+        inputs: &mut (dyn Iterator<Item = &'a DynTxInput> + Send),
+    ) -> DynVerificationCache;
+
+    fn validate_input<'a>(
+        &self,
+        interconnect: &dyn ModuleInterconect,
+        verification_cache: &DynVerificationCache,
+        input: &'a DynTxInput,
+    ) -> Result<InputMeta<'a>, DynError>;
+
+    fn apply_input<'a, 'b>(
+        &'a self,
+        interconnect: &'a dyn ModuleInterconect,
+        batch: BatchTx<'a>,
+        input: &'b DynTxInput,
+        verification_cache: &DynVerificationCache,
+    ) -> Result<InputMeta<'b>, DynError>;
+
+    fn validate_output(&self, output: &DynTxOutput) -> Result<Amount, DynError>;
+
+    fn apply_output<'a>(
+        &'a self,
+        batch: BatchTx<'a>,
+        output: &'a DynTxOutput,
+        out_point: crate::OutPoint,
+    ) -> Result<Amount, DynError>;
+
+    async fn end_consensus_epoch<'a>(
+        &'a self,
+        consensus_peers: &HashSet<PeerId>,
+        batch: BatchTx<'a>,
+        rng: &mut (dyn DynCryptoRng + 'a),
+    ) -> Vec<PeerId>;
+
+    fn output_status(&self, out_point: crate::OutPoint) -> Option<DynTxOutputOutcome>;
+
+    fn audit(&self, audit: &mut Audit);
+
+    fn api_base_name(&self) -> &'static str;
+
+    fn api_endpoints(&self) -> &'static [DynApiEndpoint];
+}
+
+struct DynModuleWrapper<M>(M);
+
+pub struct DynamicModule {
+    inner: Box<dyn DynModule>,
+}
+
+impl DynamicModule {
+    // create a dynamic module from a typed module
+    pub fn new<M: FederationModule>(module: M) -> Self {
+        todo!()
+    }
+}
+
+impl<M: FederationModule> DynModule for DynModuleWrapper<M> {
+    // TODO: erased values -> typed values
+}
+
+impl FederationModule for DynamicModule {
+    // TODO
 }
