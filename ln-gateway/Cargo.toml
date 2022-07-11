@@ -13,7 +13,7 @@ cln-rpc = "0.1"
 clap = { version = "3.1.18", features = ["derive"] }
 futures = "0.3.21"
 hex = "0.4.3"
-lightning-invoice = "0.16.0"
+lightning-invoice = "0.17.0"
 minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api" }
 mint-client = { path = "../client/client-lib" }
