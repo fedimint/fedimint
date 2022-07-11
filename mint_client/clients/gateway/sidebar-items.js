@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["GatewayClientError",""]],"mod":[["db",""],["serde_keypair",""]],"struct":[["GatewayClient",""],["GatewayClientConfig",""],["PaymentParameters",""]],"type":[["Result",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["GatewayClientError",""]],"mod":[["serde_keypair",""]],"struct":[["GatewayClient",""],["GatewayClientConfig",""],["PaymentParameters",""]],"type":[["Result",""]]};
