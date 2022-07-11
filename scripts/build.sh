@@ -32,12 +32,14 @@ export LN1="lightning-cli --network regtest --lightning-dir=$LN1_DIR"
 export LN2="lightning-cli --network regtest --lightning-dir=$LN2_DIR"
 export BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
 export MINT_CLIENT="$BIN_DIR/mint-client-cli $CFG_DIR"
+export MINT_RPC_CLIENT="$BIN_DIR/mint-rpc-client"
 
 # Alias clients
 alias ln1="\$LN1"
 alias ln2="\$LN2"
 alias btc_client="\$BTC_CLIENT"
 alias mint_client="\$MINT_CLIENT"
+alias mint_rpc_client="\$MINT_RPC_CLIENT"
 
 # Function for killing processes stored in PID_FILE
 function kill_minimint_processes {

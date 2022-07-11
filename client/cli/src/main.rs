@@ -58,6 +58,12 @@ enum Command {
 
     /// Display wallet info (holdings, tiers)
     Info,
+
+    /// Create a lightning invoice to receive payment via gateway
+    LnInvoice { amount: Amount, description: String },
+
+    /// Wait for incoming invoice to be paid
+    WaitInvoice { invoice: lightning_invoice::Invoice },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -86,7 +92,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let client = UserClient::new(cfg.client, Box::new(db), Default::default()).await;
 
     match opts.command {
         Command::PegInAddress => {
@@ -127,13 +133,13 @@ async fn main() {
         }
         Command::Info => {
             let coins = client.coins();
-            info!(
+            println!(
                 "We own {} coins with a total value of {}",
                 coins.coin_count(),
                 coins.amount()
             );
             for (amount, coins) in coins.coins {
-                info!("We own {} coins of denomination {}", coins.len(), amount);
+                println!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }
         Command::PegOut { address, satoshis } => {
@@ -163,6 +169,27 @@ async fn main() {
                 .send()
                 .await
                 .unwrap();
+        }
+        Command::LnInvoice {
+            amount,
+            description,
+        } => {
+            let confirmed_invoice = client
+                .generate_invoice(amount, description, &cfg.gateway, &mut rng)
+                .await
+                .expect("Couldn't create invoice");
+            println!("{}", confirmed_invoice.invoice)
+        }
+        Command::WaitInvoice { invoice } => {
+            let contract_id = (*invoice.payment_hash()).into();
+            let outpoint = client
+                .claim_incoming_contract(contract_id, &mut rng)
+                .await
+                .expect("Timeout waiting for invoice payment");
+            println!(
+                "Paid in minimint transaction {}. Call 'fetch' to get your coins.",
+                outpoint.txid
+            );
         }
     }
 }

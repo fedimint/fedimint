@@ -44,8 +44,8 @@ pub struct PaymentParameters {
 }
 
 impl GatewayClient {
-    pub fn new(cfg: GatewayClientConfig, db: Box<dyn Database>) -> Self {
-        let api = api::HttpFederationApi::new(
+    pub async fn new(cfg: GatewayClientConfig, db: Box<dyn Database>) -> Self {
+        let api = api::WsFederationApi::new(
             cfg.common.max_evil,
             cfg.common
                 .api_endpoints
@@ -57,7 +57,8 @@ impl GatewayClient {
                     (peer_id, url)
                 })
                 .collect(),
-        );
+        )
+        .await;
         Self::new_with_api(cfg, db, Box::new(api))
     }
 
@@ -225,7 +226,7 @@ impl GatewayClient {
         payment_hash: &bitcoin_hashes::sha256::Hash,
         amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
-    ) -> Result<(minimint_api::TransactionId, ContractId)> {
+    ) -> Result<(OutPoint, ContractId)> {
         let mut batch = DbBatch::new();
 
         // Fetch offer for this payment hash
@@ -263,11 +264,14 @@ impl GatewayClient {
         let tx = self
             .mint_client()
             .finalize_change(change, batch.transaction(), builder, &mut rng);
-        let mint_tx_id = self.context.api.submit_transaction(tx).await?;
+        let txid = self.context.api.submit_transaction(tx).await?;
+        let outpoint = OutPoint { txid, out_idx: 0 };
+
+        // TODO: Save this contract in DB
 
         self.context.db.apply_batch(batch).expect("DB error");
 
-        Ok((mint_tx_id, contract.contract_id()))
+        Ok((outpoint, contract.contract_id()))
     }
 
     /// Claw back funds after outgoing contract that had invalid preimage

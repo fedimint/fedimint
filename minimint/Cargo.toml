@@ -20,6 +20,7 @@ futures = "0.3.9"
 hbbft = { git = "https://github.com/fedimint/hbbft", branch = "minimint" }
 hex = "0.4.2"
 itertools = "0.10.0"
+jsonrpsee = { version = "0.14.0", features = ["ws-server"] }
 minimint-api = { path = "../minimint-api" }
 minimint-core = { path = "../minimint-core" }
 minimint-derive = { path = "../minimint-derive" }
@@ -35,7 +36,6 @@ sha3 = "0.9.1"
 sled = "0.34.6"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
-tide = "0.16.0"
 tokio = { version = "1.0.1", features = ["full"] }
 tokio-util = { version = "0.6.0", features = [ "codec" ] }
 tracing ="0.1.22"

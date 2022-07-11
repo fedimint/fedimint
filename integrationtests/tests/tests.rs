@@ -12,7 +12,6 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
 use minimint::transaction::Output;
-use minimint_api::OutPoint;
 use minimint_ln::contracts::incoming::PreimageDecryptionShare;
 use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
@@ -63,7 +62,7 @@ async fn peg_in_and_peg_out_with_fees() {
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_can_be_exchanged_between_users() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let user_receive = user_send.new_client(&[0]).await;
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
@@ -84,7 +83,7 @@ async fn minted_coins_cannot_double_spent_with_different_nodes() {
     fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
     let coins = user1.client.select_and_spend_coins(sats(2000)).unwrap();
 
-    let (user2, user3) = (user1.new_client(&[0]), user1.new_client(&[1]));
+    let (user2, user3) = (user1.new_client(&[0]).await, user1.new_client(&[1]).await);
     let out2 = user2.client.reissue(coins.clone(), rng()).await.unwrap();
     let out3 = user3.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
@@ -100,7 +99,7 @@ async fn minted_coins_cannot_double_spent_with_different_nodes() {
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_in_wallet_can_be_split_into_change() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let user_receive = user_send.new_client(&[0]).await;
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
     assert_eq!(
@@ -182,20 +181,19 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
         .await;
     fed.subset_peers(&[3]).run_consensus_epochs(1).await;
 
-    let (keypair, unconfirmed_invoice) = user
-        .client
-        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
-        .await
-        .unwrap();
-    fed.run_consensus_epochs(1).await; // create offer
+    // Create lightning invoice whose associated "offer" is accepted by federation consensus
+    let invoice = tokio::join!(
+        user.client
+            .generate_invoice(payment_amount, "".into(), &gateway.keys, rng()),
+        fed.run_consensus_epochs(1) // create offer
+    )
+    .0
+    .unwrap();
 
+    // Gateway buys offer, triggering preimage decryption
     let (_, contract_id) = gateway
         .server
-        .buy_preimage_offer(
-            unconfirmed_invoice.invoice.payment_hash(),
-            &payment_amount,
-            rng(),
-        )
+        .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // pay for offer
@@ -211,7 +209,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
     drop_peer_3_during_epoch(&fed).await; // preimage decryption
 
     user.client
-        .claim_incoming_contract(contract_id, keypair, rng())
+        .claim_incoming_contract(contract_id, rng())
         .await
         .unwrap();
     fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint coins, sign coins
@@ -310,25 +308,19 @@ async fn receive_lightning_payment_valid_preimage() {
     assert_eq!(user.total_coins(), sats(0));
     assert_eq!(gateway.user.total_coins(), starting_balance);
 
-    // Create invoice and offer in the federation
-    let (keypair, unconfirmed_invoice) = user
-        .client
-        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
-        .await
-        .unwrap();
-    fed.run_consensus_epochs(1).await; // process offer
-
-    // Confirm the offer has been accepted by the federation
-    let invoice = user
-        .client
-        .confirm_invoice(unconfirmed_invoice)
-        .await
-        .unwrap();
+    // Create lightning invoice whose associated "offer" is accepted by federation consensus
+    let invoice = tokio::join!(
+        user.client
+            .generate_invoice(payment_amount, "".into(), &gateway.keys, rng()),
+        fed.run_consensus_epochs(1),
+    )
+    .0
+    .unwrap();
 
     // Gateway deposits ecash to trigger preimage decryption by the federation
-    let (txid, contract_id) = gateway
+    let (outpoint, contract_id) = gateway
         .server
-        .buy_preimage_offer(invoice.payment_hash(), &payment_amount, rng())
+        .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
@@ -341,7 +333,6 @@ async fn receive_lightning_payment_valid_preimage() {
     user.assert_total_coins(sats(0)).await;
 
     // Gateway receives decrypted preimage
-    let outpoint = OutPoint { txid, out_idx: 0 };
     let preimage = gateway
         .server
         .await_preimage_decryption(outpoint)
@@ -349,13 +340,13 @@ async fn receive_lightning_payment_valid_preimage() {
         .unwrap();
 
     // Check that the preimage matches user pubkey & lightning invoice preimage
-    let pubkey = keypair.public_key();
+    let pubkey = invoice.keypair.public_key();
     assert_eq!(pubkey, preimage.0);
-    assert_eq!(&sha256(&pubkey.serialize()), invoice.payment_hash());
+    assert_eq!(&sha256(&pubkey.serialize()), invoice.invoice.payment_hash());
 
     // User claims their ecash
     user.client
-        .claim_incoming_contract(contract_id, keypair, rng())
+        .claim_incoming_contract(contract_id, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
@@ -411,7 +402,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     // User gets error when they try to claim gateway's escrowed ecash
     let response = user
         .client
-        .claim_incoming_contract(contract_id, kp, rng())
+        .claim_incoming_contract(contract_id, rng())
         .await;
     assert!(response.is_err());
 
@@ -485,7 +476,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let user_receive = user_send.new_client(&[0]).await;
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     let coins = user_send.client.select_and_spend_coins(sats(5000)).unwrap();

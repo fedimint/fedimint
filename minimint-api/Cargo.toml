@@ -12,7 +12,6 @@ bitcoin = { version = "0.28.1", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
 futures = "0.3.21"
 hex = "0.4.3"
-http-types = "2.12.0"
 lightning-invoice = "0.17.0"
 minimint-derive = { path = "../minimint-derive" }
 rand = "0.6.0"
@@ -25,6 +24,7 @@ thiserror = "1.0.23"
 tracing ="0.1.22"
 
 [target.'cfg(target_family="wasm")'.dependencies]
+async-lock = "2.5"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support

@@ -20,6 +20,7 @@ use hbbft::honey_badger::Message;
 
 use itertools::Itertools;
 use lightning_invoice::Invoice;
+use ln_gateway::GatewayRequest;
 use minimint_api::task::spawn;
 use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
@@ -50,7 +51,7 @@ use minimint_wallet::config::WalletConfig;
 use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::SpendableUTXO;
-use mint_client::api::HttpFederationApi;
+use mint_client::api::WsFederationApi;
 use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
 use mint_client::UserClient;
@@ -132,7 +133,7 @@ pub async fn fixtures(
             );
             let connect_gen = |peer| InsecureTcpConnector::new(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user = UserTest::new(client_config.clone(), peers);
+            let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
                 client_config,
@@ -151,7 +152,7 @@ pub async fn fixtures(
             let net_ref = &net;
             let connect_gen = move |peer| net_ref.connector(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user = UserTest::new(client_config.clone(), peers);
+            let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
                 client_config,
@@ -222,14 +223,15 @@ impl GatewayTest {
 
         let database = Box::new(MemDatabase::new());
         let user_client =
-            UserClient::new(client_config.clone(), database.clone(), Default::default());
+            UserClient::new(client_config.clone(), database.clone(), Default::default()).await;
         let user = UserTest {
             client: user_client,
             config: client_config,
             database: database.clone(),
         };
-        let client = Arc::new(GatewayClient::new(federation_client, database.clone()));
-        let server = LnGateway::new(client.clone(), ln_client).await;
+        let client = Arc::new(GatewayClient::new(federation_client, database.clone()).await);
+        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
+        let server = LnGateway::new(client.clone(), ln_client, sender, receiver);
 
         GatewayTest {
             server,
@@ -248,12 +250,12 @@ pub struct UserTest {
 
 impl UserTest {
     /// Returns a new user client connected to a subset of peers.
-    pub fn new_client(&self, peers: &[u16]) -> Self {
+    pub async fn new_client(&self, peers: &[u16]) -> Self {
         let peers = peers
             .iter()
             .map(|i| PeerId::from(*i))
             .collect::<Vec<PeerId>>();
-        Self::new(self.config.clone(), peers)
+        Self::new(self.config.clone(), peers).await
     }
 
     /// Helper to simplify the peg_out method call
@@ -280,22 +282,25 @@ impl UserTest {
         self.client.coins().amount()
     }
 
-    fn new(config: ClientConfig, peers: Vec<PeerId>) -> Self {
-        let api = Box::new(HttpFederationApi::new(
-            config.max_evil,
-            config
-                .api_endpoints
-                .iter()
-                .enumerate()
-                .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-                .map(|(id, url)| {
-                    (
-                        PeerId::from(id as u16),
-                        url.parse().expect("Invalid URL in config"),
-                    )
-                })
-                .collect(),
-        ));
+    async fn new(config: ClientConfig, peers: Vec<PeerId>) -> Self {
+        let api = Box::new(
+            WsFederationApi::new(
+                config.max_evil,
+                config
+                    .api_endpoints
+                    .iter()
+                    .enumerate()
+                    .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
+                    .map(|(id, url)| {
+                        (
+                            PeerId::from(id as u16),
+                            url.parse().expect("Invalid URL in config"),
+                        )
+                    })
+                    .collect(),
+            )
+            .await,
+        );
 
         let database = Box::new(MemDatabase::new());
         let client =

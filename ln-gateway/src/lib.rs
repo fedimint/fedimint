@@ -1,61 +1,55 @@
+pub mod cln;
 pub mod ln;
+pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
 use bitcoin_hashes::sha256::Hash;
+use cln::HtlcAccepted;
 use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-use minimint_api::{db::Database, Amount, OutPoint, TransactionId};
-use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig, GatewayClientError};
+use minimint_api::{Amount, OutPoint};
+use mint_client::clients::gateway::{GatewayClient, GatewayClientError};
 use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
+use webserver::run_webserver;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LnGatewayConfig {
-    pub federation_client: GatewayClientConfig,
-    pub ln_socket: PathBuf,
+#[derive(Debug)]
+pub enum GatewayRequest {
+    HtlcAccepted(
+        (
+            HtlcAccepted,
+            oneshot::Sender<Result<Preimage, LnGatewayError>>,
+        ),
+    ),
+    PayInvoice((ContractId, oneshot::Sender<Result<(), LnGatewayError>>)),
 }
 
 pub struct LnGateway {
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
-    fetcher: tokio::task::JoinHandle<()>,
+    webserver: tokio::task::JoinHandle<tide::Result<()>>,
+    receiver: mpsc::Receiver<GatewayRequest>,
 }
 
 impl LnGateway {
-    pub async fn from_config(db: Box<dyn Database>, cfg: LnGatewayConfig) -> LnGateway {
-        let LnGatewayConfig {
-            federation_client,
-            ln_socket,
-        } = cfg;
-        let federation_client = GatewayClient::new(federation_client, db);
-        let ln_client = cln_rpc::ClnRpc::new(ln_socket)
-            .await
-            .expect("connect to ln_socket");
-        let ln_client = Mutex::new(ln_client);
-
-        Self::new(Arc::new(federation_client), Box::new(ln_client)).await
-    }
-
-    pub async fn new(
+    pub fn new(
         federation_client: Arc<GatewayClient>,
         ln_client: Box<dyn LnRpc>,
-    ) -> LnGateway {
+        sender: mpsc::Sender<GatewayRequest>,
+        receiver: mpsc::Receiver<GatewayRequest>,
+    ) -> Self {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
-        let fetcher = tokio::spawn(background_fetch(
-            federation_client.clone(),
-            ln_client.clone(),
-        ));
-
+        let webserver = tokio::spawn(run_webserver(sender));
         LnGateway {
             federation_client,
             ln_client,
-            fetcher,
+            webserver,
+            receiver,
         }
     }
 
@@ -64,12 +58,12 @@ impl LnGateway {
         payment_hash: &Hash,
         amount: &Amount,
         rng: impl RngCore + CryptoRng,
-    ) -> Result<(TransactionId, ContractId), LnGatewayError> {
-        let (txid, contract_id) = self
+    ) -> Result<(OutPoint, ContractId), LnGatewayError> {
+        let (outpoint, contract_id) = self
             .federation_client
             .buy_preimage_offer(payment_hash, amount, rng)
             .await?;
-        Ok((txid, contract_id))
+        Ok((outpoint, contract_id))
     }
 
     pub async fn await_preimage_decryption(
@@ -148,37 +142,76 @@ impl LnGateway {
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?)
     }
-}
 
-/// This function runs as a background process fetching issued token signatures and driving forward
-/// payments which were interrupted during execution.
-#[instrument(skip_all)]
-async fn background_fetch(federation_client: Arc<GatewayClient>, _ln_client: Arc<dyn LnRpc>) {
-    // TODO: also try to drive forward payments that were interrupted
-    loop {
-        let least_wait_until = Instant::now() + Duration::from_millis(100);
-        let pending_fetches = federation_client
-            .list_fetchable_coins()
-            .into_iter()
-            .map(|out_point| {
-                // TODO: get rid of cloning
-                let federation_client = federation_client.clone();
-                async move {
-                    if let Err(e) = federation_client.fetch_coins(out_point).await {
-                        debug!(error = %e, "Fetching coins failed");
+    async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<(), LnGatewayError> {
+        let rng = rand::rngs::OsRng::new().unwrap();
+        let outpoint = self.pay_invoice(contract_id, rng).await?;
+        self.await_outgoing_contract_claimed(contract_id, outpoint)
+            .await?;
+        Ok(())
+    }
+
+    async fn handle_htlc_incoming_msg(
+        &self,
+        htlc_accepted: HtlcAccepted,
+    ) -> Result<Preimage, LnGatewayError> {
+        let amount = htlc_accepted.htlc.amount;
+        let payment_hash = htlc_accepted.htlc.payment_hash;
+        let rng = rand::rngs::OsRng::new().unwrap();
+
+        tracing::debug!("Incoming htlc for payment hash {}", payment_hash);
+        let (outpoint, _) = self.buy_preimage_offer(&payment_hash, &amount, rng).await?;
+        tracing::debug!("Decrypting preimage {}", payment_hash);
+        let preimage = self.await_preimage_decryption(outpoint).await?;
+        tracing::debug!("Decrypted preimage {:?}", payment_hash);
+
+        Ok(preimage)
+    }
+
+    pub async fn run(&mut self) -> Result<(), LnGatewayError> {
+        // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        loop {
+            let least_wait_until = Instant::now() + Duration::from_millis(100);
+            let pending_fetches = self
+                .federation_client
+                .list_fetchable_coins()
+                .into_iter()
+                .map(|out_point| {
+                    // TODO: get rid of cloning
+                    let federation_client = self.federation_client.clone();
+                    async move {
+                        if let Err(e) = federation_client.fetch_coins(out_point).await {
+                            debug!(error = %e, "Fetching coins failed");
+                        }
+                    }
+                })
+                .collect::<Vec<_>>();
+            futures::future::join_all(pending_fetches).await;
+
+            // Handle messages from webserver and plugin
+            while let Ok(msg) = self.receiver.try_recv() {
+                tracing::trace!("Gateway received message {:?}", msg);
+                match msg {
+                    GatewayRequest::HtlcAccepted((htlc_accepted, sender)) => {
+                        let result = self.handle_htlc_incoming_msg(htlc_accepted).await;
+                        sender.send(result).expect("couldn't send over channel");
+                    }
+                    GatewayRequest::PayInvoice((contract_id, sender)) => {
+                        let result = self.handle_pay_invoice_msg(contract_id).await;
+                        sender.send(result).expect("couldn't send over channel");
                     }
                 }
-            })
-            .collect::<Vec<_>>();
-        futures::future::join_all(pending_fetches).await;
-        minimint_api::task::sleep_until(least_wait_until).await;
+            }
+
+            minimint_api::task::sleep_until(least_wait_until).await;
+        }
     }
 }
 
 impl Drop for LnGateway {
     fn drop(&mut self) {
-        self.fetcher.abort();
-        assert!(futures::executor::block_on(&mut self.fetcher).is_err());
+        self.webserver.abort();
+        let _ = futures::executor::block_on(&mut self.webserver);
     }
 }
 

@@ -23,7 +23,11 @@ use minimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
 };
 use rand::{CryptoRng, RngCore};
+use std::time::Duration;
 use thiserror::Error;
+
+use self::db::ConfirmedInvoiceKey;
+use self::incoming::ConfirmedInvoice;
 
 pub struct LnClient<'c> {
     pub context: BorrowedClientContext<'c, LightningModuleClientConfig>,
@@ -81,7 +85,7 @@ impl<'c> LnClient<'c> {
     pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
         self.context
             .api
-            .fetch_contract(id)
+            .await_contract(id, Duration::from_secs(10))
             .await
             .map_err(LnClientError::ApiError)
     }
@@ -152,9 +156,26 @@ impl<'c> LnClient<'c> {
     pub async fn get_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
         self.context
             .api
-            .fetch_offer(payment_hash)
+            .await_offer(payment_hash, Duration::from_secs(10))
             .await
             .map_err(LnClientError::ApiError)
+    }
+
+    pub fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
+        self.context
+            .db
+            .insert_entry(&ConfirmedInvoiceKey(invoice.contract_id()), invoice)
+            .expect("Db error");
+    }
+
+    pub fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
+        let confirmed_invoice = self
+            .context
+            .db
+            .get_value(&ConfirmedInvoiceKey(contract_id))
+            .expect("Db error")
+            .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
+        Ok(confirmed_invoice)
     }
 }
 
@@ -168,6 +189,8 @@ pub enum LnClientError {
     ApiError(ApiError),
     #[error("Mint returned unexpected account type")]
     WrongAccountType,
+    #[error("No ConfirmedOffer found for contract ID {0}")]
+    NoConfirmedInvoice(ContractId),
 }
 
 #[cfg(test)]

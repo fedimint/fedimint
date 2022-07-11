@@ -1,6 +1,7 @@
 use crate::api::{ApiError, FederationApi};
 use crate::clients::transaction::TransactionBuilder;
 use crate::ln::gateway::LightningGateway;
+use crate::ln::incoming::ConfirmedInvoice;
 use crate::ln::{LnClient, LnClientError};
 use crate::mint::{MintClient, MintClientError, SpendableCoin};
 use crate::wallet::{WalletClient, WalletClientError};
@@ -9,6 +10,8 @@ use bitcoin::util::key::KeyPair;
 use bitcoin::{Address, Network, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use lightning::ln::PaymentSecret;
+use lightning::routing::gossip::RoutingFees;
+use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Currency, Invoice, InvoiceBuilder};
 use minimint_api::db::batch::{Accumulator, BatchItem, DbBatch};
 use minimint_api::db::Database;
@@ -44,17 +47,9 @@ pub struct UserClient {
     context: OwnedClientContext<ClientConfig>,
 }
 
-/// Invoice whose "offer" hasn't yet been accepted by federation
-pub struct UnconfirmedInvoice {
-    /// The invoice itself
-    pub invoice: Invoice,
-    /// The outpoint which creates the "offer" this invoice depends on
-    pub outpoint: OutPoint,
-}
-
 impl UserClient {
-    pub fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
-        let api = api::HttpFederationApi::new(
+    pub async fn new(cfg: ClientConfig, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
+        let api = api::WsFederationApi::new(
             cfg.max_evil,
             cfg.api_endpoints
                 .iter()
@@ -65,7 +60,8 @@ impl UserClient {
                     (peer_id, url)
                 })
                 .collect(),
-        );
+        )
+        .await;
         Self::new_with_api(cfg, db, Box::new(api), secp)
     }
 
@@ -329,12 +325,13 @@ impl UserClient {
         Ok(())
     }
 
-    pub async fn create_unconfirmed_invoice<R: RngCore + CryptoRng>(
+    pub async fn generate_invoice<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
         description: String,
+        gateway: &LightningGateway,
         mut rng: R,
-    ) -> Result<(KeyPair, UnconfirmedInvoice), ClientError> {
+    ) -> Result<ConfirmedInvoice, ClientError> {
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
@@ -342,6 +339,19 @@ impl UserClient {
 
         // Temporary lightning node pubkey
         let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
+
+        // Route hint instructing payer how to route to gateway
+        let gateway_route_hint = RouteHint(vec![RouteHintHop {
+            src_node_id: gateway.node_pub_key,
+            short_channel_id: 8,
+            fees: RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
+            cltv_expiry_delta: 30,
+            htlc_minimum_msat: None,
+            htlc_maximum_msat: None,
+        }]);
 
         let invoice = InvoiceBuilder::new(network_to_currency(self.context.config.wallet.network))
             .amount_milli_satoshis(amount.milli_sat)
@@ -351,6 +361,7 @@ impl UserClient {
             .current_timestamp()
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
+            .private_route(gateway_route_hint)
             .build_signed(|hash| {
                 self.context
                     .secp
@@ -369,37 +380,42 @@ impl UserClient {
             .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await?;
 
-        let outpoint = OutPoint { txid, out_idx: 0 };
-        Ok((payment_keypair, UnconfirmedInvoice { invoice, outpoint }))
-    }
-
-    /// Wait for this invoice's offer to be accepted by federation
-    pub async fn confirm_invoice(
-        &self,
-        invoice: UnconfirmedInvoice,
-    ) -> Result<Invoice, ClientError> {
+        // Await acceptance by the federation
         let timeout = std::time::Duration::from_secs(10);
+        let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api
-            .await_output_outcome::<OfferId>(invoice.outpoint, timeout)
+            .await_output_outcome::<OfferId>(outpoint, timeout)
             .await?;
-        Ok(invoice.invoice)
+
+        let confirmed = ConfirmedInvoice {
+            invoice,
+            keypair: payment_keypair,
+        };
+        self.ln_client().save_confirmed_invoice(&confirmed);
+
+        Ok(confirmed)
     }
 
     pub async fn claim_incoming_contract(
         &self,
         contract_id: ContractId,
-        keypair: KeyPair,
         mut rng: impl RngCore + CryptoRng,
-    ) -> Result<TransactionId, ClientError> {
-        // Lookup contract
+    ) -> Result<OutPoint, ClientError> {
+        // Lookup contract and "confirmed invoice"
         let contract = self.ln_client().get_incoming_contract(contract_id).await?;
+        let ci = self.ln_client().get_confirmed_invoice(contract_id)?;
 
         // Input claims this contract
         let mut tx = TransactionBuilder::default();
-        tx.input(&mut vec![keypair], Input::LN(contract.claim()));
-        self.submit_tx_with_change(tx, DbBatch::new(), &mut rng)
-            .await
+        tx.input(&mut vec![ci.keypair], Input::LN(contract.claim()));
+        let txid = self
+            .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
+            .await?;
+
+        // TODO: Update database if invoice is paid or expired
+
+        Ok(OutPoint { txid, out_idx: 0 })
     }
 }
 

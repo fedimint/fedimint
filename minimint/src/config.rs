@@ -122,12 +122,7 @@ impl GenerateConfig for ServerConfig {
             max_evil,
             api_endpoints: peers
                 .iter()
-                .map(|&peer| {
-                    format!(
-                        "http://127.0.0.1:{}",
-                        params.api_base_port + u16::from(peer)
-                    )
-                })
+                .map(|&peer| format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer)))
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,

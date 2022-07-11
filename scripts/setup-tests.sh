@@ -15,7 +15,7 @@ done
 $BTC_CLIENT createwallet ""
 
 # Start lightning nodes
-lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 &
+lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN1_DIR --addr=127.0.0.1:9000 --plugin=$BIN_DIR/ln_gateway --minimint-cfg=$CFG_DIR &
 echo $! >> $PID_FILE
 lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$LN2_DIR --addr=127.0.0.1:9001 &
 echo $! >> $PID_FILE
@@ -40,6 +40,6 @@ mine_blocks 10
 export LN2_PUB_KEY="$($LN2 getinfo | jq -r '.id')"
 export LN1_PUB_KEY="$($LN1 getinfo | jq -r '.id')"
 $LN1 connect $LN2_PUB_KEY@127.0.0.1:9001
-until $LN1 fundchannel $LN2_PUB_KEY 0.1btc; do sleep $POLL_INTERVAL; done
+until $LN1 -k fundchannel id=$LN2_PUB_KEY amount=0.1btc push_msat=5000000000; do sleep $POLL_INTERVAL; done
 mine_blocks 10
 until [[ $($LN1 listpeers | jq -r ".peers[] | select(.id == \"$LN2_PUB_KEY\") | .channels[0].state") = "CHANNELD_NORMAL" ]]; do sleep $POLL_INTERVAL; done
