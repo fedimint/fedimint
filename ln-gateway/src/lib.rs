@@ -250,7 +250,8 @@ impl LnGateway {
     }
 
     async fn handle_balance_msg(&self) -> Result<Amount, LnGatewayError> {
-        self.federation_client.fetch_all_coins().await?;
+        let fetch_results = self.federation_client.fetch_all_coins().await;
+        fetch_results.into_iter().collect::<Result<Vec<_>, _>>()?;
         Ok(self.federation_client.coins().amount())
     }
     async fn handle_address_msg(&self) -> Result<Address, LnGatewayError> {
@@ -284,9 +285,11 @@ impl LnGateway {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
-            if let Err(e) = self.federation_client.fetch_all_coins().await {
-                debug!(error = %e, "Fetching coins failed")
-            };
+            for fetch_result in self.federation_client.fetch_all_coins().await {
+                if let Err(e) = fetch_result {
+                    debug!(error = %e, "Fetching coins failed")
+                };
+            }
 
             // Handle messages from webserver and plugin
             while let Ok(msg) = self.receiver.try_recv() {
