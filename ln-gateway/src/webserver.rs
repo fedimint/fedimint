@@ -20,7 +20,7 @@ pub async fn pay_invoice(
     let gw_sender = { req.state().lock().await.clone() };
 
     gw_sender
-        .send(GatewayRequest::PayInvoice((contract_id, pay_sender)))
+        .send(GatewayRequest::PayInvoice(contract_id, pay_sender))
         .await
         .expect("failed to send over channel");
     pay_receiver.await.unwrap()?;

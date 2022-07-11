@@ -21,12 +21,10 @@ use webserver::run_webserver;
 #[derive(Debug)]
 pub enum GatewayRequest {
     HtlcAccepted(
-        (
-            HtlcAccepted,
-            oneshot::Sender<Result<Preimage, LnGatewayError>>,
-        ),
+        HtlcAccepted,
+        oneshot::Sender<Result<Preimage, LnGatewayError>>,
     ),
-    PayInvoice((ContractId, oneshot::Sender<Result<(), LnGatewayError>>)),
+    PayInvoice(ContractId, oneshot::Sender<Result<(), LnGatewayError>>),
 }
 
 pub struct LnGateway {
@@ -192,11 +190,11 @@ impl LnGateway {
             while let Ok(msg) = self.receiver.try_recv() {
                 tracing::trace!("Gateway received message {:?}", msg);
                 match msg {
-                    GatewayRequest::HtlcAccepted((htlc_accepted, sender)) => {
+                    GatewayRequest::HtlcAccepted(htlc_accepted, sender) => {
                         let result = self.handle_htlc_incoming_msg(htlc_accepted).await;
                         sender.send(result).expect("couldn't send over channel");
                     }
-                    GatewayRequest::PayInvoice((contract_id, sender)) => {
+                    GatewayRequest::PayInvoice(contract_id, sender) => {
                         let result = self.handle_pay_invoice_msg(contract_id).await;
                         sender.send(result).expect("couldn't send over channel");
                     }
