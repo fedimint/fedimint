@@ -49,17 +49,19 @@ The Database is split into different key spaces based on prefixing that can be u
 
 | Name                             | Prefix | Key                                 | Value                        |
 |----------------------------------|--------|-------------------------------------|------------------------------|
-| Accounts                         | 0x40   | contract id (sha256)                | `ContractAccount`            |
-| Offers                           | 0x41   | payment hash (sha256)               | `IncomingContractOffer`      |
-| Our Decryption Shares            | 0x42   | contract id (sha256)                | `DecryptionShare`            |
-| Consensus Decryption Shares      | 0x43   | contract id (sha256), peer id (u16) | `DecryptionShare`            |
-| Contract Update (output outcome) | 0x44   | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
-| Confirmed Invoice                | 0x45   | contract id (sha256 payment hash)   | `ConfirmedInvoice`           |
+| Offers                           | `0x41` | payment hash (sha256)               | `IncomingContractOffer`      |
+| Our Decryption Shares            | `0x42` | contract id (sha256)                | `DecryptionShare`            |
+| Consensus Decryption Shares      | `0x43` | contract id (sha256), peer id (u16) | `DecryptionShare`            |
+| Contract Update (output outcome) | `0x44` | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
 
 ## Client DB Layout
 
-| Name      | Prefix | Key                                | Value                        |
-|-----------|--------|------------------------------------|------------------------------|
-| Coins     | `0x20`   | amount (8 bytes), nonce (32 bytes) | serialized `SpendableCoin`   |
-| Issuances | `0x21`   | issuance_id (32 bytes)             | serialized `IssuanceRequest` |
-| Peg-Ins   | `0x22`   | secret contract key (32 bytes)     | none                         |
+| Name                      | Prefix | Key                                | Value                        |
+|---------------------------|--------|------------------------------------|------------------------------|
+| Coins                     | `0x20` | amount (8 bytes), nonce (32 bytes) | serialized `SpendableCoin`   |
+| Issuances                 | `0x21` | issuance_id (32 bytes)             | serialized `IssuanceRequest` |
+| Peg-Ins                   | `0x22` | secret contract key (32 bytes)     | none                         |
+| Outoing Payment           | `0x23` | contract id (sha256 payment hash)  | `OutgoingContractData`       |
+| Outgoing Payment Claim    | `0x24` | contract id (sha256)               | `Transaction`                |
+| Outgoing Contract Account | `0x25` | contract id (sha256)               | `OutgoingContractAccount`    |
+| Confirmed Invoice         | `0x26` | contract id (sha256 payment hash)  | `ConfirmedInvoice`           |
