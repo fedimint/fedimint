@@ -226,8 +226,6 @@
 <span id="220">220</span>
 <span id="221">221</span>
 <span id="222">222</span>
-<span id="223">223</span>
-<span id="224">224</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">cln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">webserver</span>;
@@ -251,12 +249,10 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">GatewayRequest</span> {
     <span class="ident">HtlcAccepted</span>(
-        (
-            <span class="ident">HtlcAccepted</span>,
-            <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Preimage</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        ),
+        <span class="ident">HtlcAccepted</span>,
+        <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Preimage</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     ),
-    <span class="ident">PayInvoice</span>((<span class="ident">ContractId</span>, <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>)),
+    <span class="ident">PayInvoice</span>(<span class="ident">ContractId</span>, <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>),
 }
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LnGateway</span> {
@@ -422,11 +418,11 @@
             <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">msg</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">try_recv</span>() {
                 <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, <span class="ident">msg</span>);
                 <span class="kw">match</span> <span class="ident">msg</span> {
-                    <span class="ident">GatewayRequest::HtlcAccepted</span>((<span class="ident">htlc_accepted</span>, <span class="ident">sender</span>)) =&gt; {
+                    <span class="ident">GatewayRequest::HtlcAccepted</span>(<span class="ident">htlc_accepted</span>, <span class="ident">sender</span>) =&gt; {
                         <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">handle_htlc_incoming_msg</span>(<span class="ident">htlc_accepted</span>).<span class="kw">await</span>;
                         <span class="ident">sender</span>.<span class="ident">send</span>(<span class="ident">result</span>).<span class="ident">expect</span>(<span class="string">&quot;couldn&#39;t send over channel&quot;</span>);
                     }
-                    <span class="ident">GatewayRequest::PayInvoice</span>((<span class="ident">contract_id</span>, <span class="ident">sender</span>)) =&gt; {
+                    <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">contract_id</span>, <span class="ident">sender</span>) =&gt; {
                         <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">handle_pay_invoice_msg</span>(<span class="ident">contract_id</span>).<span class="kw">await</span>;
                         <span class="ident">sender</span>.<span class="ident">send</span>(<span class="ident">result</span>).<span class="ident">expect</span>(<span class="string">&quot;couldn&#39;t send over channel&quot;</span>);
                     }
