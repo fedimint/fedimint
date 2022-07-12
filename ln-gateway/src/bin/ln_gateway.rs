@@ -155,6 +155,7 @@ async fn main() -> Result<(), Error> {
             });
             handle.await?
         })
+        .dynamic() // Allow reloading the plugin
         .start()
         .await?
     {
