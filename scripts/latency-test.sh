@@ -2,27 +2,27 @@
 # Runs a test to determine the latency of certain user actions
 
 set -eu
-FED_SIZE=${1:-4}
+FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-5}
 export RUST_LOG=error,ln_gateway=off
 export PEG_IN_AMOUNT=0.00099999
 
-source ./scripts/build.sh $FED_SIZE
+source ./scripts/build.sh $FM_FED_SIZE
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 ./scripts/pegin.sh
 
 #### BEGIN TESTS ####
-echo "Running with fed size $FED_SIZE"
+echo "Running with fed size $FM_FED_SIZE"
 
 # reissue
 time1=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "REISSUE $i"
-  TOKENS=$($MINT_CLIENT spend 1000)
-  $MINT_CLIENT reissue $TOKENS
-  $MINT_CLIENT fetch
+  TOKENS=$($FM_MINT_CLIENT spend 1000)
+  $FM_MINT_CLIENT reissue $TOKENS
+  $FM_MINT_CLIENT fetch
 done
 time2=$(date +%s.%N)
 
@@ -31,9 +31,9 @@ for i in $( seq 1 $ITERATIONS )
 do
   echo "LN SEND $i"
   LABEL=test$RANDOM$RANDOM
-  INVOICE="$($LN2 invoice 500000 $LABEL $LABEL 1m | jq -r '.bolt11')"
-  $MINT_CLIENT ln-pay $INVOICE
-  INVOICE_RESULT="$($LN2 waitinvoice $LABEL)"
+  INVOICE="$($FM_LN2 invoice 500000 $LABEL $LABEL 1m | jq -r '.bolt11')"
+  $FM_MINT_CLIENT ln-pay $INVOICE
+  INVOICE_RESULT="$($FM_LN2 waitinvoice $LABEL)"
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
   echo "RESULT $INVOICE_STATUS"
   [[ "$INVOICE_STATUS" = "paid" ]]
@@ -44,8 +44,8 @@ time3=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "LN RECEIVE $i"
-  INVOICE="$($MINT_CLIENT ln-invoice 500000 '$RANDOM')"
-  INVOICE_RESULT=$($LN2 pay $INVOICE)
+  INVOICE="$($FM_MINT_CLIENT ln-invoice 500000 '$RANDOM')"
+  INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
   echo "RESULT $INVOICE_STATUS"
   [[ "$INVOICE_STATUS" = "complete" ]]
