@@ -1,6 +1,5 @@
 var sourcesIndex = {};
 sourcesIndex["configgen"] = {"name":"","files":["configgen.rs"]};
-sourcesIndex["gw_configgen"] = {"name":"","files":["gw_configgen.rs"]};
 sourcesIndex["ln_gateway"] = {"name":"","files":["ln_gateway.rs"]};
 sourcesIndex["minimint"] = {"name":"","dirs":[{"name":"consensus","files":["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]},{"name":"net","files":["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]}],"files":["config.rs","db.rs","lib.rs","rng.rs"]};
 sourcesIndex["minimint_api"] = {"name":"","dirs":[{"name":"db","files":["batch.rs","mem_impl.rs","mod.rs","sled_impl.rs"]},{"name":"encoding","files":["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]},{"name":"module","files":["audit.rs","interconnect.rs","mod.rs","testing.rs"]}],"files":["config.rs","lib.rs","task.rs"]};

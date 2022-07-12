@@ -1,7 +1,5 @@
 (function() {var implementors = {};
 implementors["configgen"] = [{"text":"impl Parser for <a class=\"struct\" href=\"configgen/struct.Options.html\" title=\"struct configgen::Options\">Options</a>","synthetic":false,"types":["configgen::Options"]}];
-implementors["gw_configgen"] = [{"text":"impl Parser for <a class=\"struct\" href=\"gw_configgen/struct.Opts.html\" title=\"struct gw_configgen::Opts\">Opts</a>","synthetic":false,"types":["gw_configgen::Opts"]}];
-implementors["ln_gateway"] = [{"text":"impl Parser for <a class=\"struct\" href=\"ln_gateway/struct.Opts.html\" title=\"struct ln_gateway::Opts\">Opts</a>","synthetic":false,"types":["ln_gateway::Opts"]}];
 implementors["mint_client_cli"] = [{"text":"impl Parser for <a class=\"struct\" href=\"mint_client_cli/struct.Options.html\" title=\"struct mint_client_cli::Options\">Options</a>","synthetic":false,"types":["mint_client_cli::Options"]},{"text":"impl Parser for <a class=\"enum\" href=\"mint_client_cli/enum.Command.html\" title=\"enum mint_client_cli::Command\">Command</a>","synthetic":false,"types":["mint_client_cli::Command"]}];
 implementors["mint_rpc_client"] = [{"text":"impl Parser for <a class=\"struct\" href=\"mint_rpc_client/struct.ApiCall.html\" title=\"struct mint_rpc_client::ApiCall\">ApiCall</a>","synthetic":false,"types":["mint_rpc_client::ApiCall"]}];
 implementors["server"] = [{"text":"impl Parser for <a class=\"struct\" href=\"server/struct.ServerOpts.html\" title=\"struct server::ServerOpts\">ServerOpts</a>","synthetic":false,"types":["server::ServerOpts"]}];
