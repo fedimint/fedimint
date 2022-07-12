@@ -14,7 +14,7 @@ cargo build --release
 # Define temporary directories to not overwrite manually created config if run locally
 export FM_TEST_DIR=$FM_TMP_DIR
 export FM_BIN_DIR="$SRC_DIR/target/release"
-export FM_PID_FILE="$TMP_DIR/.pid"
+export FM_PID_FILE="$FM_TMP_DIR/.pid"
 export FM_LN1_DIR="$FM_TEST_DIR/ln1"
 export FM_LN2_DIR="$FM_TEST_DIR/ln2"
 export FM_BTC_DIR="$FM_TEST_DIR/bitcoin"
