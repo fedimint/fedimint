@@ -429,6 +429,10 @@
 <span id="423">423</span>
 <span id="424">424</span>
 <span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api</span>::{<span class="ident">ApiError</span>, <span class="ident">FederationApi</span>};
@@ -775,7 +779,11 @@
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_fetchable_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">list_active_issuances</span>()
+        <span class="self">self</span>.<span class="ident">mint_client</span>()
+            .<span class="ident">list_active_issuances</span>()
+            .<span class="ident">into_iter</span>()
+            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">outpoint</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">outpoint</span>)
+            .<span class="ident">collect</span>()
     }
 
     <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried</span>
