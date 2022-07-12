@@ -222,11 +222,14 @@ impl<'c> MintClient<'c> {
         Ok(())
     }
 
-    pub fn list_active_issuances(&self) -> Vec<OutPoint> {
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
         self.context
             .db
             .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .map(|res| res.expect("DB error").0 .0)
+            .map(|res| {
+                let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
+                (outpoint, cfd)
+            })
             .collect()
     }
 
