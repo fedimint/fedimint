@@ -23,7 +23,8 @@ $BTC_CLIENT generatetoaddress 11 "$($BTC_CLIENT getnewaddress)"
 function await_block_sync() {
   EXPECTED_BLOCK_HEIGHT="$(( $($BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $CONFIRMATION_TIME ))"
   for ((ID=0; ID<FED_SIZE; ID++)); do
-    MINT_API_URL="ws://127.0.0.1:500$ID"
+    PORT=$(echo "5000 + $ID" | bc)
+    MINT_API_URL="ws://127.0.0.1:$PORT"
     until [ "$($MINT_RPC_CLIENT $MINT_API_URL '/wallet/block_height')" == "$EXPECTED_BLOCK_HEIGHT" ]; do
       sleep $POLL_INTERVAL
     done
