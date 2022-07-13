@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Calls the CLI to peg user client into the federation
+echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway]"
 
 set -euxo pipefail
 
 # Let's define some shortcuts for bitcoind and the mint client
 POLL_INTERVAL=1
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
+USE_GATEWAY=${2:-0}
 
 CONFIRMATION_TIME=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finalty_delay')
 echo "Pegging in $PEG_IN_AMOUNT with confirmation time $CONFIRMATION_TIME"
 
 # Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
 # random value only known to our client.
-ADDR="$($FM_MINT_CLIENT peg-in-address)"
+if [ "$USE_GATEWAY" ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address)"; fi
 
 # We send the amount we want to peg-in to this address
 TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR $PEG_IN_AMOUNT)"
@@ -40,7 +42,7 @@ TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
 
 # With these proofs we can instruct the client to start the peg-in process. Our client will add the tweak used to derive
 # the peg-in address to the request so that the federation can claim the funds later.
-$FM_MINT_CLIENT peg-in "$TXOUT_PROOF" "$TRANSACTION"
+if [ "$USE_GATEWAY" ]; then $FM_LN1 gw-deposit "$TXOUT_PROOF" "$TRANSACTION"; else $FM_MINT_CLIENT peg-in "$TXOUT_PROOF" "$TRANSACTION"; fi
 
 # Since the process is asynchronous have to come back to fetch the result later. We choose to do this right away and
 # just block till we get our tokens.
