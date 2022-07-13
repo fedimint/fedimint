@@ -3,14 +3,14 @@
 echo "Run with 'source ./scripts/pegin.sh [amount] [use_gateway]"
 
 set -euxo pipefail
+source ./scripts/lib.sh
 
 # Let's define some shortcuts for bitcoind and the mint client
 POLL_INTERVAL=1
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
 USE_GATEWAY=${2:-0}
 
-CONFIRMATION_TIME=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finalty_delay')
-echo "Pegging in $PEG_IN_AMOUNT with confirmation time $CONFIRMATION_TIME"
+echo "Pegging in $PEG_IN_AMOUNT"
 
 # Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
 # random value only known to our client.
@@ -21,17 +21,6 @@ TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR $PEG_IN_AMOUNT)"
 
 # Now we "wait" for confirmations
 $FM_BTC_CLIENT generatetoaddress 11 "$($FM_BTC_CLIENT getnewaddress)"
-
-function await_block_sync() {
-  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $CONFIRMATION_TIME ))"
-  for ((ID=0; ID<FM_FED_SIZE; ID++)); do
-    PORT=$(echo "5000 + $ID" | bc)
-    MINT_API_URL="ws://127.0.0.1:$PORT"
-    until [ "$($FM_MINT_RPC_CLIENT $MINT_API_URL '/wallet/block_height')" == "$EXPECTED_BLOCK_HEIGHT" ]; do
-      sleep $POLL_INTERVAL
-    done
-  done
-}
 await_block_sync
 
 # We then get a proof from our bitcoind that we sent coins to the peg-in address. This proof can be evaluated by just
