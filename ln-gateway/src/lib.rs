@@ -7,7 +7,7 @@ use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
 use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
 use minimint_api::{Amount, OutPoint};
-use mint_client::clients::gateway::{GatewayClient, GatewayClientError};
+use mint_client::{ClientError, GatewayClient};
 use rand::{CryptoRng, RngCore};
 use std::{
     sync::Arc,
@@ -215,8 +215,8 @@ impl Drop for LnGateway {
 
 #[derive(Debug, Error)]
 pub enum LnGatewayError {
-    #[error("Federation operation error: {0:?}")]
-    FederationError(#[from] GatewayClientError),
+    #[error("Federation client operation error: {0:?}")]
+    ClientError(#[from] ClientError),
     #[error("Our LN node could not route the payment: {0:?}")]
     CouldNotRoute(LightningError),
 }

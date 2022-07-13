@@ -52,9 +52,8 @@ use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::SpendableUTXO;
 use mint_client::api::WsFederationApi;
-use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
-use mint_client::UserClient;
+use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use real::{RealBitcoinTest, RealLightningTest};
 
 mod fake;
@@ -133,13 +132,18 @@ pub async fn fixtures(
             );
             let connect_gen = |peer| InsecureTcpConnector::new(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
-                client_config,
+                client_config.clone(),
                 lightning.gateway_node_pub_key,
             )
             .await;
+
+            let user_cfg = UserClientConfig {
+                client_config,
+                gateway: gateway.keys.clone(),
+            };
+            let user = UserTest::new(user_cfg, peers).await;
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
@@ -152,13 +156,17 @@ pub async fn fixtures(
             let net_ref = &net;
             let connect_gen = move |peer| net_ref.connector(peer).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user = UserTest::new(client_config.clone(), peers).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
-                client_config,
+                client_config.clone(),
                 lightning.gateway_node_pub_key,
             )
             .await;
+            let user_cfg = UserClientConfig {
+                client_config,
+                gateway: gateway.keys.clone(),
+            };
+            let user = UserTest::new(user_cfg, peers).await;
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
@@ -209,12 +217,6 @@ impl GatewayTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
-        let federation_client = GatewayClientConfig {
-            common: client_config.clone(),
-            redeem_key: kp,
-            timelock_delta: 10,
-        };
-
         let keys = LightningGateway {
             mint_pub_key: kp.public_key(),
             node_pub_key,
@@ -222,14 +224,25 @@ impl GatewayTest {
         };
 
         let database = Box::new(MemDatabase::new());
+        let user_cfg = UserClientConfig {
+            client_config: client_config.clone(),
+            gateway: keys.clone(),
+        };
         let user_client =
-            UserClient::new(client_config.clone(), database.clone(), Default::default()).await;
+            UserClient::new(user_cfg.clone(), database.clone(), Default::default()).await;
         let user = UserTest {
             client: user_client,
-            config: client_config,
+            config: user_cfg,
             database: database.clone(),
         };
-        let client = Arc::new(GatewayClient::new(federation_client, database.clone()).await);
+
+        let gw_cfg = GatewayClientConfig {
+            client_config: client_config.clone(),
+            redeem_key: kp,
+            timelock_delta: 10,
+        };
+        let client =
+            Arc::new(GatewayClient::new(gw_cfg, database.clone(), Default::default()).await);
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let server = LnGateway::new(client.clone(), ln_client, sender, receiver);
 
@@ -244,7 +257,7 @@ impl GatewayTest {
 
 pub struct UserTest {
     pub client: UserClient,
-    pub config: ClientConfig,
+    pub config: UserClientConfig,
     database: Box<dyn Database>,
 }
 
@@ -282,11 +295,12 @@ impl UserTest {
         self.client.coins().amount()
     }
 
-    async fn new(config: ClientConfig, peers: Vec<PeerId>) -> Self {
+    async fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
         let api = Box::new(
             WsFederationApi::new(
-                config.max_evil,
+                config.client_config.max_evil,
                 config
+                    .client_config
                     .api_endpoints
                     .iter()
                     .enumerate()

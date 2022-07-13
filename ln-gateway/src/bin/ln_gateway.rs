@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
+use mint_client::{Client, GatewayClientConfig, UserClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
 use serde_json::json;
@@ -13,9 +14,7 @@ use tracing::error;
 use ln_gateway::{cln::HtlcAccepted, GatewayRequest, LnGateway, LnGatewayError};
 use minimint::config::load_from_file;
 use minimint::modules::ln::contracts::incoming::Preimage;
-use mint_client::clients::gateway::{GatewayClient, GatewayClientConfig};
 use mint_client::ln::gateway::LightningGateway;
-use mint_client::ClientAndGatewayConfig;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
@@ -30,7 +29,7 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     let kp_fed = KeyPair::new(&ctx, &mut rng);
 
     let gateway_cfg = GatewayClientConfig {
-        common: federation_client_cfg.clone(),
+        client_config: federation_client_cfg.clone(),
         redeem_key: kp_fed,
         timelock_delta: 10,
     };
@@ -51,8 +50,8 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     };
     let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
 
-    let client_cfg = ClientAndGatewayConfig {
-        client: federation_client_cfg,
+    let client_cfg = UserClientConfig {
+        client_config: federation_client_cfg,
         gateway: LightningGateway {
             mint_pub_key: kp_fed.public_key(),
             node_pub_key,
@@ -103,7 +102,8 @@ async fn initialize_gateway(
         .unwrap()
         .open_tree("mint-client")
         .unwrap();
-    let federation_client = Arc::new(GatewayClient::new(gw_client_cfg, Box::new(db)).await);
+    let ctx = secp256k1::Secp256k1::new();
+    let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx).await);
     let ln_client = Box::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver)

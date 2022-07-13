@@ -1,4 +1,4 @@
-use crate::BorrowedClientContext;
+use crate::utils::BorrowedClientContext;
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
