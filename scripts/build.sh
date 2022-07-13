@@ -14,7 +14,7 @@ cargo build --release
 # Define temporary directories to not overwrite manually created config if run locally
 export MINIMINT_TEST_DIR=$TMP_DIR
 export BIN_DIR="$SRC_DIR/target/release"
-export PID_FILE=".pid"
+export PID_FILE="$TMP_DIR/.pid"
 export LN1_DIR="$MINIMINT_TEST_DIR/ln1"
 export LN2_DIR="$MINIMINT_TEST_DIR/ln2"
 export BTC_DIR="$MINIMINT_TEST_DIR/bitcoin"
@@ -43,9 +43,8 @@ alias mint_rpc_client="\$MINT_RPC_CLIENT"
 
 # Function for killing processes stored in PID_FILE
 function kill_minimint_processes {
-  while read pid; do
-    kill $pid || true
-  done <$PID_FILE
+  kill $(cat $PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
+  pkill "ln_gateway";
   rm $PID_FILE
 }
 trap kill_minimint_processes EXIT

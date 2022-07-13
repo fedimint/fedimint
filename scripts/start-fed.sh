@@ -9,6 +9,5 @@ SKIPPED_SERVERS=${SKIPPED_SERVERS:-0}
 cd $CFG_DIR
 for ((ID=SKIPPED_SERVERS; ID<FED_SIZE; ID++)); do
   echo "starting mint $ID"
-  ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 | sed -e "s/^/mint $ID: /" ) &
-  echo $! >> $PID_FILE
+  ( ($BIN_DIR/server $CFG_DIR/server-$ID.json 2>&1 & echo $! >&3 ) 3>>$PID_FILE | sed -e "s/^/mint $ID: /" ) &
 done
