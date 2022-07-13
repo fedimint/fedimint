@@ -1,5 +1,6 @@
 extern crate self as minimint_api;
 
+use bitcoin::Denomination;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
@@ -8,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
+use thiserror::Error;
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 
@@ -67,6 +69,13 @@ pub struct OutPoint {
     pub out_idx: u64,
 }
 
+#[derive(Error, Debug)]
+pub enum ParseAmountError {
+    #[error("Error parsing string as integer: {0}")]
+    NotANumber(#[from] ParseIntError),
+    #[error("Error parsing string as a bitcoin amount: {0}")]
+    WrongBitcoinAmount(#[from] bitcoin::util::amount::ParseAmountError),
+}
 impl PeerId {
     pub fn to_usize(self) -> usize {
         self.0 as usize
@@ -102,6 +111,14 @@ impl Amount {
         Amount {
             milli_sat: sat * 1000,
         }
+    }
+
+    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
+        if let Denomination::MilliSatoshi = denom {
+            return Self::from_str(s);
+        }
+        let btc_amt = bitcoin::util::amount::Amount::from_str_in(s, denom)?;
+        Ok(Self::from(btc_amt))
     }
 
     pub fn saturating_sub(self, other: Amount) -> Self {
@@ -198,7 +215,7 @@ impl std::ops::Sub for Amount {
 }
 
 impl FromStr for Amount {
-    type Err = ParseIntError;
+    type Err = ParseAmountError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Amount {

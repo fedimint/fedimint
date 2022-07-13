@@ -6,7 +6,9 @@ use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::SpendableCoin;
-use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
+use mint_client::utils::{
+    from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
+};
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -41,7 +43,10 @@ enum Command {
     },
 
     /// Prepare coins to send to a third party as a payment
-    Spend { amount: Amount },
+    Spend {
+        #[clap(parse(try_from_str = parse_minimint_amount))]
+        amount: Amount,
+    },
 
     /// Withdraw funds from the federation
     PegOut {
@@ -60,7 +65,11 @@ enum Command {
     Info,
 
     /// Create a lightning invoice to receive payment via gateway
-    LnInvoice { amount: Amount, description: String },
+    LnInvoice {
+        #[clap(parse(try_from_str = parse_minimint_amount))]
+        amount: Amount,
+        description: String,
+    },
 
     /// Wait for incoming invoice to be paid
     WaitInvoice { invoice: lightning_invoice::Invoice },

@@ -3,7 +3,7 @@
 
 set -euxo pipefail
 export RUST_LOG=info
-export PEG_IN_AMOUNT=0.00099999
+export PEG_IN_AMOUNT=99999
 
 source ./scripts/lib.sh
 source ./scripts/build.sh
@@ -15,7 +15,7 @@ source ./scripts/setup-tests.sh
 #### BEGIN TESTS ####
 
 # reissue
-TOKENS=$($FM_MINT_CLIENT spend 42000)
+TOKENS=$($FM_MINT_CLIENT spend '42000msat')
 $FM_MINT_CLIENT reissue $TOKENS
 $FM_MINT_CLIENT fetch
 
@@ -40,7 +40,7 @@ INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # incoming lightning
-INVOICE="$($FM_MINT_CLIENT ln-invoice 100000 'integration test')"
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test')"
 INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]
