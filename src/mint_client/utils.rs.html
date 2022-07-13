@@ -28,7 +28,55 @@
 <span id="22">22</span>
 <span id="23">23</span>
 <span id="24">24</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::SpendableCoin</span>;
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::FederationApi</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::SpendableCoin</span>;
+<span class="kw">use</span> <span class="ident">bitcoin::Network</span>;
+<span class="kw">use</span> <span class="ident">lightning_invoice::Currency</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding::Decodable</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
 
@@ -51,6 +99,46 @@
     <span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
 ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">bitcoin::Amount</span>, <span class="ident">bitcoin::util::amount::ParseAmountError</span><span class="op">&gt;</span> {
     <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+}
+
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BorrowedClientContext</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">C</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="ident">config</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">C</span>,
+    <span class="kw">pub</span> <span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">Database</span>,
+    <span class="kw">pub</span> <span class="ident">api</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">FederationApi</span>,
+    <span class="kw">pub</span> <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OwnedClientContext</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="ident">config</span>: <span class="ident">C</span>,
+    <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">api</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">FederationApi</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">secp</span>: <span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">CO</span><span class="op">&gt;</span> <span class="ident">OwnedClientContext</span><span class="op">&lt;</span><span class="ident">CO</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">borrow_with_module_config</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">CB</span>, <span class="ident">F</span><span class="op">&gt;</span>(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="self">self</span>,
+        <span class="ident">to_cfg</span>: <span class="ident">F</span>,
+    ) -&gt; <span class="ident">BorrowedClientContext</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">CB</span><span class="op">&gt;</span>
+    <span class="kw">where</span>
+        <span class="ident">F</span>: <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="ident">CO</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="ident">CB</span>,
+    {
+        <span class="ident">BorrowedClientContext</span> {
+            <span class="ident">config</span>: <span class="ident">to_cfg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">config</span>),
+            <span class="ident">db</span>: <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">as_ref</span>(),
+            <span class="ident">api</span>: <span class="self">self</span>.<span class="ident">api</span>.<span class="ident">as_ref</span>(),
+            <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>,
+        }
+    }
+}
+
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">network_to_currency</span>(<span class="ident">network</span>: <span class="ident">Network</span>) -&gt; <span class="ident">Currency</span> {
+    <span class="kw">match</span> <span class="ident">network</span> {
+        <span class="ident">Network::Bitcoin</span> =&gt; <span class="ident">Currency::Bitcoin</span>,
+        <span class="ident">Network::Regtest</span> =&gt; <span class="ident">Currency::Regtest</span>,
+        <span class="ident">Network::Testnet</span> =&gt; <span class="ident">Currency::BitcoinTestnet</span>,
+        <span class="ident">Network::Signet</span> =&gt; <span class="ident">Currency::Signet</span>,
+    }
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (1c7b36d4d 2022-07-12)" ></div>

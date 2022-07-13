@@ -235,7 +235,7 @@
 <span class="kw">use</span> <span class="ident">cln::HtlcAccepted</span>;
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts</span>::{<span class="ident">incoming::Preimage</span>, <span class="ident">ContractId</span>};
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>};
-<span class="kw">use</span> <span class="ident">mint_client::clients::gateway</span>::{<span class="ident">GatewayClient</span>, <span class="ident">GatewayClientError</span>};
+<span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">ClientError</span>, <span class="ident">GatewayClient</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">sync::Arc</span>,
@@ -443,8 +443,8 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">LnGatewayError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Federation operation error: {0:?}&quot;</span>)]</span>
-    <span class="ident">FederationError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">GatewayClientError</span>),
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Federation client operation error: {0:?}&quot;</span>)]</span>
+    <span class="ident">ClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">ClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Our LN node could not route the payment: {0:?}&quot;</span>)]</span>
     <span class="ident">CouldNotRoute</span>(<span class="ident">LightningError</span>),
 }

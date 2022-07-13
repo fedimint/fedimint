@@ -636,8 +636,8 @@
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::clients::transaction::TransactionBuilder</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::BorrowedClientContext</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::TransactionBuilder</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
 <span class="kw">use</span> <span class="ident">db</span>::{<span class="ident">CoinKey</span>, <span class="ident">CoinKeyPrefix</span>, <span class="ident">OutputFinalizationKey</span>, <span class="ident">OutputFinalizationKeyPrefix</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":[["api",""],["clients",""],["ln",""],["mint",""],["utils",""],["wallet",""]],"struct":[["BorrowedClientContext",""],["ClientAndGatewayConfig",""],["OwnedClientContext",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["TIMELOCK",""]],"enum":[["ClientError",""]],"mod":[["api",""],["ln",""],["mint",""],["serde_keypair",""],["transaction",""],["utils",""],["wallet",""]],"struct":[["Client",""],["GatewayClientConfig",""],["PaymentParameters",""],["UserClientConfig",""]],"type":[["GatewayClient",""],["Result",""],["UserClient",""]]};

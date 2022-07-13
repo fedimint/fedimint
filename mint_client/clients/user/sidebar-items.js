@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":[["TIMELOCK",""]],"enum":[["ClientError",""]],"fn":[["network_to_currency",""]],"struct":[["UserClient",""]]};
