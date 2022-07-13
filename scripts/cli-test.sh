@@ -13,32 +13,32 @@ source ./scripts/pegin.sh
 #### BEGIN TESTS ####
 
 # reissue
-TOKENS=$($MINT_CLIENT spend 42000)
-$MINT_CLIENT reissue $TOKENS
-$MINT_CLIENT fetch
+TOKENS=$($FM_MINT_CLIENT spend 42000)
+$FM_MINT_CLIENT reissue $TOKENS
+$FM_MINT_CLIENT fetch
 
 # peg out
-PEG_OUT_ADDR="$($BTC_CLIENT getnewaddress)"
-$MINT_CLIENT peg-out $PEG_OUT_ADDR 500
+PEG_OUT_ADDR="$($FM_BTC_CLIENT getnewaddress)"
+$FM_MINT_CLIENT peg-out $PEG_OUT_ADDR 500
 sleep 5 # FIXME wait for tx to be included
 mine_blocks 120
 await_block_sync
-until [ "$($BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
+until [ "$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR 0)" == "0.00000500" ]; do
   sleep $POLL_INTERVAL
 done
 mine_blocks 10
-RECEIVED=$($BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
+RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
 # outgoing lightning
-INVOICE="$($LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
-$MINT_CLIENT ln-pay $INVOICE
-INVOICE_RESULT="$($LN2 waitinvoice test)"
+INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
+$FM_MINT_CLIENT ln-pay $INVOICE
+INVOICE_RESULT="$($FM_LN2 waitinvoice test)"
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # incoming lightning
-INVOICE="$($MINT_CLIENT ln-invoice 100000 'integration test')"
-INVOICE_RESULT=$($LN2 pay $INVOICE)
+INVOICE="$($FM_MINT_CLIENT ln-invoice 100000 'integration test')"
+INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]

@@ -37,39 +37,21 @@ git clone git@github.com:fedimint/minimint.git
 cd minimint
 ```
 
-### Building and Configuring
-First we need to build the executables, set env vars, and generate mint configs within the Nix environment (takes a few minutes the first time):
+### Setting up the federation
+Just run the following script
 ```shell
-nix-shell
-source ./scripts/build.sh [fed_size] [dir]
+./scripts/tmuxinator.sh
 ```
-with optional parameters:
-* **`fed_size`:** number of federation nodes to run (default=`4`)
-* **`dir`:** a directory to store the databases and config files (default=`mktemp -d`)
+which will set up a complete federation including a lightning gateway and another lightning node inside tmux. The first run can take some time since a lot of dependencies need to be built.
 
-### Running
-In order to test locally we need Bitcoin running in [RegTest mode](https://developer.bitcoin.org/examples/testing.html#regtest-mode) (still within `nix-shell`):
+The first tmux screen is one big shell for you to follow the tutorial in. If you want to see the federation, bitcoind and lightningd running you can navigate to the second screen (shown below) by typing `ctrl+b, n` (next) and `ctrl+b, p` (previous). You can scroll through the terminal buffer by first typing `ctrl+b, PgUp` and then navigating using `PgUp` and `PgDown`. To maximize any of the panes type `ctrl+b, z`.
 
-```shell
-source ./scripts/setup-tests.sh
-```
-This starts `bitcoind` and 2 instances of `lightningd` with a channel between them for testing Lightning -- one of them running a "lightning gateway" as a Core Lightning [plugin](https://lightning.readthedocs.io/PLUGINS.html).
-
-Now we can start the federation with:
-```shell
-bash ./scripts/start-fed.sh
-```
-
-In order to clean-up these processes you can either `exit` the shell or run `kill_minimint_processes`.
+![screenshot of the federation running in tmux](tmuxinator.png)
 
 ### Using the client
 Note as you run commands the mint nodes will output logging information which you can adjust by setting the [RUST_LOG](https://docs.rs/env_logger/latest/env_logger/) env variable.
 
-Use the peg-in script to mine some bitcoin and deposit funds in exchange for e-cash.
-```shell
-bash ./scripts/pegin.sh 0.0001
-```
-You can adjust the amount of bitcoin to peg-in with, but avoid large amounts as this may take a very long time.
+The previous step has already set up an e-cash client with a funded wallet for you. If you are interested in the details take a look at [`scripts/pegin.sh`](scripts/pegin.sh).
 
 You can view your client's holdings using the `info` command:
 

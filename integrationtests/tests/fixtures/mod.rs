@@ -116,8 +116,7 @@ pub async fn fixtures(
     match env::var("MINIMINT_TEST_REAL") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let dir =
-                env::var("MINIMINT_TEST_DIR").expect("Must have test dir defined for real tests");
+            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
             let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
             let bitcoin = RealBitcoinTest::new(wallet_config);

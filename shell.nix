@@ -18,6 +18,7 @@ let
 in
 pkgs.mkShell {
   packages = with pkgs; [
+    bc
     openssl
     pkg-config
     perl
@@ -28,6 +29,8 @@ pkgs.mkShell {
     clightning-dev
     jq
     procps
+    tmux
+    tmuxinator
   ] ++ lib.optionals stdenv.isDarwin [
     libiconv
     darwin.apple_sdk.frameworks.Security

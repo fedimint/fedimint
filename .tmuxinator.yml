@@ -1,0 +1,38 @@
+name: fedimint-dev
+root: .
+pre_window:
+  - source .tmpenv
+  - alias ln1="\$FM_LN1"
+  - alias ln2="\$FM_LN2"
+  - alias btc_client="\$FM_BTC_CLIENT"
+  - alias mint_client="\$FM_MINT_CLIENT"
+  - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
+  - clear
+tmux_detached: false
+windows:
+  - main:
+      panes:
+        - user:
+            - source scripts/tmux-user-shell.sh
+  - federation:
+      layout: 3ed7,272x74,0,0{119x74,0,0,54,152x74,120,0[152x17,120,0,55,152x17,120,18,56,152x17,120,36,57,152x20,120,54,58]}
+      panes:
+        - user:
+            - # empty user shell
+        - bitcoind:
+          - bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - ln1:
+          - sleep 1 # wait for bitcoind
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --minimint-cfg=$FM_CFG_DIR &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - ln2:
+          - sleep 1 # wait for bitcoind
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 &
+          - echo $! >> $FM_PID_FILE
+          - fg
+        - federation:
+          - sleep 1 # wait for bitcoind
+          - ./scripts/start-fed.sh
