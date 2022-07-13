@@ -82,7 +82,22 @@ INFO mint_client_cli: Fetched coins issuance=5b1ac4e9604...
 
 ### Using the gateway
 
-Generate a Lightning invoice from LN2, our non-gateway lightning node:
+First let's have the gatway execute a peg-in so it has an ecash token balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
+
+```shell
+$ ./scripts/pegin.sh 0.0001 1
+```
+
+Now we can use `lightning-cli` of the node where the gateway plugin is running to get our ecash token balance:
+
+```shell
+$ ln1 gw-balance
+{
+   "balance_msat": 9000000
+}
+```
+
+To make an outgoing payment we generate a Lightning invoice from LN2, our non-gateway lightning node:
 
 ```shell
 $ ln2 invoice 100000 test test 1m
