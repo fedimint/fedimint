@@ -171,6 +171,7 @@
 <span id="165">165</span>
 <span id="166">166</span>
 <span id="167">167</span>
+<span id="168">168</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>};
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
@@ -328,6 +329,7 @@
             });
             <span class="ident">handle</span>.<span class="kw">await</span><span class="question-mark">?</span>
         })
+        .<span class="ident">dynamic</span>() <span class="comment">// Allow reloading the plugin</span>
         .<span class="ident">start</span>()
         .<span class="kw">await</span><span class="question-mark">?</span>
     {
@@ -339,5 +341,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (38b72154d 2022-07-11)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (1c7b36d4d 2022-07-12)" ></div>
 </body></html>
