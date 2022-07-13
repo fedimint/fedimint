@@ -7,7 +7,7 @@ use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
-use mint_client::{ClientAndGatewayConfig, UserClient};
+use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -84,7 +84,7 @@ async fn main() {
     let opts = Options::parse();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
-    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
+    let cfg: UserClientConfig = load_from_file(&cfg_path);
     let db = sled::open(&db_path)
         .unwrap()
         .open_tree("mint-client")
@@ -92,7 +92,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg.client, Box::new(db), Default::default()).await;
+    let client = Client::new(cfg.clone(), Box::new(db), Default::default()).await;
 
     match opts.command {
         Command::PegInAddress => {

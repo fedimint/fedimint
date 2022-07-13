@@ -18,7 +18,7 @@ use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use minimint_wallet::WalletConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
-use mint_client::clients::transaction::TransactionBuilder;
+use mint_client::transaction::TransactionBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {
@@ -408,10 +408,10 @@ async fn receive_lightning_payment_invalid_preimage() {
         .await;
     assert!(response.is_err());
 
-    // Gateway re-claims their funds
+    // Gateway is refunded
     let _outpoint = gateway
         .client
-        .claim_incoming_contract(contract_id, rng())
+        .refund_incoming_contract(contract_id, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract

@@ -1,8 +1,8 @@
 mod db;
 
 use crate::api::ApiError;
-use crate::clients::transaction::TransactionBuilder;
-use crate::BorrowedClientContext;
+use crate::transaction::TransactionBuilder;
+use crate::utils::BorrowedClientContext;
 use bitcoin::KeyPair;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use minimint_api::db::batch::{BatchItem, BatchTx};

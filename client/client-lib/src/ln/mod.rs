@@ -9,7 +9,7 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::gateway::LightningGateway;
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::BorrowedClientContext;
+use crate::utils::BorrowedClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use lightning_invoice::Invoice;
 use minimint_api::db::batch::BatchTx;
