@@ -21,6 +21,8 @@ pkgs.mkShell {
     openssl
     pkg-config
     perl
+    clippy
+    rustfmt
     rustc
     cargo
     rust-analyzer
