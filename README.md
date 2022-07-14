@@ -11,7 +11,7 @@ If you want to learn more about the general idea go to [fedimint.org](https://fe
 Visit our [Telegram group](https://t.me/fedimint) for high-level discussions (no codebase questions please).
 
 To get started with development have a look at the:
-* [Developer discord](https://discord.gg/JEdvZ8fv) - only for programming questions and discussing the codebase
+* [Developer discord](https://discord.gg/dZYajBMsEB) - only for programming questions and discussing the codebase
 * [GitHub Issues](https://github.com/fedimint/minimint/issues) - things to fix, planned features, longer term architectural choices, etc.
 * [Architecture](docs/architecture.md) - high-level description of the codebase and design
 * [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
