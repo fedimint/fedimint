@@ -36,7 +36,7 @@ use minimint::config::ServerConfigParams;
 use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
 use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal};
 use minimint::net::connect::mock::MockNetwork;
-use minimint::net::connect::{Connector, InsecureTcpConnector};
+use minimint::net::connect::{Connector, TlsTcpConnector};
 use minimint::net::peers::PeerConnector;
 use minimint::transaction::Output;
 use minimint::{consensus, MinimintServer};
@@ -129,7 +129,7 @@ pub async fn fixtures(
                     .await
                     .expect("connect to ln_socket"),
             );
-            let connect_gen = |peer| InsecureTcpConnector::new(peer).to_any();
+            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
@@ -153,7 +153,7 @@ pub async fn fixtures(
             let lightning = FakeLightningTest::new();
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |peer| net_ref.connector(peer).to_any();
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
@@ -626,7 +626,7 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
-        connect_gen: &impl Fn(PeerId) -> PeerConnector<Message<PeerId>>,
+        connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<Message<PeerId>>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {
             let bitcoin_rpc = bitcoin_gen();
@@ -636,7 +636,7 @@ impl FederationTest {
                 cfg.clone(),
                 database.clone(),
                 bitcoin_gen,
-                connect_gen(cfg.identity),
+                connect_gen(cfg),
             )
             .await;
 

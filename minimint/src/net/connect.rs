@@ -1,15 +1,19 @@
 //! Provides an abstract network connection interface and multiple implementations
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
-use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::Stream;
 use minimint_api::PeerId;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
+use tokio_rustls::rustls::RootCertStore;
+use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 
 /// Shared [`Connector`] trait object
 pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
@@ -45,55 +49,163 @@ pub trait Connector<M> {
     }
 }
 
-/// TCP connector without encryption or authentication, **not suitable for production deployments**
-pub struct InsecureTcpConnector {
-    our_id: PeerId,
+/// TCP connector with encryption and authentication
+#[derive(Debug)]
+pub struct TlsTcpConnector {
+    our_certificate: rustls::Certificate,
+    our_private_key: rustls::PrivateKey,
+    peer_certs: Arc<PeerCertStore>,
+    /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands
+    cert_store: RootCertStore,
 }
 
-impl InsecureTcpConnector {
-    pub fn new(us: PeerId) -> Self {
-        InsecureTcpConnector { our_id: us }
+#[derive(Debug)]
+pub struct TlsConfig {
+    pub our_certificate: rustls::Certificate,
+    pub our_private_key: rustls::PrivateKey,
+    pub peer_certs: HashMap<PeerId, rustls::Certificate>,
+}
+
+#[derive(Debug)]
+pub struct PeerCertStore {
+    peer_certificates: Vec<(PeerId, rustls::Certificate)>,
+}
+
+impl TlsTcpConnector {
+    pub fn new(cfg: TlsConfig) -> TlsTcpConnector {
+        let mut cert_store = RootCertStore::empty();
+        for (_, cert) in cfg.peer_certs.iter() {
+            cert_store
+                .add(cert)
+                .expect("Could not add peer certificate");
+        }
+
+        TlsTcpConnector {
+            our_certificate: cfg.our_certificate,
+            our_private_key: cfg.our_private_key,
+            peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
+            cert_store,
+        }
+    }
+}
+
+impl PeerCertStore {
+    fn new(certs: impl IntoIterator<Item = (PeerId, rustls::Certificate)>) -> PeerCertStore {
+        PeerCertStore {
+            peer_certificates: certs.into_iter().collect(),
+        }
+    }
+
+    fn get_peer_by_cert(&self, cert: &rustls::Certificate) -> Option<PeerId> {
+        self.peer_certificates
+            .iter()
+            .find_map(|(peer, peer_cert)| if peer_cert == cert { Some(*peer) } else { None })
+    }
+
+    fn authenticate_peer(
+        &self,
+        received: Option<&[rustls::Certificate]>,
+    ) -> Result<PeerId, anyhow::Error> {
+        let cert_chain =
+            received.ok_or_else(|| anyhow::anyhow!("Peer did not authenticate itself"))?;
+
+        if cert_chain.len() != 1 {
+            return Err(anyhow::anyhow!(
+                "Received certificate chain of len={}, expected=1",
+                cert_chain.len()
+            ));
+        }
+
+        let received_cert = cert_chain.first().expect("Checked above");
+
+        self.get_peer_by_cert(received_cert)
+            .ok_or_else(|| anyhow::anyhow!("Unknown certificate"))
+    }
+
+    async fn accept_connection<M>(
+        &self,
+        listener: &mut TcpListener,
+        acceptor: &TlsAcceptor,
+    ) -> Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>
+    where
+        M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
+    {
+        let (connection, _) = listener.accept().await?;
+        let tls_conn = acceptor.accept(connection).await?;
+
+        let (_, tls_session) = tls_conn.get_ref();
+        let auth_peer = self.authenticate_peer(tls_session.peer_certificates())?;
+
+        let framed =
+            BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
+                tls_conn,
+            )
+            .to_any();
+        Ok((auth_peer, framed))
     }
 }
 
 #[async_trait]
-impl<M> Connector<M> for InsecureTcpConnector
+impl<M> Connector<M> for TlsTcpConnector
 where
     M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + 'static,
 {
     async fn connect_framed(&self, destination: String, peer: PeerId) -> ConnectResult<M> {
-        let mut connection = TcpStream::connect(destination).await?;
-        let handshake_peer = do_handshake(self.our_id, &mut connection).await?;
+        let cfg = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(self.cert_store.clone())
+            .with_single_cert(
+                vec![self.our_certificate.clone()],
+                self.our_private_key.clone(),
+            )
+            .expect("Failed to create TLS config");
 
-        if handshake_peer != peer {
-            return Err(anyhow!("Got wrong peer id in handshake"));
+        let fake_domain =
+            rustls::ServerName::try_from(format!("peer-{}", peer.to_usize()).as_str())
+                .expect("Always a valid DNS name");
+
+        let connector = TlsConnector::from(Arc::new(cfg));
+        let tls_conn = connector
+            .connect(fake_domain, TcpStream::connect(destination).await?)
+            .await?;
+
+        let (_, tls_session) = tls_conn.get_ref();
+        let auth_peer = self
+            .peer_certs
+            .authenticate_peer(tls_session.peer_certificates())?;
+
+        if auth_peer != peer {
+            return Err(anyhow::anyhow!("Connected to unexpected peer"));
         }
 
-        Ok((
-            handshake_peer,
-            Box::new(BidiFramed::new_from_tcp(connection)),
-        ))
+        let framed =
+            BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
+                tls_conn,
+            )
+            .to_any();
+
+        Ok((peer, framed))
     }
 
-    async fn listen(
-        &self,
-        bind_addr: String,
-    ) -> Result<Pin<Box<dyn Stream<Item = ConnectResult<M>> + Send + Unpin + 'static>>, anyhow::Error>
-    {
+    async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error> {
+        let verifier = AllowAnyAuthenticatedClient::new(self.cert_store.clone());
+        let config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(
+                vec![self.our_certificate.clone()],
+                self.our_private_key.clone(),
+            )
+            .unwrap();
         let listener = TcpListener::bind(bind_addr).await?;
-        let our_id = self.our_id;
+        let peer_certs = self.peer_certs.clone();
 
-        let stream = futures::stream::unfold(listener, move |listener| {
+        let stream = futures::stream::unfold(listener, move |mut listener| {
+            let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
+            let peer_certs = peer_certs.clone();
+
             Box::pin(async move {
-                let res = listener.accept().await;
-
-                let res = match res {
-                    Ok((mut connection, _)) => do_handshake(our_id, &mut connection)
-                        .await
-                        .map(|peer| (peer, BidiFramed::new_from_tcp(connection).to_any())),
-                    Err(e) => Err(anyhow::Error::new(e)),
-                };
-
+                let res = peer_certs.accept_connection(&mut listener, &acceptor).await;
                 Some((res, listener))
             })
         });
@@ -101,24 +213,10 @@ where
     }
 }
 
-async fn do_handshake<S>(our_id: PeerId, stream: &mut S) -> Result<PeerId, anyhow::Error>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    // Send our id
-    let our_id = our_id.to_usize() as u16;
-    stream.write_all(&our_id.to_le_bytes()[..]).await?;
-
-    // Receive peer id
-    let mut peer_id = [0u8; 2];
-    stream.read_exact(&mut peer_id[..]).await?;
-    Ok(PeerId::from(u16::from_le_bytes(peer_id)))
-}
-
 /// Fake network stack used in tests
 #[allow(unused_imports)]
 pub mod mock {
-    use crate::net::connect::{do_handshake, ConnectResult, Connector};
+    use crate::net::connect::{ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
     use anyhow::Error;
     use futures::{FutureExt, SinkExt, Stream, StreamExt};
@@ -129,7 +227,9 @@ pub mod mock {
     use std::pin::Pin;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::io::{DuplexStream, ReadHalf, WriteHalf};
+    use tokio::io::{
+        AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
+    };
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
 
@@ -206,6 +306,20 @@ pub mod mock {
             });
             Ok(Box::pin(stream))
         }
+    }
+
+    async fn do_handshake<S>(our_id: PeerId, stream: &mut S) -> Result<PeerId, anyhow::Error>
+    where
+        S: AsyncRead + AsyncWrite + Unpin,
+    {
+        // Send our id
+        let our_id = our_id.to_usize() as u16;
+        stream.write_all(&our_id.to_le_bytes()[..]).await?;
+
+        // Receive peer id
+        let mut peer_id = [0u8; 2];
+        stream.read_exact(&mut peer_id[..]).await?;
+        Ok(PeerId::from(u16::from_le_bytes(peer_id)))
     }
 
     #[tokio::test]

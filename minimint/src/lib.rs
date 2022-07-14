@@ -21,7 +21,7 @@ use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
-use crate::net::connect::{Connector, InsecureTcpConnector};
+use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{
     AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
 };
@@ -61,7 +61,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
 impl MinimintServer {
     pub async fn new(cfg: ServerConfig) -> Self {
         let connector: PeerConnector<Message<PeerId>> =
-            InsecureTcpConnector::new(cfg.identity).to_any();
+            TlsTcpConnector::new(cfg.tls_config()).to_any();
 
         Self::new_with(
             cfg.clone(),
