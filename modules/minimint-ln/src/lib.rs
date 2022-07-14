@@ -119,6 +119,13 @@ pub enum OutputOutcome {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightningGateway {
+    pub mint_pub_key: secp256k1::XOnlyPublicKey,
+    pub node_pub_key: secp256k1::PublicKey,
+    pub api: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct DecryptionShareCI {
     pub contract_id: ContractId,

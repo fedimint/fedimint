@@ -30,7 +30,7 @@ use minimint_core::modules::ln::contracts::incoming::{
     DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
 use minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-use minimint_core::modules::ln::ContractOutput;
+use minimint_core::modules::ln::{ContractOutput, LightningGateway};
 use minimint_core::modules::wallet::PegOut;
 use minimint_core::outcome::TransactionStatus;
 use minimint_core::transaction::TransactionItem;
@@ -64,7 +64,7 @@ use crate::utils::{network_to_currency, OwnedClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
     api::{ApiError, FederationApi},
-    ln::{gateway::LightningGateway, incoming::ConfirmedInvoice, LnClient},
+    ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableCoin},
     wallet::WalletClient,
 };

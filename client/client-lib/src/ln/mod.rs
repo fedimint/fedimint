@@ -1,12 +1,10 @@
 // TODO: once user and mint client are merged, make this private again
 pub mod db;
-pub mod gateway;
 pub mod incoming;
 pub mod outgoing;
 
 use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
-use crate::ln::gateway::LightningGateway;
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::BorrowedClientContext;
@@ -21,7 +19,7 @@ use minimint_core::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
 };
 use minimint_core::modules::ln::{
-    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
+    ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
 };
 use rand::{CryptoRng, RngCore};
 use std::time::Duration;
@@ -197,7 +195,6 @@ pub enum LnClientError {
 #[cfg(test)]
 mod tests {
     use crate::api::FederationApi;
-    use crate::ln::gateway::LightningGateway;
     use crate::ln::LnClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
@@ -210,8 +207,8 @@ mod tests {
     use minimint_core::modules::ln::config::LightningModuleClientConfig;
     use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use minimint_core::modules::ln::ContractOrOfferOutput;
     use minimint_core::modules::ln::{ContractAccount, LightningModule};
+    use minimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
     use minimint_core::modules::wallet::PegOutFees;
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;

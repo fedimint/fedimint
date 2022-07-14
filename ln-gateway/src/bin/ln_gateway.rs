@@ -6,6 +6,7 @@ use cln_rpc::ClnRpc;
 use ln_gateway::{
     BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequestTrait, WithdrawPayload,
 };
+use minimint::modules::ln::LightningGateway;
 use mint_client::{Client, GatewayClientConfig, UserClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -16,7 +17,6 @@ use tracing::error;
 
 use ln_gateway::{cln::HtlcAccepted, GatewayRequest, LnGateway, LnGatewayError};
 use minimint::config::load_from_file;
-use mint_client::ln::gateway::LightningGateway;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
