@@ -92,6 +92,18 @@ pub struct GatewayClientConfig {
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
+    pub api: String,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
+}
+
+impl From<GatewayClientConfig> for LightningGateway {
+    fn from(config: GatewayClientConfig) -> Self {
+        LightningGateway {
+            mint_pub_key: config.redeem_key.public_key(),
+            node_pub_key: config.node_pub_key,
+            api: config.api,
+        }
+    }
 }
 
 pub struct Client<C> {
@@ -110,7 +122,7 @@ impl AsRef<ClientConfig> for UserClientConfig {
     }
 }
 
-impl<T: AsRef<ClientConfig>> Client<T> {
+impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn ln_client(&self) -> LnClient {
         LnClient {
             context: self
@@ -134,6 +146,10 @@ impl<T: AsRef<ClientConfig>> Client<T> {
                 .borrow_with_module_config(|cfg| &cfg.as_ref().wallet),
             fee_consensus: self.context.config.as_ref().fee_consensus.clone(), // TODO: remove or put into context
         }
+    }
+
+    pub fn config(&self) -> T {
+        self.context.config.clone()
     }
 
     pub async fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {

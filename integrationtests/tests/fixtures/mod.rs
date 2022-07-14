@@ -230,11 +230,15 @@ impl GatewayTest {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
+            api: "http://127.0.0.1:8080".to_string(),
+            node_pub_key,
         };
         let client =
             Arc::new(GatewayClient::new(gw_cfg, database.clone(), Default::default()).await);
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let server = LnGateway::new(client.clone(), ln_client, sender, receiver);
+        let server = LnGateway::new(client.clone(), ln_client, sender, receiver)
+            .await
+            .expect("Gateway failed to register with federation");
 
         GatewayTest {
             server,

@@ -29,16 +29,6 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     let ctx = secp256k1::Secp256k1::new();
     let kp_fed = KeyPair::new(&ctx, &mut rng);
 
-    let gateway_cfg = GatewayClientConfig {
-        client_config: federation_client_cfg.clone(),
-        redeem_key: kp_fed,
-        timelock_delta: 10,
-    };
-
-    let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
-    let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
-    serde_json::to_writer_pretty(gw_cfg_file, &gateway_cfg).unwrap();
-
     let node_pub_key_bytes = match ln_client
         .call(cln_rpc::Request::Getinfo(
             cln_rpc::model::requests::GetinfoRequest {},
@@ -51,9 +41,20 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     };
     let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
 
+    // Write gateway config
+    let gateway_cfg = GatewayClientConfig {
+        client_config: federation_client_cfg.clone(),
+        redeem_key: kp_fed,
+        timelock_delta: 10,
+        node_pub_key,
+        api: String::from("http://127.0.0.1:8080"), // FIXME: don't hard-code this
+    };
+    let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
+    let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
+    serde_json::to_writer_pretty(gw_cfg_file, &gateway_cfg).unwrap();
+
     // Write user config
     let client_cfg = UserClientConfig(federation_client_cfg);
-
     let client_cfg_file_path: PathBuf = workdir.join("client.json");
     let client_cfg_file =
         std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
@@ -102,6 +103,8 @@ async fn initialize_gateway(
     let ln_client = Box::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver)
+        .await
+        .expect("Failed to register with federation")
 }
 
 /// Send message to LnGateway over channel and receive response over onshot channel

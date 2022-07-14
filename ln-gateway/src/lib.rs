@@ -121,20 +121,26 @@ pub struct LnGateway {
 }
 
 impl LnGateway {
-    pub fn new(
+    pub async fn new(
         federation_client: Arc<GatewayClient>,
         ln_client: Box<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-    ) -> Self {
+    ) -> Result<Self, LnGatewayError> {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
+        // Regster gateway with federation
+        federation_client
+            .register_with_federation(federation_client.config().into())
+            .await
+            .expect("Failed to register with federation");
+        // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(sender));
-        LnGateway {
+        Ok(Self {
             federation_client,
             ln_client,
             webserver,
             receiver,
-        }
+        })
     }
 
     pub async fn buy_preimage_offer(
