@@ -559,6 +559,21 @@ impl Client<UserClientConfig> {
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
+
+    /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
+    /// for them to do so
+    pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
+        let gateway = self.fetch_gateway().await?;
+
+        let future = reqwest::Client::new()
+            .post(&format!("{}/pay_invoice", gateway.api))
+            .json(&contract_id)
+            .send();
+        minimint_api::task::timeout(Duration::from_secs(15), future)
+            .await
+            .map_err(|_| ClientError::OutgoingPaymentTimeout)??;
+        Ok(())
+    }
 }
 
 impl Client<GatewayClientConfig> {
@@ -879,4 +894,8 @@ pub enum ClientError {
     InvalidPreimage,
     #[error("Federation has no lightning gateways")]
     NoGateways,
+    #[error("HTTP Error {0}")]
+    HttpError(#[from] reqwest::Error),
+    #[error("Outgoing payment timeout")]
+    OutgoingPaymentTimeout,
 }
