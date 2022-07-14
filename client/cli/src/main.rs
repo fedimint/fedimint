@@ -163,7 +163,7 @@ async fn main() {
             let http = reqwest::Client::new();
 
             let (contract_id, outpoint) = client
-                .fund_outgoing_ln_contract(&cfg.gateway, bolt11, &mut rng)
+                .fund_outgoing_ln_contract(bolt11, &mut rng)
                 .await
                 .expect("Not enough coins");
 
@@ -182,14 +182,14 @@ async fn main() {
                 .timeout(Duration::from_secs(15))
                 .send()
                 .await
-                .unwrap();
+                .expect("Gateway failed to execute contract");
         }
         Command::LnInvoice {
             amount,
             description,
         } => {
             let confirmed_invoice = client
-                .generate_invoice(amount, description, &cfg.gateway, &mut rng)
+                .generate_invoice(amount, description, &mut rng)
                 .await
                 .expect("Couldn't create invoice");
             println!("{}", confirmed_invoice.invoice)

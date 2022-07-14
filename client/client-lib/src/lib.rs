@@ -19,6 +19,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+use ln::db::LightningGatewayKey;
 use minimint_api::{
     db::{
         batch::{Accumulator, BatchItem, DbBatch},
@@ -393,12 +394,35 @@ impl<T: AsRef<ClientConfig>> Client<T> {
 }
 
 impl Client<UserClientConfig> {
+    pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
+        // fetch gateway from db
+        if let Some(gateway) = self
+            .context
+            .db
+            .get_value(&LightningGatewayKey)
+            .expect("DB error")
+        {
+            return Ok(gateway);
+        }
+
+        // if db is empty, fetch from federation and save to db
+        let gateways = self.context.api.fetch_gateways().await?;
+        if gateways.is_empty() {
+            return Err(ClientError::NoGateways);
+        };
+        let gateway = gateways[0].clone();
+        self.context
+            .db
+            .insert_entry(&LightningGatewayKey, &gateway)
+            .expect("DB error");
+        Ok(gateway)
+    }
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
-        gateway: &LightningGateway,
         invoice: Invoice,
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
+        let gateway = self.fetch_gateway().await?;
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
@@ -410,7 +434,7 @@ impl Client<UserClientConfig> {
             .create_outgoing_output(
                 batch.transaction(),
                 invoice,
-                gateway,
+                &gateway,
                 absolute_timelock as u32,
                 &mut rng,
             )
@@ -445,9 +469,9 @@ impl Client<UserClientConfig> {
         &self,
         amount: Amount,
         description: String,
-        gateway: &LightningGateway,
         mut rng: R,
     ) -> Result<ConfirmedInvoice> {
+        let gateway = self.fetch_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
@@ -853,4 +877,6 @@ pub enum ClientError {
     InvalidTransaction(String),
     #[error("Invalid preimage")]
     InvalidPreimage,
+    #[error("Federation has no lightning gateways")]
+    NoGateways,
 }
