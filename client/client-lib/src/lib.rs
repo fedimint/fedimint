@@ -809,3 +809,14 @@ pub enum ClientError {
     #[error("Invalid preimage")]
     InvalidPreimage,
 }
+
+impl ClientError {
+    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            ClientError::MintApiError(e) => e.is_retryable(),
+            ClientError::MintClientError(e) => e.is_retryable(),
+            _ => false,
+        }
+    }
+}
