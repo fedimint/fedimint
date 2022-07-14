@@ -772,6 +772,15 @@ impl Client<GatewayClientConfig> {
             .map(|(outpoint, _)| outpoint)
             .collect()
     }
+
+    /// Register this gateway with the federation
+    pub async fn register_with_federation(&self, config: LightningGateway) -> Result<()> {
+        self.context
+            .api
+            .register_gateway(config)
+            .await
+            .map_err(ClientError::MintApiError)
+    }
 }
 
 // FIXME: move this elsewhere. maybe into "core".

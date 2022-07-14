@@ -138,7 +138,7 @@ mod tests {
     use minimint_core::config::FeeConsensus;
     use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use minimint_core::modules::ln::contracts::ContractId;
-    use minimint_core::modules::ln::ContractAccount;
+    use minimint_core::modules::ln::{ContractAccount, LightningGateway};
     use minimint_core::modules::wallet::bitcoind::test::{
         FakeBitcoindRpc, FakeBitcoindRpcController,
     };
@@ -201,6 +201,14 @@ mod tests {
             _amount: &bitcoin::Amount,
         ) -> crate::api::Result<Option<PegOutFees>> {
             unimplemented!();
+        }
+
+        async fn fetch_gateways(&self) -> crate::api::Result<Vec<LightningGateway>> {
+            unimplemented!()
+        }
+
+        async fn register_gateway(&self, _gateway: LightningGateway) -> crate::api::Result<()> {
+            unimplemented!()
         }
     }
 

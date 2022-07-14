@@ -26,6 +26,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
+use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use itertools::Itertools;
 
 use minimint_api::db::batch::{BatchItem, BatchTx};
@@ -556,13 +557,27 @@ impl FederationModule for LightningModule {
             api_endpoint! {
                 "/offer",
                 async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
-                let offer = module
-                    .get_offer(payment_hash)
-                    .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
+                    let offer = module
+                        .get_offer(payment_hash)
+                        .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
-                debug!(%payment_hash, "Sending offer info");
-                Ok(offer)
-            } },
+                    debug!(%payment_hash, "Sending offer info");
+                    Ok(offer)
+                }
+            },
+            api_endpoint! {
+                "/list_gateways",
+                async |module: &LightningModule, _v: ()| -> Vec<LightningGateway> {
+                    Ok(module.list_gateways())
+                }
+            },
+            api_endpoint! {
+                "/register_gateway",
+                async |module: &LightningModule, gateway: LightningGateway| -> () {
+                    module.register_gateway(gateway);
+                    Ok(())
+                }
+            },
         ];
         ENDPOINTS
     }
@@ -605,6 +620,19 @@ impl LightningModule {
         self.db
             .get_value(&ContractKey(contract_id))
             .expect("DB error")
+    }
+
+    pub fn list_gateways(&self) -> Vec<LightningGateway> {
+        self.db
+            .find_by_prefix(&LightningGatewayKeyPrefix)
+            .map(|res| res.expect("DB error").1)
+            .collect()
+    }
+
+    pub fn register_gateway(&self, gateway: LightningGateway) {
+        self.db
+            .insert_entry(&LightningGatewayKey(gateway.node_pub_key), &gateway)
+            .expect("DB error");
     }
 }
 
