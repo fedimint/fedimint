@@ -6,7 +6,7 @@ use cln_rpc::ClnRpc;
 use ln_gateway::{
     BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequestTrait, WithdrawPayload,
 };
-use mint_client::{Client, GatewayClientConfig, UserClientConfig};
+use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
 use serde_json::json;
@@ -19,11 +19,10 @@ use minimint::config::load_from_file;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
-/// Create [`gateway.json`] and [`client.json`] config files
+/// Create [`gateway.json`] config files
 async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
-    let federation_client_cfg_path = workdir.join("federation_client.json");
-    let federation_client_cfg: minimint::config::ClientConfig =
-        load_from_file(&federation_client_cfg_path);
+    let client_cfg_path = workdir.join("client.json");
+    let client_cfg: minimint::config::ClientConfig = load_from_file(&client_cfg_path);
 
     let mut rng = thread_rng();
     let ctx = secp256k1::Secp256k1::new();
@@ -43,7 +42,7 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
 
     // Write gateway config
     let gateway_cfg = GatewayClientConfig {
-        client_config: federation_client_cfg.clone(),
+        client_config: client_cfg.clone(),
         redeem_key: kp_fed,
         timelock_delta: 10,
         node_pub_key,
@@ -52,13 +51,6 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
     let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
     serde_json::to_writer_pretty(gw_cfg_file, &gateway_cfg).unwrap();
-
-    // Write user config
-    let client_cfg = UserClientConfig(federation_client_cfg);
-    let client_cfg_file_path: PathBuf = workdir.join("client.json");
-    let client_cfg_file =
-        std::fs::File::create(client_cfg_file_path).expect("Could not create cfg file");
-    serde_json::to_writer_pretty(client_cfg_file, &client_cfg).unwrap();
 }
 
 /// Loads configs if they exist, generates them if not
