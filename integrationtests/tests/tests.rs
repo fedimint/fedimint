@@ -435,7 +435,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tbs_pks = &user.config.client_config.mint.tbs_pks;
+    let tbs_pks = &user.config.0.mint.tbs_pks;
     let tx = builder.build(
         sats(0),
         DbBatch::new().transaction(),

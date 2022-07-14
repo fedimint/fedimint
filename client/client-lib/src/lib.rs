@@ -84,10 +84,7 @@ pub struct PaymentParameters {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UserClientConfig {
-    pub client_config: ClientConfig,
-    pub gateway: LightningGateway,
-}
+pub struct UserClientConfig(pub ClientConfig);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayClientConfig {
@@ -109,7 +106,7 @@ impl AsRef<ClientConfig> for GatewayClientConfig {
 
 impl AsRef<ClientConfig> for UserClientConfig {
     fn as_ref(&self) -> &ClientConfig {
-        &self.client_config
+        &self.0
     }
 }
 
@@ -493,22 +490,21 @@ impl Client<UserClientConfig> {
             htlc_maximum_msat: None,
         }]);
 
-        let invoice = InvoiceBuilder::new(network_to_currency(
-            self.context.config.client_config.wallet.network,
-        ))
-        .amount_milli_satoshis(amount.milli_sat)
-        .description(description)
-        .payment_hash(payment_hash)
-        .payment_secret(payment_secret)
-        .current_timestamp()
-        .min_final_cltv_expiry(18)
-        .payee_pub_key(node_public_key)
-        .private_route(gateway_route_hint)
-        .build_signed(|hash| {
-            self.context
-                .secp
-                .sign_ecdsa_recoverable(hash, &node_secret_key)
-        })?;
+        let invoice =
+            InvoiceBuilder::new(network_to_currency(self.context.config.0.wallet.network))
+                .amount_milli_satoshis(amount.milli_sat)
+                .description(description)
+                .payment_hash(payment_hash)
+                .payment_secret(payment_secret)
+                .current_timestamp()
+                .min_final_cltv_expiry(18)
+                .payee_pub_key(node_public_key)
+                .private_route(gateway_route_hint)
+                .build_signed(|hash| {
+                    self.context
+                        .secp
+                        .sign_ecdsa_recoverable(hash, &node_secret_key)
+                })?;
 
         let offer_output =
             self.ln_client()

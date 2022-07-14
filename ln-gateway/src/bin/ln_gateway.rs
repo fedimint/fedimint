@@ -6,7 +6,6 @@ use cln_rpc::ClnRpc;
 use ln_gateway::{
     BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequestTrait, WithdrawPayload,
 };
-use minimint::modules::ln::LightningGateway;
 use mint_client::{Client, GatewayClientConfig, UserClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -52,14 +51,8 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     };
     let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
 
-    let client_cfg = UserClientConfig {
-        client_config: federation_client_cfg,
-        gateway: LightningGateway {
-            mint_pub_key: kp_fed.public_key(),
-            node_pub_key,
-            api: "http://127.0.0.1:8080".to_string(),
-        },
-    };
+    // Write user config
+    let client_cfg = UserClientConfig(federation_client_cfg);
 
     let client_cfg_file_path: PathBuf = workdir.join("client.json");
     let client_cfg_file =
