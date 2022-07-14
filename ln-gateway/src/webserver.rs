@@ -6,6 +6,7 @@ use tokio::sync::oneshot;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
+use crate::GatewayRequestInner;
 use crate::{GatewayRequest, LnGatewayError};
 use minimint::modules::ln::contracts::ContractId;
 
@@ -16,14 +17,18 @@ pub async fn pay_invoice(
     let contract_id: ContractId = req.body_json().await?;
     debug!(%contract_id, "Received request to pay invoice");
 
-    let (pay_sender, pay_receiver) = oneshot::channel::<Result<(), LnGatewayError>>();
+    let (sender, receiver) = oneshot::channel::<Result<(), LnGatewayError>>();
     let gw_sender = { req.state().lock().await.clone() };
 
+    let msg = GatewayRequest::PayInvoice(GatewayRequestInner {
+        request: contract_id,
+        sender,
+    });
     gw_sender
-        .send(GatewayRequest::PayInvoice(contract_id, pay_sender))
+        .send(msg)
         .await
         .expect("failed to send over channel");
-    pay_receiver.await.unwrap()?;
+    receiver.await.unwrap()?;
 
     Ok(Response::new(200))
 }

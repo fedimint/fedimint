@@ -7,6 +7,7 @@ use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::hash::Hash;
 use std::io::Cursor;
 use thiserror::Error;
@@ -196,8 +197,10 @@ impl<'de> Deserialize<'de> for TxOutProof {
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let hex_str: &str = Deserialize::deserialize(deserializer)?;
-            let bytes = hex::decode(hex_str).map_err(<D as Deserializer<'de>>::Error::custom)?;
+            // TODO: Try Cow
+            let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
+            let bytes =
+                hex::decode(hex_str.as_ref()).map_err(<D as Deserializer<'de>>::Error::custom)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
                 .map_err(<D as Deserializer<'de>>::Error::custom)?)
         } else {
