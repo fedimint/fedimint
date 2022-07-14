@@ -428,7 +428,6 @@ checksum = "05bba324e6baf655b882df672453dbbc527bc938cadd27750ae510aaccc3a66a"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
- "bitcoinconsensus",
  "secp256k1",
  "serde",
 ]
@@ -439,16 +438,6 @@ version = "0.10.0"
 source = "git+https://github.com/fedimint/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "bitcoinconsensus"
-version = "0.19.0-3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a8aa43b5cd02f856cb126a9af819e77b8910fdd74dd1407be649f2f5fe3a1b5"
-dependencies = [
- "cc",
- "libc",
 ]
 
 [[package]]
