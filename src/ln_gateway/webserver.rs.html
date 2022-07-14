@@ -44,6 +44,11 @@
 <span id="38">38</span>
 <span id="39">39</span>
 <span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
 <span class="kw">use</span> <span class="ident">tide::Response</span>;
@@ -52,6 +57,7 @@
 <span class="kw">use</span> <span class="ident">tokio::sync::Mutex</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::GatewayRequestInner</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">GatewayRequest</span>, <span class="ident">LnGatewayError</span>};
 <span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
 
@@ -62,14 +68,18 @@
     <span class="kw">let</span> <span class="ident">contract_id</span>: <span class="ident">ContractId</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">body_json</span>().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
-    <span class="kw">let</span> (<span class="ident">pay_sender</span>, <span class="ident">pay_receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+    <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
     <span class="kw">let</span> <span class="ident">gw_sender</span> <span class="op">=</span> { <span class="ident">req</span>.<span class="ident">state</span>().<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">clone</span>() };
 
+    <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">GatewayRequestInner</span> {
+        <span class="ident">request</span>: <span class="ident">contract_id</span>,
+        <span class="ident">sender</span>,
+    });
     <span class="ident">gw_sender</span>
-        .<span class="ident">send</span>(<span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">contract_id</span>, <span class="ident">pay_sender</span>))
+        .<span class="ident">send</span>(<span class="ident">msg</span>)
         .<span class="kw">await</span>
         .<span class="ident">expect</span>(<span class="string">&quot;failed to send over channel&quot;</span>);
-    <span class="ident">pay_receiver</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
+    <span class="ident">receiver</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(<span class="ident">Response::new</span>(<span class="number">200</span>))
 }

@@ -172,11 +172,70 @@
 <span id="166">166</span>
 <span id="167">167</span>
 <span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>};
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
 <span class="kw">use</span> <span class="ident">cln_plugin</span>::{<span class="ident">options</span>, <span class="ident">Builder</span>, <span class="ident">Error</span>, <span class="ident">Plugin</span>};
 <span class="kw">use</span> <span class="ident">cln_rpc::ClnRpc</span>;
+<span class="kw">use</span> <span class="ident">ln_gateway</span>::{
+    <span class="ident">BalancePayload</span>, <span class="ident">DepositAddressPayload</span>, <span class="ident">DepositPayload</span>, <span class="ident">GatewayRequestTrait</span>, <span class="ident">WithdrawPayload</span>,
+};
 <span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">Client</span>, <span class="ident">GatewayClientConfig</span>, <span class="ident">UserClientConfig</span>};
 <span class="kw">use</span> <span class="ident">rand::thread_rng</span>;
 <span class="kw">use</span> <span class="ident">secp256k1::KeyPair</span>;
@@ -187,7 +246,6 @@
 
 <span class="kw">use</span> <span class="ident">ln_gateway</span>::{<span class="ident">cln::HtlcAccepted</span>, <span class="ident">GatewayRequest</span>, <span class="ident">LnGateway</span>, <span class="ident">LnGatewayError</span>};
 <span class="kw">use</span> <span class="ident">minimint::config::load_from_file</span>;
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::incoming::Preimage</span>;
 <span class="kw">use</span> <span class="ident">mint_client::ln::gateway::LightningGateway</span>;
 
 <span class="kw">type</span> <span class="ident">PluginState</span> <span class="op">=</span> <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>;
@@ -283,25 +341,67 @@
     <span class="ident">LnGateway::new</span>(<span class="ident">federation_client</span>, <span class="ident">ln_client</span>, <span class="ident">sender</span>, <span class="ident">receiver</span>)
 }
 
+<span class="doccomment">/// Send message to LnGateway over channel and receive response over onshot channel</span>
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">gw_rpc</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>(<span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>, <span class="ident">message</span>: <span class="ident">R</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">R::Response</span>, <span class="ident">Error</span><span class="op">&gt;</span>
+<span class="kw">where</span>
+    <span class="ident">R</span>: <span class="ident">GatewayRequestTrait</span>,
+{
+    <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">R::Response</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+    <span class="kw">let</span> <span class="ident">gw_sender</span> <span class="op">=</span> { <span class="ident">plugin</span>.<span class="ident">state</span>().<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">clone</span>() };
+    <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">message</span>.<span class="ident">to_enum</span>(<span class="ident">sender</span>);
+    <span class="ident">gw_sender</span>
+        .<span class="ident">send</span>(<span class="ident">msg</span>)
+        .<span class="kw">await</span>
+        .<span class="ident">expect</span>(<span class="string">&quot;failed to send over channel&quot;</span>);
+    <span class="prelude-val">Ok</span>(<span class="ident">receiver</span>.<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;Failed to send over channel&quot;</span>)<span class="question-mark">?</span>)
+}
+
 <span class="doccomment">/// Handle core-lightning &quot;htlc_accepted&quot; events by attempting to buy this preimage from the federation</span>
 <span class="doccomment">/// and completing the payment</span>
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">htlc_accepted_handler</span>(
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">htlc_accepted_hook</span>(
     <span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>,
     <span class="ident">value</span>: <span class="ident">serde_json::Value</span>,
 ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
-    <span class="kw">let</span> (<span class="ident">htlc_sender</span>, <span class="ident">htlc_receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Preimage</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-    <span class="kw">let</span> <span class="ident">gw_sender</span> <span class="op">=</span> { <span class="ident">plugin</span>.<span class="ident">state</span>().<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">clone</span>() };
     <span class="kw">let</span> <span class="ident">htlc_accepted</span>: <span class="ident">HtlcAccepted</span> <span class="op">=</span> <span class="ident">serde_json::from_value</span>(<span class="ident">value</span>)<span class="question-mark">?</span>;
-    <span class="ident">gw_sender</span>
-        .<span class="ident">send</span>(<span class="ident">GatewayRequest::HtlcAccepted</span>(<span class="ident">htlc_accepted</span>, <span class="ident">htlc_sender</span>))
-        .<span class="kw">await</span>
-        .<span class="ident">expect</span>(<span class="string">&quot;failed to send over channel&quot;</span>);
-    <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="ident">htlc_receiver</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
-
+    <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="ident">gw_rpc</span>(<span class="ident">plugin</span>, <span class="ident">htlc_accepted</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span>({
       <span class="string">&quot;result&quot;</span>: <span class="string">&quot;resolve&quot;</span>,
       <span class="string">&quot;payment_key&quot;</span>: <span class="ident">preimage</span>,
     }))
+}
+
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">balance_rpc</span>(
+    <span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>,
+    <span class="kw">_</span>: <span class="ident">serde_json::Value</span>,
+) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">gw_rpc</span>(<span class="ident">plugin</span>, <span class="ident">BalancePayload</span> {}).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;balance_msat&quot;</span>: <span class="ident">amount</span>.<span class="ident">milli_sat</span> }))
+}
+
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">address</span>(
+    <span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>,
+    <span class="kw">_</span>: <span class="ident">serde_json::Value</span>,
+) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">address</span> <span class="op">=</span> <span class="ident">gw_rpc</span>(<span class="ident">plugin</span>, <span class="ident">DepositAddressPayload</span> {}).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;address&quot;</span>: <span class="ident">address</span> }))
+}
+
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">deposit_rpc</span>(
+    <span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>,
+    <span class="ident">value</span>: <span class="ident">serde_json::Value</span>,
+) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">deposit</span>: <span class="ident">DepositPayload</span> <span class="op">=</span> <span class="ident">serde_json::from_value</span>(<span class="ident">value</span>)<span class="question-mark">?</span>;
+    <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">gw_rpc</span>(<span class="ident">plugin</span>, <span class="ident">deposit</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;fedimint_txid&quot;</span>: <span class="ident">txid</span>.<span class="ident">to_string</span>() }))
+}
+
+<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">withdraw_rpc</span>(
+    <span class="ident">plugin</span>: <span class="ident">Plugin</span><span class="op">&lt;</span><span class="ident">PluginState</span><span class="op">&gt;</span>,
+    <span class="ident">value</span>: <span class="ident">serde_json::Value</span>,
+) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">withdraw</span>: <span class="ident">WithdrawPayload</span> <span class="op">=</span> <span class="ident">serde_json::from_value</span>(<span class="ident">value</span>)<span class="question-mark">?</span>;
+    <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">gw_rpc</span>(<span class="ident">plugin</span>, <span class="ident">withdraw</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;fedimint_txid&quot;</span>: <span class="ident">txid</span>.<span class="ident">to_string</span>() }))
 }
 
 <span class="attribute">#[<span class="ident">tokio::main</span>]</span>
@@ -318,10 +418,22 @@
             <span class="ident">options::Value::String</span>(<span class="string">&quot;default-dont-use&quot;</span>.<span class="ident">into</span>()),
             <span class="string">&quot;minimint config directory&quot;</span>,
         ))
+        .<span class="ident">rpcmethod</span>(<span class="string">&quot;gw-balance&quot;</span>, <span class="string">&quot;Display ecash token balance&quot;</span>, <span class="ident">balance_rpc</span>)
+        .<span class="ident">rpcmethod</span>(
+            <span class="string">&quot;gw-deposit&quot;</span>,
+            <span class="string">&quot;Deposit into federation. Args: &lt;txoutproof&gt; &lt;bitcoin-transaction&gt;&quot;</span>,
+            <span class="ident">deposit_rpc</span>,
+        )
+        .<span class="ident">rpcmethod</span>(
+            <span class="string">&quot;gw-withdraw&quot;</span>,
+            <span class="string">&quot;Withdraw from federation. Args: &lt;address&gt; &lt;sats&gt;&quot;</span>,
+            <span class="ident">withdraw_rpc</span>,
+        )
+        .<span class="ident">rpcmethod</span>(<span class="string">&quot;gw-address&quot;</span>, <span class="string">&quot;Generate deposit address&quot;</span>, <span class="ident">address</span>)
         .<span class="ident">hook</span>(<span class="string">&quot;htlc_accepted&quot;</span>, <span class="op">|</span><span class="ident">plugin</span>, <span class="ident">value</span><span class="op">|</span> <span class="kw">async</span> <span class="kw">move</span> {
             <span class="comment">// This callback needs to be `Sync`, so we use tokio::spawn</span>
             <span class="kw">let</span> <span class="ident">handle</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="ident">htlc_accepted_handler</span>(<span class="ident">plugin</span>, <span class="ident">value</span>).<span class="kw">await</span>.<span class="ident">or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+                <span class="ident">htlc_accepted_hook</span>(<span class="ident">plugin</span>, <span class="ident">value</span>).<span class="kw">await</span>.<span class="ident">or_else</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
                     <span class="macro">error!</span>(<span class="string">&quot;htlc_accepted error {:?}&quot;</span>, <span class="ident">e</span>);
                     <span class="comment">// cln_plugin doesn&#39;t handle errors very well ... tell it to proceed normally</span>
                     <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">&quot;result&quot;</span>: <span class="string">&quot;continue&quot;</span> }))
