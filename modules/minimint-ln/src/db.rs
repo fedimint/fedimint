@@ -1,15 +1,17 @@
 use crate::contracts::incoming::{IncomingContractOffer, PreimageDecryptionShare};
 use crate::contracts::ContractId;
-use crate::{ContractAccount, OutputOutcome};
+use crate::{ContractAccount, LightningGateway, OutputOutcome};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{OutPoint, PeerId};
+use secp256k1::PublicKey;
 
 const DB_PREFIX_CONTRACT: u8 = 0x40;
 const DB_PREFIX_OFFER: u8 = 0x41;
 const DB_PREFIX_PROPOSE_DECRYPTION_SHARE: u8 = 0x42;
 const DB_PREFIX_AGREED_DECRYPTION_SHARE: u8 = 0x43;
 const DB_PREFIX_CONTRACT_UPDATE: u8 = 0x44;
+const DB_PREFIX_LIGHTNING_GATEWAY: u8 = 0x45;
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractKey(pub ContractId);
@@ -94,4 +96,22 @@ impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_AGREED_DECRYPTION_SHARE;
     type Key = AgreedDecryptionShareKey;
     type Value = PreimageDecryptionShare;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct LightningGatewayKey(pub PublicKey);
+
+impl DatabaseKeyPrefixConst for LightningGatewayKey {
+    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    type Key = Self;
+    type Value = LightningGateway;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct LightningGatewayKeyPrefix;
+
+impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    type Key = LightningGatewayKey;
+    type Value = LightningGateway;
 }
