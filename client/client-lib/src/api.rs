@@ -138,7 +138,7 @@ pub struct WsFederationApi<C = WsClient> {
 }
 
 #[derive(Debug)]
-struct FederationMember<C> {
+pub struct FederationMember<C> {
     url: String,
     peer_id: PeerId,
     client: RwLock<Option<C>>,
@@ -237,6 +237,16 @@ impl<C> WsFederationApi<C> {
                 })
                 .collect(),
             max_evil,
+        }
+    }
+}
+
+impl FederationMember<WsClient> {
+    pub fn new(peer_id: PeerId, url: String) -> Self {
+        Self {
+            url,
+            peer_id,
+            client: RwLock::new(None),
         }
     }
 }
