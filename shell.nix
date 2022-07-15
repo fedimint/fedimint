@@ -22,6 +22,8 @@ pkgs.mkShell {
     openssl
     pkg-config
     perl
+    clippy
+    rustfmt
     rustc
     cargo
     rust-analyzer
@@ -37,5 +39,9 @@ pkgs.mkShell {
   ];
   OPENSSL_DIR = "${pkgs.openssl.dev}";
   OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+  shellHook = ''
+    # filter out global cargo installation so it doesn't interfere
+    PATH="$(echo $PATH | sed "s/:[^:]*\.cargo[^:]*//g")"
+  '';
 }
 
