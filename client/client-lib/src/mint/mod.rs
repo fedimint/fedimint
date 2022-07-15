@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -70,7 +70,6 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
-    // FIXME: implement three step process: unspent -> in flight -> spent/unspent
     pub fn mark_coins_spent(&self, mut batch: BatchTx, coins: &Coins<SpendableCoin>) {
         batch.append_from_iter(coins.iter().map(|(amount, coin)| {
             BatchItem::delete(CoinKey {
@@ -98,7 +97,6 @@ impl<'c> MintClient<'c> {
         Ok(coins)
     }
 
-    // TODO: implement input generation with change to avoid error on missing coin denominations
     /// Select coins to fund a transaction with.
     ///
     /// **ATTENTION**: calling this function multiple times without committing the batch to the
@@ -256,7 +254,10 @@ impl<'c> MintClient<'c> {
                             trace!("Mint returned retryable error: {:?}", e);
                             minimint_api::task::sleep(Duration::from_secs(1)).await
                         }
-                        Err(e) => return Err(e),
+                        Err(e) => {
+                            warn!("Mint returned error: {:?}", e);
+                            return Err(e);
+                        }
                     }
                 }
             })
@@ -419,6 +420,7 @@ mod tests {
     use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
+    use bitcoin::Address;
     use futures::executor::block_on;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
@@ -430,6 +432,7 @@ mod tests {
     use minimint_core::modules::ln::ContractAccount;
     use minimint_core::modules::mint::config::MintClientConfig;
     use minimint_core::modules::mint::Mint;
+    use minimint_core::modules::wallet::PegOutFees;
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;
     use std::sync::Arc;
@@ -478,6 +481,14 @@ mod tests {
             &self,
             _payment_hash: bitcoin::hashes::sha256::Hash,
         ) -> crate::api::Result<IncomingContractOffer> {
+            unimplemented!();
+        }
+
+        async fn fetch_peg_out_fees(
+            &self,
+            _address: Address,
+            _amount: bitcoin::Amount,
+        ) -> crate::api::Result<Option<PegOutFees>> {
             unimplemented!();
         }
     }

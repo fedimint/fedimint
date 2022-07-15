@@ -7,9 +7,9 @@ use std::sync::Arc;
 use crate::bitcoind::BitcoindRpc;
 use crate::config::WalletConfig;
 use crate::db::{
-    BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingPegOutKey,
-    PendingPegOutPrefixKey, PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey,
-    UTXOKey, UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+    BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey,
 };
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
@@ -24,7 +24,6 @@ use bitcoin::{
     Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
     Transaction, TxIn, TxOut, Txid,
 };
-use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
@@ -56,12 +55,7 @@ pub mod txoproof;
 #[cfg(feature = "native")]
 pub mod bitcoincore_rpc;
 
-pub const CONFIRMATION_TARGET: u16 = 24;
-
-/// The urgency of doing a peg-out is defined as the sum over all pending peg-outs of the amount of
-/// BTC blocks that have been mined since the peg-out was created. E.g. 10 transactions, each
-/// waiting for 10 blocks, would cross a minimum urgency threshold of 100.
-pub const MIN_PEG_OUT_URGENCY: u32 = 100;
+pub const CONFIRMATION_TARGET: u16 = 10;
 
 pub type PartialSig = Vec<u8>;
 
@@ -129,6 +123,7 @@ pub struct UnsignedTransaction {
     pub psbt: PartiallySignedTransaction,
     pub signatures: Vec<(PeerId, PegOutSignatureItem)>,
     pub change: bitcoin::Amount,
+    pub fees: PegOutFees,
 }
 
 struct StatelessWallet<'a> {
@@ -156,10 +151,23 @@ pub struct Feerate {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PegOutFees {
+    pub fee_rate: Feerate,
+    pub total_weight: u64,
+}
+
+impl PegOutFees {
+    pub fn amount(&self) -> Amount {
+        self.fee_rate.calculate_fee(self.total_weight)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOut {
     pub recipient: bitcoin::Address,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
+    pub fees: PegOutFees,
 }
 
 #[async_trait(?Send)]
@@ -347,6 +355,16 @@ impl FederationModule for Wallet {
                 output.recipient.network,
             ));
         }
+        let consensus_fee_rate = self.current_round_consensus().unwrap().fee_rate;
+        if output.fees.fee_rate < consensus_fee_rate {
+            return Err(WalletError::PegOutFeeRate(
+                output.fees.fee_rate,
+                consensus_fee_rate,
+            ));
+        }
+        if self.create_peg_out_tx(output).is_none() {
+            return Err(WalletError::NotEnoughSpendableUTXO);
+        }
         Ok(output.amount.into())
     }
 
@@ -354,21 +372,61 @@ impl FederationModule for Wallet {
         &'a self,
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
-        out_point: minimint_api::OutPoint,
+        _out_point: minimint_api::OutPoint,
     ) -> Result<minimint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
             amount = %output.amount, recipient = %output.recipient,
             "Queuing peg-out",
         );
-        batch.append_insert_new(
-            PendingPegOutKey(out_point),
-            PendingPegOut {
-                destination: output.recipient.script_pubkey(),
-                amount: output.amount,
-                pending_since_block: self.consensus_height().unwrap_or(0),
-            },
+
+        let mut tx = self
+            .create_peg_out_tx(output)
+            .expect("Should have been validated");
+        self.offline_wallet().sign_psbt(&mut tx.psbt);
+        let txid = tx.psbt.unsigned_tx.txid();
+        info!(
+            %txid,
+            "Signing peg out",
         );
+
+        let sigs = tx
+            .psbt
+            .inputs
+            .iter_mut()
+            .map(|input| {
+                assert_eq!(
+                    input.partial_sigs.len(),
+                    1,
+                    "There was already more than one (our) or no signatures in input"
+                );
+
+                // TODO: don't put sig into PSBT in the first place
+                // We actually take out our own signature so everyone finalizes the tx in the
+                // same epoch.
+                let sig = std::mem::take(&mut input.partial_sigs)
+                    .into_values()
+                    .next()
+                    .expect("asserted previously");
+
+                // We drop SIGHASH_ALL, because we always use that and it is only present in the
+                // PSBT for compatibility with other tools.
+                secp256k1::ecdsa::Signature::from_der(&sig.to_vec()[..sig.to_vec().len() - 1])
+                    .expect("we serialized it ourselves that way")
+            })
+            .collect::<Vec<_>>();
+
+        // Delete used UTXOs
+        batch.append_from_iter(
+            tx.psbt
+                .unsigned_tx
+                .input
+                .iter()
+                .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
+        );
+
+        batch.append_insert_new(UnsignedTransactionKey(txid), tx);
+        batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
         batch.commit();
         Ok(amount)
     }
@@ -379,90 +437,6 @@ impl FederationModule for Wallet {
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
-        // We only want to peg out if we have a real randomness beacon after the first consensus round
-        let round_consensus = match self.current_round_consensus() {
-            Some(consensus) => consensus,
-            None => return vec![],
-        };
-
-        // Check if we should create a peg-out transaction
-        let (peg_out_ids, pending_peg_outs): (Vec<minimint_api::OutPoint>, Vec<PendingPegOut>) =
-            self.pending_peg_outs().into_iter().unzip();
-        let urgency = pending_peg_outs
-            .iter()
-            .map(|peg_out| round_consensus.block_height - peg_out.pending_since_block)
-            .sum::<u32>();
-
-        trace!(
-            pending_peg_outs = pending_peg_outs.len(),
-            urgency,
-            urgency_threshold = MIN_PEG_OUT_URGENCY,
-        );
-
-        if urgency > MIN_PEG_OUT_URGENCY {
-            let (mut psbt, change) = self
-                .create_peg_out_tx(pending_peg_outs, round_consensus)
-                .await;
-            let txid = psbt.unsigned_tx.txid();
-
-            info!(
-                %txid,
-                peg_outs = peg_out_ids.len(),
-                "Signing peg out",
-            );
-            let sigs = psbt
-                .inputs
-                .iter_mut()
-                .map(|input| {
-                    assert_eq!(
-                        input.partial_sigs.len(),
-                        1,
-                        "There was already more than one (our) or no signatures in input"
-                    );
-
-                    // TODO: don't put sig into PSBT in the first place
-                    // We actually take out our own signature so everyone finalizes the tx in the
-                    // same epoch.
-                    let sig = std::mem::take(&mut input.partial_sigs)
-                        .into_values()
-                        .next()
-                        .expect("asserted previously");
-
-                    // We drop SIGHASH_ALL, because we always use that and it is only present in the
-                    // PSBT for compatibility with other tools.
-                    secp256k1::ecdsa::Signature::from_der(&sig.to_vec()[..sig.to_vec().len() - 1])
-                        .expect("we serialized it ourselves that way")
-                })
-                .collect::<Vec<_>>();
-
-            // Delete used UTXOs
-            batch.append_from_iter(
-                psbt.unsigned_tx
-                    .input
-                    .iter()
-                    .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
-            );
-
-            // Delete peg-outs from pending list
-            batch.append_from_iter(
-                peg_out_ids
-                    .into_iter()
-                    .map(|peg_out| BatchItem::delete(PendingPegOutKey(peg_out))),
-            );
-
-            batch.append_insert_new(
-                UnsignedTransactionKey(psbt.unsigned_tx.txid()),
-                UnsignedTransaction {
-                    psbt,
-                    signatures: vec![],
-                    change: change
-                        .map(|c| c.amount)
-                        .unwrap_or_else(|| Amount::from_sat(0)),
-                },
-            );
-            batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
-        }
-
         // Sign and finalize any unsigned transactions that have signatures
         let unsigned_txs: Vec<(UnsignedTransactionKey, UnsignedTransaction)> = self
             .db
@@ -477,6 +451,7 @@ impl FederationModule for Wallet {
                 mut psbt,
                 signatures,
                 change,
+                ..
             } = unsigned;
 
             let signers: HashSet<PeerId> = signatures
@@ -524,9 +499,6 @@ impl FederationModule for Wallet {
         audit.add_items(&self.db, &UTXOPrefixKey, |_, v| {
             v.amount.as_sat() as i64 * 1000
         });
-        audit.add_items(&self.db, &PendingPegOutPrefixKey, |_, v| {
-            v.amount.as_sat() as i64 * -1000
-        });
         audit.add_items(&self.db, &UnsignedTransactionPrefixKey, |_, v| {
             v.change.as_sat() as i64 * 1000
         });
@@ -540,13 +512,30 @@ impl FederationModule for Wallet {
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        const ENDPOINTS: &[ApiEndpoint<Wallet>] = &[api_endpoint! {
-            "/block_height",
-            async |module: &Wallet, _params: ()| -> u32 {
-                Ok(module.consensus_height().unwrap_or(0))
-            }
+        const ENDPOINTS: &[ApiEndpoint<Wallet>] = &[
+            api_endpoint! {
+                "/block_height",
+                async |module: &Wallet, _params: ()| -> u32 {
+                    Ok(module.consensus_height().unwrap_or(0))
+                }
+            },
+            api_endpoint! {
+                "/peg_out_fees",
+                async |module: &Wallet, params: (Address, u64)| -> Option<PegOutFees> {
+                    let (address, sats) = params;
+                    let consensus = module.current_round_consensus().unwrap();
+                    let tx = module.offline_wallet().create_tx(
+                        bitcoin::Amount::from_sat(sats),
+                        address.script_pubkey(),
+                        module.available_utxos(),
+                        consensus.fee_rate,
+                        &consensus.randomness_beacon
+                    );
 
-        }];
+                    Ok(tx.map(|tx| tx.fees))
+                }
+            },
+        ];
         ENDPOINTS
     }
 }
@@ -857,29 +846,15 @@ impl Wallet {
             .is_some()
     }
 
-    pub fn pending_peg_outs(&self) -> Vec<(OutPoint, PendingPegOut)> {
-        self.db
-            .find_by_prefix(&PendingPegOutPrefixKey)
-            .map_ok(|(key, peg_out)| (key.0, peg_out))
-            .collect::<Result<_, _>>()
-            .expect("DB error")
-    }
-
-    async fn create_peg_out_tx(
-        &self,
-        pending_peg_outs: Vec<PendingPegOut>,
-        consensus: RoundConsensus,
-    ) -> (PartiallySignedTransaction, Option<PendingPegOut>) {
-        let wallet = self.offline_wallet();
-        let (mut psbt, change) = wallet.create_tx(
-            pending_peg_outs,
+    fn create_peg_out_tx(&self, peg_out: &PegOut) -> Option<UnsignedTransaction> {
+        let change_tweak = self.current_round_consensus().unwrap().randomness_beacon;
+        self.offline_wallet().create_tx(
+            peg_out.amount,
+            peg_out.recipient.script_pubkey(),
             self.available_utxos(),
-            consensus.fee_rate,
-            &consensus.randomness_beacon,
-        );
-        // TODO: extract sigs and do stuff?!
-        wallet.sign_psbt(&mut psbt);
-        (psbt, change)
+            peg_out.fees.fee_rate,
+            &change_tweak,
+        )
     }
 
     fn available_utxos(&self) -> Vec<(UTXOKey, SpendableUTXO)> {
@@ -908,93 +883,83 @@ impl Wallet {
 }
 
 impl<'a> StatelessWallet<'a> {
+    /// Attempts to create a tx ready to be signed from available UTXOs.
+    /// Returns `None` if there are not enough `SpendableUTXO`
     fn create_tx(
         &self,
-        outputs: Vec<PendingPegOut>,
+        peg_out_amount: bitcoin::Amount,
+        destination: Script,
         mut utxos: Vec<(UTXOKey, SpendableUTXO)>,
-        feerate: Feerate,
+        fee_rate: Feerate,
         change_tweak: &[u8],
-    ) -> (PartiallySignedTransaction, Option<PendingPegOut>) {
+    ) -> Option<UnsignedTransaction> {
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
         //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
-
-        // We first calculate the total amount of outputs without change. We need at least that much
-        // plus fees in input amounts.
-        let peg_out_amount = outputs
-            .iter()
-            .map(|peg_out| peg_out.amount)
-            .reduce(|a, b| a + b)
-            .expect("We always peg out to at least one address");
-
         // We then go on to calculate the base size of the transaction `total_weight` and the
         // maximum weight per added input which we will add every time we select an input.
         let change_script = self.derive_script(change_tweak);
-        let out_weight: usize = outputs
-            .iter()
-            .map(|out| out.destination.len() * 4 + 1 + 32)
-            .sum::<usize>()
+        let out_weight = (destination.len() * 4 + 1 + 32
             // Add change script weight, it's very likely to be needed if not we just overpay in fees
             + 1 // script len varint, 1 byte for all addresses we accept
             + change_script.len() * 4 // script len
-            + 32; // value
-        let mut total_weight = 16 + // version
+            + 32) as u64; // value
+        let mut total_weight = (16 + // version
             12 + // up to 2**16-1 inputs
             12 + // up to 2**16-1 outputs
             out_weight + // weight of all outputs
-            16; // lock time
-        let max_input_weight = self
+            16) as u64; // lock time
+        let max_input_weight = (self
             .descriptor
             .max_satisfaction_weight()
             .expect("is satisfyable") +
             128 + // TxOutHash
             16 + // TxOutIndex
-            16; // sequence
+            16) as u64; // sequence
 
         // Finally we initialize our accumulator for selected input amounts
         let mut total_selected_value = bitcoin::Amount::from_sat(0);
+        let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
+        let mut fees = fee_rate.calculate_fee(total_weight);
 
-        // When selecting UTXOs we employ a very primitive algorithm:
-        //  1. Sort UTXOs by amount, least to biggest
-        //  2. Keep selecting UTXOs as long as we still lack input value to pay both all outputs
-        //     plus the fee
+        // When selecting UTXOs we select from largest to smallest amounts
         utxos.sort_by_key(|(_, utxo)| utxo.amount);
-        let selected_utxos = utxos
-            .into_iter()
-            .take_while(|(_, utxo)| {
-                let fee = feerate.calculate_fee(total_weight);
-                if total_selected_value < (peg_out_amount + fee) {
+        while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
+            match utxos.pop() {
+                Some((utxo_key, utxo)) => {
                     total_selected_value += utxo.amount;
                     total_weight += max_input_weight;
-                    true
-                } else {
-                    false
+                    fees = fee_rate.calculate_fee(total_weight);
+                    selected_utxos.push((utxo_key, utxo));
                 }
-            })
-            .collect::<Vec<_>>();
+                _ => return None, // Not enough UTXOs
+            }
+        }
 
-        // We might have selected too much value on the input side, so we need to pay the remainder
-        // back to ourselves.
-        let fees = feerate.calculate_fee(total_weight);
+        // We always pay ourselves change back to ensure that we don't lose anything due to dust
         let change = total_selected_value - fees - peg_out_amount;
-        let change_output = if change >= change_script.dust_value() {
-            Some(PendingPegOut {
-                destination: change_script,
-                amount: change,
-                pending_since_block: 0,
-            })
-        } else {
-            None
-        };
+        let output: Vec<TxOut> = vec![
+            TxOut {
+                value: peg_out_amount.as_sat(),
+                script_pubkey: destination,
+            },
+            TxOut {
+                value: change.as_sat(),
+                script_pubkey: change_script,
+            },
+        ];
+        let mut change_out = bitcoin::util::psbt::Output::default();
+        change_out
+            .proprietary
+            .insert(proprietary_tweak_key(), change_tweak.to_vec());
 
         info!(
             inputs = selected_utxos.len(),
-            input_value_btc = total_selected_value.as_btc(),
-            peg_outs = outputs.len(),
-            peg_out_value_btc = peg_out_amount.as_btc(),
-            fees_btc = fees.as_btc(),
-            fee_rate = feerate.sats_per_kvb,
-            change_btc = change.as_btc(),
+            input_sats = total_selected_value.as_sat(),
+            peg_out_sats = peg_out_amount.as_sat(),
+            fees_sats = fees.as_sat(),
+            fee_rate = fee_rate.sats_per_kvb,
+            change_sats = change.as_sat(),
             "Creating peg-out tx",
         );
 
@@ -1010,14 +975,7 @@ impl<'a> StatelessWallet<'a> {
                     witness: bitcoin::Witness::new(),
                 })
                 .collect(),
-            output: outputs
-                .iter()
-                .chain(change_output.as_ref())
-                .map(|peg_out| TxOut {
-                    value: peg_out.amount.as_sat(),
-                    script_pubkey: peg_out.destination.clone(),
-                })
-                .collect(),
+            output,
         };
         info!(txid = %transaction.txid(), "Creating peg-out tx");
 
@@ -1070,19 +1028,18 @@ impl<'a> StatelessWallet<'a> {
                     }
                 })
                 .collect(),
-            outputs: outputs
-                .iter()
-                .map(|_| Default::default())
-                .chain(change_output.clone().map(|_| {
-                    let mut cout = bitcoin::util::psbt::Output::default();
-                    cout.proprietary
-                        .insert(proprietary_tweak_key(), change_tweak.to_vec());
-                    cout
-                }))
-                .collect(),
+            outputs: vec![Default::default(), change_out],
         };
 
-        (psbt, change_output)
+        Some(UnsignedTransaction {
+            psbt,
+            signatures: vec![],
+            change,
+            fees: PegOutFees {
+                fee_rate,
+                total_weight,
+            },
+        })
     }
 
     fn sign_psbt(&self, psbt: &mut PartiallySignedTransaction) {
@@ -1210,8 +1167,8 @@ pub async fn broadcast_pending_tx(db: &Arc<dyn Database>, rpc: &dyn BitcoindRpc)
 }
 
 impl Feerate {
-    pub fn calculate_fee(&self, weight: usize) -> bitcoin::Amount {
-        let sats = self.sats_per_kvb * (weight as u64) / 1000;
+    pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
+        let sats = self.sats_per_kvb * weight / 1000;
         bitcoin::Amount::from_sat(sats)
     }
 }
@@ -1247,6 +1204,10 @@ pub enum WalletError {
     PegInProofError(#[from] PegInProofError),
     #[error("The peg-in was already claimed")]
     PegInAlreadyClaimed,
+    #[error("Peg-out fee rate {0:?} is set below consensus {1:?}")]
+    PegOutFeeRate(Feerate, Feerate),
+    #[error("Not enough SpendableUTXO")]
+    NotEnoughSpendableUTXO,
 }
 
 #[derive(Debug, Error)]

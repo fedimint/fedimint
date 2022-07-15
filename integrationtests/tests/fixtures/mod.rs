@@ -45,7 +45,7 @@ use minimint_api::db::batch::DbBatch;
 use minimint_api::db::mem_impl::MemDatabase;
 use minimint_api::db::Database;
 
-use minimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
+use minimint_api::{Amount, FederationModule, OutPoint, PeerId};
 use minimint_wallet::bitcoind::BitcoindRpc;
 use minimint_wallet::config::WalletConfig;
 use minimint_wallet::db::UTXOKey;
@@ -270,12 +270,15 @@ impl UserTest {
         Self::new(self.config.clone(), peers).await
     }
 
-    /// Helper to simplify the peg_out method call
-    pub async fn peg_out(&self, amount: u64, address: &Address) -> TransactionId {
-        self.client
-            .peg_out(bitcoin::Amount::from_sat(amount), address.clone(), rng())
+    /// Helper to simplify the peg_out method calls
+    pub async fn peg_out(&self, amount: u64, address: &Address) -> Amount {
+        let peg_out = self
+            .client
+            .fetch_peg_out_fees(bitcoin::Amount::from_sat(amount), address.clone())
             .await
-            .unwrap()
+            .unwrap();
+        self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
+        peg_out.fees.amount().into()
     }
 
     /// Returns the amount denominations of all coins from lowest to highest

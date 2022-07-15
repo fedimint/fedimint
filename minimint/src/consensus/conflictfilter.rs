@@ -29,6 +29,7 @@ where
     coin_set: HashSet<Coins<Coin>>,
     peg_in_set: HashSet<PegInProof>,
     contract_set: HashSet<ContractId>,
+    pegged_out: bool,
 }
 
 impl<I, T> ConflictFilterable<T> for I
@@ -45,36 +46,33 @@ where
             coin_set: Default::default(),
             peg_in_set: Default::default(),
             contract_set: Default::default(),
+            pegged_out: false,
         }
     }
 }
 
-impl<I, T, F> Iterator for ConflictFilter<I, T, F>
+impl<I, T, F> ConflictFilter<I, T, F>
 where
     I: Iterator<Item = T>,
     F: Fn(&T) -> &Transaction,
 {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let next = self.inner_iter.next()?;
-        let tx = (self.tx_accessor)(&next);
+    fn partition(&mut self, tx: &Transaction) -> Result<Transaction, Transaction> {
         for input in &tx.inputs {
             match input {
                 Input::Mint(ref coins) => {
                     // TODO: can this be done without cloning? E.g. hashing?
                     if !self.coin_set.insert(coins.clone()) {
-                        return None;
+                        return Err(tx.clone());
                     }
                 }
                 Input::Wallet(ref peg_in) => {
                     if !self.peg_in_set.insert(peg_in.as_ref().clone()) {
-                        return None;
+                        return Err(tx.clone());
                     }
                 }
                 Input::LN(input) => {
                     if !self.contract_set.insert(input.contract_id) {
-                        return None;
+                        return Err(tx.clone());
                     }
                 }
             }
@@ -88,10 +86,30 @@ where
                     .contract_set
                     .insert(contract_output.contract.contract_id())
                 {
-                    return None;
+                    return Err(tx.clone());
                 }
             }
+            if let Output::Wallet(_) = output {
+                if self.pegged_out {
+                    return Err(tx.clone());
+                }
+                self.pegged_out = true;
+            }
         }
-        Some(next)
+        Ok(tx.clone())
+    }
+
+    pub fn partitioned(&mut self) -> (Vec<Transaction>, Vec<Transaction>) {
+        let mut ok = vec![];
+        let mut err = vec![];
+
+        while let Some(next) = self.inner_iter.next() {
+            let tx = (self.tx_accessor)(&next);
+            match self.partition(tx) {
+                Ok(t) => ok.push(t),
+                Err(t) => err.push(t),
+            }
+        }
+        (ok, err)
     }
 }

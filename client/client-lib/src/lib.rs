@@ -26,6 +26,7 @@ use minimint_core::modules::ln::contracts::incoming::{
 };
 use minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
 use minimint_core::modules::ln::ContractOutput;
+use minimint_core::modules::wallet::PegOut;
 use minimint_core::transaction::TransactionItem;
 use minimint_core::{
     config::ClientConfig,
@@ -266,24 +267,40 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         self.context.db.apply_batch(batch).expect("DB error");
     }
 
+    pub async fn fetch_peg_out_fees(
+        &self,
+        amount: bitcoin::Amount,
+        recipient: Address,
+    ) -> Result<PegOut> {
+        let fees = self
+            .context
+            .api
+            .fetch_peg_out_fees(recipient.clone(), amount)
+            .await?;
+        fees.map(|fees| PegOut {
+            recipient,
+            amount,
+            fees,
+        })
+        .ok_or(ClientError::PegOutWaitingForUTXOs)
+    }
+
     pub async fn peg_out<R: RngCore + CryptoRng>(
         &self,
-        amt: bitcoin::Amount,
-        address: Address,
+        peg_out: PegOut,
         mut rng: R,
     ) -> Result<TransactionId> {
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount =
-            Amount::from(amt) + self.context.config.as_ref().fee_consensus.fee_peg_out_abs;
+        let funding_amount = self.context.config.as_ref().fee_consensus.fee_peg_out_abs
+            + (peg_out.amount + peg_out.fees.amount()).into();
         let (mut coin_keys, coin_input) = self
             .mint_client()
             .create_coin_input(batch.transaction(), funding_amount)?;
-        let pegout_output = self.wallet_client().create_pegout_output(amt, address);
 
         tx.input(&mut coin_keys, Input::Mint(coin_input));
-        tx.output(Output::Wallet(pegout_output));
+        tx.output(Output::Wallet(peg_out));
 
         self.submit_tx_with_change(tx, batch, &mut rng).await
     }
@@ -779,6 +796,8 @@ pub enum ClientError {
     LnClientError(#[from] LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
+    #[error("Peg-out waiting for UTXOs")]
+    PegOutWaitingForUTXOs,
     #[error("Timed out while waiting for contract to be accepted")]
     WaitContractTimeout,
     #[error("Error fetching offer")]

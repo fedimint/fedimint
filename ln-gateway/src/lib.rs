@@ -275,8 +275,13 @@ impl LnGateway {
         withdraw: WithdrawPayload,
     ) -> Result<TransactionId, LnGatewayError> {
         let rng = rand::rngs::OsRng::new().unwrap();
+        let peg_out = self
+            .federation_client
+            .fetch_peg_out_fees(withdraw.1, withdraw.0)
+            .await
+            .unwrap();
         self.federation_client
-            .peg_out(withdraw.1, withdraw.0, rng)
+            .peg_out(peg_out, rng)
             .await
             .map_err(LnGatewayError::ClientError)
     }

@@ -19,6 +19,8 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
+use bitcoin::{Address, Amount};
+use minimint_core::modules::wallet::PegOutFees;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -40,6 +42,13 @@ pub trait FederationApi: Send + Sync {
 
     /// Fetch the current consensus block height (trailing actual block height)
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
+
+    /// Fetch the expected peg-out fees given a peg-out tx
+    async fn fetch_peg_out_fees(
+        &self,
+        address: Address,
+        amount: Amount,
+    ) -> Result<Option<PegOutFees>>;
 }
 
 impl<'a> dyn FederationApi + 'a {
@@ -48,6 +57,7 @@ impl<'a> dyn FederationApi + 'a {
         T: TryIntoOutcome + Send,
     {
         match self.fetch_tx_outcome(out_point.txid).await? {
+            TransactionStatus::Rejected(e) => Err(ApiError::TransactionRejected(e)),
             TransactionStatus::Error(e) => Err(ApiError::TransactionError(e)),
             TransactionStatus::Accepted { outputs, .. } => {
                 let outputs_len = outputs.len();
@@ -146,8 +156,10 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 pub enum ApiError {
     #[error("Rpc error: {0}")]
     RpcError(#[from] JsonRpcError),
-    #[error("Accepted transaction errored on execution: {0}")]
+    #[error("Error retrieving the transaction: {0}")]
     TransactionError(String),
+    #[error("The transaction was rejected by consensus processing: {0}")]
+    TransactionRejected(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
     OutPointOutOfRange(usize, usize),
     #[error("Core error: {0}")]
@@ -187,6 +199,15 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
         self.request("/wallet/block_height", ()).await
+    }
+
+    async fn fetch_peg_out_fees(
+        &self,
+        address: Address,
+        amount: Amount,
+    ) -> Result<Option<PegOutFees>> {
+        self.request("/wallet/peg_out_fees", (address, amount.as_sat()))
+            .await
     }
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {

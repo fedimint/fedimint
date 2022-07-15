@@ -63,7 +63,7 @@ impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
             Output::Mint(coins) => coins.amount(),
-            Output::Wallet(peg_out) => peg_out.amount.into(),
+            Output::Wallet(peg_out) => (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(minimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
             Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
