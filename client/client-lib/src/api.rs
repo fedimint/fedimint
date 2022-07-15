@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
@@ -19,6 +21,8 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -146,6 +150,8 @@ pub type Result<T> = std::result::Result<T, ApiError>;
 pub enum ApiError {
     #[error("Rpc error: {0}")]
     RpcError(#[from] JsonRpcError),
+    #[error("Peers did not agree on the output")]
+    PeersDidNotAgree, // TODO: please suggest a better name
     #[error("Accepted transaction errored on execution: {0}")]
     TransactionError(String),
     #[error("Out point out of range, transaction got {0} outputs, requested element {1}")]
@@ -285,35 +291,38 @@ impl<C: JsonRpcClient> FederationMember<C> {
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {
-    pub async fn request<P: serde::Serialize, R: serde::de::DeserializeOwned>(
-        &self,
-        method: &str,
-        param: P,
-    ) -> Result<R> {
+    pub async fn request<P, R>(&self, method: &str, param: P) -> Result<R>
+    where
+        P: serde::Serialize,
+        R: serde::de::DeserializeOwned + Hash + Eq,
+    {
         let params = [serde_json::to_value(param).expect("encoding error")];
-        let requests = self
+        let mut requests = self
             .members
             .iter()
-            .map(|member| Box::pin(member.request(method, &params)));
+            .map(|member| member.request(method, &params))
+            .collect::<FuturesUnordered<_>>();
 
         let mut error = None;
-        let mut successes = 0;
-        for request in requests {
-            match request.await {
+        let mut responses = HashMap::new();
+        while let Some(response) = requests.next().await {
+            match response {
                 Ok(res) => {
-                    if successes == self.max_evil {
+                    // TODO: avoid double lookup
+                    if responses.get(&res).copied().unwrap_or(0) == self.max_evil {
                         return Ok(res);
-                    } else {
-                        successes += 1;
                     }
+                    *responses.entry(res).or_insert(0) += 1;
                 }
                 Err(e) => error = Some(e),
             };
         }
 
-        Err(ApiError::RpcError(
-            error.expect("If there was no success there has to be an error"),
-        ))
+        if let Some(err) = error {
+            Err(ApiError::RpcError(err))
+        } else {
+            Err(ApiError::PeersDidNotAgree)
+        }
     }
 }
 
