@@ -363,6 +363,9 @@
 <span id="357">357</span>
 <span id="358">358</span>
 <span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">cln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">webserver</span>;
@@ -615,7 +618,8 @@
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_balance_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">fetch_results</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span>;
+        <span class="ident">fetch_results</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">coins</span>().<span class="ident">amount</span>())
     }
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_address_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Address</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
@@ -649,9 +653,11 @@
         <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted</span>
         <span class="kw">loop</span> {
             <span class="kw">let</span> <span class="ident">least_wait_until</span> <span class="op">=</span> <span class="ident">Instant::now</span>() <span class="op">+</span> <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span> {
-                <span class="macro">debug!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>)
-            };
+            <span class="kw">for</span> <span class="ident">fetch_result</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span> {
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">fetch_result</span> {
+                    <span class="macro">debug!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>)
+                };
+            }
 
             <span class="comment">// Handle messages from webserver and plugin</span>
             <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">msg</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">try_recv</span>() {

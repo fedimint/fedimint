@@ -631,8 +631,6 @@
 <span id="625">625</span>
 <span id="626">626</span>
 <span id="627">627</span>
-<span id="628">628</span>
-<span id="629">629</span>
 </pre><pre class="rust"><code><span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -640,7 +638,9 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
 <span class="kw">use</span> <span class="ident">db</span>::{<span class="ident">CoinKey</span>, <span class="ident">CoinKeyPrefix</span>, <span class="ident">OutputFinalizationKey</span>, <span class="ident">OutputFinalizationKeyPrefix</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};
+<span class="kw">use</span> <span class="ident">futures::stream::FuturesUnordered</span>;
+<span class="kw">use</span> <span class="ident">futures::StreamExt</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::config::MintClientConfig</span>;
@@ -868,35 +868,33 @@
             .<span class="ident">collect</span>()
     }
 
-    <span class="comment">// FIXME: remove</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_all_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">active_issuances</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">OutputFinalizationKeyPrefix</span>)
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-
-        <span class="comment">// TODO: return out points instead</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_ids</span> <span class="op">=</span> <span class="macro">vec!</span>[];
-        <span class="kw">for</span> (<span class="ident">OutputFinalizationKey</span>(<span class="ident">out_point</span>), <span class="kw">_</span>) <span class="kw">in</span> <span class="ident">active_issuances</span> {
-            <span class="kw">loop</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_coins</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">out_point</span>).<span class="kw">await</span> {
-                    <span class="prelude-val">Ok</span>(()) =&gt; {
-                        <span class="ident">tx_ids</span>.<span class="ident">push</span>(<span class="ident">out_point</span>.<span class="ident">txid</span>);
-                        <span class="kw">break</span>;
-                    }
-                    <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying</span>
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; {
-                        <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, <span class="ident">e</span>);
-                        <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>)).<span class="kw">await</span>
-                    }
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
-                }
-            }
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_all_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">active_issuances</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">list_active_issuances</span>();
+        <span class="kw">if</span> <span class="ident">active_issuances</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">return</span> <span class="ident">Vec::new</span>();
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">tx_ids</span>)
+
+        <span class="kw">let</span> <span class="ident">stream</span> <span class="op">=</span> <span class="ident">active_issuances</span>
+            .<span class="ident">into_iter</span>()
+            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">out_point</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+                <span class="kw">loop</span> {
+                    <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_coins</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">out_point</span>).<span class="kw">await</span> {
+                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+                            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">out_point</span>);
+                        }
+                        <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying</span>
+                        <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; {
+                            <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, <span class="ident">e</span>);
+                            <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>)).<span class="kw">await</span>
+                        }
+                        <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+                    }
+                }
+            })
+            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">FuturesUnordered</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+        <span class="ident">stream</span>.<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>().<span class="kw">await</span>
     }
 }
 
@@ -1164,9 +1162,7 @@
         });
         <span class="ident">client_db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-        <span class="ident">client</span>.<span class="ident">fetch_all_coins</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="ident">client_db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
+        <span class="ident">client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span>;
     }
 
     <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>

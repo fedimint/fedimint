@@ -328,8 +328,8 @@
             };
         }
         <span class="ident">Command::Fetch</span> =&gt; {
-            <span class="kw">for</span> <span class="ident">id</span> <span class="kw">in</span> <span class="ident">client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>() {
-                <span class="macro">info!</span>(<span class="ident">issuance</span> <span class="op">=</span> <span class="op">%</span><span class="ident">id</span>.<span class="ident">to_hex</span>(), <span class="string">&quot;Fetched coins&quot;</span>);
+            <span class="kw">for</span> <span class="ident">fetch_result</span> <span class="kw">in</span> <span class="ident">client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span> {
+                <span class="macro">info!</span>(<span class="ident">issuance</span> <span class="op">=</span> <span class="op">%</span><span class="ident">fetch_result</span>.<span class="ident">unwrap</span>().<span class="ident">txid</span>.<span class="ident">to_hex</span>(), <span class="string">&quot;Fetched coins&quot;</span>);
             }
         }
         <span class="ident">Command::Info</span> =&gt; {
