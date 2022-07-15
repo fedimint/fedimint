@@ -1,7 +1,7 @@
 extern crate minimint_api;
 
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::NetworkInfo;
@@ -96,7 +96,7 @@ impl MinimintServer {
         let ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
         let consensus = Arc::new(MinimintConsensus {
-            rng_gen: Box::new(CloneRngGen(Mutex::new(OsRng::new().unwrap()))), //FIXME
+            rng_gen: Box::new(OsRngGen),
             cfg: cfg.clone(),
             mint,
             wallet,
@@ -218,12 +218,11 @@ impl MinimintServer {
     }
 }
 
-struct CloneRngGen<T: RngCore + CryptoRng + Clone + Send>(Mutex<T>);
-
-impl<T: RngCore + CryptoRng + Clone + Send> RngGenerator for CloneRngGen<T> {
-    type Rng = T;
+struct OsRngGen;
+impl RngGenerator for OsRngGen {
+    type Rng = OsRng;
 
     fn get_rng(&self) -> Self::Rng {
-        self.0.lock().unwrap().clone()
+        OsRng::new().unwrap()
     }
 }
