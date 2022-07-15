@@ -41,7 +41,7 @@ fn item_message(item: &ConsensusItem) -> String {
             )
         }
         ConsensusItem::LN(DecryptionShareCI { contract_id, .. }) => {
-            format!("LN Decrytion Share for contract {}", contract_id)
+            format!("LN Decryption Share for contract {}", contract_id)
         }
         ConsensusItem::Transaction(Transaction {
             inputs, outputs, ..
