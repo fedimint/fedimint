@@ -72,12 +72,30 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::FederationApi</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::SpendableCoin</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::Network</span>;
 <span class="kw">use</span> <span class="ident">lightning_invoice::Currency</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding::Decodable</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::ParseAmountError</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_coins</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span> {
@@ -98,7 +116,23 @@
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_bitcoin_amount</span>(
     <span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
 ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">bitcoin::Amount</span>, <span class="ident">bitcoin::util::amount::ParseAmountError</span><span class="op">&gt;</span> {
-    <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">i</span>) <span class="op">=</span> <span class="ident">s</span>.<span class="ident">find</span>(<span class="ident">char::is_alphabetic</span>) {
+        <span class="kw">let</span> (<span class="ident">amt</span>, <span class="ident">denom</span>) <span class="op">=</span> <span class="ident">s</span>.<span class="ident">split_at</span>(<span class="ident">i</span>);
+        <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">amt</span>, <span class="ident">denom</span>.<span class="ident">parse</span>()<span class="question-mark">?</span>)
+    } <span class="kw">else</span> {
+        <span class="comment">//default to satoshi</span>
+        <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+    }
+}
+
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_minimint_amount</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">minimint_api::Amount</span>, <span class="ident">ParseAmountError</span><span class="op">&gt;</span> {
+    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">i</span>) <span class="op">=</span> <span class="ident">s</span>.<span class="ident">find</span>(<span class="ident">char::is_alphabetic</span>) {
+        <span class="kw">let</span> (<span class="ident">amt</span>, <span class="ident">denom</span>) <span class="op">=</span> <span class="ident">s</span>.<span class="ident">split_at</span>(<span class="ident">i</span>);
+        <span class="ident">minimint_api::Amount::from_str_in</span>(<span class="ident">amt</span>, <span class="ident">denom</span>.<span class="ident">parse</span>()<span class="question-mark">?</span>)
+    } <span class="kw">else</span> {
+        <span class="comment">//default to satoshi</span>
+        <span class="ident">minimint_api::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+    }
 }
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BorrowedClientContext</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">C</span><span class="op">&gt;</span> {

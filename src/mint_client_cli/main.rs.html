@@ -199,6 +199,15 @@
 <span id="193">193</span>
 <span id="194">194</span>
 <span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::hex::ToHex</span>;
 <span class="kw">use</span> <span class="ident">clap::Parser</span>;
@@ -207,7 +216,9 @@
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof::TxOutProof</span>;
 <span class="kw">use</span> <span class="ident">mint_client::mint::SpendableCoin</span>;
-<span class="kw">use</span> <span class="ident">mint_client::utils</span>::{<span class="ident">from_hex</span>, <span class="ident">parse_bitcoin_amount</span>, <span class="ident">parse_coins</span>, <span class="ident">serialize_coins</span>};
+<span class="kw">use</span> <span class="ident">mint_client::utils</span>::{
+    <span class="ident">from_hex</span>, <span class="ident">parse_bitcoin_amount</span>, <span class="ident">parse_coins</span>, <span class="ident">parse_minimint_amount</span>, <span class="ident">serialize_coins</span>,
+};
 <span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">Client</span>, <span class="ident">UserClientConfig</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
@@ -242,7 +253,10 @@
     },
 
     <span class="doccomment">/// Prepare coins to send to a third party as a payment</span>
-    <span class="ident">Spend</span> { <span class="ident">amount</span>: <span class="ident">Amount</span> },
+    <span class="ident">Spend</span> {
+        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> <span class="op">=</span> <span class="ident">parse_minimint_amount</span>))]</span>
+        <span class="ident">amount</span>: <span class="ident">Amount</span>,
+    },
 
     <span class="doccomment">/// Withdraw funds from the federation</span>
     <span class="ident">PegOut</span> {
@@ -261,7 +275,11 @@
     <span class="ident">Info</span>,
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway</span>
-    <span class="ident">LnInvoice</span> { <span class="ident">amount</span>: <span class="ident">Amount</span>, <span class="ident">description</span>: <span class="ident">String</span> },
+    <span class="ident">LnInvoice</span> {
+        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> <span class="op">=</span> <span class="ident">parse_minimint_amount</span>))]</span>
+        <span class="ident">amount</span>: <span class="ident">Amount</span>,
+        <span class="ident">description</span>: <span class="ident">String</span>,
+    },
 
     <span class="doccomment">/// Wait for incoming invoice to be paid</span>
     <span class="ident">WaitInvoice</span> { <span class="ident">invoice</span>: <span class="ident">lightning_invoice::Invoice</span> },
