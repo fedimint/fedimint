@@ -5,7 +5,7 @@ set -eu
 FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-5}
 export RUST_LOG=error,ln_gateway=off
-export PEG_IN_AMOUNT=0.00099999
+export PEG_IN_AMOUNT=99999
 
 source ./scripts/build.sh $FM_FED_SIZE
 source ./scripts/setup-tests.sh
@@ -44,7 +44,7 @@ time3=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "LN RECEIVE $i"
-  INVOICE="$($FM_MINT_CLIENT ln-invoice 500000 '$RANDOM')"
+  INVOICE="$($FM_MINT_CLIENT ln-invoice '500000msat' '$RANDOM')"
   INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
   echo "RESULT $INVOICE_STATUS"

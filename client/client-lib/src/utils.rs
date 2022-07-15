@@ -4,6 +4,7 @@ use bitcoin::Network;
 use lightning_invoice::Currency;
 use minimint_api::db::Database;
 use minimint_api::encoding::Decodable;
+use minimint_api::ParseAmountError;
 use minimint_core::modules::mint::tiered::coins::Coins;
 
 pub fn parse_coins(s: &str) -> Coins<SpendableCoin> {
@@ -24,7 +25,23 @@ pub fn from_hex<D: Decodable>(s: &str) -> Result<D, anyhow::Error> {
 pub fn parse_bitcoin_amount(
     s: &str,
 ) -> Result<bitcoin::Amount, bitcoin::util::amount::ParseAmountError> {
-    bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+    if let Some(i) = s.find(char::is_alphabetic) {
+        let (amt, denom) = s.split_at(i);
+        bitcoin::Amount::from_str_in(amt, denom.parse()?)
+    } else {
+        //default to satoshi
+        bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+    }
+}
+
+pub fn parse_minimint_amount(s: &str) -> Result<minimint_api::Amount, ParseAmountError> {
+    if let Some(i) = s.find(char::is_alphabetic) {
+        let (amt, denom) = s.split_at(i);
+        minimint_api::Amount::from_str_in(amt, denom.parse()?)
+    } else {
+        //default to satoshi
+        minimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+    }
 }
 
 pub struct BorrowedClientContext<'a, C> {
