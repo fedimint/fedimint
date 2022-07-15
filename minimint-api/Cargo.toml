@@ -33,7 +33,7 @@ gloo-timers = { version = "0.2.4", features = ["futures"] }
 wasm-bindgen-futures = "0.4.31"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.19.2", features = ["rt", "rt-multi-thread", "time"] }
+tokio = { version = "1.19.2", features = ["rt", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
 tempfile = "3.3.0"
