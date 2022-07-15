@@ -59,14 +59,14 @@ pub struct TlsTcpConnector {
     cert_store: RootCertStore,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TlsConfig {
     pub our_certificate: rustls::Certificate,
     pub our_private_key: rustls::PrivateKey,
     pub peer_certs: HashMap<PeerId, rustls::Certificate>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PeerCertStore {
     peer_certificates: Vec<(PeerId, rustls::Certificate)>,
 }
@@ -394,5 +394,188 @@ pub mod mock {
         .boxed();
 
         tokio::join!(send_future, receive_future);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::gen_cert_and_key;
+    use crate::net::connect::{ConnectionListener, TlsConfig};
+    use crate::net::framed::AnyFramedTransport;
+    use crate::{Connector, TlsTcpConnector};
+    use futures::{SinkExt, StreamExt};
+    use minimint_api::PeerId;
+
+    fn gen_connector_config(count: usize) -> Vec<TlsConfig> {
+        let peer_keys = (0..count)
+            .map(|id| {
+                let peer = PeerId::from(id as u16);
+                let cert_key = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
+                cert_key
+            })
+            .collect::<Vec<_>>();
+
+        peer_keys
+            .iter()
+            .map(|(cert, key)| TlsConfig {
+                our_certificate: cert.clone(),
+                our_private_key: key.clone(),
+                peer_certs: peer_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(peer, (cert, _))| (PeerId::from(peer as u16), cert.clone()))
+                    .collect(),
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn connect_success() {
+        // FIXME: don't actually bind here, probably requires yet another Box<dyn Trait> layer :(
+        let bind_addr = "127.0.0.1:7000".to_owned();
+        let connectors = gen_connector_config(5)
+            .into_iter()
+            .map(TlsTcpConnector::new)
+            .collect::<Vec<_>>();
+
+        let mut server: ConnectionListener<u64> =
+            connectors[0].listen(bind_addr.clone()).await.unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let (peer, mut conn) = server.next().await.unwrap().unwrap();
+            assert_eq!(peer.to_usize(), 2);
+            let received = conn.next().await.unwrap().unwrap();
+            assert_eq!(received, 42);
+            conn.send(21).await.unwrap();
+            assert!(conn.next().await.unwrap().is_err());
+        });
+
+        let (peer_of_a, mut client_a): (_, AnyFramedTransport<u64>) = connectors[2]
+            .connect_framed(bind_addr.clone(), PeerId::from(0))
+            .await
+            .unwrap();
+        assert_eq!(peer_of_a.to_usize(), 0);
+        client_a.send(42).await.unwrap();
+        let received = client_a.next().await.unwrap().unwrap();
+        assert_eq!(received, 21);
+        drop(client_a);
+
+        server_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn connect_reject() {
+        let bind_addr = "127.0.0.1:7001".to_owned();
+        let cfg = gen_connector_config(5);
+
+        let honest = TlsTcpConnector::new(cfg[0].clone());
+
+        let mut malicious_wrong_key_cfg = cfg[1].clone();
+        malicious_wrong_key_cfg.our_private_key = cfg[2].our_private_key.clone();
+        let malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg);
+
+        // Honest server, malicious client with wrong private key
+        {
+            let mut server: ConnectionListener<u64> =
+                honest.listen(bind_addr.clone()).await.unwrap();
+
+            let server_task = tokio::spawn(async move {
+                let conn_res = server.next().await.unwrap();
+                assert_eq!(
+                    conn_res.err().unwrap().to_string().as_str(),
+                    "invalid peer certificate signature"
+                );
+            });
+
+            let err_anytime = async {
+                let (_peer, mut conn): (_, AnyFramedTransport<u64>) = malicious_wrong_key
+                    .connect_framed(bind_addr.clone(), PeerId::from(0))
+                    .await?;
+
+                conn.send(42).await?;
+                conn.flush().await?;
+                conn.next().await.unwrap()?;
+
+                Result::<_, anyhow::Error>::Ok(())
+            };
+
+            let conn_res = err_anytime.await;
+            assert_eq!(
+                conn_res.err().unwrap().to_string().as_str(),
+                "received fatal alert: AccessDenied"
+            );
+
+            server_task.await.unwrap();
+        }
+
+        // Malicious server with wrong key, honest client
+        {
+            let mut server: ConnectionListener<u64> =
+                malicious_wrong_key.listen(bind_addr.clone()).await.unwrap();
+
+            let server_task = tokio::spawn(async move {
+                let conn_res = server.next().await.unwrap();
+                assert_eq!(
+                    conn_res.err().unwrap().to_string().as_str(),
+                    "received fatal alert: BadCertificate"
+                );
+            });
+
+            let err_anytime = async {
+                let (_peer, mut conn): (_, AnyFramedTransport<u64>) = honest
+                    .connect_framed(bind_addr.clone(), PeerId::from(1))
+                    .await?;
+
+                conn.send(42).await?;
+                conn.flush().await?;
+                conn.next().await.unwrap()?;
+
+                Result::<_, anyhow::Error>::Ok(())
+            };
+
+            let conn_res = err_anytime.await;
+            assert_eq!(
+                conn_res.err().unwrap().to_string().as_str(),
+                "invalid peer certificate signature"
+            );
+
+            server_task.await.unwrap();
+        }
+
+        // Server with wrong certificate, honest client
+        {
+            let mut server: ConnectionListener<u64> = TlsTcpConnector::new(cfg[2].clone())
+                .listen(bind_addr.clone())
+                .await
+                .unwrap();
+
+            let server_task = tokio::spawn(async move {
+                let conn_res = server.next().await.unwrap();
+                assert_eq!(
+                    conn_res.err().unwrap().to_string().as_str(),
+                    "received fatal alert: BadCertificate"
+                );
+            });
+
+            let err_anytime = async {
+                let (_peer, mut conn): (_, AnyFramedTransport<u64>) = honest
+                    .connect_framed(bind_addr.clone(), PeerId::from(0))
+                    .await?;
+
+                conn.send(42).await?;
+                conn.flush().await?;
+                conn.next().await.unwrap()?;
+
+                Result::<_, anyhow::Error>::Ok(())
+            };
+
+            let conn_res = err_anytime.await;
+            assert_eq!(
+                conn_res.err().unwrap().to_string().as_str(),
+                "invalid peer certificate contents: invalid peer certificate: CertNotValidForName"
+            );
+
+            server_task.await.unwrap();
+        }
     }
 }

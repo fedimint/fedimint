@@ -186,7 +186,7 @@ impl ServerConfig {
     }
 }
 
-fn gen_cert_and_key(
+pub(crate) fn gen_cert_and_key(
     name: &str,
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
     let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
