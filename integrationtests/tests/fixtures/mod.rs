@@ -327,11 +327,11 @@ impl UserTest {
     }
 
     pub async fn assert_total_coins(&self, amount: Amount) {
-        self.client.fetch_all_coins().await.unwrap();
+        self.client.fetch_all_coins().await;
         assert_eq!(self.total_coins(), amount);
     }
     pub async fn assert_coin_amounts(&self, amounts: Vec<Amount>) {
-        self.client.fetch_all_coins().await.unwrap();
+        self.client.fetch_all_coins().await;
         assert_eq!(self.coin_amounts(), amounts);
     }
 }
@@ -426,7 +426,7 @@ impl FederationTest {
     pub async fn mint_coins_for_user(&self, user: &UserTest, amount: Amount) {
         self.database_add_coins_for_user(user, amount);
         self.run_consensus_epochs(1).await;
-        user.client.fetch_all_coins().await.unwrap();
+        user.client.fetch_all_coins().await;
     }
 
     /// Mines a UTXO owned by the federation.

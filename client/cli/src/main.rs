@@ -127,8 +127,8 @@ async fn main() {
             };
         }
         Command::Fetch => {
-            for id in client.fetch_all_coins().await.unwrap() {
-                info!(issuance = %id.to_hex(), "Fetched coins");
+            for fetch_result in client.fetch_all_coins().await {
+                info!(issuance = %fetch_result.unwrap().txid.to_hex(), "Fetched coins");
             }
         }
         Command::Info => {

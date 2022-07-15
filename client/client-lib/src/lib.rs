@@ -318,14 +318,13 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         Ok(())
     }
 
-    pub async fn fetch_all_coins<'a>(&self) -> Result<Vec<TransactionId>> {
-        let mut batch = DbBatch::new();
-        let res = self
-            .mint_client()
-            .fetch_all_coins(batch.transaction())
-            .await?;
-        self.context.db.apply_batch(batch).expect("DB error");
-        Ok(res)
+    pub async fn fetch_all_coins<'a>(&self) -> Vec<Result<OutPoint>> {
+        self.mint_client()
+            .fetch_all_coins()
+            .await
+            .into_iter()
+            .map(|res| res.map_err(|e| e.into()))
+            .collect()
     }
 
     pub fn coins(&self) -> Coins<SpendableCoin> {
