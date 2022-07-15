@@ -1,7 +1,5 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
@@ -293,16 +291,15 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         param: P,
     ) -> Result<R> {
         let params = [serde_json::to_value(param).expect("encoding error")];
-        let mut requests = self
+        let requests = self
             .members
             .iter()
-            .map(|member| member.request(method, &params))
-            .collect::<FuturesUnordered<_>>();
+            .map(|member| Box::pin(member.request(method, &params)));
 
         let mut error = None;
         let mut successes = 0;
-        while let Some(response) = requests.next().await {
-            match response {
+        for request in requests {
+            match request.await {
                 Ok(res) => {
                     if successes == self.max_evil {
                         return Ok(res);
