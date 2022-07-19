@@ -82,7 +82,7 @@ INFO mint_client_cli: Fetched coins issuance=5b1ac4e9604...
 
 ### Using the gateway
 
-First let's have the gatway execute a peg-in so it has an ecash token balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
+First let's have the gateway execute a peg-in so it has an ecash token balance. We can use the same `pegin.sh` script as before, but add an extra parameter to tell it to use the gateway:
 
 ```shell
 $ ./scripts/pegin.sh 0.0001 1
