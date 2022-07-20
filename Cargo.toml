@@ -9,6 +9,7 @@ members = [
     "minimint-api",
     "client/cli",
     "client/client-lib",
+    "client/clientd",
     "modules/minimint-mint",
     "modules/minimint-ln",
     "modules/minimint-wallet",

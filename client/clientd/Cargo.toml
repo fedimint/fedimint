@@ -1,0 +1,20 @@
+[package]
+name = "clientd"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mint-client = { path = "../client-lib" }
+minimint-api = { path = "../../minimint-api" }
+minimint-core = { path = "../../minimint-core" }
+sled = "0.34.6"
+tokio = { version = "1.19.2", features = ["full"] }
+serde = { version = "1.0.118", features = [ "derive" ] }
+tracing ="0.1.22"
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+clap = { version = "3.1.18", features = ["derive"] }
+axum = "0.5.13"
+tower = "0.4.13"
+tower-http = { version = "0.3.4", features = [ "trace" ] }
