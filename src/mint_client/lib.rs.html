@@ -814,6 +814,31 @@
 <span id="808">808</span>
 <span id="809">809</span>
 <span id="810">810</span>
+<span id="811">811</span>
+<span id="812">812</span>
+<span id="813">813</span>
+<span id="814">814</span>
+<span id="815">815</span>
+<span id="816">816</span>
+<span id="817">817</span>
+<span id="818">818</span>
+<span id="819">819</span>
+<span id="820">820</span>
+<span id="821">821</span>
+<span id="822">822</span>
+<span id="823">823</span>
+<span id="824">824</span>
+<span id="825">825</span>
+<span id="826">826</span>
+<span id="827">827</span>
+<span id="828">828</span>
+<span id="829">829</span>
+<span id="830">830</span>
+<span id="831">831</span>
+<span id="832">832</span>
+<span id="833">833</span>
+<span id="834">834</span>
+<span id="835">835</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -823,9 +848,14 @@
 
 <span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">sync::Arc</span>, <span class="ident">time::Duration</span>};
 
+<span class="kw">use</span> <span class="ident">futures::StreamExt</span>;
+
 <span class="kw">use</span> <span class="ident">bitcoin::util::key::KeyPair</span>;
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span> <span class="kw">as</span> <span class="ident">BitcoinTransaction</span>};
+
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span>;
+<span class="kw">use</span> <span class="ident">futures::stream::FuturesUnordered</span>;
+
 <span class="kw">use</span> <span class="ident">lightning::ln::PaymentSecret</span>;
 <span class="kw">use</span> <span class="ident">lightning::routing::gossip::RoutingFees</span>;
 <span class="kw">use</span> <span class="ident">lightning::routing::router</span>::{<span class="ident">RouteHint</span>, <span class="ident">RouteHintHop</span>};
@@ -842,6 +872,8 @@
 };
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">outgoing</span>, <span class="ident">Contract</span>, <span class="ident">IdentifyableContract</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractOutput</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOut</span>;
+<span class="kw">use</span> <span class="ident">minimint_core::outcome::TransactionStatus</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::transaction::TransactionItem</span>;
 <span class="kw">use</span> <span class="ident">minimint_core</span>::{
     <span class="ident">config::ClientConfig</span>,
@@ -866,6 +898,7 @@
 };
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::LnClientError</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::db</span>::{<span class="ident">CoinKey</span>, <span class="ident">PendingCoinsKeyPrefix</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::MintClientError</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::TransactionBuilder</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils</span>::{<span class="ident">network_to_currency</span>, <span class="ident">OwnedClientContext</span>};
@@ -1007,23 +1040,13 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_tx_with_change</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">tx</span>: <span class="ident">TransactionBuilder</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">Accumulator</span><span class="op">&lt;</span><span class="ident">BatchItem</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
+        <span class="ident">batch</span>: <span class="ident">Accumulator</span><span class="op">&lt;</span><span class="ident">BatchItem</span><span class="op">&gt;</span>,
+        <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">change</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">change_required</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>);
-        <span class="kw">let</span> <span class="ident">final_tx</span> <span class="op">=</span>
-            <span class="self">self</span>.<span class="ident">mint_client</span>()
-                .<span class="ident">finalize_change</span>(<span class="ident">change</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">tx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">final_tx</span>.<span class="ident">tx_hash</span>();
-        <span class="kw">let</span> <span class="ident">mint_tx_id</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">submit_transaction</span>(<span class="ident">final_tx</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// TODO: make check part of submit_transaction</span>
-        <span class="macro">assert_eq!</span>(
-            <span class="ident">txid</span>, <span class="ident">mint_tx_id</span>,
-            <span class="string">&quot;Federation is faulty, returned wrong tx id.&quot;</span>
-        );
-
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-        <span class="prelude-val">Ok</span>(<span class="ident">txid</span>)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>
+            .<span class="ident">mint_client</span>()
+            .<span class="ident">submit_tx_with_change</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>, <span class="ident">tx</span>, <span class="ident">batch</span>, <span class="ident">rng</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent</span>
@@ -1039,9 +1062,7 @@
         <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
-
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">create_coin_input_from_coins</span>(<span class="ident">coins</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
+        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">DbBatch::new</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1054,14 +1075,11 @@
         <span class="ident">coins</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span>,
         <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+        <span class="kw">let</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
 
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">create_coin_input</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">coins</span>.<span class="ident">amount</span>())<span class="question-mark">?</span>;
-
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
+        <span class="kw">let</span> <span class="ident">input_coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">coins</span>.<span class="ident">amount</span>())<span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">input_coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
         <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">Output::Mint</span>(<span class="ident">coins</span>));
         <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1075,31 +1093,42 @@
         <span class="ident">create_tx</span>: <span class="kw">impl</span> <span class="ident">FnMut</span>(<span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span>) -&gt; <span class="ident">OutPoint</span>,
     ) {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-
         <span class="self">self</span>.<span class="ident">mint_client</span>()
-            .<span class="ident">create_coin_output</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">amount</span>, <span class="ident">rng</span>, <span class="ident">create_tx</span>);
-
+            .<span class="ident">receive_coins</span>(<span class="ident">amount</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">rng</span>, <span class="ident">create_tx</span>);
         <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_peg_out_with_fees</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
+        <span class="ident">recipient</span>: <span class="ident">Address</span>,
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PegOut</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">fees</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">context</span>
+            .<span class="ident">api</span>
+            .<span class="ident">fetch_peg_out_fees</span>(<span class="kw-2">&amp;</span><span class="ident">recipient</span>, <span class="kw-2">&amp;</span><span class="ident">amount</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="ident">fees</span>.<span class="ident">map</span>(<span class="op">|</span><span class="ident">fees</span><span class="op">|</span> <span class="ident">PegOut</span> {
+            <span class="ident">recipient</span>,
+            <span class="ident">amount</span>,
+            <span class="ident">fees</span>,
+        })
+        .<span class="ident">ok_or</span>(<span class="ident">ClientError::PegOutWaitingForUTXOs</span>)
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">peg_out</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">amt</span>: <span class="ident">bitcoin::Amount</span>,
-        <span class="ident">address</span>: <span class="ident">Address</span>,
+        <span class="ident">peg_out</span>: <span class="ident">PegOut</span>,
         <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+        <span class="kw">let</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
 
-        <span class="kw">let</span> <span class="ident">funding_amount</span> <span class="op">=</span>
-            <span class="ident">Amount::from</span>(<span class="ident">amt</span>) <span class="op">+</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>.<span class="ident">fee_peg_out_abs</span>;
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">create_coin_input</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">funding_amount</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">pegout_output</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">wallet_client</span>().<span class="ident">create_pegout_output</span>(<span class="ident">amt</span>, <span class="ident">address</span>);
-
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
-        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">Output::Wallet</span>(<span class="ident">pegout_output</span>));
+        <span class="kw">let</span> <span class="ident">funding_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>.<span class="ident">fee_peg_out_abs</span>
+            <span class="op">+</span> (<span class="ident">peg_out</span>.<span class="ident">amount</span> <span class="op">+</span> <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>();
+        <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">funding_amount</span>)<span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>));
 
         <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span>
     }
@@ -1113,11 +1142,19 @@
         <span class="ident">address</span>
     }
 
+    <span class="doccomment">/// **WARNING** this selects and removes coins from the database without confirming whether</span>
+    <span class="doccomment">/// we have successfully spent them in a transaction.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">select_and_spend_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">amount</span>: <span class="ident">Amount</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">select_and_spend_coins</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">amount</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">transaction</span>();
+        <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">amount</span>)<span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">append_from_iter</span>(<span class="ident">coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
+            <span class="ident">BatchItem::delete</span>(<span class="ident">CoinKey</span> {
+                <span class="ident">amount</span>,
+                <span class="ident">nonce</span>: <span class="ident">coin</span>.<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>(),
+            })
+        }));
+        <span class="ident">tx</span>.<span class="ident">commit</span>();
         <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
         <span class="prelude-val">Ok</span>(<span class="ident">coins</span>)
     }
@@ -1132,6 +1169,42 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin</span>
+    <span class="doccomment">/// inputs back.</span>
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">reissue_pending_coins</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rng</span>: <span class="ident">R</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
+        <span class="kw">let</span> <span class="ident">pending</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">context</span>
+            .<span class="ident">db</span>
+            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingCoinsKeyPrefix</span>)
+            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>));
+
+        <span class="kw">let</span> <span class="ident">stream</span> <span class="op">=</span> <span class="ident">pending</span>
+            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">key</span>, <span class="ident">coins</span>)<span class="op">|</span> <span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">loop</span> {
+                    <span class="kw">match</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_tx_outcome</span>(<span class="ident">key</span>.<span class="number">0</span>).<span class="kw">await</span> {
+                        <span class="prelude-val">Ok</span>(<span class="ident">TransactionStatus::Rejected</span>(<span class="kw">_</span>)) =&gt; <span class="kw">return</span> (<span class="ident">key</span>, <span class="ident">coins</span>),
+                        <span class="prelude-val">Ok</span>(<span class="ident">TransactionStatus::Accepted</span> { .. }) =&gt; {
+                            <span class="kw">return</span> (<span class="ident">key</span>, <span class="ident">Coins</span>::<span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span><span class="ident">::default</span>())
+                        }
+                        <span class="kw">_</span> =&gt; {}
+                    }
+                }
+            })
+            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">FuturesUnordered</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">transaction</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">all_coins</span> <span class="op">=</span> <span class="ident">Coins</span>::<span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span><span class="ident">::default</span>();
+        <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">coins</span>) <span class="kw">in</span> <span class="ident">stream</span>.<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>().<span class="kw">await</span> {
+            <span class="ident">all_coins</span>.<span class="ident">extend</span>(<span class="ident">coins</span>);
+            <span class="ident">tx</span>.<span class="ident">append_delete</span>(<span class="ident">key</span>);
+        }
+        <span class="ident">tx</span>.<span class="ident">commit</span>();
+        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
+
+        <span class="self">self</span>.<span class="ident">reissue</span>(<span class="ident">all_coins</span>, <span class="ident">rng</span>).<span class="kw">await</span>
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_all_coins</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span><span class="op">&gt;</span> {
@@ -1179,12 +1252,8 @@
         };
         <span class="kw">let</span> <span class="ident">ln_output</span> <span class="op">=</span> <span class="ident">Output::LN</span>(<span class="ident">contract</span>);
 
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">ln_output</span>.<span class="ident">amount</span>();
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">create_coin_input</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">amount</span>)<span class="question-mark">?</span>;
-
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
+        <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">ln_output</span>.<span class="ident">amount</span>())<span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
         <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">ln_output</span>);
         <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
@@ -1399,7 +1468,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
         <span class="ident">preimage</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
@@ -1407,20 +1476,13 @@
         <span class="kw">let</span> <span class="ident">contract</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_outgoing_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="ident">input</span> <span class="op">=</span> <span class="ident">Input::LN</span>(<span class="ident">contract</span>.<span class="ident">claim</span>(<span class="ident">outgoing::Preimage</span>(<span class="ident">preimage</span>)));
 
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>], <span class="ident">input</span>);
-        <span class="kw">let</span> <span class="ident">change</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">change_required</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">client_config</span>.<span class="ident">fee_consensus</span>);
-        <span class="kw">let</span> <span class="ident">final_tx</span> <span class="op">=</span>
-            <span class="self">self</span>.<span class="ident">mint_client</span>()
-                .<span class="ident">finalize_change</span>(<span class="ident">change</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">tx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">final_tx</span>.<span class="ident">tx_hash</span>();
-
         <span class="ident">batch</span>.<span class="ident">autocommit</span>(<span class="op">|</span><span class="ident">batch</span><span class="op">|</span> {
             <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">OutgoingContractAccountKey</span>(<span class="ident">contract_id</span>));
-            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">OutgoingPaymentClaimKey</span>(<span class="ident">contract_id</span>), <span class="ident">final_tx</span>.<span class="ident">clone</span>());
+            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">OutgoingPaymentClaimKey</span>(<span class="ident">contract_id</span>), ());
         });
 
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">submit_transaction</span>(<span class="ident">final_tx</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>], <span class="ident">input</span>);
+        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> })
     }
@@ -1429,9 +1491,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">payment_hash</span>: <span class="kw-2">&amp;</span><span class="ident">bitcoin_hashes::sha256::Hash</span>,
         <span class="ident">amount</span>: <span class="kw-2">&amp;</span><span class="ident">Amount</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">ContractId</span>)<span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+        <span class="kw">let</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
 
         <span class="comment">// Fetch offer for this payment hash</span>
         <span class="kw">let</span> <span class="ident">offer</span>: <span class="ident">IncomingContractOffer</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_offer</span>(<span class="kw-2">*</span><span class="ident">payment_hash</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1440,9 +1502,9 @@
         }
 
         <span class="comment">// Inputs</span>
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">create_coin_input</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">offer</span>.<span class="ident">amount</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">builder</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
+        <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">offer</span>.<span class="ident">amount</span>)<span class="question-mark">?</span>;
+        <span class="ident">builder</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
 
         <span class="comment">// Outputs</span>
         <span class="kw">let</span> <span class="ident">our_pub_key</span> <span class="op">=</span>
@@ -1461,20 +1523,11 @@
         );
 
         <span class="comment">// Submit transaction</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">builder</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
-        <span class="ident">builder</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
         <span class="ident">builder</span>.<span class="ident">output</span>(<span class="ident">incoming_output</span>);
-        <span class="kw">let</span> <span class="ident">change</span> <span class="op">=</span> <span class="ident">builder</span>.<span class="ident">change_required</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">client_config</span>.<span class="ident">fee_consensus</span>);
-        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">finalize_change</span>(<span class="ident">change</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">builder</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">builder</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
 
         <span class="comment">// FIXME: Save this contract in DB</span>
-
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-
         <span class="prelude-val">Ok</span>((<span class="ident">outpoint</span>, <span class="ident">contract</span>.<span class="ident">contract_id</span>()))
     }
 
@@ -1482,9 +1535,9 @@
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">refund_incoming_contract</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+        <span class="kw">let</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_incoming_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">builder</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
@@ -1494,12 +1547,7 @@
             <span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>],
             <span class="ident">Input::LN</span>(<span class="ident">contract_account</span>.<span class="ident">claim</span>()),
         );
-        <span class="kw">let</span> <span class="ident">change</span> <span class="op">=</span> <span class="ident">builder</span>.<span class="ident">change_required</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">client_config</span>.<span class="ident">fee_consensus</span>);
-        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">finalize_change</span>(<span class="ident">change</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">builder</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">mint_tx_id</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let</span> <span class="ident">mint_tx_id</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">builder</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">mint_tx_id</span>)
     }
 
@@ -1595,6 +1643,8 @@
     <span class="ident">LnClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">LnClientError</span>),
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]</span>
     <span class="ident">PegInAmountTooSmall</span>,
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-out waiting for UTXOs&quot;</span>)]</span>
+    <span class="ident">PegOutWaitingForUTXOs</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]</span>
     <span class="ident">WaitContractTimeout</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error fetching offer&quot;</span>)]</span>
@@ -1625,5 +1675,5 @@
     <span class="ident">InvalidPreimage</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d5e7f4782 2022-07-16)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

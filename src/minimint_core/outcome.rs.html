@@ -174,10 +174,10 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">TransactionStatus</span> {
-    <span class="doccomment">/// The error state is only recorded if the error happens after consensus is achieved on the</span>
+    <span class="doccomment">/// The rejected state is only recorded if the error happens after consensus is achieved on the</span>
     <span class="doccomment">/// transaction. This should happen only rarely, e.g. on double spends since a basic validity</span>
-    <span class="doccomment">/// check is performed on transaction submission.</span>
-    <span class="ident">Error</span>(<span class="ident">String</span>),
+    <span class="doccomment">/// check is performed on transaction submission or on not having enough UTXOs to peg-out.</span>
+    <span class="ident">Rejected</span>(<span class="ident">String</span>),
     <span class="doccomment">/// The transaction was accepted and is now being processed</span>
     <span class="ident">Accepted</span> {
         <span class="ident">epoch</span>: <span class="ident">u64</span>,
@@ -231,7 +231,7 @@
 <span class="kw">impl</span> <span class="ident">Final</span> <span class="kw">for</span> <span class="ident">TransactionStatus</span> {
     <span class="kw">fn</span> <span class="ident">is_final</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">TransactionStatus::Error</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            <span class="ident">TransactionStatus::Rejected</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             <span class="ident">TransactionStatus::Accepted</span> { <span class="ident">outputs</span>, .. } =&gt; <span class="ident">outputs</span>.<span class="ident">iter</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">out</span><span class="op">|</span> <span class="ident">out</span>.<span class="ident">is_final</span>()),
         }
     }
@@ -323,5 +323,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d5e7f4782 2022-07-16)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

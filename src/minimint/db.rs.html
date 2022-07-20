@@ -59,6 +59,16 @@
 <span id="53">53</span>
 <span id="54">54</span>
 <span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::AcceptedTransaction</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::Transaction</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
@@ -69,6 +79,7 @@
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSED_TRANSACTION</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x01</span>;
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_ACCEPTED_TRANSACTION</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x02</span>;
 <span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_DROP_PEER</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x03</span>;
+<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_REJECTED_TRANSACTION</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x04</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">TransactionId</span>);
@@ -98,6 +109,15 @@
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RejectedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">TransactionId</span>);
+
+<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">RejectedTransactionKey</span> {
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_REJECTED_TRANSACTION</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">String</span>;
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DropPeerKey</span>(<span class="kw">pub</span> <span class="ident">PeerId</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">DropPeerKey</span> {
@@ -115,5 +135,5 @@
     <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> ();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d5e7f4782 2022-07-16)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>

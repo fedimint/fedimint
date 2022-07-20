@@ -327,7 +327,7 @@
     <span class="kw">fn</span> <span class="ident">amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
         <span class="kw">match</span> <span class="self">self</span> {
             <span class="ident">Output::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">coins</span>.<span class="ident">amount</span>(),
-            <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; <span class="ident">peg_out</span>.<span class="ident">amount</span>.<span class="ident">into</span>(),
+            <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; (<span class="ident">peg_out</span>.<span class="ident">amount</span> <span class="op">+</span> <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>(),
             <span class="ident">Output::LN</span>(<span class="ident">minimint_ln::ContractOrOfferOutput::Contract</span>(<span class="ident">output</span>)) =&gt; <span class="ident">output</span>.<span class="ident">amount</span>,
             <span class="ident">Output::LN</span>(<span class="ident">minimint_ln::ContractOrOfferOutput::Offer</span>(<span class="kw">_</span>)) =&gt; <span class="ident">Amount::ZERO</span>,
         }
@@ -521,5 +521,5 @@
     <span class="ident">MissingSignature</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d5e7f4782 2022-07-16)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
 </body></html>
