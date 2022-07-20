@@ -114,10 +114,10 @@ impl Transaction {
         let out_amount = self.out_amount();
         let fee_amount = self.fee_amount(fee_consensus);
 
-        if in_amount >= (out_amount + fee_amount) {
+        if in_amount == (out_amount + fee_amount) {
             Ok(())
         } else {
-            Err(TransactionError::InsufficientlyFunded {
+            Err(TransactionError::UnbalancedTransaction {
                 inputs: in_amount,
                 outputs: out_amount,
                 fee: fee_amount,
@@ -245,8 +245,8 @@ where
 
 #[derive(Debug, Error)]
 pub enum TransactionError {
-    #[error("The transaction is insufficiently funded (in={inputs}, out={outputs}, fee={fee})")]
-    InsufficientlyFunded {
+    #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
+    UnbalancedTransaction {
         inputs: Amount,
         outputs: Amount,
         fee: Amount,
