@@ -271,8 +271,8 @@ mod tests {
 
         async fn fetch_peg_out_fees(
             &self,
-            _address: Address,
-            _amount: bitcoin::Amount,
+            _address: &Address,
+            _amount: &bitcoin::Amount,
         ) -> crate::api::Result<Option<PegOutFees>> {
             unimplemented!();
         }

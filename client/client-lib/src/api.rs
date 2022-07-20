@@ -46,8 +46,8 @@ pub trait FederationApi: Send + Sync {
     /// Fetch the expected peg-out fees given a peg-out tx
     async fn fetch_peg_out_fees(
         &self,
-        address: Address,
-        amount: Amount,
+        address: &Address,
+        amount: &Amount,
     ) -> Result<Option<PegOutFees>>;
 }
 
@@ -58,7 +58,6 @@ impl<'a> dyn FederationApi + 'a {
     {
         match self.fetch_tx_outcome(out_point.txid).await? {
             TransactionStatus::Rejected(e) => Err(ApiError::TransactionRejected(e)),
-            TransactionStatus::Error(e) => Err(ApiError::TransactionError(e)),
             TransactionStatus::Accepted { outputs, .. } => {
                 let outputs_len = outputs.len();
                 outputs
@@ -203,8 +202,8 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
 
     async fn fetch_peg_out_fees(
         &self,
-        address: Address,
-        amount: Amount,
+        address: &Address,
+        amount: &Amount,
     ) -> Result<Option<PegOutFees>> {
         self.request("/wallet/peg_out_fees", (address, amount.as_sat()))
             .await

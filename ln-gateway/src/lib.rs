@@ -277,7 +277,7 @@ impl LnGateway {
         let rng = rand::rngs::OsRng::new().unwrap();
         let peg_out = self
             .federation_client
-            .fetch_peg_out_fees(withdraw.1, withdraw.0)
+            .new_peg_out_with_fees(withdraw.1, withdraw.0)
             .await
             .unwrap();
         self.federation_client

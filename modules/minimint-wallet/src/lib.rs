@@ -101,14 +101,6 @@ pub struct SpendableUTXO {
     pub amount: bitcoin::Amount,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
-pub struct PendingPegOut {
-    destination: Script,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    amount: bitcoin::Amount,
-    pending_since_block: u32,
-}
-
 /// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct PendingTransaction {

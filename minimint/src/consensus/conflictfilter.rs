@@ -90,10 +90,10 @@ where
                 }
             }
             if let Output::Wallet(_) = output {
-                if self.pegged_out {
-                    return Err(tx.clone());
+                match self.pegged_out {
+                    true => return Err(tx.clone()),
+                    false => self.pegged_out = true,
                 }
-                self.pegged_out = true;
             }
         }
         Ok(tx.clone())

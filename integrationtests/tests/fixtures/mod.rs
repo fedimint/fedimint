@@ -53,6 +53,7 @@ use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::SpendableUTXO;
 use mint_client::api::WsFederationApi;
 use mint_client::ln::gateway::LightningGateway;
+
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use real::{RealBitcoinTest, RealLightningTest};
 
@@ -232,7 +233,6 @@ impl GatewayTest {
         let user = UserTest {
             client: user_client,
             config: user_cfg,
-            database: database.clone(),
         };
 
         let gw_cfg = GatewayClientConfig {
@@ -257,7 +257,6 @@ impl GatewayTest {
 pub struct UserTest {
     pub client: UserClient,
     pub config: UserClientConfig,
-    database: Box<dyn Database>,
 }
 
 impl UserTest {
@@ -274,7 +273,7 @@ impl UserTest {
     pub async fn peg_out(&self, amount: u64, address: &Address) -> Amount {
         let peg_out = self
             .client
-            .fetch_peg_out_fees(bitcoin::Amount::from_sat(amount), address.clone())
+            .new_peg_out_with_fees(bitcoin::Amount::from_sat(amount), address.clone())
             .await
             .unwrap();
         self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
@@ -319,14 +318,9 @@ impl UserTest {
         );
 
         let database = Box::new(MemDatabase::new());
-        let client =
-            UserClient::new_with_api(config.clone(), database.clone(), api, Default::default());
+        let client = UserClient::new_with_api(config.clone(), database, api, Default::default());
 
-        UserTest {
-            client,
-            config,
-            database,
-        }
+        UserTest { client, config }
     }
 
     pub async fn assert_total_coins(&self, amount: Amount) {
@@ -485,17 +479,13 @@ impl FederationTest {
 
     /// Inserts coins directly into the databases of federation nodes
     pub fn database_add_coins_for_user(&self, user: &UserTest, amount: Amount) -> OutPoint {
-        let mut batch = DbBatch::new();
         let out_point = OutPoint {
             txid: Default::default(),
             out_idx: 0,
         };
 
-        user.client.mint_client().create_coin_output(
-            batch.transaction(),
-            amount,
-            OsRng::new().unwrap(),
-            |tokens| {
+        user.client
+            .receive_coins(amount, OsRng::new().unwrap(), |tokens| {
                 for server in &self.servers {
                     let mut batch = DbBatch::new();
                     let mut batch_tx = batch.transaction();
@@ -524,9 +514,7 @@ impl FederationTest {
                     server.borrow_mut().database.apply_batch(batch).unwrap();
                 }
                 out_point
-            },
-        );
-        user.database.apply_batch(batch).unwrap();
+            });
         out_point
     }
 

@@ -12,6 +12,7 @@ use threshold_crypto::{SecretKey, SecretKeyShare};
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
 use minimint::transaction::Output;
+use minimint_api::db::batch::DbBatch;
 use minimint_ln::contracts::incoming::PreimageDecryptionShare;
 use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
@@ -64,7 +65,7 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() {
     fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
     let mut peg_out = user
         .client
-        .fetch_peg_out_fees(peg_out_amount, peg_out_address.clone())
+        .new_peg_out_with_fees(peg_out_amount, peg_out_address.clone())
         .await
         .unwrap();
 
@@ -81,7 +82,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
     let address2 = bitcoin.get_new_address();
 
     fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
-    let _fees = user.peg_out(1000, &address1).await;
+    let fees = user.peg_out(1000, &address1).await;
     user.peg_out(1000, &address2).await;
 
     fed.run_consensus_epochs(2).await;
@@ -91,8 +92,9 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
     let received2 = bitcoin.mine_block_and_get_received(&address2);
 
     assert_eq!(received1 + received2, sats(1000));
-    // FIXME requires clients reissuing coins from failed transactions
-    // user.assert_total_coins(sats(5000 - 1000) - fees).await;
+    user.client.reissue_pending_coins(rng()).await.unwrap();
+    fed.run_consensus_epochs(2).await; // reissue the coins from the tx that failed
+    user.assert_total_coins(sats(5000 - 1000) - fees).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -111,7 +113,7 @@ async fn peg_outs_must_wait_for_available_utxos() {
     // The change UTXO is still finalizing
     let response = user
         .client
-        .fetch_peg_out_fees(Amount::from_sat(2000), address2.clone());
+        .new_peg_out_with_fees(Amount::from_sat(2000), address2.clone());
     assert_matches!(response.await, Err(ClientError::PegOutWaitingForUTXOs));
 
     bitcoin.mine_blocks(100);
@@ -442,7 +444,14 @@ async fn receive_lightning_payment_invalid_preimage() {
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tx = builder.build(&secp(), &mut rng());
+    let tbs_pks = &user.config.client_config.mint.tbs_pks;
+    let tx = builder.build(
+        sats(0),
+        DbBatch::new().transaction(),
+        &secp(),
+        tbs_pks,
+        &mut rng(),
+    );
     fed.submit_transaction(tx);
     fed.run_consensus_epochs(1).await; // process offer
 

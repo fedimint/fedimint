@@ -153,7 +153,10 @@ async fn main() {
             }
         }
         Command::PegOut { address, satoshis } => {
-            let peg_out = client.fetch_peg_out_fees(satoshis, address).await.unwrap();
+            let peg_out = client
+                .new_peg_out_with_fees(satoshis, address)
+                .await
+                .unwrap();
             client.peg_out(peg_out, &mut rng).await.unwrap();
         }
         Command::LnPay { bolt11 } => {
