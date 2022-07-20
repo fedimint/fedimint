@@ -7,9 +7,14 @@ pub mod wallet;
 
 use std::{sync::Arc, time::Duration};
 
+use futures::StreamExt;
+
 use bitcoin::util::key::KeyPair;
 use bitcoin::{Address, Transaction as BitcoinTransaction};
+
 use bitcoin_hashes::Hash;
+use futures::stream::FuturesUnordered;
+
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
@@ -26,6 +31,8 @@ use minimint_core::modules::ln::contracts::incoming::{
 };
 use minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
 use minimint_core::modules::ln::ContractOutput;
+use minimint_core::modules::wallet::PegOut;
+use minimint_core::outcome::TransactionStatus;
 use minimint_core::transaction::TransactionItem;
 use minimint_core::{
     config::ClientConfig,
@@ -50,6 +57,7 @@ use crate::ln::db::{
 };
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
+use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::MintClientError;
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, OwnedClientContext};
@@ -191,23 +199,13 @@ impl<T: AsRef<ClientConfig>> Client<T> {
     async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
         tx: TransactionBuilder,
-        mut batch: Accumulator<BatchItem>,
-        mut rng: R,
+        batch: Accumulator<BatchItem>,
+        rng: R,
     ) -> Result<TransactionId> {
-        let change = tx.change_required(&self.context.config.as_ref().fee_consensus);
-        let final_tx =
-            self.mint_client()
-                .finalize_change(change, batch.transaction(), tx, &mut rng);
-        let txid = final_tx.tx_hash();
-        let mint_tx_id = self.context.api.submit_transaction(final_tx).await?;
-        // TODO: make check part of submit_transaction
-        assert_eq!(
-            txid, mint_tx_id,
-            "Federation is faulty, returned wrong tx id."
-        );
-
-        self.context.db.apply_batch(batch).expect("DB error");
-        Ok(txid)
+        Ok(self
+            .mint_client()
+            .submit_tx_with_change(&self.context.config.as_ref().fee_consensus, tx, batch, rng)
+            .await?)
     }
 
     /// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent
@@ -223,9 +221,7 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
-
-        let (mut coin_keys, coin_input) = self.mint_client().create_coin_input_from_coins(coins)?;
-        tx.input(&mut coin_keys, Input::Mint(coin_input));
+        tx.input_coins(coins, &self.context.secp)?;
         let txid = self
             .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await?;
@@ -238,14 +234,11 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         coins: Coins<BlindToken>,
         mut rng: R,
     ) -> Result<OutPoint> {
-        let mut batch = DbBatch::new();
+        let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let (mut coin_keys, coin_input) = self
-            .mint_client()
-            .create_coin_input(batch.transaction(), coins.amount())?;
-
-        tx.input(&mut coin_keys, Input::Mint(coin_input));
+        let input_coins = self.mint_client().select_coins(coins.amount())?;
+        tx.input_coins(input_coins, &self.context.secp)?;
         tx.output(Output::Mint(coins));
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
 
@@ -259,31 +252,42 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         create_tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
     ) {
         let mut batch = DbBatch::new();
-
         self.mint_client()
-            .create_coin_output(batch.transaction(), amount, rng, create_tx);
-
+            .receive_coins(amount, batch.transaction(), rng, create_tx);
         self.context.db.apply_batch(batch).expect("DB error");
+    }
+
+    pub async fn new_peg_out_with_fees(
+        &self,
+        amount: bitcoin::Amount,
+        recipient: Address,
+    ) -> Result<PegOut> {
+        let fees = self
+            .context
+            .api
+            .fetch_peg_out_fees(&recipient, &amount)
+            .await?;
+        fees.map(|fees| PegOut {
+            recipient,
+            amount,
+            fees,
+        })
+        .ok_or(ClientError::PegOutWaitingForUTXOs)
     }
 
     pub async fn peg_out<R: RngCore + CryptoRng>(
         &self,
-        amt: bitcoin::Amount,
-        address: Address,
+        peg_out: PegOut,
         mut rng: R,
     ) -> Result<TransactionId> {
-        let mut batch = DbBatch::new();
+        let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount =
-            Amount::from(amt) + self.context.config.as_ref().fee_consensus.fee_peg_out_abs;
-        let (mut coin_keys, coin_input) = self
-            .mint_client()
-            .create_coin_input(batch.transaction(), funding_amount)?;
-        let pegout_output = self.wallet_client().create_pegout_output(amt, address);
-
-        tx.input(&mut coin_keys, Input::Mint(coin_input));
-        tx.output(Output::Wallet(pegout_output));
+        let funding_amount = self.context.config.as_ref().fee_consensus.fee_peg_out_abs
+            + (peg_out.amount + peg_out.fees.amount()).into();
+        let coins = self.mint_client().select_coins(funding_amount)?;
+        tx.input_coins(coins, &self.context.secp)?;
+        tx.output(Output::Wallet(peg_out));
 
         self.submit_tx_with_change(tx, batch, &mut rng).await
     }
@@ -297,11 +301,19 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         address
     }
 
+    /// **WARNING** this selects and removes coins from the database without confirming whether
+    /// we have successfully spent them in a transaction.
     pub fn select_and_spend_coins(&self, amount: Amount) -> Result<Coins<SpendableCoin>> {
         let mut batch = DbBatch::new();
-        let coins = self
-            .mint_client()
-            .select_and_spend_coins(batch.transaction(), amount)?;
+        let mut tx = batch.transaction();
+        let coins = self.mint_client().select_coins(amount)?;
+        tx.append_from_iter(coins.iter().map(|(amount, coin)| {
+            BatchItem::delete(CoinKey {
+                amount,
+                nonce: coin.coin.0.clone(),
+            })
+        }));
+        tx.commit();
         self.context.db.apply_batch(batch).expect("DB error");
         Ok(coins)
     }
@@ -316,6 +328,42 @@ impl<T: AsRef<ClientConfig>> Client<T> {
             .await?;
         self.context.db.apply_batch(batch).expect("DB error");
         Ok(())
+    }
+
+    /// Should be called after any transaction that might have failed in order to get any coin
+    /// inputs back.
+    pub async fn reissue_pending_coins<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
+        let pending = self
+            .context
+            .db
+            .find_by_prefix(&PendingCoinsKeyPrefix)
+            .map(|res| res.expect("DB error"));
+
+        let stream = pending
+            .map(|(key, coins)| async move {
+                loop {
+                    match self.context.api.fetch_tx_outcome(key.0).await {
+                        Ok(TransactionStatus::Rejected(_)) => return (key, coins),
+                        Ok(TransactionStatus::Accepted { .. }) => {
+                            return (key, Coins::<SpendableCoin>::default())
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        let mut batch = DbBatch::new();
+        let mut tx = batch.transaction();
+        let mut all_coins = Coins::<SpendableCoin>::default();
+        for (key, coins) in stream.collect::<Vec<_>>().await {
+            all_coins.extend(coins);
+            tx.append_delete(key);
+        }
+        tx.commit();
+        self.context.db.apply_batch(batch).unwrap();
+
+        self.reissue(all_coins, rng).await
     }
 
     pub async fn fetch_all_coins<'a>(&self) -> Vec<Result<OutPoint>> {
@@ -363,12 +411,8 @@ impl Client<UserClientConfig> {
         };
         let ln_output = Output::LN(contract);
 
-        let amount = ln_output.amount();
-        let (mut coin_keys, coin_input) = self
-            .mint_client()
-            .create_coin_input(batch.transaction(), amount)?;
-
-        tx.input(&mut coin_keys, Input::Mint(coin_input));
+        let coins = self.mint_client().select_coins(ln_output.amount())?;
+        tx.input_coins(coins, &self.context.secp)?;
         tx.output(ln_output);
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
@@ -583,7 +627,7 @@ impl Client<GatewayClientConfig> {
         &self,
         contract_id: ContractId,
         preimage: [u8; 32],
-        mut rng: impl RngCore + CryptoRng,
+        rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
@@ -591,20 +635,13 @@ impl Client<GatewayClientConfig> {
         let contract = self.ln_client().get_outgoing_contract(contract_id).await?;
         let input = Input::LN(contract.claim(outgoing::Preimage(preimage)));
 
-        tx.input(&mut vec![self.context.config.redeem_key], input);
-        let change = tx.change_required(&self.context.config.client_config.fee_consensus);
-        let final_tx =
-            self.mint_client()
-                .finalize_change(change, batch.transaction(), tx, &mut rng);
-        let txid = final_tx.tx_hash();
-
         batch.autocommit(|batch| {
             batch.append_delete(OutgoingContractAccountKey(contract_id));
-            batch.append_insert(OutgoingPaymentClaimKey(contract_id), final_tx.clone());
+            batch.append_insert(OutgoingPaymentClaimKey(contract_id), ());
         });
 
-        self.context.db.apply_batch(batch).expect("DB error");
-        self.context.api.submit_transaction(final_tx).await?;
+        tx.input(&mut vec![self.context.config.redeem_key], input);
+        let txid = self.submit_tx_with_change(tx, batch, rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
     }
@@ -613,9 +650,9 @@ impl Client<GatewayClientConfig> {
         &self,
         payment_hash: &bitcoin_hashes::sha256::Hash,
         amount: &Amount,
-        mut rng: impl RngCore + CryptoRng,
+        rng: impl RngCore + CryptoRng,
     ) -> Result<(OutPoint, ContractId)> {
-        let mut batch = DbBatch::new();
+        let batch = DbBatch::new();
 
         // Fetch offer for this payment hash
         let offer: IncomingContractOffer = self.ln_client().get_offer(*payment_hash).await?;
@@ -624,9 +661,9 @@ impl Client<GatewayClientConfig> {
         }
 
         // Inputs
-        let (mut coin_keys, coin_input) = self
-            .mint_client()
-            .create_coin_input(batch.transaction(), offer.amount)?;
+        let mut builder = TransactionBuilder::default();
+        let coins = self.mint_client().select_coins(offer.amount)?;
+        builder.input_coins(coins, &self.context.secp)?;
 
         // Outputs
         let our_pub_key =
@@ -645,20 +682,11 @@ impl Client<GatewayClientConfig> {
         );
 
         // Submit transaction
-        let mut builder = TransactionBuilder::default();
-        builder.input(&mut coin_keys, Input::Mint(coin_input));
         builder.output(incoming_output);
-        let change = builder.change_required(&self.context.config.client_config.fee_consensus);
-        let tx = self
-            .mint_client()
-            .finalize_change(change, batch.transaction(), builder, &mut rng);
-        let txid = self.context.api.submit_transaction(tx).await?;
+        let txid = self.submit_tx_with_change(builder, batch, rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
         // FIXME: Save this contract in DB
-
-        self.context.db.apply_batch(batch).expect("DB error");
-
         Ok((outpoint, contract.contract_id()))
     }
 
@@ -666,9 +694,9 @@ impl Client<GatewayClientConfig> {
     pub async fn refund_incoming_contract(
         &self,
         contract_id: ContractId,
-        mut rng: impl RngCore + CryptoRng,
+        rng: impl RngCore + CryptoRng,
     ) -> Result<TransactionId> {
-        let mut batch = DbBatch::new();
+        let batch = DbBatch::new();
         let contract_account = self.ln_client().get_incoming_contract(contract_id).await?;
 
         let mut builder = TransactionBuilder::default();
@@ -678,12 +706,7 @@ impl Client<GatewayClientConfig> {
             &mut vec![self.context.config.redeem_key],
             Input::LN(contract_account.claim()),
         );
-        let change = builder.change_required(&self.context.config.client_config.fee_consensus);
-        let tx = self
-            .mint_client()
-            .finalize_change(change, batch.transaction(), builder, &mut rng);
-        let mint_tx_id = self.context.api.submit_transaction(tx).await?;
-        self.context.db.apply_batch(batch).expect("DB error");
+        let mint_tx_id = self.submit_tx_with_change(builder, batch, rng).await?;
         Ok(mint_tx_id)
     }
 
@@ -779,6 +802,8 @@ pub enum ClientError {
     LnClientError(#[from] LnClientError),
     #[error("Peg-in amount must be greater than peg-in fee")]
     PegInAmountTooSmall,
+    #[error("Peg-out waiting for UTXOs")]
+    PegOutWaitingForUTXOs,
     #[error("Timed out while waiting for contract to be accepted")]
     WaitContractTimeout,
     #[error("Error fetching offer")]

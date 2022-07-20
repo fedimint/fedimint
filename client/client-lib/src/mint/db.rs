@@ -1,11 +1,13 @@
 use crate::mint::{CoinFinalizationData, SpendableCoin};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{Amount, OutPoint};
+use minimint_api::{Amount, OutPoint, TransactionId};
+use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::mint::CoinNonce;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;
+pub const DB_PREFIX_PENDING_COINS: u8 = 0x27;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct CoinKey {
@@ -26,6 +28,24 @@ impl DatabaseKeyPrefixConst for CoinKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_COIN;
     type Key = CoinKey;
     type Value = SpendableCoin;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct PendingCoinsKey(pub TransactionId);
+
+impl DatabaseKeyPrefixConst for PendingCoinsKey {
+    const DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
+    type Key = Self;
+    type Value = Coins<SpendableCoin>;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct PendingCoinsKeyPrefix;
+
+impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
+    type Key = PendingCoinsKey;
+    type Value = Coins<SpendableCoin>;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]

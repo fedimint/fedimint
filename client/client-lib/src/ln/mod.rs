@@ -201,6 +201,7 @@ mod tests {
     use crate::ln::LnClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
+    use bitcoin::Address;
     use lightning_invoice::Invoice;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
@@ -211,6 +212,7 @@ mod tests {
     use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
     use minimint_core::modules::ln::ContractOrOfferOutput;
     use minimint_core::modules::ln::{ContractAccount, LightningModule};
+    use minimint_core::modules::wallet::PegOutFees;
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;
     use std::sync::Arc;
@@ -264,6 +266,14 @@ mod tests {
             &self,
             _payment_hash: bitcoin::hashes::sha256::Hash,
         ) -> crate::api::Result<IncomingContractOffer> {
+            unimplemented!();
+        }
+
+        async fn fetch_peg_out_fees(
+            &self,
+            _address: &Address,
+            _amount: &bitcoin::Amount,
+        ) -> crate::api::Result<Option<PegOutFees>> {
             unimplemented!();
         }
     }

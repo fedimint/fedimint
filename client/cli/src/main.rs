@@ -5,6 +5,7 @@ use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
+
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
@@ -152,7 +153,11 @@ async fn main() {
             }
         }
         Command::PegOut { address, satoshis } => {
-            client.peg_out(satoshis, address, &mut rng).await.unwrap();
+            let peg_out = client
+                .new_peg_out_with_fees(satoshis, address)
+                .await
+                .unwrap();
+            client.peg_out(peg_out, &mut rng).await.unwrap();
         }
         Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();

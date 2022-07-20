@@ -9,7 +9,7 @@ use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::interconnect::MinimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, ProposedTransactionKey,
-    ProposedTransactionKeyPrefix,
+    ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
@@ -24,6 +24,7 @@ use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::{LightningModule, LightningModuleError};
 use minimint_core::modules::mint::{Mint, MintError};
 use minimint_core::modules::wallet::{Wallet, WalletError};
+use minimint_core::outcome::TransactionStatus;
 use minimint_derive::UnzipConsensus;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -200,18 +201,25 @@ where
             // There are two item types that need checking:
             //  * peg-ins that each peg-in tx is only used to issue coins once
             //  * coin spends to avoid double spends in one batch
-            let filtered_transactions = transaction_cis
+            //  * only one peg-out allowed per epoch
+            let (ok_tx, err_tx) = transaction_cis
                 .into_iter()
                 .filter_conflicts(|(_, tx)| tx)
-                .collect::<Vec<_>>();
+                .partitioned();
 
             let mut db_batch = DbBatch::new();
-            let caches =
-                self.build_verification_caches(filtered_transactions.iter().map(|(_, tx)| tx));
-            for (peer, transaction) in filtered_transactions {
-                let mut batch_tx = db_batch.transaction();
+            let mut batch_tx = db_batch.transaction();
 
-                let span = info_span!("Processing transaction", %peer);
+            for transaction in err_tx {
+                batch_tx.append_insert(
+                    RejectedTransactionKey(transaction.tx_hash()),
+                    format!("{:?}", TransactionSubmissionError::TransactionConflictError),
+                );
+            }
+
+            let caches = self.build_verification_caches(ok_tx.iter());
+            for transaction in ok_tx {
+                let span = info_span!("Processing transaction");
                 // in_scope to make sure that no await is in the middle of the span
                 let _enter = span.in_scope(|| {
                     trace!(?transaction);
@@ -230,13 +238,16 @@ where
                             );
                         }
                         Err(error) => {
-                            // TODO: log error for user
                             warn!(%error, "Transaction failed");
+                            batch_tx.append_insert(
+                                RejectedTransactionKey(transaction.tx_hash()),
+                                format!("{:?}", error),
+                            );
                         }
                     }
-                    batch_tx.commit();
                 });
             }
+            batch_tx.commit();
             self.db.apply_batch(db_batch).expect("DB error");
         }
 
@@ -453,13 +464,22 @@ where
                 })
                 .collect();
 
-            Some(crate::outcome::TransactionStatus::Accepted {
+            return Some(crate::outcome::TransactionStatus::Accepted {
                 epoch: accepted_tx.epoch,
                 outputs,
-            })
-        } else {
-            None
+            });
         }
+
+        let rejected: Option<String> = self
+            .db
+            .get_value(&RejectedTransactionKey(txid))
+            .expect("DB error");
+
+        if let Some(message) = rejected {
+            return Some(TransactionStatus::Rejected(message));
+        }
+
+        None
     }
 
     fn build_verification_caches<'a>(
@@ -555,4 +575,6 @@ pub enum TransactionSubmissionError {
     OutputPegOut(WalletError),
     #[error("LN contract output error: {0}")]
     ContractOutputError(LightningModuleError),
+    #[error("Transaction conflict error")]
+    TransactionConflictError,
 }

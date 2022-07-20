@@ -8,7 +8,7 @@ use minimint_core::config::FeeConsensus;
 use minimint_core::modules::wallet::config::WalletClientConfig;
 use minimint_core::modules::wallet::tweakable::Tweakable;
 use minimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use minimint_core::modules::wallet::PegOut;
+
 use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
@@ -101,14 +101,6 @@ impl<'c> WalletClient<'c> {
 
         Ok((secret_tweak_key, peg_in_proof))
     }
-
-    pub fn create_pegout_output(
-        &self,
-        amount: bitcoin::Amount,
-        recipient: bitcoin::Address,
-    ) -> PegOut {
-        PegOut { recipient, amount }
-    }
 }
 
 type Result<T> = std::result::Result<T, WalletClientError>;
@@ -142,8 +134,10 @@ mod tests {
         FakeBitcoindRpc, FakeBitcoindRpcController,
     };
     use minimint_core::modules::wallet::config::WalletClientConfig;
-    use minimint_core::modules::wallet::db::UTXOKey;
-    use minimint_core::modules::wallet::{SpendableUTXO, Wallet};
+    use minimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
+    use minimint_core::modules::wallet::{
+        Feerate, PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet,
+    };
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;
     use std::str::FromStr;
@@ -191,6 +185,14 @@ mod tests {
         ) -> crate::api::Result<IncomingContractOffer> {
             unimplemented!();
         }
+
+        async fn fetch_peg_out_fees(
+            &self,
+            _address: &Address,
+            _amount: &bitcoin::Amount,
+        ) -> crate::api::Result<Option<PegOutFees>> {
+            unimplemented!();
+        }
     }
 
     async fn new_mint_and_client() -> (
@@ -235,7 +237,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn create_output() {
         let (fed, client_context, btc_rpc) = new_mint_and_client().await;
-        let client = WalletClient {
+        let _client = WalletClient {
             context: client_context.borrow_with_module_config(|x| x),
             fee_consensus: FeeConsensus {
                 fee_coin_spend_abs: Amount::ZERO,
@@ -257,6 +259,16 @@ mod tests {
             };
 
             db.insert_entry(&UTXOKey(out_point), &utxo).unwrap();
+
+            db.insert_entry(
+                &RoundConsensusKey,
+                &RoundConsensus {
+                    block_height: 0,
+                    fee_rate: Feerate { sats_per_kvb: 0 },
+                    randomness_beacon: tweak,
+                },
+            )
+            .unwrap();
         });
 
         let addr = Address::from_str("msFGPqHVk8rbARMd69FfGYxwcboZLemdBi").unwrap();
@@ -266,7 +278,14 @@ mod tests {
             txid: Default::default(),
             out_idx: 0,
         };
-        let output = client.create_pegout_output(amount, addr.clone());
+        let output = PegOut {
+            recipient: addr.clone(),
+            amount,
+            fees: PegOutFees {
+                fee_rate: Feerate { sats_per_kvb: 0 },
+                total_weight: 0,
+            },
+        };
 
         // agree on output
         btc_rpc.set_block_height(100).await;

@@ -9,10 +9,10 @@ use crate::CoreError;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum TransactionStatus {
-    /// The error state is only recorded if the error happens after consensus is achieved on the
+    /// The rejected state is only recorded if the error happens after consensus is achieved on the
     /// transaction. This should happen only rarely, e.g. on double spends since a basic validity
-    /// check is performed on transaction submission.
-    Error(String),
+    /// check is performed on transaction submission or on not having enough UTXOs to peg-out.
+    Rejected(String),
     /// The transaction was accepted and is now being processed
     Accepted {
         epoch: u64,
@@ -66,7 +66,7 @@ impl Final for OutputOutcome {
 impl Final for TransactionStatus {
     fn is_final(&self) -> bool {
         match self {
-            TransactionStatus::Error(_) => true,
+            TransactionStatus::Rejected(_) => true,
             TransactionStatus::Accepted { outputs, .. } => outputs.iter().all(|out| out.is_final()),
         }
     }

@@ -2,7 +2,6 @@ use crate::ln::outgoing::OutgoingContractData;
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_core::modules::ln::contracts::ContractId;
-use minimint_core::transaction::Transaction;
 
 use super::incoming::ConfirmedInvoice;
 use super::outgoing::OutgoingContractAccount;
@@ -36,7 +35,7 @@ pub struct OutgoingPaymentClaimKey(pub ContractId);
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
     const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
     type Key = Self;
-    type Value = Transaction;
+    type Value = ();
 }
 
 #[derive(Debug, Encodable, Decodable)]
@@ -45,7 +44,7 @@ pub struct OutgoingPaymentClaimKeyPrefix;
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
     type Key = OutgoingPaymentClaimKey;
-    type Value = Transaction;
+    type Value = ();
 }
 
 #[derive(Debug, Encodable, Decodable)]
