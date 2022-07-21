@@ -333,6 +333,15 @@
 <span id="327">327</span>
 <span id="328">328</span>
 <span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
@@ -359,6 +368,15 @@
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> <span class="ident">WalletClient</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> {
+    <span class="doccomment">/// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the</span>
+    <span class="doccomment">/// federations peg-in-descriptor resulting in a bitcoin script. Both script and keypair are stored in the DB</span>
+    <span class="doccomment">/// by using the script as part of the key and the keypair as the value. Even though only the public-key is used to tweak</span>
+    <span class="doccomment">/// the descriptor, the secret-key is needed to prove that one actually created the tweak to be able to claim the funds and</span>
+    <span class="doccomment">/// prevent front-running by a malicious  federation member</span>
+    <span class="doccomment">/// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a</span>
+    <span class="doccomment">/// transaction containing the scripts public-key in at least one of it&#39;s outpoints.</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_new_pegin_address</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
@@ -663,5 +681,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d68e7ebc3 2022-07-20)" ></div>
 </body></html>

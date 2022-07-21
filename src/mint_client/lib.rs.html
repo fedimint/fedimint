@@ -839,6 +839,14 @@
 <span id="833">833</span>
 <span id="834">834</span>
 <span id="835">835</span>
+<span id="836">836</span>
+<span id="837">837</span>
+<span id="838">838</span>
+<span id="839">839</span>
+<span id="840">840</span>
+<span id="841">841</span>
+<span id="842">842</span>
+<span id="843">843</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -1133,6 +1141,14 @@
         <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span>
     }
 
+    <span class="doccomment">/// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This function requires a cryptographically secure randomness source, and utilizes the [wallet-clients](crate::wallet::WalletClient)</span>
+    <span class="doccomment">/// [get_new_pegin_address](crate::wallet::WalletClient::get_new_pegin_address) to **derive** a bitcoin-address from the federations</span>
+    <span class="doccomment">/// public descriptor by tweaking it.</span>
+    <span class="doccomment">/// - this function will write to the clients DB</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// read more on fedimints address derivation: &lt;https://fedimint.org/MiniMint/wallet/&gt;</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_new_pegin_address</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rng</span>: <span class="ident">R</span>) -&gt; <span class="ident">Address</span> {
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="ident">address</span> <span class="op">=</span> <span class="self">self</span>
@@ -1675,5 +1691,5 @@
     <span class="ident">InvalidPreimage</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9a7b7d5e5 2022-07-19)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d68e7ebc3 2022-07-20)" ></div>
 </body></html>
