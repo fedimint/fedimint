@@ -38,7 +38,7 @@ cd minimint
 ```
 
 ### Setting up the federation
-Just run the following script
+Just run the following script, **make sure not to run it inside a tmux window**:
 ```shell
 ./scripts/tmuxinator.sh
 ```
