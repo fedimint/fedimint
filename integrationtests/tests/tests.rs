@@ -597,3 +597,19 @@ async fn audit_negative_balance_sheet_panics() {
     fed.mint_coins_for_user(&user, sats(2000)).await;
     fed.run_consensus_epochs(1).await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unbalanced_transactions_get_rejected() {
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
+    // cannot make change for this invoice (results in unbalanced tx)
+    let invoice = lightning.invoice(sats(777));
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+    let response = user
+        .client
+        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
+        .await;
+
+    // TODO return a more useful error
+    assert!(response.is_err());
+}
