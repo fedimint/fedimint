@@ -23,7 +23,9 @@ pub struct WalletConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletClientConfig {
+    /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
+    /// The bitcoin network the client will use
     pub network: Network,
 }
 

@@ -24,6 +24,15 @@ pub struct WalletClient<'c> {
 }
 
 impl<'c> WalletClient<'c> {
+    /// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak
+    ///
+    /// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the
+    /// federations peg-in-descriptor resulting in a bitcoin script. Both script and keypair are stored in the DB
+    /// by using the script as part of the key and the keypair as the value. Even though only the public-key is used to tweak
+    /// the descriptor, the secret-key is needed to prove that one actually created the tweak to be able to claim the funds and
+    /// prevent front-running by a malicious  federation member
+    /// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a
+    /// transaction containing the scripts public-key in at least one of it's outpoints.
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(
         &self,
         mut batch: BatchTx<'_>,

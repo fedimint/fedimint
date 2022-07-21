@@ -292,6 +292,14 @@ impl<T: AsRef<ClientConfig>> Client<T> {
         self.submit_tx_with_change(tx, batch, &mut rng).await
     }
 
+    /// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)
+    ///
+    /// This function requires a cryptographically secure randomness source, and utilizes the [wallet-clients](crate::wallet::WalletClient)
+    /// [get_new_pegin_address](crate::wallet::WalletClient::get_new_pegin_address) to **derive** a bitcoin-address from the federations
+    /// public descriptor by tweaking it.
+    /// - this function will write to the clients DB
+    ///
+    /// read more on fedimints address derivation: <https://fedimint.org/MiniMint/wallet/>
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
         let mut batch = DbBatch::new();
         let address = self
