@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-if [[ -n "$TMUX" ]]; then
+if [[ -n "${TMUX:-}" ]]; then
   echo "Can not run tmuxinator in tmux"
   exit 1
 fi
