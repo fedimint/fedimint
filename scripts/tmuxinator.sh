@@ -3,6 +3,11 @@
 
 set -euo pipefail
 
+if [[ -n "$TMUX" ]]; then
+  echo "Can not run tmuxinator in tmux"
+  exit 1
+fi
+
 source scripts/build.sh
 echo "Running in temporary directory $FM_TEST_DIR"
 
