@@ -378,10 +378,10 @@
         <span class="kw">let</span> <span class="ident">out_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">out_amount</span>();
         <span class="kw">let</span> <span class="ident">fee_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">fee_amount</span>(<span class="ident">fee_consensus</span>);
 
-        <span class="kw">if</span> <span class="ident">in_amount</span> <span class="op">&gt;</span><span class="op">=</span> (<span class="ident">out_amount</span> <span class="op">+</span> <span class="ident">fee_amount</span>) {
+        <span class="kw">if</span> <span class="ident">in_amount</span> <span class="op">==</span> (<span class="ident">out_amount</span> <span class="op">+</span> <span class="ident">fee_amount</span>) {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">TransactionError::InsufficientlyFunded</span> {
+            <span class="prelude-val">Err</span>(<span class="ident">TransactionError::UnbalancedTransaction</span> {
                 <span class="ident">inputs</span>: <span class="ident">in_amount</span>,
                 <span class="ident">outputs</span>: <span class="ident">out_amount</span>,
                 <span class="ident">fee</span>: <span class="ident">fee_amount</span>,
@@ -509,8 +509,8 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">TransactionError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The transaction is insufficiently funded (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]</span>
-    <span class="ident">InsufficientlyFunded</span> {
+    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})&quot;</span>)]</span>
+    <span class="ident">UnbalancedTransaction</span> {
         <span class="ident">inputs</span>: <span class="ident">Amount</span>,
         <span class="ident">outputs</span>: <span class="ident">Amount</span>,
         <span class="ident">fee</span>: <span class="ident">Amount</span>,
