@@ -10,15 +10,21 @@ use minimint_core::modules::wallet::config::WalletConfig;
 use rand::{CryptoRng, RngCore};
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
+use crate::net::connect::TlsConfig;
 use std::path::PathBuf;
+use tokio_rustls::rustls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     pub identity: PeerId,
     pub hbbft_bind_addr: String,
     pub api_bind_addr: String,
+    #[serde(with = "serde_tls_cert")]
+    pub tls_cert: rustls::Certificate,
+    #[serde(with = "serde_tls_key")]
+    pub tls_key: rustls::PrivateKey,
 
     pub peers: BTreeMap<PeerId, Peer>,
     #[serde(with = "serde_binary_human_readable")]
@@ -43,6 +49,8 @@ pub struct Peer {
     pub connection: ConnectionConfig,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk: hbbft::crypto::PublicKey,
+    #[serde(with = "serde_tls_cert")]
+    pub tls_cert: rustls::Certificate,
 }
 
 #[derive(Debug)]
@@ -64,6 +72,13 @@ impl GenerateConfig for ServerConfig {
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
+        let tls_keys = peers
+            .iter()
+            .map(|peer| {
+                let (cert, key) = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
+                (*peer, (cert, key))
+            })
+            .collect::<HashMap<_, _>>();
 
         let cfg_peers = netinfo
             .iter()
@@ -74,6 +89,7 @@ impl GenerateConfig for ServerConfig {
                         addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
                     },
                     hbbft_pk: *netinf.public_key(&id).unwrap(),
+                    tls_cert: tls_keys[&id].0.clone(),
                 };
 
                 (id, peer)
@@ -104,6 +120,8 @@ impl GenerateConfig for ServerConfig {
                     identity: id,
                     hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
                     api_bind_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
+                    tls_cert: tls_keys[&id].0.clone(),
+                    tls_key: tls_keys[&id].1.clone(),
                     peers: cfg_peers.clone(),
                     hbbft_sk: SerdeSecret(netinf.secret_key().clone()),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
@@ -147,11 +165,93 @@ impl ServerConfig {
         }
     }
 
+    pub fn tls_config(&self) -> TlsConfig {
+        TlsConfig {
+            our_certificate: self.tls_cert.clone(),
+            our_private_key: self.tls_key.clone(),
+            peer_certs: self
+                .peers
+                .iter()
+                .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
+                .collect(),
+        }
+    }
+
     pub fn get_incoming_count(&self) -> u16 {
         self.identity.into()
     }
 
     pub fn max_faulty(&self) -> usize {
         hbbft::util::max_faulty(self.peers.len())
+    }
+}
+
+pub(crate) fn gen_cert_and_key(
+    name: &str,
+) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
+    let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+    let keypair_ser = keypair.serialize_der();
+    let mut params = rcgen::CertificateParams::new(vec![name.to_owned()]);
+
+    params.key_pair = Some(keypair);
+    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+    params.is_ca = rcgen::IsCa::SelfSignedOnly;
+    params
+        .distinguished_name
+        .push(rcgen::DnType::CommonName, name);
+
+    let cert = rcgen::Certificate::from_params(params)?;
+
+    Ok((
+        rustls::Certificate(cert.serialize_der()?),
+        rustls::PrivateKey(keypair_ser),
+    ))
+}
+
+mod serde_tls_cert {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::borrow::Cow;
+    use tokio_rustls::rustls;
+
+    pub fn serialize<S>(cert: &rustls::Certificate, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_str = hex::encode(&cert.0);
+        Serialize::serialize(&hex_str, serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<rustls::Certificate, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
+        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        Ok(rustls::Certificate(bytes))
+    }
+}
+
+mod serde_tls_key {
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::borrow::Cow;
+    use tokio_rustls::rustls;
+
+    pub fn serialize<S>(key: &rustls::PrivateKey, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_str = hex::encode(&key.0);
+        Serialize::serialize(&hex_str, serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<rustls::PrivateKey, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
+        let bytes = hex::decode(hex_str.as_ref()).map_err(|_e| D::Error::custom("Invalid hex"))?;
+        Ok(rustls::PrivateKey(bytes))
     }
 }
