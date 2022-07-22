@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["timeout",""]],"struct":[["MockConnector",""],["MockNetwork",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["do_handshake",""],["timeout",""]],"struct":[["MockConnector",""],["MockNetwork",""]]};

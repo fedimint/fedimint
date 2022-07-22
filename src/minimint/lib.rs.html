@@ -255,7 +255,7 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_core</span>::<span class="kw-2">*</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus</span>::{<span class="ident">ConsensusItem</span>, <span class="ident">ConsensusOutcome</span>, <span class="ident">ConsensusProposal</span>, <span class="ident">MinimintConsensus</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">Connector</span>, <span class="ident">InsecureTcpConnector</span>};
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">Connector</span>, <span class="ident">TlsTcpConnector</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::peers</span>::{
     <span class="ident">AnyPeerConnections</span>, <span class="ident">PeerConnections</span>, <span class="ident">PeerConnector</span>, <span class="ident">ReconnectPeerConnections</span>,
 };
@@ -295,7 +295,7 @@
 <span class="kw">impl</span> <span class="ident">MinimintServer</span> {
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">connector</span>: <span class="ident">PeerConnector</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span>
-            <span class="ident">InsecureTcpConnector::new</span>(<span class="ident">cfg</span>.<span class="ident">identity</span>).<span class="ident">to_any</span>();
+            <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>.<span class="ident">tls_config</span>()).<span class="ident">to_any</span>();
 
         <span class="ident"><span class="self">Self</span>::new_with</span>(
             <span class="ident">cfg</span>.<span class="ident">clone</span>(),
