@@ -907,6 +907,15 @@
 <span id="901">901</span>
 <span id="902">902</span>
 <span id="903">903</span>
+<span id="904">904</span>
+<span id="905">905</span>
+<span id="906">906</span>
+<span id="907">907</span>
+<span id="908">908</span>
+<span id="909">909</span>
+<span id="910">910</span>
+<span id="911">911</span>
+<span id="912">912</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
     <span class="ident">MintAuditItemKey</span>, <span class="ident">MintAuditItemKeyPrefix</span>, <span class="ident">NonceKey</span>, <span class="ident">OutputOutcomeKey</span>,
@@ -949,7 +958,6 @@
 
 <span class="doccomment">/// Federated mint member mint</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Mint</span> {
-    <span class="ident">key_id</span>: <span class="ident">PeerId</span>,
     <span class="ident">sec_key</span>: <span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">SecretKeyShare</span><span class="op">&gt;</span>,
     <span class="ident">pub_key_shares</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">PublicKeyShare</span><span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">pub_key</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident">AggregatePublicKey</span><span class="op">&gt;</span>,
@@ -1180,7 +1188,11 @@
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
                 <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">transaction</span>();
-                <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">shares</span>.<span class="ident">clone</span>());
+                <span class="kw">let</span> <span class="ident">proposal_key</span> <span class="op">=</span> <span class="ident">ProposedPartialSignatureKey</span> {
+                    <span class="ident">request_id</span>: <span class="ident">issuance_id</span>,
+                };
+                <span class="kw">let</span> <span class="ident">our_contribution</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">proposal_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">our_contribution</span>, <span class="ident">shares</span>.<span class="ident">clone</span>());
 
                 <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible</span>
                 <span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">error</span>)<span class="op">|</span> {
@@ -1201,6 +1213,7 @@
                                 <span class="ident">peer_id</span>: <span class="ident">peer</span>,
                             })
                         }));
+                        <span class="ident">batch_tx</span>.<span class="ident">append_delete</span>(<span class="ident">proposal_key</span>);
 
                         <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(<span class="ident">OutputOutcomeKey</span>(<span class="ident">issuance_id</span>), <span class="ident">blind_signature</span>);
                     }
@@ -1343,7 +1356,6 @@
         .<span class="ident">collect</span>();
 
         <span class="ident">Mint</span> {
-            <span class="ident">key_id</span>: <span class="ident">our_id</span>,
             <span class="ident">sec_key</span>: <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>,
             <span class="ident">pub_key_shares</span>: <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>,
             <span class="ident">pub_key</span>: <span class="ident">aggregate_pub_keys</span>,
@@ -1364,6 +1376,7 @@
 
     <span class="kw">fn</span> <span class="ident">combine</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">our_contribution</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PartialSigResponse</span><span class="op">&gt;</span>,
         <span class="ident">partial_sigs</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PartialSigResponse</span>)<span class="op">&gt;</span>,
     ) -&gt; (<span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">SigResponse</span>, <span class="ident">CombineError</span><span class="op">&gt;</span>, <span class="ident">MintShareErrors</span>) {
         <span class="comment">// Terminate early if there are not enough shares</span>
@@ -1391,8 +1404,8 @@
         }
 
         <span class="comment">// Determine the reference response to check against</span>
-        <span class="kw">let</span> <span class="ident">our_contribution</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">find</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">peer</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">key_id</span>) {
-            <span class="prelude-val">Some</span>((<span class="kw">_</span>, <span class="ident">psigs</span>)) =&gt; <span class="ident">psigs</span>,
+        <span class="kw">let</span> <span class="ident">our_contribution</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">our_contribution</span> {
+            <span class="prelude-val">Some</span>(<span class="ident">psig</span>) =&gt; <span class="ident">psig</span>,
             <span class="prelude-val">None</span> =&gt; {
                 <span class="kw">return</span> (
                     <span class="prelude-val">Err</span>(<span class="ident">CombineError::NoOwnContribution</span>),
@@ -1520,13 +1533,6 @@
             },
             <span class="ident">partial_sig</span>,
         );
-
-        <span class="comment">// FIXME: add own id to cfg</span>
-        <span class="kw">if</span> <span class="ident">peer</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">key_id</span> {
-            <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">ProposedPartialSignatureKey</span> {
-                <span class="ident">request_id</span>: <span class="ident">output_id</span>,
-            });
-        }
 
         <span class="ident">batch</span>.<span class="ident">commit</span>();
     }
@@ -1681,13 +1687,20 @@
 
         <span class="kw">let</span> <span class="ident">psigs</span> <span class="op">=</span> <span class="ident">mints</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">m</span><span class="op">|</span> (<span class="ident">m</span>.<span class="ident">key_id</span>, <span class="ident">m</span>.<span class="ident">blind_sign</span>(<span class="ident">blind_tokens</span>.<span class="ident">clone</span>()).<span class="ident">unwrap</span>()))
+            .<span class="ident">enumerate</span>()
+            .<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span>(<span class="ident">id</span>, <span class="ident">m</span>)<span class="op">|</span> {
+                (
+                    <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>),
+                    <span class="ident">m</span>.<span class="ident">blind_sign</span>(<span class="ident">blind_tokens</span>.<span class="ident">clone</span>()).<span class="ident">unwrap</span>(),
+                )
+            })
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
 
+        <span class="kw">let</span> <span class="ident">our_sig</span> <span class="op">=</span> <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span>.<span class="ident">clone</span>();
         <span class="kw">let</span> <span class="ident">mint</span> <span class="op">=</span> <span class="kw-2">&amp;mut</span> <span class="ident">mints</span>[<span class="number">0</span>];
 
         <span class="comment">// Test happy path</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">psigs</span>.<span class="ident">clone</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>.<span class="ident">clone</span>());
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="kw">let</span> <span class="ident">bsig</span> <span class="op">=</span> <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>();
@@ -1699,7 +1712,8 @@
         });
 
         <span class="comment">// Test threshold sig shares</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>)].<span class="ident">to_vec</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span>
+            <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>)].<span class="ident">to_vec</span>());
         <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
@@ -1710,7 +1724,7 @@
 
         <span class="comment">// Test too few sig shares</span>
         <span class="kw">let</span> <span class="ident">few_sigs</span> <span class="op">=</span> <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span> <span class="op">-</span> <span class="number">1</span>)].<span class="ident">to_vec</span>();
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">few_sigs</span>.<span class="ident">clone</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">few_sigs</span>.<span class="ident">clone</span>());
         <span class="macro">assert_eq!</span>(
             <span class="ident">bsig_res</span>,
             <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
@@ -1721,12 +1735,13 @@
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="comment">// Test no own share</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="ident">psigs</span>[<span class="number">1</span>..].<span class="ident">to_vec</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">None</span>, <span class="ident">psigs</span>[<span class="number">1</span>..].<span class="ident">to_vec</span>());
         <span class="macro">assert_eq!</span>(<span class="ident">bsig_res</span>, <span class="prelude-val">Err</span>(<span class="ident">CombineError::NoOwnContribution</span>));
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="comment">// Test multiple peer contributions</span>
         <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
@@ -1741,6 +1756,7 @@
 
         <span class="comment">// Test wrong length response</span>
         <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
@@ -1758,6 +1774,7 @@
             .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">1</span>), <span class="ident">PeerErrorType::DifferentStructureSigShare</span>)));
 
         <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
@@ -1777,6 +1794,7 @@
 
         <span class="kw">let</span> (<span class="ident">_bk</span>, <span class="ident">bmsg</span>) <span class="op">=</span> <span class="ident">blind_message</span>(<span class="ident">Message::from_bytes</span>(<span class="string">b&quot;test&quot;</span>));
         <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
@@ -1811,5 +1829,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (d68e7ebc3 2022-07-20)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (62b272d25 2022-07-21)" ></div>
 </body></html>
