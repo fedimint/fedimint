@@ -126,8 +126,8 @@ async fn peg_outs_must_wait_for_available_utxos() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_can_be_exchanged_between_users() {
-    let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]).await;
+    let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let user_receive = user_send.new_client(&[0, 1]).await;
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
@@ -209,12 +209,7 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) {
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_peg_out_psbts() {
     let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(1), sats(10), sats(100), sats(1000)]).await;
-    // FIXME coins cannot be fetched if peer is not in the epoch
-    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(3000));
-    fed.subset_peers(&[0, 1, 2])
-        .mint_coins_for_user(&user, sats(3000))
-        .await;
-    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
+    fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
 
     let peg_out_address = bitcoin.get_new_address();
     user.peg_out(1000, &peg_out_address).await;
@@ -238,12 +233,8 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() {
 async fn drop_peers_who_dont_contribute_decryption_shares() {
     let (fed, user, bitcoin, gateway, _) = fixtures(4, &[sats(100), sats(1000)]).await;
     let payment_amount = sats(2000);
-    // FIXME coins cannot be fetched if peer is not in the epoch
-    fed.mine_spendable_utxo(&gateway.user, &*bitcoin, Amount::from_sat(3000));
-    fed.subset_peers(&[0, 1, 2])
-        .mint_coins_for_user(&gateway.user, sats(3000))
+    fed.mine_and_mint(&gateway.user, &*bitcoin, sats(3000))
         .await;
-    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
 
     // Create lightning invoice whose associated "offer" is accepted by federation consensus
     let invoice = tokio::join!(
