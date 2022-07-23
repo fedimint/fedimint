@@ -14,8 +14,8 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
 
+use fedimint::config::load_from_file;
 use ln_gateway::{cln::HtlcAccepted, GatewayRequest, LnGateway, LnGatewayError};
-use minimint::config::load_from_file;
 use mint_client::ln::gateway::LightningGateway;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
@@ -23,7 +23,7 @@ type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 /// Create [`gateway.json`] and [`client.json`] config files
 async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
     let federation_client_cfg_path = workdir.join("federation_client.json");
-    let federation_client_cfg: minimint::config::ClientConfig =
+    let federation_client_cfg: fedimint::config::ClientConfig =
         load_from_file(&federation_client_cfg_path);
 
     let mut rng = thread_rng();
@@ -74,11 +74,11 @@ async fn initialize_gateway(
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
 ) -> LnGateway {
-    let workdir = match plugin.option("minimint-cfg") {
+    let workdir = match plugin.option("fedimint-cfg") {
         Some(options::Value::String(workdir)) => {
             // FIXME: cln_plugin doesn't yet support optional parameters
             if &workdir == "default-dont-use" {
-                panic!("minimint-cfg option missing")
+                panic!("fedimint-cfg option missing")
             } else {
                 PathBuf::from(workdir)
             }
@@ -183,10 +183,10 @@ async fn main() -> Result<(), Error> {
     // Register this plugin with core-lightning
     if let Some(plugin) = Builder::new(state, stdin(), stdout())
         .option(options::ConfigOption::new(
-            "minimint-cfg",
+            "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
             options::Value::String("default-dont-use".into()),
-            "minimint config directory",
+            "fedimint config directory",
         ))
         .rpcmethod("gw-balance", "Display ecash token balance", balance_rpc)
         .rpcmethod(

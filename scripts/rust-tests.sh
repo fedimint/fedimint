@@ -7,5 +7,5 @@ export RUST_LOG=info
 source ./scripts/build.sh
 source ./scripts/setup-tests.sh
 
-export MINIMINT_TEST_REAL=1
-cargo test --release -p minimint-tests -- --test-threads=1
+export fedimint_TEST_REAL=1
+cargo test --release -p fedimint-tests -- --test-threads=1

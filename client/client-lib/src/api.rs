@@ -1,16 +1,16 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
+use fedimint_api::task::{RwLock, RwLockWriteGuard};
+use fedimint_api::{OutPoint, PeerId, TransactionId};
+use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+use fedimint_core::modules::ln::contracts::ContractId;
+use fedimint_core::modules::ln::ContractAccount;
+use fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
+use fedimint_core::transaction::Transaction;
+use fedimint_core::CoreError;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
-use minimint_api::task::{RwLock, RwLockWriteGuard};
-use minimint_api::{OutPoint, PeerId, TransactionId};
-use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-use minimint_core::modules::ln::contracts::ContractId;
-use minimint_core::modules::ln::ContractAccount;
-use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-use minimint_core::transaction::Transaction;
-use minimint_core::CoreError;
 use tracing::{error, instrument, warn};
 
 #[cfg(not(target_family = "wasm"))]
@@ -20,7 +20,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
 use bitcoin::{Address, Amount};
-use minimint_core::modules::wallet::PegOutFees;
+use fedimint_core::modules::wallet::PegOutFees;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -82,12 +82,12 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_output_outcome(outpoint).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
+                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| ApiError::Timeout)?
     }
@@ -102,12 +102,12 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_offer(payment_hash).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
+                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| ApiError::Timeout)?
     }
@@ -122,12 +122,12 @@ impl<'a> dyn FederationApi + 'a {
             loop {
                 match self.fetch_contract(contract_id).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => minimint_api::task::sleep(interval).await,
+                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .await
             .map_err(|_| ApiError::Timeout)?
     }

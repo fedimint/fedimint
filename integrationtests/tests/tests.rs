@@ -10,15 +10,15 @@ use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
-use minimint::consensus::ConsensusItem;
-use minimint::transaction::Output;
-use minimint_api::db::batch::DbBatch;
-use minimint_ln::contracts::incoming::PreimageDecryptionShare;
-use minimint_ln::DecryptionShareCI;
-use minimint_mint::tiered::coins::Coins;
-use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
-use minimint_wallet::WalletConsensusItem;
-use minimint_wallet::WalletConsensusItem::PegOutSignature;
+use fedimint::consensus::ConsensusItem;
+use fedimint::transaction::Output;
+use fedimint_api::db::batch::DbBatch;
+use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
+use fedimint_ln::DecryptionShareCI;
+use fedimint_mint::tiered::coins::Coins;
+use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
+use fedimint_wallet::WalletConsensusItem;
+use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 

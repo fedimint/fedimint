@@ -4,12 +4,12 @@ use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 use crate::mint::CoinFinalizationData;
 use crate::{MintClientError, SpendableCoin};
 use bitcoin::KeyPair;
-use minimint_api::db::batch::{BatchItem, BatchTx};
-use minimint_api::{Amount, OutPoint};
-use minimint_core::config::FeeConsensus;
-use minimint_core::modules::mint::tiered::coins::Coins;
-use minimint_core::modules::mint::{BlindToken, Coin, Keys};
-use minimint_core::transaction::{Input, Output, Transaction};
+use fedimint_api::db::batch::{BatchItem, BatchTx};
+use fedimint_api::{Amount, OutPoint};
+use fedimint_core::config::FeeConsensus;
+use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::{BlindToken, Coin, Keys};
+use fedimint_core::transaction::{Input, Output, Transaction};
 use tbs::AggregatePublicKey;
 
 pub struct TransactionBuilder {
@@ -134,7 +134,7 @@ impl TransactionBuilder {
         let txid = self.tx.tx_hash();
         if !self.keys.is_empty() {
             let signature =
-                minimint_core::transaction::agg_sign(&self.keys, txid.as_hash(), secp, &mut rng);
+                fedimint_core::transaction::agg_sign(&self.keys, txid.as_hash(), secp, &mut rng);
             self.tx.signature = Some(signature);
         }
 

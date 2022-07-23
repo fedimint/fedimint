@@ -1,6 +1,6 @@
-# MiniMint
+# Fedimint
 
-MiniMint is a federated [Chaumian e-cash](https://en.wikipedia.org/wiki/Ecash) mint backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
+Fedimint is a federated [Chaumian e-cash](https://en.wikipedia.org/wiki/Ecash) mint backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
 
 **DO NOT USE IT WITH REAL MONEY, THERE ARE MULTIPLE KNOWN SECURITY ISSUES.**
 
@@ -11,37 +11,46 @@ If you want to learn more about the general idea go to [fedimint.org](https://fe
 Visit our [Telegram group](https://t.me/fedimint) for high-level discussions (no codebase questions please).
 
 To get started with development have a look at the:
-* [Developer discord](https://discord.gg/dZYajBMsEB) - only for programming questions and discussing the codebase
-* [GitHub Issues](https://github.com/fedimint/minimint/issues) - things to fix, planned features, longer term architectural choices, etc.
-* [Architecture](docs/architecture.md) - high-level description of the codebase and design
-* [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
-* [Scripts](scripts/README.md) - useful scripts for running the tests and federation
+
+- [Developer discord](https://discord.gg/dZYajBMsEB) - only for programming questions and discussing the codebase
+- [GitHub Issues](https://github.com/fedimint/fedimint/issues) - things to fix, planned features, longer term architectural choices, etc.
+- [Architecture](docs/architecture.md) - high-level description of the codebase and design
+- [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
+- [Scripts](scripts/README.md) - useful scripts for running the tests and federation
 
 PRs fixing TODOs or issues are always welcome, but please discuss more involved changes in an issue first. Smaller PRs to fix typos, broken links etc. are also very welcome.
 Happy hacking!
 
-## Running MiniMint
-MiniMint consists of three kinds of executables:
-* **Federation nodes** - servers who form the mint by running a consensus protocol
-* **Lightning gateways** - allows users send and receive over Lightning by bridging between the mint and an LN node
-* **User clients** - handles user communication with the mint and the gateway
+## Running Fedimint
+
+Fedimint consists of three kinds of executables:
+
+- **Federation nodes** - servers who form the mint by running a consensus protocol
+- **Lightning gateways** - allows users send and receive over Lightning by bridging between the mint and an LN node
+- **User clients** - handles user communication with the mint and the gateway
 
 ### Prerequisites
-In order to run MiniMint you will need:
+
+In order to run fedimint you will need:
+
 - The [Rust toolchain](https://www.rust-lang.org/tools/install) to build and run the executables
 - The [Nix package manager](https://nixos.org/download.html) for managing build and test dependencies
 
-Clone and `cd` into the MiniMint repo:
+Clone and `cd` into the fedimint repo:
+
 ```shell
-git clone git@github.com:fedimint/minimint.git
-cd minimint
+git clone git@github.com:fedimint/fedimint.git
+cd fedimint
 ```
 
 ### Setting up the federation
+
 Just run the following script, **make sure not to run it inside a tmux window**:
+
 ```shell
 ./scripts/tmuxinator.sh
 ```
+
 which will set up a complete federation including a lightning gateway and another lightning node inside tmux. The first run can take some time since a lot of dependencies need to be built.
 
 The first tmux screen is one big shell for you to follow the tutorial in. If you want to see the federation, bitcoind and lightningd running you can navigate to the second screen (shown below) by typing `ctrl+b, n` (next) and `ctrl+b, p` (previous). You can scroll through the terminal buffer by first typing `ctrl+b, PgUp` and then navigating using `PgUp` and `PgDown`. To maximize any of the panes type `ctrl+b, z`.
@@ -49,6 +58,7 @@ The first tmux screen is one big shell for you to follow the tutorial in. If you
 ![screenshot of the federation running in tmux](tmuxinator.png)
 
 ### Using the client
+
 Note as you run commands the mint nodes will output logging information which you can adjust by setting the [RUST_LOG](https://docs.rs/env_logger/latest/env_logger/) env variable.
 
 The previous step has already set up an e-cash client with a funded wallet for you. If you are interested in the details take a look at [`scripts/pegin.sh`](scripts/pegin.sh).
@@ -131,6 +141,7 @@ $ ln2 listinvoices test
 ```
 
 Create our own invoice:
+
 ```shell
 $ mint_client ln-invoice 1000 "description"
 lnbcrt1u1p3vcp...
@@ -145,7 +156,7 @@ $ ln2 pay lnbcrt1u1p3vcp...
 Have mint client check that payment succeeded, fetch coins, and display new balances:
 
 ```shell
-$ mint_client wait-invoice lnbcrt1u1p3vcp... 
+$ mint_client wait-invoice lnbcrt1u1p3vcp...
 $ mint_client fetch
 $ mint_client info
 ```
@@ -157,13 +168,13 @@ There also exist some other, more experimental commands that can be explored usi
 ```shell
 $ mint_client help
 
-mint-client-cli 
+mint-client-cli
 
 USAGE:
     mint-client-cli <WORKDIR> <SUBCOMMAND>
 
 ARGS:
-    <WORKDIR>    
+    <WORKDIR>
 
 OPTIONS:
     -h, --help    Print help information

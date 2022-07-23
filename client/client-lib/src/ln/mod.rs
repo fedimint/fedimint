@@ -11,18 +11,18 @@ use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::BorrowedClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
-use lightning_invoice::Invoice;
-use minimint_api::db::batch::BatchTx;
-use minimint_api::Amount;
-use minimint_core::modules::ln::config::LightningModuleClientConfig;
-use minimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
-use minimint_core::modules::ln::contracts::outgoing::OutgoingContract;
-use minimint_core::modules::ln::contracts::{
+use fedimint_api::db::batch::BatchTx;
+use fedimint_api::Amount;
+use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+use fedimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
+use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
+use fedimint_core::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
 };
-use minimint_core::modules::ln::{
+use fedimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput,
 };
+use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
 use std::time::Duration;
 use thiserror::Error;
@@ -202,19 +202,19 @@ mod tests {
     use crate::OwnedClientContext;
     use async_trait::async_trait;
     use bitcoin::Address;
+    use fedimint_api::db::batch::DbBatch;
+    use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::module::testing::FakeFed;
+    use fedimint_api::{Amount, OutPoint, TransactionId};
+    use fedimint_core::modules::ln::config::LightningModuleClientConfig;
+    use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+    use fedimint_core::modules::ln::ContractOrOfferOutput;
+    use fedimint_core::modules::ln::{ContractAccount, LightningModule};
+    use fedimint_core::modules::wallet::PegOutFees;
+    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use fedimint_core::transaction::Transaction;
     use lightning_invoice::Invoice;
-    use minimint_api::db::batch::DbBatch;
-    use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::module::testing::FakeFed;
-    use minimint_api::{Amount, OutPoint, TransactionId};
-    use minimint_core::modules::ln::config::LightningModuleClientConfig;
-    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    use minimint_core::modules::ln::ContractOrOfferOutput;
-    use minimint_core::modules::ln::{ContractAccount, LightningModule};
-    use minimint_core::modules::wallet::PegOutFees;
-    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use minimint_core::transaction::Transaction;
     use std::sync::Arc;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;

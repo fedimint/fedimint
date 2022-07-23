@@ -1,9 +1,9 @@
 use crate::mint::{CoinFinalizationData, SpendableCoin};
-use minimint_api::db::DatabaseKeyPrefixConst;
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{Amount, OutPoint, TransactionId};
-use minimint_core::modules::mint::tiered::coins::Coins;
-use minimint_core::modules::mint::CoinNonce;
+use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::CoinNonce;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;

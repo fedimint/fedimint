@@ -15,26 +15,22 @@ use bitcoin::{Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use futures::stream::FuturesUnordered;
 
-use lightning::ln::PaymentSecret;
-use lightning::routing::gossip::RoutingFees;
-use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
-use minimint_api::{
+use fedimint_api::{
     db::{
         batch::{Accumulator, BatchItem, DbBatch},
         Database,
     },
     Amount, OutPoint, PeerId, TransactionId,
 };
-use minimint_core::modules::ln::contracts::incoming::{
+use fedimint_core::modules::ln::contracts::incoming::{
     DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
-use minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-use minimint_core::modules::ln::ContractOutput;
-use minimint_core::modules::wallet::PegOut;
-use minimint_core::outcome::TransactionStatus;
-use minimint_core::transaction::TransactionItem;
-use minimint_core::{
+use fedimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
+use fedimint_core::modules::ln::ContractOutput;
+use fedimint_core::modules::wallet::PegOut;
+use fedimint_core::outcome::TransactionStatus;
+use fedimint_core::transaction::TransactionItem;
+use fedimint_core::{
     config::ClientConfig,
     modules::{
         ln::{
@@ -46,6 +42,10 @@ use minimint_core::{
     },
     transaction::{Input, Output},
 };
+use lightning::ln::PaymentSecret;
+use lightning::routing::gossip::RoutingFees;
+use lightning::routing::router::{RouteHint, RouteHintHop};
+use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -299,7 +299,7 @@ impl<T: AsRef<ClientConfig>> Client<T> {
     /// public descriptor by tweaking it.
     /// - this function will write to the clients DB
     ///
-    /// read more on fedimints address derivation: <https://fedimint.org/MiniMint/wallet/>
+    /// read more on fedimints address derivation: <https://fedimint.org/fedimint/wallet/>
     pub fn get_new_pegin_address<R: RngCore + CryptoRng>(&self, rng: R) -> Address {
         let mut batch = DbBatch::new();
         let address = self
@@ -682,7 +682,7 @@ impl Client<GatewayClientConfig> {
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        let incoming_output = minimint_core::transaction::Output::LN(
+        let incoming_output = fedimint_core::transaction::Output::LN(
             ContractOrOfferOutput::Contract(ContractOutput {
                 amount: *amount,
                 contract: contract.clone(),

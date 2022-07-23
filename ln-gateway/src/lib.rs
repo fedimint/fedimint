@@ -6,10 +6,10 @@ use crate::ln::{LightningError, LnRpc};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
+use fedimint::modules::ln::contracts::{incoming::Preimage, ContractId};
+use fedimint::modules::wallet::txoproof::TxOutProof;
+use fedimint_api::{Amount, OutPoint, TransactionId};
 use futures::Future;
-use minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-use minimint::modules::wallet::txoproof::TxOutProof;
-use minimint_api::{Amount, OutPoint, TransactionId};
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient};
 use rand::{CryptoRng, RngCore};
@@ -329,7 +329,7 @@ impl LnGateway {
                 }
             }
 
-            minimint_api::task::sleep_until(least_wait_until).await;
+            fedimint_api::task::sleep_until(least_wait_until).await;
         }
     }
 }

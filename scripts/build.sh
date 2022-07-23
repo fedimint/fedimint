@@ -42,9 +42,9 @@ alias mint_client="\$FM_MINT_CLIENT"
 alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 
 # Function for killing processes stored in FM_PID_FILE
-function kill_minimint_processes {
+function kill_fedimint_processes {
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
   pkill "ln_gateway";
   rm $FM_PID_FILE
 }
-trap kill_minimint_processes EXIT
+trap kill_fedimint_processes EXIT

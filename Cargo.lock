@@ -474,7 +474,7 @@ dependencies = [
 [[package]]
 name = "bitcoin_hashes"
 version = "0.10.0"
-source = "git+https://github.com/fedimint/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
+source = "git+https://github.com/fedimint/bitcoin_hashes?branch=fedimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
 dependencies = [
  "serde",
 ]
@@ -1075,6 +1075,210 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "bytes",
+ "clap",
+ "fedimint-api",
+ "fedimint-core",
+ "fedimint-derive",
+ "fedimint-wallet",
+ "futures",
+ "hbbft",
+ "hex",
+ "itertools",
+ "jsonrpsee",
+ "opentelemetry",
+ "opentelemetry-jaeger",
+ "rand 0.6.5",
+ "rayon",
+ "rcgen",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "sled",
+ "tbs",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util 0.6.10",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "x509-parser",
+]
+
+[[package]]
+name = "fedimint-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-lock",
+ "async-trait",
+ "bitcoin",
+ "bitcoin_hashes",
+ "fedimint-derive",
+ "futures",
+ "getrandom 0.2.7",
+ "gloo-timers",
+ "hex",
+ "lightning-invoice",
+ "rand 0.6.5",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sled",
+ "tbs",
+ "tempfile",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "fedimint-core"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "fedimint-api",
+ "fedimint-derive",
+ "fedimint-ln",
+ "fedimint-mint",
+ "fedimint-wallet",
+ "futures",
+ "hex",
+ "itertools",
+ "rand 0.6.5",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tbs",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-derive"
+version = "0.1.0"
+dependencies = [
+ "heck 0.3.3",
+ "proc-macro2 1.0.40",
+ "quote 1.0.20",
+ "syn 1.0.98",
+]
+
+[[package]]
+name = "fedimint-ln"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "fedimint-api",
+ "futures",
+ "itertools",
+ "lightning",
+ "lightning-invoice",
+ "rand 0.7.3",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "test-log",
+ "thiserror",
+ "threshold_crypto 0.4.0",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-mint"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "counter",
+ "fedimint-api",
+ "fedimint-derive",
+ "itertools",
+ "rand 0.6.5",
+ "rayon",
+ "secp256k1-zkp",
+ "serde",
+ "tbs",
+ "test-log",
+ "thiserror",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-tests"
+version = "0.1.0"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "clightningrpc",
+ "cln-rpc",
+ "fedimint",
+ "fedimint-api",
+ "fedimint-ln",
+ "fedimint-mint",
+ "fedimint-wallet",
+ "futures",
+ "hbbft",
+ "itertools",
+ "lightning",
+ "lightning-invoice",
+ "ln-gateway",
+ "mint-client",
+ "rand 0.6.5",
+ "serde",
+ "threshold_crypto 0.4.0",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-wallet"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "fedimint-api",
+ "fedimint-derive",
+ "hex",
+ "itertools",
+ "miniscript",
+ "rand 0.6.5",
+ "secp256k1",
+ "serde",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "validator",
+]
+
+[[package]]
 name = "femme"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1444,7 +1648,7 @@ checksum = "607c8a29735385251a339424dd462993c0fed8fa09d378f259377df08c126022"
 [[package]]
 name = "hbbft"
 version = "0.1.1"
-source = "git+https://github.com/fedimint/hbbft?branch=minimint#aeb5d5a5ebec63428bbb509f98b41e1eeec68221"
+source = "git+https://github.com/fedimint/hbbft?branch=fedimint#aeb5d5a5ebec63428bbb509f98b41e1eeec68221"
 dependencies = [
  "bincode",
  "byteorder",
@@ -1910,11 +2114,11 @@ dependencies = [
  "bitcoin_hashes",
  "cln-plugin",
  "cln-rpc",
+ "fedimint",
+ "fedimint-api",
  "futures",
  "hex",
  "lightning-invoice",
- "minimint",
- "minimint-api",
  "mint-client",
  "rand 0.6.5",
  "secp256k1",
@@ -2010,210 +2214,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
-name = "minimint"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "bitcoin",
- "bytes",
- "clap",
- "futures",
- "hbbft",
- "hex",
- "itertools",
- "jsonrpsee",
- "minimint-api",
- "minimint-core",
- "minimint-derive",
- "minimint-wallet",
- "opentelemetry",
- "opentelemetry-jaeger",
- "rand 0.6.5",
- "rayon",
- "rcgen",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "sha3",
- "sled",
- "tbs",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-util 0.6.10",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "x509-parser",
-]
-
-[[package]]
-name = "minimint-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-lock",
- "async-trait",
- "bitcoin",
- "bitcoin_hashes",
- "futures",
- "getrandom 0.2.7",
- "gloo-timers",
- "hex",
- "lightning-invoice",
- "minimint-derive",
- "rand 0.6.5",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "sled",
- "tbs",
- "tempfile",
- "test-log",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "minimint-core"
-version = "0.0.0"
-dependencies = [
- "async-trait",
- "bincode",
- "bitcoin",
- "futures",
- "hex",
- "itertools",
- "minimint-api",
- "minimint-derive",
- "minimint-ln",
- "minimint-mint",
- "minimint-wallet",
- "rand 0.6.5",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "sha3",
- "tbs",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "minimint-derive"
-version = "0.1.0"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2 1.0.40",
- "quote 1.0.20",
- "syn 1.0.98",
-]
-
-[[package]]
-name = "minimint-ln"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "bitcoin_hashes",
- "futures",
- "itertools",
- "lightning",
- "lightning-invoice",
- "minimint-api",
- "rand 0.7.3",
- "secp256k1",
- "serde",
- "serde_json",
- "test-log",
- "thiserror",
- "threshold_crypto 0.4.0",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "minimint-mint"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bincode",
- "counter",
- "itertools",
- "minimint-api",
- "minimint-derive",
- "rand 0.6.5",
- "rayon",
- "secp256k1-zkp",
- "serde",
- "tbs",
- "test-log",
- "thiserror",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "minimint-tests"
-version = "0.1.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "bitcoin",
- "bitcoincore-rpc",
- "clightningrpc",
- "cln-rpc",
- "futures",
- "hbbft",
- "itertools",
- "lightning",
- "lightning-invoice",
- "ln-gateway",
- "minimint",
- "minimint-api",
- "minimint-ln",
- "minimint-mint",
- "minimint-wallet",
- "mint-client",
- "rand 0.6.5",
- "serde",
- "threshold_crypto 0.4.0",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "minimint-wallet"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitcoin",
- "bitcoincore-rpc",
- "hex",
- "itertools",
- "minimint-api",
- "minimint-derive",
- "miniscript",
- "rand 0.6.5",
- "secp256k1",
- "serde",
- "test-log",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "validator",
-]
-
-[[package]]
 name = "miniscript"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2242,6 +2242,8 @@ dependencies = [
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
+ "fedimint-api",
+ "fedimint-core",
  "futures",
  "hex",
  "jsonrpsee-core",
@@ -2250,8 +2252,6 @@ dependencies = [
  "jsonrpsee-ws-client",
  "lightning",
  "lightning-invoice",
- "minimint-api",
- "minimint-core",
  "miniscript",
  "once_cell",
  "rand 0.6.5",
@@ -2273,9 +2273,9 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "clap",
+ "fedimint-api",
+ "fedimint-core",
  "lightning-invoice",
- "minimint-api",
- "minimint-core",
  "mint-client",
  "rand 0.6.5",
  "reqwest",

@@ -2,12 +2,12 @@ use crate::utils::BorrowedClientContext;
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
-use minimint_api::db::batch::BatchTx;
-use minimint_api::Amount;
-use minimint_core::config::FeeConsensus;
-use minimint_core::modules::wallet::config::WalletClientConfig;
-use minimint_core::modules::wallet::tweakable::Tweakable;
-use minimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+use fedimint_api::db::batch::BatchTx;
+use fedimint_api::Amount;
+use fedimint_core::config::FeeConsensus;
+use fedimint_core::modules::wallet::config::WalletClientConfig;
+use fedimint_core::modules::wallet::tweakable::Tweakable;
+use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 
 use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
@@ -132,23 +132,23 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::Address;
 
-    use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::module::testing::FakeFed;
-    use minimint_api::{Amount, OutPoint, TransactionId};
-    use minimint_core::config::FeeConsensus;
-    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint_core::modules::ln::contracts::ContractId;
-    use minimint_core::modules::ln::ContractAccount;
-    use minimint_core::modules::wallet::bitcoind::test::{
+    use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::module::testing::FakeFed;
+    use fedimint_api::{Amount, OutPoint, TransactionId};
+    use fedimint_core::config::FeeConsensus;
+    use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use fedimint_core::modules::ln::contracts::ContractId;
+    use fedimint_core::modules::ln::ContractAccount;
+    use fedimint_core::modules::wallet::bitcoind::test::{
         FakeBitcoindRpc, FakeBitcoindRpcController,
     };
-    use minimint_core::modules::wallet::config::WalletClientConfig;
-    use minimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
-    use minimint_core::modules::wallet::{
+    use fedimint_core::modules::wallet::config::WalletClientConfig;
+    use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
+    use fedimint_core::modules::wallet::{
         Feerate, PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet,
     };
-    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use minimint_core::transaction::Transaction;
+    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use fedimint_core::transaction::Transaction;
     use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
@@ -315,7 +315,7 @@ mod tests {
         fed.lock().await.consensus_round(&[], &[]).await;
 
         // wait for broadcast
-        minimint_api::task::sleep(Duration::from_secs(12)).await;
+        fedimint_api::task::sleep(Duration::from_secs(12)).await;
         assert!(btc_rpc.is_btc_sent_to(amount, addr).await);
 
         let wallet_value = fed

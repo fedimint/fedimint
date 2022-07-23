@@ -1,10 +1,11 @@
 # Telemetry
 
-Minimint uses [opentelemetry] and [jaeger] for telemetry.
+Fedimint uses [opentelemetry] and [jaeger] for telemetry.
 
 ## Running Server with telemetry
 
 - Running jaeger
+
 ```shell
 docker run -d -p6831:6831/udp -p16686:16686 jaegertracing/all-in-one:latest
 ```

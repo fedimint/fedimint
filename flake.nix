@@ -30,7 +30,7 @@
         };
 
         cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
-          pname = "minimint";
+          pname = "fedimint";
         });
 
         myCrateClippy = craneLib.cargoClippy (commonArgs // {

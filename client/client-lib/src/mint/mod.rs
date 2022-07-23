@@ -5,17 +5,17 @@ use crate::transaction::TransactionBuilder;
 use crate::utils::BorrowedClientContext;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
-use minimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{Amount, OutPoint, TransactionId};
-use minimint_core::config::FeeConsensus;
-use minimint_core::modules::mint::config::MintClientConfig;
-use minimint_core::modules::mint::tiered::coins::Coins;
-use minimint_core::modules::mint::{
+use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_core::config::FeeConsensus;
+use fedimint_core::modules::mint::config::MintClientConfig;
+use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{Secp256k1, Signing};
@@ -193,7 +193,7 @@ impl<'c> MintClient<'c> {
                         // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
                         Err(e) if e.is_retryable() => {
                             trace!("Mint returned retryable error: {:?}", e);
-                            minimint_api::task::sleep(Duration::from_secs(1)).await
+                            fedimint_api::task::sleep(Duration::from_secs(1)).await
                         }
                         Err(e) => {
                             warn!("Mint returned error: {:?}", e);
@@ -362,20 +362,20 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
+    use fedimint_api::db::batch::DbBatch;
+    use fedimint_api::db::mem_impl::MemDatabase;
+    use fedimint_api::db::Database;
+    use fedimint_api::module::testing::FakeFed;
+    use fedimint_api::{Amount, OutPoint, TransactionId};
+    use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    use fedimint_core::modules::ln::contracts::ContractId;
+    use fedimint_core::modules::ln::ContractAccount;
+    use fedimint_core::modules::mint::config::MintClientConfig;
+    use fedimint_core::modules::mint::Mint;
+    use fedimint_core::modules::wallet::PegOutFees;
+    use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    use fedimint_core::transaction::Transaction;
     use futures::executor::block_on;
-    use minimint_api::db::batch::DbBatch;
-    use minimint_api::db::mem_impl::MemDatabase;
-    use minimint_api::db::Database;
-    use minimint_api::module::testing::FakeFed;
-    use minimint_api::{Amount, OutPoint, TransactionId};
-    use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    use minimint_core::modules::ln::contracts::ContractId;
-    use minimint_core::modules::ln::ContractAccount;
-    use minimint_core::modules::mint::config::MintClientConfig;
-    use minimint_core::modules::mint::Mint;
-    use minimint_core::modules::wallet::PegOutFees;
-    use minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    use minimint_core::transaction::Transaction;
     use std::sync::Arc;
 
     type Fed = FakeFed<Mint, MintClientConfig>;

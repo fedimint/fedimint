@@ -1,0 +1,28 @@
+[package]
+name = "fedimint-ln"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1"
+bincode = "1"
+bitcoin_hashes = "0.10.0"
+futures = "0.3.21"
+itertools = "0.10.1"
+lightning = "0.0.109"
+lightning-invoice = "0.17.0"
+fedimint-api = { path = "../../fedimint-api" }
+secp256k1 = { version="0.22.1", default-features=false }
+serde = {version = "1.0.130", features = [ "derive" ] }
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+thiserror = "1.0.23"
+tracing = "0.1.29"
+rand07 = { version = "0.7", package = "rand" }
+serde_json = "1.0.82"
+
+[dev-dependencies]
+tokio = {version = "1.14.0", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }

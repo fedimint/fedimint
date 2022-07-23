@@ -5,7 +5,7 @@ let
     sources = import ./nix/sources.nix;
     naersk = pkgs.callPackage sources.naersk {};
 in naersk.buildPackage {
-  pname = "minimint";
+  pname = "fedimint";
   version = "ci";
   src = builtins.filterSource (p: t: lib.cleanSourceFilter p t && baseNameOf p != "target") ./.;
   buildInputs = [
