@@ -1,9 +1,7 @@
-use std::sync::Arc;
+use axum::{routing::post, Extension, Json, Router};
 
-use tide::Response;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
-use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
 use crate::GatewayRequestInner;
@@ -12,13 +10,12 @@ use minimint::modules::ln::contracts::ContractId;
 
 #[instrument(skip_all, err)]
 pub async fn pay_invoice(
-    mut req: tide::Request<Arc<Mutex<mpsc::Sender<GatewayRequest>>>>,
-) -> tide::Result {
-    let contract_id: ContractId = req.body_json().await?;
+    Extension(gw_sender): Extension<mpsc::Sender<GatewayRequest>>,
+    Json(contract_id): Json<ContractId>,
+) -> Result<(), LnGatewayError> {
     debug!(%contract_id, "Received request to pay invoice");
 
     let (sender, receiver) = oneshot::channel::<Result<(), LnGatewayError>>();
-    let gw_sender = { req.state().lock().await.clone() };
 
     let msg = GatewayRequest::PayInvoice(GatewayRequestInner {
         request: contract_id,
@@ -30,16 +27,18 @@ pub async fn pay_invoice(
         .expect("failed to send over channel");
     receiver.await.unwrap()?;
 
-    Ok(Response::new(200))
+    Ok(())
 }
 
-pub async fn run_webserver(sender: mpsc::Sender<GatewayRequest>) -> tide::Result<()> {
-    // Tide state must be Sync
-    let sync_sender = Arc::new(Mutex::new(sender));
-    let mut app = tide::with_state(sync_sender);
+pub async fn run_webserver(sender: mpsc::Sender<GatewayRequest>) -> axum::response::Result<()> {
+    let app = Router::new()
+        .route("/pay_invoice", post(pay_invoice))
+        .layer(Extension(sender));
 
-    app.at("/pay_invoice").post(pay_invoice);
-    app.listen("127.0.0.1:8080").await?;
+    axum::Server::bind(&"127.0.0.1:8080".parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 
     Ok(())
 }
