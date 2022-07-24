@@ -58,7 +58,7 @@ use crate::ln::db::{
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-use crate::mint::MintClientError;
+use crate::mint::{CoinFinalizationData, MintClientError};
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, OwnedClientContext};
 use crate::wallet::WalletClientError;
@@ -385,6 +385,10 @@ impl<T: AsRef<ClientConfig>> Client<T> {
 
     pub fn coins(&self) -> Coins<SpendableCoin> {
         self.mint_client().coins()
+    }
+
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
+        self.mint_client().list_active_issuances()
     }
 }
 

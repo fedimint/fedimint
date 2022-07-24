@@ -26,3 +26,10 @@ function await_block_sync() {
     done
   done
 }
+
+function await_server_on_port() {
+  until nc -z 127.0.0.1 $1
+  do
+      sleep $POLL_INTERVAL
+  done
+}

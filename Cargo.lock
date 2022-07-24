@@ -540,12 +540,16 @@ dependencies = [
 name = "clientd"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
+ "bitcoin",
  "clap",
  "minimint-api",
  "minimint-core",
  "mint-client",
+ "reqwest",
  "serde",
+ "serde_json",
  "sled",
  "tokio",
  "tower",
