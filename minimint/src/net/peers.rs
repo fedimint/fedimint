@@ -234,16 +234,20 @@ where
     async fn send(&mut self, target: Target<PeerId>, msg: T) {
         trace!(?target, "Sending message to");
         match target {
-            Target::All => {
-                for connection in self.connections.values_mut() {
-                    connection.send(msg.clone()).await;
+            Target::AllExcept(not_to) => {
+                for (peer, connection) in &mut self.connections {
+                    if !not_to.contains(peer) {
+                        connection.send(msg.clone()).await;
+                    }
                 }
             }
-            Target::Node(peer_id) => {
-                if let Some(peer) = self.connections.get_mut(&peer_id) {
-                    peer.send(msg).await;
-                } else {
-                    trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
+            Target::Nodes(peer_ids) => {
+                for peer_id in peer_ids {
+                    if let Some(peer) = self.connections.get_mut(&peer_id) {
+                        peer.send(msg.clone()).await;
+                    } else {
+                        trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
+                    }
                 }
             }
         }
@@ -585,7 +589,8 @@ mod tests {
     use futures::Future;
     use hbbft::Target;
     use minimint_api::PeerId;
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
+    use std::iter::FromIterator;
     use std::time::Duration;
     use tracing_subscriber::EnvFilter;
 
@@ -633,12 +638,16 @@ mod tests {
         let mut peers_a = build_peers("a", 1).await;
         let mut peers_b = build_peers("b", 2).await;
 
-        peers_a.send(Target::Node(PeerId::from(2)), 42).await;
+        peers_a
+            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(2)])), 42)
+            .await;
         let recv = timeout(peers_b.receive()).await.unwrap();
         assert_eq!(recv.0, PeerId::from(1));
         assert_eq!(recv.1, 42);
 
-        peers_a.send(Target::Node(PeerId::from(3)), 21).await;
+        peers_a
+            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(3)])), 21)
+            .await;
 
         let mut peers_c = build_peers("c", 3).await;
         let recv = timeout(peers_c.receive()).await.unwrap();
