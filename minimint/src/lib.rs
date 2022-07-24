@@ -3,6 +3,7 @@ extern crate minimint_api;
 use std::future::Future;
 use std::sync::Arc;
 
+use dashmap::DashMap;
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::NetworkInfo;
 use rand::rngs::OsRng;
@@ -102,7 +103,8 @@ impl MinimintServer {
             wallet,
             ln,
             db: database,
-            transaction_notify: Arc::new(Notify::new()),
+            new_transaction_notify: Arc::new(Notify::new()),
+            transaction_accept_notify: DashMap::new(),
         });
 
         let connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
@@ -191,7 +193,7 @@ impl MinimintServer {
 
     async fn await_proposal_or_peer_message(&mut self) -> Option<PeerMessage> {
         tokio::select! {
-            () = self.consensus.transaction_notify.notified() => None,
+            () = self.consensus.new_transaction_notify.notified() => None,
             () = self.consensus.await_consensus_proposal() => None,
             msg = self.connections.receive() => Some(msg)
         }

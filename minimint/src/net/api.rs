@@ -119,6 +119,16 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
             "/fetch_transaction",
             async |minimint: &MinimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
+                // there are two case:
+                // 1. transaction is submited, but not accepted/rejected yet
+                // 2. transaction is accepted/rejected
+
+                // NOTE: if we check status first and then wait for notification
+                // the status may change in between
+                if let Some(notify) = minimint.transaction_accept_notify.get(&tx_hash).map(|notify| Arc::clone(&*notify)) {
+                    // convert case 1 into 2
+                    notify.notified().await;
+                };
 
                 let tx_status = minimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
 

@@ -14,6 +14,7 @@ use crate::db::{
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
+use dashmap::DashMap;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use minimint_api::db::batch::{BatchTx, DbBatch};
@@ -70,7 +71,10 @@ where
     pub db: Arc<dyn Database>,
 
     // Notifies tasks when there is a new transaction
-    pub transaction_notify: Arc<Notify>,
+    pub new_transaction_notify: Arc<Notify>,
+
+    // Notify on accepted transaction
+    pub transaction_accept_notify: DashMap<TransactionId, Arc<Notify>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -152,11 +156,14 @@ where
             .insert_entry(&ProposedTransactionKey(tx_hash), &transaction)
             .expect("DB error");
 
+        self.transaction_accept_notify
+            .insert(tx_hash, Arc::new(Notify::new()));
+
         if new.is_some() {
             warn!("Added consensus item was already in consensus queue");
         }
 
-        self.transaction_notify.notify_one();
+        self.new_transaction_notify.notify_one();
         Ok(())
     }
 
@@ -195,6 +202,8 @@ where
 
         // Process transactions
         {
+            // transactions to notify
+            let tx_ids: Vec<_> = transaction_cis.iter().map(|(_, tx)| tx.tx_hash()).collect();
             // Since the changes to the database will happen all at once we won't be able to handle
             // conflicts between consensus items in one batch there. Thus we need to make sure that
             // all items in a batch are consistent/deterministically filter out inconsistent ones.
@@ -249,6 +258,12 @@ where
             }
             batch_tx.commit();
             self.db.apply_batch(db_batch).expect("DB error");
+            // only notify after updating the db
+            for tx_id in tx_ids {
+                if let Some((_, notify)) = self.transaction_accept_notify.remove(&tx_id) {
+                    notify.notify_waiters();
+                }
+            }
         }
 
         // End consensus epoch
