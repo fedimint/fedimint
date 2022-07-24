@@ -2134,6 +2134,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin_hashes",
+ "dashmap",
  "futures",
  "itertools",
  "lightning",

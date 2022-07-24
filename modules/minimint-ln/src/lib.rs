@@ -26,6 +26,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
+use dashmap::DashMap;
 use itertools::Itertools;
 
 use minimint_api::db::batch::{BatchItem, BatchTx};
@@ -40,6 +41,7 @@ use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
+use tokio::sync::Notify;
 
 use std::sync::Arc;
 use thiserror::Error;
@@ -67,6 +69,7 @@ use tracing::{debug, error, info_span, instrument, trace, warn};
 pub struct LightningModule {
     cfg: LightningModuleConfig,
     db: Arc<dyn Database>,
+    offers: DashMap<bitcoin_hashes::sha256::Hash, Arc<Notify>>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -549,12 +552,50 @@ impl FederationModule for LightningModule {
             api_endpoint! {
                 "/offer",
                 async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
-                let offer = module
-                    .get_offer(payment_hash)
-                    .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
+                    // # Concurrency
+                    //
+                    // - first concurrent request adds new notify into map (it will not be present).
+                    // - if the offer is in the database.
+                    //      - first concurrent request notifies all others.
+                    //      - all other requests wait for notication.
+                    // - otherwise wait for notification.
 
-                debug!(%payment_hash, "Sending offer info");
-                Ok(offer)
+                    use dashmap::mapref::entry::Entry;
+                    match module.offers.entry(payment_hash.clone()) {
+                        // first concurrent request
+                        Entry::Vacant(v) => {
+                            let notify = Arc::new(Notify::new());
+                            // TODO: add timeout to prevent memory leak
+                            v.insert(Arc::clone(&notify));
+                            // start waiting before droping the entry lock
+                            let n = (*notify).notified();
+                            drop(v); // unlock the dashmap entry
+                            if let Some(offer) = module.get_offer(payment_hash) {
+                                // already in db
+                                module.offers.remove(&payment_hash);
+                                // remove before notify to make sure none to wait just *after*
+                                // we notify and before we remove from map
+                                (*notify).notify_waiters();
+                                return Ok(offer);
+                            }
+
+                            n.await;
+                            // the notifier is reponsible for removing entry from map
+                        }
+                        // other concurrent requests
+                        Entry::Occupied(o) => {
+                            let notify = o.get().clone();
+                            // start waiting before droping the entry lock
+                            let n = notify.notified();
+                            drop(o); // unlock the dashmap entry
+                            n.await;
+                        },
+                    }
+                    let offer = module
+                        .get_offer(payment_hash)
+                        .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
+
+                    Ok(offer)
             } },
         ];
         ENDPOINTS
@@ -563,7 +604,11 @@ impl FederationModule for LightningModule {
 
 impl LightningModule {
     pub fn new(cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
-        LightningModule { cfg, db }
+        LightningModule {
+            cfg,
+            db,
+            offers: DashMap::new(),
+        }
     }
 
     fn validate_decryption_share(
