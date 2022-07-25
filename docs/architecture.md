@@ -42,7 +42,7 @@ For instance, the consensus thread may receive a peg-out proposal, validate the 
 
 ## Modules
 There currently are three `FederationModule` used in `MinimintConsensus` that exist in the [crates](#Crate-organization) previously described:
-* `Wallet` module - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
+* [Wallet module](wallet_module.md) - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
 * `Mint` module - verifies `Coin` input signatures and issues `BlindToken` outputs of different denominations
 * `LightningModule` - creates `ContractInput` inputs and `ContractOrOfferOutput` outputs representing a payment sent or received by a gateway on behalf of a user
 
