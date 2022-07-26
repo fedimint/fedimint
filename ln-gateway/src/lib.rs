@@ -3,6 +3,8 @@ pub mod ln;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
@@ -14,6 +16,7 @@ use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
+use std::borrow::Cow;
 use std::{
     io::Cursor,
     sync::Arc,
@@ -113,7 +116,7 @@ where
 pub struct LnGateway {
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
-    webserver: tokio::task::JoinHandle<tide::Result<()>>,
+    webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
     receiver: mpsc::Receiver<GatewayRequest>,
 }
 
@@ -363,5 +366,13 @@ pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializ
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
         T::consensus_decode(Cursor::new(&bytes))
             .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    }
+}
+
+impl IntoResponse for LnGatewayError {
+    fn into_response(self) -> Response {
+        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
+        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        err
     }
 }
