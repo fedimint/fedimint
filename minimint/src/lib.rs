@@ -4,7 +4,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use hbbft::honey_badger::{HoneyBadger, Message};
-use hbbft::NetworkInfo;
+use hbbft::{NetworkInfo, Target};
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use tokio::sync::Notify;
@@ -13,6 +13,7 @@ use tracing::warn;
 
 use config::ServerConfig;
 use minimint_api::db::Database;
+use minimint_api::net::peers::{AnyPeerConnections, PeerConnections};
 use minimint_api::PeerId;
 use minimint_core::modules::ln::LightningModule;
 use minimint_core::modules::wallet::bitcoind::BitcoindRpc;
@@ -22,9 +23,7 @@ pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::{
-    AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
-};
+use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
 use crate::rng::RngGenerator;
 
 /// The actual implementation of the federated mint
@@ -179,7 +178,10 @@ impl MinimintServer {
             .expect("HBBFT propose failed");
 
         for msg in step.messages {
-            self.connections.send(msg.target, msg.message).await;
+            match msg.target {
+                Target::All => self.connections.send_all(msg.message).await,
+                Target::Node(peer) => self.connections.send(peer, msg.message).await,
+            }
         }
 
         while outcomes.is_empty() {
@@ -211,7 +213,10 @@ impl MinimintServer {
         }
 
         for msg in step.messages {
-            self.connections.send(msg.target, msg.message).await;
+            match msg.target {
+                Target::All => self.connections.send_all(msg.message).await,
+                Target::Node(peer) => self.connections.send(peer, msg.message).await,
+            }
         }
 
         step.output
