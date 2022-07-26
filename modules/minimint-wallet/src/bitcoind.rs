@@ -1,13 +1,6 @@
-use std::error::Error;
-
 use crate::Feerate;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Transaction};
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub struct BitcoinRpcError(#[from] pub Box<dyn Error + Sync + Send>);
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///

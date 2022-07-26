@@ -20,22 +20,26 @@ use crate::contracts::{
     Contract, ContractId, ContractOutcome, FundedContract, IdentifyableContract,
 };
 use crate::db::{
-    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractUpdateKey,
-    OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey, ProposeDecryptionShareKeyPrefix,
+    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
+    ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
+    ProposeDecryptionShareKeyPrefix,
 };
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use itertools::Itertools;
+
 use minimint_api::db::batch::{BatchItem, BatchTx};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::audit::Audit;
 use minimint_api::module::interconnect::ModuleInterconect;
-use minimint_api::module::{http, ApiEndpoint};
+use minimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
 use minimint_api::{Amount, FederationModule, PeerId};
 use minimint_api::{InputMeta, OutPoint};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::ops::Sub;
 
 use std::sync::Arc;
 use thiserror::Error;
@@ -155,39 +159,15 @@ impl FederationModule for LightningModule {
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        batch.append_from_iter(consensus_items.into_iter().filter_map(
-            |(peer, decryption_share)| {
-                let span = info_span!("process decryption share", %peer);
-                let _guard = span.enter();
-                let contract: ContractAccount = self
-                    .get_contract_account(decryption_share.contract_id)
-                    .or_else(|| {
-                        warn!("Received decryption share fot non-incoming contract");
-                        None
-                    })?;
-                let incoming_contract = match contract.contract {
-                    FundedContract::Incoming(incoming) => incoming.contract,
-                    _ => {
-                        warn!("Received decryption share fot non-incoming contract");
-                        return None;
-                    }
-                };
+        batch.append_from_iter(consensus_items.into_iter().map(|(peer, decryption_share)| {
+            let span = info_span!("process decryption share", %peer);
+            let _guard = span.enter();
 
-                if !self.validate_decryption_share(
-                    peer,
-                    &decryption_share.share,
-                    &incoming_contract.encrypted_preimage,
-                ) {
-                    warn!("Received invalid decryption share");
-                    return None;
-                }
-
-                Some(BatchItem::insert_new(
-                    AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                    decryption_share.share,
-                ))
-            },
-        ));
+            BatchItem::insert_new(
+                AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                decryption_share.share,
+            )
+        }));
         batch.commit();
     }
 
@@ -355,14 +335,14 @@ impl FederationModule for LightningModule {
                         .expect("DB error")
                         .expect("offer exists if output is valid");
 
-                    let deryption_share = self
+                    let decryption_share = self
                         .cfg
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
                     batch.append_insert_new(
                         ProposeDecryptionShareKey(contract.contract.contract_id()),
-                        PreimageDecryptionShare(deryption_share),
+                        PreimageDecryptionShare(decryption_share),
                     );
                     batch.append_delete(OfferKey(offer.hash));
                 }
@@ -384,12 +364,12 @@ impl FederationModule for LightningModule {
     #[instrument(skip_all)]
     async fn end_consensus_epoch<'a>(
         &'a self,
-        _consensus_peers: &HashSet<PeerId>,
+        consensus_peers: &HashSet<PeerId>,
         mut batch: BatchTx<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Decrypt preimages
-        let preimage_decraption_shares = self
+        let preimage_decryption_shares = self
             .db
             .find_by_prefix(&AgreedDecryptionShareKeyPrefix)
             .map(|res| {
@@ -398,13 +378,45 @@ impl FederationModule for LightningModule {
             })
             .into_group_map();
 
-        for (contract_id, shares) in preimage_decraption_shares {
+        let mut bad_peers = vec![];
+        for (contract_id, shares) in preimage_decryption_shares {
+            let peers: Vec<PeerId> = shares.iter().map(|(peer, _)| *peer).collect();
             let span = info_span!("decrypt_preimage", %contract_id);
             let _gaurd = span.enter();
 
-            if shares.len() < self.cfg.threshold {
-                trace!(
-                    shares = %shares.len(),
+            let incoming_contract = match self.get_contract_account(contract_id) {
+                Some(ContractAccount {
+                    contract: FundedContract::Incoming(incoming),
+                    ..
+                }) => incoming.contract,
+                _ => {
+                    warn!("Received decryption share for non-existent incoming contract");
+                    for peer in peers {
+                        batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                    }
+                    continue;
+                }
+            };
+
+            let valid_shares: HashMap<PeerId, PreimageDecryptionShare> = shares
+                .into_iter()
+                .filter(|(peer, share)| {
+                    self.validate_decryption_share(
+                        *peer,
+                        share,
+                        &incoming_contract.encrypted_preimage,
+                    )
+                })
+                .collect();
+
+            for peer in consensus_peers.sub(&valid_shares.keys().cloned().collect()) {
+                bad_peers.push(peer);
+                warn!("{} did not contribute valid decryption shares", peer);
+            }
+
+            if valid_shares.len() < self.cfg.threshold {
+                warn!(
+                    valid_shares = %valid_shares.len(),
                     shares_needed = %self.cfg.threshold,
                     "Too few decryption shares"
                 );
@@ -432,7 +444,7 @@ impl FederationModule for LightningModule {
             }
 
             let preimage = match self.cfg.threshold_pub_keys.decrypt(
-                shares
+                valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), &share.0)),
                 &incoming_contract.encrypted_preimage.0,
@@ -445,10 +457,16 @@ impl FederationModule for LightningModule {
                 }
             };
 
+            // Delete decryption shares once we've decrypted the preimage
+            batch.append_delete(ProposeDecryptionShareKey(contract_id));
+            for peer in peers {
+                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+            }
+
             let decrypted_preimage = if preimage.len() != 32 {
                 DecryptedPreimage::Invalid
             } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
-                if let Ok(preimage_key) = secp256k1::schnorrsig::PublicKey::from_slice(&preimage) {
+                if let Ok(preimage_key) = secp256k1::XOnlyPublicKey::from_slice(&preimage) {
                     DecryptedPreimage::Some(crate::contracts::incoming::Preimage(preimage_key))
                 } else {
                     DecryptedPreimage::Invalid
@@ -493,8 +511,7 @@ impl FederationModule for LightningModule {
         }
         batch.commit();
 
-        // FIXME should use to drop non-contributing peers
-        vec![]
+        bad_peers
     }
 
     fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
@@ -503,69 +520,44 @@ impl FederationModule for LightningModule {
             .expect("DB error")
     }
 
+    fn audit(&self, audit: &mut Audit) {
+        audit.add_items(&self.db, &ContractKeyPrefix, |_, v| {
+            -(v.amount.milli_sat as i64)
+        });
+    }
+
     fn api_base_name(&self) -> &'static str {
         "ln"
     }
 
     fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>] {
-        &[
-            ApiEndpoint {
-                path_spec: "/account/:contract_id",
-                params: &["contract_id"],
-                method: http::Method::Get,
-                handler: |module, params, _body| {
-                    let contract_id: ContractId = match params
-                        .get("contract_id")
-                        .expect("Contract id not supplied")
-                        .parse()
-                    {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
-
-                    let contract_account = module
+        const ENDPOINTS: &[ApiEndpoint<LightningModule>] = &[
+            api_endpoint! {
+                "/account",
+                async |module: &LightningModule, contract_id: ContractId| -> ContractAccount {
+                    module
                         .get_contract_account(contract_id)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
-
-                    debug!(%contract_id, "Sending contract account info");
-                    let body = http::Body::from_json(&contract_account).expect("encoding error");
-                    Ok(body.into())
-                },
+                        .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
+                }
             },
-            ApiEndpoint {
-                path_spec: "/offers",
-                params: &[],
-                method: http::Method::Get,
-                handler: |module, _params, _body| {
-                    let offers = module.get_offers();
-                    let body = http::Body::from_json(&offers).expect("encoding error");
-                    Ok(body.into())
-                },
+            api_endpoint! {
+                "/offers",
+                async |module: &LightningModule, _params: ()| -> Vec<IncomingContractOffer> {
+                    Ok(module.get_offers())
+                }
             },
-            ApiEndpoint {
-                path_spec: "/offer/:payment_hash",
-                params: &["payment_hash"],
-                method: http::Method::Get,
-                handler: |module, params, _body| {
-                    let payment_hash: bitcoin_hashes::sha256::Hash = match params
-                        .get("payment_hash")
-                        .expect("Contract id not supplied")
-                        .parse()
-                    {
-                        Ok(id) => id,
-                        Err(_) => return Ok(http::Response::new(400)),
-                    };
+            api_endpoint! {
+                "/offer",
+                async |module: &LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -> IncomingContractOffer {
+                let offer = module
+                    .get_offer(payment_hash)
+                    .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
-                    let offer = module
-                        .get_offer(payment_hash)
-                        .ok_or_else(|| http::Error::from_str(404, "Not found"))?;
-
-                    debug!(%payment_hash, "Sending offer info");
-                    let body = http::Body::from_json(&offer).expect("encoding error");
-                    Ok(body.into())
-                },
-            },
-        ]
+                debug!(%payment_hash, "Sending offer info");
+                Ok(offer)
+            } },
+        ];
+        ENDPOINTS
     }
 }
 
@@ -612,18 +604,14 @@ impl LightningModule {
 fn block_height(interconnect: &dyn ModuleInterconect) -> u32 {
     // This is a future because we are normally reading from a network socket. But for internal
     // calls the data is available instantly in one go, so we can just block on it.
-    futures::executor::block_on(
-        interconnect
-            .call(
-                "wallet",
-                "/block_height".to_owned(),
-                http::Method::Get,
-                Default::default(),
-            )
-            .expect("Wallet module not present or malfunctioning!")
-            .body_json(),
-    )
-    .expect("Malformed block height response from wallet module!")
+    let body = futures::executor::block_on(interconnect.call(
+        "wallet",
+        "/block_height".to_owned(),
+        Default::default(),
+    ))
+    .expect("Wallet module not present or malfunctioning!");
+
+    serde_json::from_value(body).expect("Malformed block height response from wallet module!")
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]

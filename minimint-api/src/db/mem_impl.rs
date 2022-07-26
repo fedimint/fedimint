@@ -1,6 +1,7 @@
 use super::batch::{BatchItem, DbBatch};
-use super::{Database, DatabaseError};
+use super::Database;
 use crate::db::PrefixIter;
+use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -27,19 +28,15 @@ impl MemDatabase {
 }
 
 impl Database for MemDatabase {
-    fn raw_insert_entry(
-        &self,
-        key: &[u8],
-        value: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         Ok(self.data.lock().unwrap().insert(key.to_vec(), value))
     }
 
-    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.data.lock().unwrap().get(key).cloned())
     }
 
-    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self.data.lock().unwrap().remove(key))
     }
 
@@ -57,7 +54,7 @@ impl Database for MemDatabase {
         Box::new(MemDbIter { data })
     }
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+    fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
         let batch: Vec<_> = batch.into();
 
         for change in batch.iter() {
@@ -95,7 +92,7 @@ struct MemDbIter {
 }
 
 impl Iterator for MemDbIter {
-    type Item = Result<(Vec<u8>, Vec<u8>), DatabaseError>;
+    type Item = Result<(Vec<u8>, Vec<u8>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.data.pop().map(Result::Ok)

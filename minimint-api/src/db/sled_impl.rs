@@ -1,47 +1,41 @@
 use super::batch::{BatchItem, DbBatch};
-use super::{Database, DatabaseError, DecodingError};
+use super::{Database, DecodingError};
 use crate::db::PrefixIter;
+use anyhow::Result;
 use sled::transaction::TransactionError;
 use tracing::{error, trace};
 
 // TODO: maybe make the concrete impl its own crate
 impl Database for sled::Tree {
-    fn raw_insert_entry(
-        &self,
-        key: &[u8],
-        value: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>, DatabaseError> {
-        Ok(self
-            .insert(key, value)
-            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
-            .map(|bytes| bytes.to_vec()))
+    fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        Ok(self.insert(key, value)?.map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self
             .get(key)
-            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
+            .map_err(anyhow::Error::from)?
             .map(|bytes| bytes.to_vec()))
     }
 
-    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, DatabaseError> {
+    fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self
             .remove(key)
-            .map_err(|e| DatabaseError::DbError(Box::new(e)))?
+            .map_err(anyhow::Error::from)?
             .map(|bytes| bytes.to_vec()))
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
         Box::new(self.scan_prefix(key_prefix).map(|res| {
             res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
-                .map_err(|e| DatabaseError::DbError(Box::new(e)))
+                .map_err(anyhow::Error::from)
         }))
     }
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<(), DatabaseError> {
+    fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
         let batch: Vec<_> = batch.into();
 
-        self.transaction(|t| {
+        self.transaction::<_, _, TransactionError>(|t| {
             for change in batch.iter() {
                 match change {
                     BatchItem::InsertNewElement(element) => {
@@ -69,19 +63,13 @@ impl Database for sled::Tree {
 
             Ok(())
         })
-        .map_err(|e: TransactionError| DatabaseError::DbError(Box::new(e)))
+        .map_err(anyhow::Error::from)
     }
 }
 
 impl From<DecodingError> for sled::transaction::ConflictableTransactionError<DecodingError> {
     fn from(e: DecodingError) -> Self {
         sled::transaction::ConflictableTransactionError::Abort(e)
-    }
-}
-
-impl From<sled::Error> for DatabaseError {
-    fn from(e: sled::Error) -> Self {
-        DatabaseError::DbError(Box::new(e))
     }
 }
 

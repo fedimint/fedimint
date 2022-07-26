@@ -1,41 +1,128 @@
+pub mod audit;
 pub mod interconnect;
 pub mod testing;
 
 use crate::db::batch::BatchTx;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
-use secp256k1_zkp::schnorrsig;
-use std::collections::{HashMap, HashSet};
+use secp256k1_zkp::XOnlyPublicKey;
+use std::collections::HashSet;
 
+use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
-pub use http_types as http;
 
 pub struct InputMeta<'a> {
     pub amount: Amount,
-    pub puk_keys: Box<dyn Iterator<Item = schnorrsig::PublicKey> + 'a>,
+    pub puk_keys: Box<dyn Iterator<Item = XOnlyPublicKey> + 'a>,
 }
 
-/// Map of URL parameters and their values.
-pub type Params<'a> = HashMap<&'static str, &'a str>;
+#[derive(Debug)]
+pub struct ApiError {
+    pub code: i32,
+    pub message: String,
+}
+
+impl ApiError {
+    pub fn new(code: i32, message: String) -> Self {
+        Self { code, message }
+    }
+
+    pub fn not_found(message: String) -> Self {
+        Self::new(404, message)
+    }
+
+    pub fn bad_request(message: String) -> Self {
+        Self::new(400, message)
+    }
+}
+
+#[async_trait]
+pub trait TypedApiEndpoint {
+    type State: Sync;
+
+    /// example: /transaction
+    const PATH: &'static str;
+
+    type Param: serde::de::DeserializeOwned + Send;
+    type Response: serde::Serialize;
+
+    async fn handle(state: &Self::State, params: Self::Param) -> Result<Self::Response, ApiError>;
+}
+
+#[doc(hidden)]
+pub mod __reexports {
+    pub use serde_json;
+}
+
+/// # Example
+///
+/// ```rust
+/// # use minimint_api::module::{api_endpoint, ApiEndpoint};
+/// struct State;
+///
+/// let _: ApiEndpoint<State> = api_endpoint! {
+///     "/foobar",
+///     async |state: &State, params: ()| -> i32 {
+///         Ok(0)
+///     }
+/// };
+/// ```
+#[macro_export]
+macro_rules! __api_endpoint {
+    (
+        $path:expr,
+        async |$state:ident: &$state_ty:ty, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
+    ) => {{
+        struct Endpoint;
+
+        #[async_trait::async_trait]
+        impl $crate::module::TypedApiEndpoint for Endpoint {
+            const PATH: &'static str = $path;
+            type State = $state_ty;
+            type Param = $param_ty;
+            type Response = $resp_ty;
+
+            async fn handle(
+                $state: &Self::State,
+                $param: Self::Param,
+            ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
+                $body
+            }
+        }
+
+        ApiEndpoint {
+            path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
+            handler: |m, param| {
+                Box::pin(async move {
+                    let params = $crate::module::__reexports::serde_json::from_value(param)
+                        .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
+
+                    let ret =
+                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, params).await?;
+                    Ok($crate::module::__reexports::serde_json::to_value(ret)
+                        .expect("encoding error"))
+                })
+            },
+        }
+    }};
+}
+
+pub use __api_endpoint as api_endpoint;
 
 /// Definition of an API endpoint defined by a module `M`.
 pub struct ApiEndpoint<M> {
-    /// Path under which the API endpoint can be reached. It should start with a `/` and may contain
-    /// parameters using the `:param` syntax, e.g. `/transaction/:txid`. E.g. this API endpoint
-    /// would be reachable under `/module_name/transaction/:txid` depending on the module name
-    /// returned by `[FedertionModule::api_base_name]`.
-    pub path_spec: &'static str,
-    /// List of parameter names used in `path_spec`. // TODO: maybe use lazy_static instead?
-    pub params: &'static [&'static str],
-    /// HTTP method that the API endpoint expects
-    pub method: http_types::Method,
+    /// Path under which the API endpoint can be reached. It should start with a `/`
+    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`
+    /// depending on the module name returned by `[FedertionModule::api_base_name]`.
+    pub path: &'static str,
     /// Handler for the API call that takes the following arguments:
     ///   * Reference to the module which defined it
-    ///   * URL parameter map
-    ///   * Request body parsed into JSON `[Value](serde_json::Value)`
-    pub handler: fn(&M, Params, serde_json::Value) -> http_types::Result<http_types::Response>,
+    ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
+    pub handler:
+        for<'a> fn(&'a M, serde_json::Value) -> BoxFuture<'a, Result<serde_json::Value, ApiError>>,
 }
 
 #[async_trait(?Send)]
@@ -141,6 +228,12 @@ pub trait FederationModule: Sized {
     /// needed by the client to access funds or give an estimate of when funds will be available.
     /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
     fn output_status(&self, out_point: crate::OutPoint) -> Option<Self::TxOutputOutcome>;
+
+    /// Queries the database and returns all assets and liabilities of the module.
+    ///
+    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
+    /// and consensus should halt.
+    fn audit(&self, audit: &mut Audit);
 
     /// Defines the prefix for API endpoints defined by the module.
     ///

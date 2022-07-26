@@ -7,6 +7,7 @@ use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::hash::Hash;
 use std::io::Cursor;
 use thiserror::Error;
@@ -23,7 +24,7 @@ pub struct PegInProof {
     transaction: Transaction,
     // Check that the idx is in range
     output_idx: u32,
-    tweak_contract_key: secp256k1::schnorrsig::PublicKey,
+    tweak_contract_key: secp256k1::XOnlyPublicKey,
 }
 
 #[derive(Clone, Debug)]
@@ -91,7 +92,7 @@ impl PegInProof {
         txout_proof: TxOutProof,
         transaction: Transaction,
         output_idx: u32,
-        tweak_contract_key: secp256k1::schnorrsig::PublicKey,
+        tweak_contract_key: secp256k1::XOnlyPublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
@@ -143,11 +144,11 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &secp256k1::schnorrsig::PublicKey {
+    pub fn tweak_contract_key(&self) -> &secp256k1::XOnlyPublicKey {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (secp256k1::schnorrsig::PublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (secp256k1::XOnlyPublicKey, bitcoin::Txid) {
         (self.tweak_contract_key, self.transaction.txid())
     }
 
@@ -196,8 +197,10 @@ impl<'de> Deserialize<'de> for TxOutProof {
         D: Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let hex_str: &str = Deserialize::deserialize(deserializer)?;
-            let bytes = hex::decode(hex_str).map_err(<D as Deserializer<'de>>::Error::custom)?;
+            // TODO: Try Cow
+            let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
+            let bytes =
+                hex::decode(hex_str.as_ref()).map_err(<D as Deserializer<'de>>::Error::custom)?;
             Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
                 .map_err(<D as Deserializer<'de>>::Error::custom)?)
         } else {
@@ -258,7 +261,7 @@ impl Decodable for PegInProof {
             txout_proof: TxOutProof::consensus_decode(&mut d)?,
             transaction: Transaction::consensus_decode(&mut d)?,
             output_idx: u32::consensus_decode(&mut d)?,
-            tweak_contract_key: secp256k1::schnorrsig::PublicKey::consensus_decode(&mut d)?,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(&mut d)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;

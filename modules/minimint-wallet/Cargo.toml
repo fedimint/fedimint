@@ -6,20 +6,21 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
-native = ["tokio", "bitcoin/bitcoinconsensus", "bitcoincore-rpc"]
+native = ["tokio", "bitcoincore-rpc"]
 default = []
 
 [dependencies]
+anyhow = "1.0.58"
 async-trait = "0.1"
-bitcoin = { version = "0.27.0", features = [ "rand", "serde"] }
-bitcoincore-rpc = {version = "0.14.0", optional = true}
+bitcoin = { version = "0.28.1", features = [ "rand", "serde"] }
+bitcoincore-rpc = {version = "0.15.0", optional = true}
 hex = "0.4.3"
 itertools = "0.10.0"
 minimint-api = { path = "../../minimint-api" }
 minimint-derive = { path = "../../minimint-derive" }
-miniscript = { version = "6.0.0", features = [ "compiler", "use-serde" ] }
+miniscript = { version = "7.0.0", features = [ "compiler", "use-serde" ] }
 rand = "0.6.0"
-secp256k1 = { version = "0.20", features = [ "serde" ] }
+secp256k1 = { version = "0.22.1", features = [ "serde" ] }
 serde = { version = "1.0.118", features = [ "derive" ] }
 thiserror = "1.0.23"
 tokio = { version = "1.0.1", features = ["sync"], optional = true }

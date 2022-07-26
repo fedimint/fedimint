@@ -56,7 +56,7 @@ pub struct IncomingContract {
     /// the contract, allowing the offer creator to redeem their money.
     pub decrypted_preimage: DecryptedPreimage,
     /// Key that can unlock contract in case the decrypted preimage was invalid
-    pub gateway_key: secp256k1::schnorrsig::PublicKey,
+    pub gateway_key: secp256k1::XOnlyPublicKey,
 }
 
 /// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it's creation. Since
@@ -93,7 +93,7 @@ hash_newtype!(
 /// A preimage in the context of incoming contracts. In this context it is a public key chosen
 /// by the creator of the [`IncomingContractOffer`].
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Preimage(pub secp256k1::schnorrsig::PublicKey);
+pub struct Preimage(pub secp256k1::XOnlyPublicKey);
 
 /// Threshold-encrypted [`Preimage`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]

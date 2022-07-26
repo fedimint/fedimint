@@ -20,6 +20,15 @@ impl DatabaseKeyPrefixConst for ContractKey {
     type Value = ContractAccount;
 }
 
+#[derive(Debug, Clone, Copy, Encodable, Decodable)]
+pub struct ContractKeyPrefix;
+
+impl DatabaseKeyPrefixConst for ContractKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
+    type Key = ContractKey;
+    type Value = ContractAccount;
+}
+
 #[derive(Debug, Encodable, Decodable)]
 pub struct ContractUpdateKey(pub OutPoint);
 

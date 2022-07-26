@@ -1,15 +1,12 @@
-use crate::{
-    PendingPegOut, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-};
+use crate::{PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction};
 use bitcoin::{BlockHash, OutPoint, Txid};
 use minimint_api::db::DatabaseKeyPrefixConst;
 use minimint_api::encoding::{Decodable, Encodable};
-use secp256k1::Signature;
+use secp256k1::ecdsa::Signature;
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;
 const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
-const DB_PREFIX_PEDNING_PEGOUT: u8 = 0x33;
 const DB_PREFIX_UNSIGNED_TRANSACTION: u8 = 0x34;
 const DB_PREFIX_PENDING_TRANSACTION: u8 = 0x35;
 const DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = 0x36;
@@ -48,24 +45,6 @@ impl DatabaseKeyPrefixConst for RoundConsensusKey {
     const DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
     type Key = Self;
     type Value = RoundConsensus;
-}
-
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingPegOutKey(pub minimint_api::OutPoint);
-
-impl DatabaseKeyPrefixConst for PendingPegOutKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PEDNING_PEGOUT;
-    type Key = Self;
-    type Value = PendingPegOut;
-}
-
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct PendingPegOutPrefixKey;
-
-impl DatabaseKeyPrefixConst for PendingPegOutPrefixKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PEDNING_PEGOUT;
-    type Key = PendingPegOutKey;
-    type Value = PendingPegOut;
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]

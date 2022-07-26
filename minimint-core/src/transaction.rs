@@ -1,9 +1,10 @@
 use crate::config::FeeConsensus;
 use bitcoin::hashes::Hash as BitcoinHash;
+use bitcoin::XOnlyPublicKey;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, FederationModule, TransactionId};
 use rand::Rng;
-use secp256k1_zkp::{schnorrsig, Secp256k1, Signing};
+use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,7 +12,7 @@ use thiserror::Error;
 pub struct Transaction {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
-    pub signature: Option<schnorrsig::Signature>,
+    pub signature: Option<schnorr::Signature>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -62,7 +63,7 @@ impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
             Output::Mint(coins) => coins.amount(),
-            Output::Wallet(peg_out) => peg_out.amount.into(),
+            Output::Wallet(peg_out) => (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(minimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
             Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
         }
@@ -113,10 +114,10 @@ impl Transaction {
         let out_amount = self.out_amount();
         let fee_amount = self.fee_amount(fee_consensus);
 
-        if in_amount >= (out_amount + fee_amount) {
+        if in_amount == (out_amount + fee_amount) {
             Ok(())
         } else {
-            Err(TransactionError::InsufficientlyFunded {
+            Err(TransactionError::UnbalancedTransaction {
                 inputs: in_amount,
                 outputs: out_amount,
                 fee: fee_amount,
@@ -145,7 +146,7 @@ impl Transaction {
 
     pub fn validate_signature(
         &self,
-        keys: impl Iterator<Item = schnorrsig::PublicKey>,
+        keys: impl Iterator<Item = XOnlyPublicKey>,
     ) -> Result<(), TransactionError> {
         let keys = keys.collect::<Vec<_>>();
 
@@ -167,7 +168,7 @@ impl Transaction {
             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
         if secp256k1_zkp::global::SECP256K1
-            .schnorrsig_verify(signature, &msg, &agg_pub_key)
+            .verify_schnorr(signature, &msg, &agg_pub_key)
             .is_ok()
         {
             Ok(())
@@ -182,41 +183,36 @@ impl Transaction {
 ///
 /// # Panics
 /// * If the `keys` iterator does not yield any keys
-pub fn agg_keys(keys: &[schnorrsig::PublicKey]) -> schnorrsig::PublicKey {
+pub fn agg_keys(keys: &[XOnlyPublicKey]) -> XOnlyPublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
 fn new_pre_session<C>(
-    keys: &[schnorrsig::PublicKey],
+    keys: &[XOnlyPublicKey],
     ctx: &Secp256k1<C>,
-) -> secp256k1_zkp::MusigPreSession
+) -> secp256k1_zkp::MusigKeyAggCache
 where
-    C: Signing,
+    C: Signing + Verification,
 {
     assert!(
         !keys.is_empty(),
         "Must supply more than 0 keys for aggregation"
     );
-
-    secp256k1_zkp::MusigPreSession::new(ctx, keys).expect("more than zero were supplied")
+    secp256k1_zkp::MusigKeyAggCache::new(ctx, keys)
 }
-
 pub fn agg_sign<R, C, M>(
-    keys: &[schnorrsig::KeyPair],
+    keys: &[bitcoin::KeyPair],
     msg: M,
     ctx: &Secp256k1<C>,
     mut rng: R,
-) -> schnorrsig::Signature
+) -> schnorr::Signature
 where
     R: rand::RngCore + rand::CryptoRng,
-    C: Signing,
+    C: Signing + Verification,
     M: Into<secp256k1_zkp::Message>,
 {
     let msg = msg.into();
-    let pub_keys = keys
-        .iter()
-        .map(|key| schnorrsig::PublicKey::from_keypair(ctx, key))
-        .collect::<Vec<_>>();
+    let pub_keys = keys.iter().map(|key| key.public_key()).collect::<Vec<_>>();
     let pre_session = new_pre_session(&pub_keys, ctx);
 
     let session_id: [u8; 32] = rng.gen();
@@ -225,17 +221,14 @@ where
         .map(|key| {
             // FIXME: upstream
             pre_session
-                .nonce_gen(ctx, &session_id, key, &msg, None)
+                .nonce_gen(ctx, session_id, key.into(), msg, None)
                 .expect("should not fail for valid inputs (ensured by type system)")
         })
         .unzip();
 
-    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(ctx, &pub_nonces)
-        .expect("Should not fail for cooperative protocol runs");
+    let agg_nonce = secp256k1_zkp::MusigAggNonce::new(ctx, &pub_nonces);
 
-    let session = pre_session
-        .nonce_process(ctx, &agg_nonce, &msg, None)
-        .expect("Should not fail for cooperative protocol runs");
+    let session = secp256k1_zkp::MusigSession::new(ctx, &pre_session, agg_nonce, msg, None);
 
     let partial_sigs = sec_nonces
         .into_iter()
@@ -247,15 +240,13 @@ where
         })
         .collect::<Vec<_>>();
 
-    session
-        .partial_sig_agg(ctx, &partial_sigs)
-        .expect("Should not fail for cooperative protocol runs")
+    session.partial_sig_agg(&partial_sigs)
 }
 
 #[derive(Debug, Error)]
 pub enum TransactionError {
-    #[error("The transaction is insufficiently funded (in={inputs}, out={outputs}, fee={fee})")]
-    InsufficientlyFunded {
+    #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
+    UnbalancedTransaction {
         inputs: Amount,
         outputs: Amount,
         fee: Amount,

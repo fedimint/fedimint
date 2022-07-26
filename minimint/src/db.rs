@@ -8,6 +8,7 @@ use std::fmt::Debug;
 pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;
 pub const DB_PREFIX_ACCEPTED_TRANSACTION: u8 = 0x02;
 pub const DB_PREFIX_DROP_PEER: u8 = 0x03;
+pub const DB_PREFIX_REJECTED_TRANSACTION: u8 = 0x04;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ProposedTransactionKey(pub TransactionId);
@@ -34,6 +35,15 @@ impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
     const DB_PREFIX: u8 = DB_PREFIX_ACCEPTED_TRANSACTION;
     type Key = Self;
     type Value = AcceptedTransaction;
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RejectedTransactionKey(pub TransactionId);
+
+impl DatabaseKeyPrefixConst for RejectedTransactionKey {
+    const DB_PREFIX: u8 = DB_PREFIX_REJECTED_TRANSACTION;
+    type Key = Self;
+    type Value = String;
 }
 
 #[derive(Debug, Encodable, Decodable)]

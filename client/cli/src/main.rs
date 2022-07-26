@@ -5,9 +5,12 @@ use minimint_api::Amount;
 use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
+
 use mint_client::mint::SpendableCoin;
-use mint_client::utils::{from_hex, parse_bitcoin_amount, parse_coins, serialize_coins};
-use mint_client::{ClientAndGatewayConfig, UserClient};
+use mint_client::utils::{
+    from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
+};
+use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -41,7 +44,10 @@ enum Command {
     },
 
     /// Prepare coins to send to a third party as a payment
-    Spend { amount: Amount },
+    Spend {
+        #[clap(parse(try_from_str = parse_minimint_amount))]
+        amount: Amount,
+    },
 
     /// Withdraw funds from the federation
     PegOut {
@@ -58,6 +64,16 @@ enum Command {
 
     /// Display wallet info (holdings, tiers)
     Info,
+
+    /// Create a lightning invoice to receive payment via gateway
+    LnInvoice {
+        #[clap(parse(try_from_str = parse_minimint_amount))]
+        amount: Amount,
+        description: String,
+    },
+
+    /// Wait for incoming invoice to be paid
+    WaitInvoice { invoice: lightning_invoice::Invoice },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -78,7 +94,7 @@ async fn main() {
     let opts = Options::parse();
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
-    let cfg: ClientAndGatewayConfig = load_from_file(&cfg_path);
+    let cfg: UserClientConfig = load_from_file(&cfg_path);
     let db = sled::open(&db_path)
         .unwrap()
         .open_tree("mint-client")
@@ -86,7 +102,7 @@ async fn main() {
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
-    let client = UserClient::new(cfg.client, Box::new(db), Default::default());
+    let client = Client::new(cfg.clone(), Box::new(db), Default::default()).await;
 
     match opts.command {
         Command::PegInAddress => {
@@ -121,23 +137,27 @@ async fn main() {
             };
         }
         Command::Fetch => {
-            for id in client.fetch_all_coins().await.unwrap() {
-                info!(issuance = %id.to_hex(), "Fetched coins");
+            for fetch_result in client.fetch_all_coins().await {
+                info!(issuance = %fetch_result.unwrap().txid.to_hex(), "Fetched coins");
             }
         }
         Command::Info => {
             let coins = client.coins();
-            info!(
+            println!(
                 "We own {} coins with a total value of {}",
                 coins.coin_count(),
                 coins.amount()
             );
             for (amount, coins) in coins.coins {
-                info!("We own {} coins of denomination {}", coins.len(), amount);
+                println!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }
         Command::PegOut { address, satoshis } => {
-            client.peg_out(satoshis, address, &mut rng).await.unwrap();
+            let peg_out = client
+                .new_peg_out_with_fees(satoshis, address)
+                .await
+                .unwrap();
+            client.peg_out(peg_out, &mut rng).await.unwrap();
         }
         Command::LnPay { bolt11 } => {
             let http = reqwest::Client::new();
@@ -163,6 +183,27 @@ async fn main() {
                 .send()
                 .await
                 .unwrap();
+        }
+        Command::LnInvoice {
+            amount,
+            description,
+        } => {
+            let confirmed_invoice = client
+                .generate_invoice(amount, description, &cfg.gateway, &mut rng)
+                .await
+                .expect("Couldn't create invoice");
+            println!("{}", confirmed_invoice.invoice)
+        }
+        Command::WaitInvoice { invoice } => {
+            let contract_id = (*invoice.payment_hash()).into();
+            let outpoint = client
+                .claim_incoming_contract(contract_id, &mut rng)
+                .await
+                .expect("Timeout waiting for invoice payment");
+            println!(
+                "Paid in minimint transaction {}. Call 'fetch' to get your coins.",
+                outpoint.txid
+            );
         }
     }
 }

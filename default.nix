@@ -13,5 +13,7 @@ in naersk.buildPackage {
       pkgs.pkg-config
       pkgs.perl
   ];
-  gitSubmodules = true;
+
+gitSubmodules = true;
+  
 }

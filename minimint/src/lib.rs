@@ -1,7 +1,7 @@
 extern crate minimint_api;
 
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::NetworkInfo;
@@ -21,7 +21,7 @@ use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 pub use minimint_core::*;
 
 use crate::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
-use crate::net::connect::{Connector, InsecureTcpConnector};
+use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{
     AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
 };
@@ -61,7 +61,7 @@ pub async fn run_minimint(cfg: ServerConfig) {
 impl MinimintServer {
     pub async fn new(cfg: ServerConfig) -> Self {
         let connector: PeerConnector<Message<PeerId>> =
-            InsecureTcpConnector::new(cfg.identity).to_any();
+            TlsTcpConnector::new(cfg.tls_config()).to_any();
 
         Self::new_with(
             cfg.clone(),
@@ -96,7 +96,7 @@ impl MinimintServer {
         let ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
         let consensus = Arc::new(MinimintConsensus {
-            rng_gen: Box::new(CloneRngGen(Mutex::new(OsRng::new().unwrap()))), //FIXME
+            rng_gen: Box::new(OsRngGen),
             cfg: cfg.clone(),
             mint,
             wallet,
@@ -218,12 +218,11 @@ impl MinimintServer {
     }
 }
 
-struct CloneRngGen<T: RngCore + CryptoRng + Clone + Send>(Mutex<T>);
-
-impl<T: RngCore + CryptoRng + Clone + Send> RngGenerator for CloneRngGen<T> {
-    type Rng = T;
+struct OsRngGen;
+impl RngGenerator for OsRngGen {
+    type Rng = OsRng;
 
     fn get_rng(&self) -> Self::Rng {
-        self.0.lock().unwrap().clone()
+        OsRng::new().unwrap()
     }
 }

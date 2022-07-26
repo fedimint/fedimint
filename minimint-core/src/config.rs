@@ -12,9 +12,10 @@ pub struct ClientConfig {
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
     pub fee_consensus: FeeConsensus,
+    pub max_evil: usize,
 }
 
-// TODO: get rid of it here, modules should govern their oen fees
+// TODO: get rid of it here, modules should govern their own fees
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub fee_coin_spend_abs: minimint_api::Amount,

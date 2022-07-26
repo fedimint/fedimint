@@ -2,19 +2,16 @@ use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::thread;
-use std::time::Duration;
 
 use bitcoin::secp256k1;
 use bitcoin::{Address, Transaction};
 use bitcoincore_rpc::Client;
 use bitcoincore_rpc::{Auth, RpcApi};
-use clightningrpc::responses::NetworkAddress;
-use clightningrpc::{responses, LightningRPC};
+
+use clightningrpc::LightningRPC;
 use lightning_invoice::Invoice;
 use minimint_api::Amount;
 use serde::Serialize;
-use tracing::{info, warn};
 
 use minimint_api::encoding::Decodable;
 use minimint_wallet::config::WalletConfig;
@@ -46,87 +43,24 @@ impl LightningTest for RealLightningTest {
 }
 
 impl RealLightningTest {
-    pub async fn new(
-        socket_gateway: PathBuf,
-        socket_other: PathBuf,
-        bitcoin: &dyn BitcoinTest,
-    ) -> Self {
+    pub async fn new(socket_gateway: PathBuf, socket_other: PathBuf) -> Self {
         let rpc_other = LightningRPC::new(socket_other);
-        let mut rpc_gateway = LightningRPC::new(socket_gateway);
+        let rpc_gateway = LightningRPC::new(socket_gateway);
 
-        // ensure the lightning node has a channel with > 1M sats
-        if Self::channel_balance(&rpc_gateway).milli_sat < 1000 * 1000 * 1000 {
-            info!("Attempting to fund new LN channel.");
-            Self::fund_channel(&mut rpc_gateway, &rpc_other, bitcoin);
-        }
         let initial_balance = Self::channel_balance(&rpc_gateway);
-        let gateway_pubkey =
+        let gateway_node_pub_key =
             secp256k1::PublicKey::from_str(&rpc_gateway.getinfo().unwrap().id).unwrap();
 
         RealLightningTest {
             rpc_gateway,
             rpc_other,
             initial_balance,
-            gateway_node_pub_key: gateway_pubkey,
+            gateway_node_pub_key,
         }
     }
 }
 
 impl RealLightningTest {
-    fn fund_channel(
-        rpc_gateway: &mut LightningRPC,
-        rpc_other: &LightningRPC,
-        bitcoin: &dyn BitcoinTest,
-    ) {
-        const FUND_AMOUNT: u64 = 10 * 1000 * 1000;
-
-        let info = rpc_other.getinfo().unwrap();
-        let other_ip = match info.binding.first().unwrap() {
-            NetworkAddress::Ipv4 { address, port } => format!("{}:{}", address, port),
-            address => panic!("Non ipv4 address {:?}", address),
-        };
-        rpc_gateway.connect(&info.id, Some(&other_ip)).unwrap();
-
-        let funding_address = rpc_gateway.newaddr(None).unwrap().bech32.unwrap();
-        bitcoin.send_and_mine_block(
-            &Address::from_str(&funding_address).unwrap(),
-            bitcoin::Amount::from_sat(FUND_AMOUNT * 2),
-        );
-        bitcoin.mine_blocks(10);
-
-        loop {
-            let fund_channel = FundChannelFixed {
-                id: &info.id,
-                amount: FUND_AMOUNT,
-            };
-            let response = rpc_gateway
-                .client()
-                .send_request::<FundChannelFixed, responses::FundChannel>(
-                    "fundchannel",
-                    fund_channel,
-                )
-                .expect("Error requesting funds.")
-                .into_result();
-            match response {
-                Ok(_) => break,
-                Err(clightningrpc::Error::Rpc(e)) if e.code == 304 || e.code == 301 => {
-                    warn!("LN awaiting block sync, please wait...")
-                }
-                Err(err) => panic!("Unexpected error {}", err),
-            }
-            thread::sleep(Duration::from_millis(1000));
-        }
-        bitcoin.mine_blocks(10);
-
-        loop {
-            warn!("LN channel not open yet, please wait...");
-            if Self::channel_balance(rpc_gateway) == Amount::from_sat(FUND_AMOUNT) {
-                break;
-            }
-            thread::sleep(Duration::from_millis(1000));
-        }
-    }
-
     fn channel_balance(rpc: &LightningRPC) -> Amount {
         let funds: u64 = rpc
             .listfunds()
@@ -163,27 +97,6 @@ impl RealBitcoinTest {
             ),
         )
         .expect(Self::ERROR);
-
-        // ensure we have a wallet with bitcoin
-        if client.list_wallets().expect(Self::ERROR).is_empty() {
-            client
-                .create_wallet("", None, None, None, None)
-                .expect(Self::ERROR);
-        }
-
-        if client
-            .get_balances()
-            .expect(Self::ERROR)
-            .mine
-            .trusted
-            .as_btc()
-            < 100.0
-        {
-            let address = client.get_new_address(None, None).expect(Self::ERROR);
-            client
-                .generate_to_address(200, &address)
-                .expect(Self::ERROR);
-        }
 
         Self { client }
     }

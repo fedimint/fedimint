@@ -1,8 +1,10 @@
+use async_trait::async_trait;
+
 use crate::config::GenerateConfig;
 use crate::db::batch::DbBatch;
 use crate::db::mem_impl::MemDatabase;
 use crate::db::Database;
-use crate::module::http;
+
 use crate::module::interconnect::ModuleInterconect;
 use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use std::collections::HashSet;
@@ -10,6 +12,8 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+
+use super::ApiError;
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, MemDatabase)>,
@@ -20,7 +24,7 @@ pub struct FakeFed<M, CC> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct TestInputMeta {
     pub amount: Amount,
-    pub keys: Vec<secp256k1_zkp::schnorrsig::PublicKey>,
+    pub keys: Vec<secp256k1_zkp::XOnlyPublicKey>,
 }
 
 impl<M, CC> FakeFed<M, CC>
@@ -194,38 +198,32 @@ where
 
 struct FakeInterconnect(
     Box<
-        dyn Fn(
-            &'static str,
-            String,
-            http_types::Method,
-            serde_json::Value,
-        ) -> http_types::Result<http_types::Response>,
+        dyn Fn(&'static str, String, serde_json::Value) -> Result<serde_json::Value, ApiError>
+            + Sync
+            + Send,
     >,
 );
 
 impl FakeInterconnect {
     fn new_block_height_responder(bh: Arc<AtomicU64>) -> FakeInterconnect {
-        FakeInterconnect(Box::new(move |module, path, method, _data| {
+        FakeInterconnect(Box::new(move |module, path, _data| {
             assert_eq!(module, "wallet");
             assert_eq!(path, "/block_height");
-            assert_eq!(method, http::Method::Get);
 
             let height = bh.load(Ordering::Relaxed);
-            Ok(http::Body::from_json(&height)
-                .expect("Error encoding fake block height")
-                .into())
+            Ok(serde_json::to_value(height).expect("encoding error"))
         }))
     }
 }
 
+#[async_trait]
 impl ModuleInterconect for FakeInterconnect {
-    fn call(
+    async fn call(
         &self,
         module: &'static str,
         path: String,
-        method: http::Method,
         data: serde_json::Value,
-    ) -> http::Result<http::Response> {
-        (self.0)(module, path, method, data)
+    ) -> Result<serde_json::Value, ApiError> {
+        (self.0)(module, path, data)
     }
 }

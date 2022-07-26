@@ -3,48 +3,44 @@ mod fixtures;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use bitcoin::schnorr::PublicKey;
-use bitcoin::Amount;
+use bitcoin::{Amount, KeyPair};
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
+use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
 use minimint::consensus::ConsensusItem;
 use minimint::transaction::Output;
-use minimint_api::OutPoint;
+use minimint_api::db::batch::DbBatch;
+use minimint_ln::contracts::incoming::PreimageDecryptionShare;
+use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use minimint_wallet::WalletConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
-use mint_client::clients::transaction::TransactionBuilder;
+use mint_client::transaction::TransactionBuilder;
+use mint_client::ClientError;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {
-    const PEG_IN_AMOUNT: u64 = 5000;
-    const PEG_OUT_AMOUNT: u64 = 1200; // amount requires minted change
-
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let after_peg_in = sats(PEG_IN_AMOUNT) - fed.fee_consensus.fee_peg_in_abs;
-    let after_peg_out = after_peg_in - sats(PEG_OUT_AMOUNT) - fed.fee_consensus.fee_peg_out_abs;
+    let peg_in_amount: u64 = 5000;
+    let peg_out_amount: u64 = 1200; // amount requires minted change
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
 
     let peg_in_address = user.client.get_new_pegin_address(rng());
-    let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(PEG_IN_AMOUNT));
+    let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount));
     bitcoin.mine_blocks(fed.wallet.finalty_delay as u64);
     fed.run_consensus_epochs(1).await;
 
     user.client.peg_in(proof, tx, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // peg in epoch + partial sigs epoch
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), after_peg_in);
+    user.assert_total_coins(sats(peg_in_amount)).await;
 
     let peg_out_address = bitcoin.get_new_address();
-    user.peg_out(PEG_OUT_AMOUNT, &peg_out_address).await;
-    fed.run_consensus_epochs(1).await;
+    let fees = user.peg_out(peg_out_amount, &peg_out_address).await;
+    fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
-    bitcoin.mine_blocks(minimint_wallet::MIN_PEG_OUT_URGENCY as u64 + 1);
-    fed.run_consensus_epochs(2).await; // block height epoch + peg out signing epoch
-    user.client.fetch_all_coins().await.unwrap();
     assert_matches!(
         fed.last_consensus_items().first(),
         Some(ConsensusItem::Wallet(PegOutSignature(_)))
@@ -53,53 +49,126 @@ async fn peg_in_and_peg_out_with_fees() {
     fed.broadcast_transactions().await;
     assert_eq!(
         bitcoin.mine_block_and_get_received(&peg_out_address),
-        sats(PEG_OUT_AMOUNT)
+        sats(peg_out_amount)
     );
-    assert_eq!(user.total_coins(), after_peg_out);
+    user.assert_total_coins(sats(peg_in_amount - peg_out_amount) - fees)
+        .await;
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_outs_are_rejected_if_fees_are_too_low() {
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let peg_out_amount = Amount::from_sat(1000);
+    let peg_out_address = bitcoin.get_new_address();
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
+    let mut peg_out = user
+        .client
+        .new_peg_out_with_fees(peg_out_amount, peg_out_address.clone())
+        .await
+        .unwrap();
+
+    // Lower rate below FeeConsensus
+    peg_out.fees.fee_rate.sats_per_kvb = 10;
+    // TODO: return a better error message to clients
+    assert!(user.client.peg_out(peg_out, rng()).await.is_err());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_outs_are_only_allowed_once_per_epoch() {
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let address1 = bitcoin.get_new_address();
+    let address2 = bitcoin.get_new_address();
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
+    let fees = user.peg_out(1000, &address1).await;
+    user.peg_out(1000, &address2).await;
+
+    fed.run_consensus_epochs(2).await;
+    fed.broadcast_transactions().await;
+
+    let received1 = bitcoin.mine_block_and_get_received(&address1);
+    let received2 = bitcoin.mine_block_and_get_received(&address2);
+
+    assert_eq!(received1 + received2, sats(1000));
+    user.client.reissue_pending_coins(rng()).await.unwrap();
+    fed.run_consensus_epochs(2).await; // reissue the coins from the tx that failed
+    user.assert_total_coins(sats(5000 - 1000) - fees).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_outs_must_wait_for_available_utxos() {
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let address1 = bitcoin.get_new_address();
+    let address2 = bitcoin.get_new_address();
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
+    user.peg_out(1000, &address1).await;
+
+    fed.run_consensus_epochs(2).await;
+    fed.broadcast_transactions().await;
+    assert_eq!(bitcoin.mine_block_and_get_received(&address1), sats(1000));
+
+    // The change UTXO is still finalizing
+    let response = user
+        .client
+        .new_peg_out_with_fees(Amount::from_sat(2000), address2.clone());
+    assert_matches!(response.await, Err(ClientError::PegOutWaitingForUTXOs));
+
+    bitcoin.mine_blocks(100);
+    fed.run_consensus_epochs(1).await;
+    user.peg_out(2000, &address2).await;
+    fed.run_consensus_epochs(2).await;
+    fed.broadcast_transactions().await;
+    assert_eq!(bitcoin.mine_block_and_get_received(&address2), sats(2000));
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_can_be_exchanged_between_users() {
-    let (fed, user_send, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let user_receive = user_send.new_client(&[0, 1]).await;
 
-    fed.mint_coins_for_user(&user_send, sats(5000)).await;
+    fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
     assert_eq!(user_receive.total_coins(), sats(0));
 
     let coins = user_send.client.select_and_spend_coins(sats(3000)).unwrap();
-    let outpoint = user_receive.client.reissue(coins, rng()).await.unwrap();
+    user_receive.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    user_receive.client.fetch_coins(outpoint).await.unwrap();
-    assert_eq!(user_send.total_coins(), sats(2000));
-    assert_eq!(user_receive.total_coins(), sats(3000));
+    user_send.assert_total_coins(sats(2000)).await;
+    user_receive.assert_total_coins(sats(3000)).await;
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_cannot_double_spent_with_different_nodes() {
-    let (fed, user1, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    fed.mint_coins_for_user(&user1, sats(5000)).await;
+    let (fed, user1, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
     let coins = user1.client.select_and_spend_coins(sats(2000)).unwrap();
 
-    let (user2, user3) = (user1.new_client(&[0]), user1.new_client(&[1]));
+    let (user2, user3) = (user1.new_client(&[0]).await, user1.new_client(&[1]).await);
     let out2 = user2.client.reissue(coins.clone(), rng()).await.unwrap();
     let out3 = user3.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    // FIXME is this the correct behavior, that the first one goes through?
-    assert!(user2.client.fetch_coins(out2).await.is_ok());
-    assert!(user3.client.fetch_coins(out3).await.is_err());
+    assert!(
+        user2.client.fetch_coins(out2).await.is_err()
+            || user3.client.fetch_coins(out3).await.is_err()
+    ); //no double spend
+    assert_eq!(user2.total_coins() + user3.total_coins(), sats(2000));
     assert_eq!(user2.total_coins(), sats(2000));
     assert_eq!(user3.total_coins(), sats(0));
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_in_wallet_can_be_split_into_change() {
-    let (fed, user_send, _, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
+    let user_receive = user_send.new_client(&[0]).await;
 
-    fed.mint_coins_for_user(&user_send, sats(1100)).await;
+    fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
     assert_eq!(
         user_send.coin_amounts(),
         vec![sats(100), sats(500), sats(500)]
@@ -111,46 +180,14 @@ async fn minted_coins_in_wallet_can_be_split_into_change() {
             block_on(user_send.client.pay_for_coins(coins, rng())).unwrap()
         });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
-    user_receive.client.fetch_all_coins().await.unwrap();
-    user_send.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        user_receive.coin_amounts(),
-        vec![sats(100), sats(100), sats(100), sats(100)]
-    );
-    assert_eq!(
-        user_send.coin_amounts(),
-        vec![sats(100), sats(100), sats(500)]
-    );
-}
 
-#[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_dont_contribute_to_peg_out() {
-    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    // FIXME coins cannot be fetched if peer is not in the epoch
-    fed.subset_peers(&[0, 1, 2])
-        .mint_coins_for_user(&user, sats(1500))
+    user_receive
+        .assert_coin_amounts(vec![sats(100), sats(100), sats(100), sats(100)])
         .await;
-    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
-    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(5000));
-
-    let peg_out_address = bitcoin.get_new_address();
-    user.peg_out(1000, &peg_out_address).await;
-    // Ensure peer 0 who received the peg out request is in the next epoch
-    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
-    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
-    bitcoin.mine_blocks(fed.wallet.finalty_delay as u64);
-    bitcoin.mine_blocks(minimint_wallet::MIN_PEG_OUT_URGENCY as u64 + 1);
-    fed.run_consensus_epochs(1).await;
-
-    fed.subset_peers(&[3]).override_proposal(vec![]);
-    drop_peer_3_during_epoch(&fed).await;
-
-    fed.broadcast_transactions().await;
-    assert_eq!(
-        bitcoin.mine_block_and_get_received(&peg_out_address),
-        sats(1000)
-    );
-    assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+    user_send
+        .assert_coin_amounts(vec![sats(100), sats(100), sats(500)])
+        .await;
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 async fn drop_peer_3_during_epoch(fed: &FederationTest) {
@@ -170,22 +207,91 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn drop_peers_who_dont_contribute_blind_sigs() {
-    let (fed, user, _, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    fed.database_add_coins_for_user(&user, sats(1000));
+async fn drop_peers_who_dont_contribute_peg_out_psbts() {
+    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(1), sats(10), sats(100), sats(1000)]).await;
+    fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
+
+    let peg_out_address = bitcoin.get_new_address();
+    user.peg_out(1000, &peg_out_address).await;
+    // Ensure peer 0 who received the peg out request is in the next epoch
+    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
     drop_peer_3_during_epoch(&fed).await;
 
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(1000));
+    fed.broadcast_transactions().await;
+    assert_eq!(
+        bitcoin.mine_block_and_get_received(&peg_out_address),
+        sats(1000)
+    );
+    assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn drop_peers_who_dont_contribute_decryption_shares() {
+    let (fed, user, bitcoin, gateway, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let payment_amount = sats(2000);
+    fed.mine_and_mint(&gateway.user, &*bitcoin, sats(3000))
+        .await;
+
+    // Create lightning invoice whose associated "offer" is accepted by federation consensus
+    let invoice = tokio::join!(
+        user.client
+            .generate_invoice(payment_amount, "".into(), &gateway.keys, rng()),
+        fed.run_consensus_epochs(1) // create offer
+    )
+    .0
+    .unwrap();
+
+    // Gateway buys offer, triggering preimage decryption
+    let (_, contract_id) = gateway
+        .server
+        .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(1).await; // pay for offer
+
+    // propose bad decryption share
+    let share = SecretKeyShare::default()
+        .decrypt_share_no_verify(&SecretKey::random().public_key().encrypt(""));
+    fed.subset_peers(&[3])
+        .override_proposal(vec![ConsensusItem::LN(DecryptionShareCI {
+            contract_id,
+            share: PreimageDecryptionShare(share),
+        })]);
+    drop_peer_3_during_epoch(&fed).await; // preimage decryption
+
+    user.client
+        .claim_incoming_contract(contract_id, rng())
+        .await
+        .unwrap();
+    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(2).await; // contract to mint coins, sign coins
+
+    user.assert_total_coins(payment_amount).await;
+    assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn drop_peers_who_dont_contribute_blind_sigs() {
+    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
+    fed.database_add_coins_for_user(&user, sats(2000));
+
+    fed.subset_peers(&[3]).override_proposal(vec![]);
+    drop_peer_3_during_epoch(&fed).await;
+
+    user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_contribute_bad_sigs() {
-    let (fed, user, _, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    let out_point = fed.database_add_coins_for_user(&user, sats(1000));
+    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
+    let out_point = fed.database_add_coins_for_user(&user, sats(2000));
     let bad_proposal = vec![ConsensusItem::Mint(PartiallySignedRequest {
         out_point,
         partial_signature: PartialSigResponse(Coins {
@@ -196,17 +302,17 @@ async fn drop_peers_who_contribute_bad_sigs() {
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
     drop_peer_3_during_epoch(&fed).await;
 
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(1000));
+    user.assert_total_coins(sats(2000)).await;
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_invoice() {
-    let (fed, user, _, gateway, lightning) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning) =
+        fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
 
-    fed.mint_coins_for_user(&user, sats(2000)).await;
+    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
     let (contract_id, outpoint) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
@@ -239,54 +345,49 @@ async fn lightning_gateway_pays_invoice() {
         .await_outgoing_contract_claimed(contract_id, outpoint)
         .await
         .unwrap();
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user.total_coins(), sats(2000 - 1010));
-    assert_eq!(gateway.user.client.coins().amount(), sats(1010));
+    user.assert_total_coins(sats(2000 - 1010)).await;
+    gateway.user.assert_total_coins(sats(1010)).await;
+
+    tokio::time::sleep(Duration::from_millis(500)).await; // FIXME need to wait for listfunds to update
     assert_eq!(lightning.amount_sent(), sats(1000));
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() {
     let starting_balance = sats(2000);
     let payment_amount = sats(100);
-    let (fed, user, _, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
-    fed.mint_coins_for_user(&gateway.user, starting_balance)
+    let (fed, user, bitcoin, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
     assert_eq!(gateway.user.total_coins(), starting_balance);
 
-    // Create invoice and offer in the federation
-    let (keypair, unconfirmed_invoice) = user
-        .client
-        .create_unconfirmed_invoice(payment_amount, "test description".into(), rng())
-        .await
-        .unwrap();
-    fed.run_consensus_epochs(1).await; // process offer
-
-    // Confirm the offer has been accepted by the federation
-    let invoice = user
-        .client
-        .confirm_invoice(unconfirmed_invoice)
-        .await
-        .unwrap();
+    // Create lightning invoice whose associated "offer" is accepted by federation consensus
+    let invoice = tokio::join!(
+        user.client
+            .generate_invoice(payment_amount, "".into(), &gateway.keys, rng()),
+        fed.run_consensus_epochs(1),
+    )
+    .0
+    .unwrap();
 
     // Gateway deposits ecash to trigger preimage decryption by the federation
-    let (txid, contract_id) = gateway
+    let (outpoint, contract_id) = gateway
         .server
-        .buy_preimage_offer(invoice.payment_hash(), &payment_amount, rng())
+        .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
-    assert_eq!(
-        gateway.user.client.coins().amount(),
-        starting_balance - payment_amount
-    );
-    assert_eq!(user.total_coins(), sats(0));
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(sats(0)).await;
 
     // Gateway receives decrypted preimage
-    let outpoint = OutPoint { txid, out_idx: 0 };
     let preimage = gateway
         .server
         .await_preimage_decryption(outpoint)
@@ -294,47 +395,54 @@ async fn receive_lightning_payment_valid_preimage() {
         .unwrap();
 
     // Check that the preimage matches user pubkey & lightning invoice preimage
-    let pubkey = PublicKey::from_keypair(&secp(), &keypair);
+    let pubkey = invoice.keypair.public_key();
     assert_eq!(pubkey, preimage.0);
-    assert_eq!(&sha256(&pubkey.serialize()), invoice.payment_hash());
+    assert_eq!(&sha256(&pubkey.serialize()), invoice.invoice.payment_hash());
 
     // User claims their ecash
     user.client
-        .claim_incoming_contract(contract_id, keypair, rng())
+        .claim_incoming_contract(contract_id, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Ecash tokens have been transferred from gateway to user
-    user.client.fetch_all_coins().await.unwrap();
-    assert_eq!(
-        gateway.user.client.coins().amount(),
-        starting_balance - payment_amount
-    );
-    assert_eq!(user.total_coins(), payment_amount);
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(payment_amount).await;
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_invalid_preimage() {
     let starting_balance = sats(2000);
     let payment_amount = sats(100);
-    let (fed, user, _, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
-    fed.mint_coins_for_user(&gateway.user, starting_balance)
+    let (fed, user, bitcoin, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
     assert_eq!(gateway.user.total_coins(), starting_balance);
 
     // Manually construct offer where sha256(preimage) != hash
-    let (keypair, pubkey) = secp().generate_schnorrsig_keypair(&mut rng());
+    let kp = KeyPair::new(&secp(), &mut rng());
     let payment_hash = sha256(&[0]);
     let offer_output = user.client.ln_client().create_offer_output(
         payment_amount,
         payment_hash,
-        pubkey.serialize(),
+        kp.public_key().serialize(),
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
-    let tx = builder.build(&secp(), &mut rng());
+    let tbs_pks = &user.config.client_config.mint.tbs_pks;
+    let tx = builder.build(
+        sats(0),
+        DbBatch::new().transaction(),
+        &secp(),
+        tbs_pks,
+        &mut rng(),
+    );
     fed.submit_transaction(tx);
     fed.run_consensus_epochs(1).await; // process offer
 
@@ -344,36 +452,34 @@ async fn receive_lightning_payment_invalid_preimage() {
         .buy_preimage_offer(&payment_hash, &payment_amount, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 for preimage decryption
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
 
     // Gateway funds have been escrowed
-    assert_eq!(user.total_coins(), sats(0));
-    assert_eq!(
-        gateway.user.total_coins(),
-        starting_balance - payment_amount
-    );
+    gateway
+        .user
+        .assert_total_coins(starting_balance - payment_amount)
+        .await;
+    user.assert_total_coins(sats(0)).await;
 
     // User gets error when they try to claim gateway's escrowed ecash
     let response = user
         .client
-        .claim_incoming_contract(contract_id, keypair, rng())
+        .claim_incoming_contract(contract_id, rng())
         .await;
     assert!(response.is_err());
 
-    // Gateway re-claims their funds
+    // Gateway is refunded
     let _outpoint = gateway
         .client
-        .claim_incoming_contract(contract_id, rng())
+        .refund_incoming_contract(contract_id, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(4).await; // 2 epochs to process contract, 2 to sweep ecash from contract
-
-    // TODO: disable background_fetch for this test and fetch the coins manually
-    // gateway.client.fetch_coins(_outpoint).await.unwrap();
+    fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 to sweep ecash from contract
 
     // Gateway has clawed back their escrowed funds
-    assert_eq!(user.total_coins(), sats(0));
-    assert_eq!(gateway.user.client.coins().amount(), starting_balance);
+    gateway.user.assert_total_coins(starting_balance).await;
+    user.assert_total_coins(sats(0)).await;
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -381,7 +487,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
     let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
 
-    fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
+    fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
@@ -405,15 +511,16 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
             ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(_))
         )
     });
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
-    let (fed, user, _, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
 
-    fed.mint_coins_for_user(&user, sats(1010)).await; // 1% LN fee
+    fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
         .client
         .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
@@ -425,14 +532,15 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     gateway.client.abort_outgoing_payment(contract_id);
     fed.run_consensus_epochs(1).await;
     assert_eq!(user.total_coins(), sats(1010));
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() {
-    let (fed, user_send, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]);
+    let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let user_receive = user_send.new_client(&[0]).await;
 
-    fed.mint_coins_for_user(&user_send, sats(5000)).await;
+    fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     let coins = user_send.client.select_and_spend_coins(sats(5000)).unwrap();
 
     // If epochs run before the reissue tx, then there won't be any coins to fetch
@@ -445,34 +553,54 @@ async fn runs_consensus_if_tx_submitted() {
     ])
     .await;
 
-    user_receive.client.fetch_all_coins().await.unwrap();
-    assert_eq!(user_receive.total_coins(), sats(5000));
+    user_receive.assert_total_coins(sats(5000)).await;
+    assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_new_block() {
     let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(5000));
-    fed.mint_coins_for_user(&user, sats(1500)).await;
-
-    let peg_out_address = bitcoin.get_new_address();
-    user.peg_out(1000, &peg_out_address).await;
+    let peg_in_address = user.client.get_new_pegin_address(rng());
+    bitcoin.mine_blocks(100);
+    let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(1000));
     fed.run_consensus_epochs(1).await;
 
-    // If epochs run before the blocks are mined, won't be able to peg-out
+    // If epochs run before the blocks are mined, user won't be able to peg-in
     join_all(vec![
         Either::Left(async {
             tokio::time::sleep(Duration::from_millis(500)).await;
             bitcoin.mine_blocks(fed.wallet.finalty_delay as u64);
-            bitcoin.mine_blocks(minimint_wallet::MIN_PEG_OUT_URGENCY as u64 + 1);
         }),
-        Either::Right(async { fed.run_consensus_epochs(2).await }),
+        Either::Right(async { fed.run_consensus_epochs(1).await }),
     ])
     .await;
 
-    fed.broadcast_transactions().await;
-    assert_eq!(
-        bitcoin.mine_block_and_get_received(&peg_out_address),
-        sats(1000)
-    );
+    user.client.peg_in(proof, tx, rng()).await.unwrap();
+    fed.run_consensus_epochs(2).await; // peg-in + blind sign
+    user.assert_total_coins(sats(1000)).await;
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[should_panic]
+async fn audit_negative_balance_sheet_panics() {
+    let (fed, user, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    fed.mint_coins_for_user(&user, sats(2000)).await;
+    fed.run_consensus_epochs(1).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unbalanced_transactions_get_rejected() {
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
+    // cannot make change for this invoice (results in unbalanced tx)
+    let invoice = lightning.invoice(sats(777));
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+    let response = user
+        .client
+        .fund_outgoing_ln_contract(&gateway.keys, invoice, rng())
+        .await;
+
+    // TODO return a more useful error
+    assert!(response.is_err());
 }

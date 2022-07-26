@@ -1,14 +1,15 @@
 use crate::config::MintConfig;
 use crate::db::{
-    NonceKey, OutputOutcomeKey, ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix,
-    ReceivedPartialSignatureKey, ReceivedPartialSignatureKeyOutputPrefix,
-    ReceivedPartialSignaturesKeyPrefix,
+    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
+    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
 };
 use async_trait::async_trait;
 use itertools::Itertools;
 use minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
+use minimint_api::module::audit::Audit;
 use minimint_api::module::interconnect::ModuleInterconect;
 use minimint_api::module::ApiEndpoint;
 use minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
@@ -39,7 +40,6 @@ pub mod tiered;
 
 /// Federated mint member mint
 pub struct Mint {
-    key_id: PeerId,
     sec_key: Keys<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Keys<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
@@ -75,7 +75,7 @@ pub struct Coin(pub CoinNonce, pub tbs::Signature);
 /// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
 /// spent coin's spending keys to avoid mint frontrunning.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct CoinNonce(pub secp256k1_zkp::schnorrsig::PublicKey);
+pub struct CoinNonce(pub secp256k1_zkp::XOnlyPublicKey);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindToken(pub tbs::BlindedMessage);
@@ -200,11 +200,13 @@ impl FederationModule for Mint {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        batch.append_from_iter(
-            input
-                .iter()
-                .map(|(_, coin)| BatchItem::insert_new(NonceKey(coin.0.clone()), ())),
-        );
+        batch.append_from_iter(input.iter().flat_map(|(amount, coin)| {
+            let key = NonceKey(coin.0.clone());
+            vec![
+                BatchItem::insert_new(key.clone(), ()),
+                BatchItem::insert_new(MintAuditItemKey::Redemption(key), amount),
+            ]
+        }));
         batch.commit();
 
         Ok(meta)
@@ -240,7 +242,7 @@ impl FederationModule for Mint {
             },
             partial_sig,
         );
-
+        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.amount());
         batch.commit();
         Ok(output.amount())
     }
@@ -268,7 +270,11 @@ impl FederationModule for Mint {
                 let mut drop_peers = Vec::<PeerId>::new();
                 let mut batch = DbBatch::new();
                 let mut batch_tx = batch.transaction();
-                let (bsig, errors) = self.combine(shares.clone());
+                let proposal_key = ProposedPartialSignatureKey {
+                    request_id: issuance_id,
+                };
+                let our_contribution = self.db.get_value(&proposal_key).expect("DB error");
+                let (bsig, errors) = self.combine(our_contribution, shares.clone());
 
                 // FIXME: validate shares before writing to DB to make combine infallible
                 errors.0.iter().for_each(|(peer, error)| {
@@ -289,6 +295,7 @@ impl FederationModule for Mint {
                                 peer_id: peer,
                             })
                         }));
+                        batch_tx.append_delete(proposal_key);
 
                         batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
                     }
@@ -312,6 +319,23 @@ impl FederationModule for Mint {
             .flat_map(|(_, peers)| peers)
             .copied()
             .collect();
+
+        let mut redemptions = Amount::from_sat(0);
+        let mut issuances = Amount::from_sat(0);
+        self.db
+            .find_by_prefix(&MintAuditItemKeyPrefix)
+            .for_each(|res| {
+                let (key, amount) = res.expect("DB error");
+                match key {
+                    MintAuditItemKey::Issuance(_) => issuances += amount,
+                    MintAuditItemKey::IssuanceTotal => issuances += amount,
+                    MintAuditItemKey::Redemption(_) => redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
+                }
+                batch.append_delete(key);
+            });
+        batch.append_insert(MintAuditItemKey::IssuanceTotal, issuances);
+        batch.append_insert(MintAuditItemKey::RedemptionTotal, redemptions);
 
         batch.append_from_accumulators(par_batches.into_iter().map(|(batch, _)| batch));
         batch.commit();
@@ -346,6 +370,15 @@ impl FederationModule for Mint {
         } else {
             None
         }
+    }
+
+    fn audit(&self, audit: &mut Audit) {
+        audit.add_items(&self.db, &MintAuditItemKeyPrefix, |k, v| match k {
+            MintAuditItemKey::Issuance(_) => -(v.milli_sat as i64),
+            MintAuditItemKey::IssuanceTotal => -(v.milli_sat as i64),
+            MintAuditItemKey::Redemption(_) => v.milli_sat as i64,
+            MintAuditItemKey::RedemptionTotal => v.milli_sat as i64,
+        });
     }
 
     fn api_base_name(&self) -> &'static str {
@@ -405,7 +438,6 @@ impl Mint {
         .collect();
 
         Mint {
-            key_id: our_id,
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
@@ -426,6 +458,7 @@ impl Mint {
 
     fn combine(
         &self,
+        our_contribution: Option<PartialSigResponse>,
         partial_sigs: Vec<(PeerId, PartialSigResponse)>,
     ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
         // Terminate early if there are not enough shares
@@ -453,8 +486,8 @@ impl Mint {
         }
 
         // Determine the reference response to check against
-        let our_contribution = match &partial_sigs.iter().find(|(peer, _)| *peer == self.key_id) {
-            Some((_, psigs)) => psigs,
+        let our_contribution = match our_contribution {
+            Some(psig) => psig,
             None => {
                 return (
                     Err(CombineError::NoOwnContribution),
@@ -583,13 +616,6 @@ impl Mint {
             partial_sig,
         );
 
-        // FIXME: add own id to cfg
-        if peer == self.key_id {
-            batch.append_delete(ProposedPartialSignatureKey {
-                request_id: output_id,
-            });
-        }
-
         batch.commit();
     }
 }
@@ -601,7 +627,7 @@ impl Coin {
     }
 
     /// Access the nonce as the public key to the spend key
-    pub fn spend_key(&self) -> &secp256k1_zkp::schnorrsig::PublicKey {
+    pub fn spend_key(&self) -> &secp256k1_zkp::XOnlyPublicKey {
         &self.0 .0
     }
 }
@@ -743,13 +769,20 @@ mod test {
 
         let psigs = mints
             .iter()
-            .map(move |m| (m.key_id, m.blind_sign(blind_tokens.clone()).unwrap()))
+            .enumerate()
+            .map(move |(id, m)| {
+                (
+                    PeerId::from(id as u16),
+                    m.blind_sign(blind_tokens.clone()).unwrap(),
+                )
+            })
             .collect::<Vec<_>>();
 
+        let our_sig = psigs[0].1.clone();
         let mint = &mut mints[0];
 
         // Test happy path
-        let (bsig_res, errors) = mint.combine(psigs.clone());
+        let (bsig_res, errors) = mint.combine(Some(our_sig.clone()), psigs.clone());
         assert!(errors.0.is_empty());
 
         let bsig = bsig_res.unwrap();
@@ -761,7 +794,8 @@ mod test {
         });
 
         // Test threshold sig shares
-        let (bsig_res, errors) = mint.combine(psigs[..(MINTS - THRESHOLD)].to_vec());
+        let (bsig_res, errors) =
+            mint.combine(Some(our_sig.clone()), psigs[..(MINTS - THRESHOLD)].to_vec());
         assert!(bsig_res.is_ok());
         assert!(errors.0.is_empty());
 
@@ -772,7 +806,7 @@ mod test {
 
         // Test too few sig shares
         let few_sigs = psigs[..(MINTS - THRESHOLD - 1)].to_vec();
-        let (bsig_res, errors) = mint.combine(few_sigs.clone());
+        let (bsig_res, errors) = mint.combine(Some(our_sig.clone()), few_sigs.clone());
         assert_eq!(
             bsig_res,
             Err(CombineError::TooFewShares(
@@ -783,12 +817,13 @@ mod test {
         assert!(errors.0.is_empty());
 
         // Test no own share
-        let (bsig_res, errors) = mint.combine(psigs[1..].to_vec());
+        let (bsig_res, errors) = mint.combine(None, psigs[1..].to_vec());
         assert_eq!(bsig_res, Err(CombineError::NoOwnContribution));
         assert!(errors.0.is_empty());
 
         // Test multiple peer contributions
         let (bsig_res, errors) = mint.combine(
+            Some(our_sig.clone()),
             psigs
                 .iter()
                 .cloned()
@@ -803,6 +838,7 @@ mod test {
 
         // Test wrong length response
         let (bsig_res, errors) = mint.combine(
+            Some(our_sig.clone()),
             psigs
                 .iter()
                 .cloned()
@@ -820,6 +856,7 @@ mod test {
             .contains(&(PeerId::from(1), PeerErrorType::DifferentStructureSigShare)));
 
         let (bsig_res, errors) = mint.combine(
+            Some(our_sig.clone()),
             psigs
                 .iter()
                 .cloned()
@@ -839,6 +876,7 @@ mod test {
 
         let (_bk, bmsg) = blind_message(Message::from_bytes(b"test"));
         let (bsig_res, errors) = mint.combine(
+            Some(our_sig),
             psigs
                 .iter()
                 .cloned()

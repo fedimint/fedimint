@@ -11,6 +11,8 @@ pub struct Elapsed;
 mod imp {
     use super::*;
 
+    pub use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+
     pub fn spawn<F>(future: F)
     where
         F: Future<Output = ()> + Send + 'static,
@@ -48,6 +50,8 @@ mod imp {
     use futures::FutureExt;
 
     use super::*;
+
+    pub use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
     pub fn spawn<F>(future: F)
     where

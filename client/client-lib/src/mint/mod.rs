@@ -1,26 +1,29 @@
-mod db;
+pub mod db;
 
 use crate::api::ApiError;
-use crate::clients::transaction::TransactionBuilder;
-use crate::BorrowedClientContext;
-use bitcoin::schnorr::KeyPair;
+use crate::transaction::TransactionBuilder;
+use crate::utils::BorrowedClientContext;
+
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use minimint_api::db::batch::{BatchItem, BatchTx};
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+use minimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::{Amount, OutPoint, TransactionId};
+use minimint_core::config::FeeConsensus;
 use minimint_core::modules::mint::config::MintClientConfig;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
-use minimint_core::transaction::{Output, Transaction};
-use rand::{CryptoRng, Rng, RngCore};
+
+use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -68,126 +71,59 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
-    // FIXME: implement three step process: unspent -> in flight -> spent/unspent
-    pub fn mark_coins_spent(&self, mut batch: BatchTx, coins: &Coins<SpendableCoin>) {
-        batch.append_from_iter(coins.iter().map(|(amount, coin)| {
-            BatchItem::delete(CoinKey {
-                amount,
-                nonce: coin.coin.0.clone(),
-            })
-        }));
-        batch.commit();
-    }
-
-    pub fn select_and_spend_coins(
-        &self,
-        mut batch: BatchTx,
-        amount: Amount,
-    ) -> Result<Coins<SpendableCoin>> {
+    pub fn select_coins(&self, amount: Amount) -> Result<Coins<SpendableCoin>> {
         let coins = self
             .coins()
             .select_coins(amount)
             .ok_or(MintClientError::NotEnoughCoins)?;
 
-        // mark spent in DB
-        // TODO: make contingent on success of payment
-        self.mark_coins_spent(batch.subtransaction(), &coins);
-        batch.commit();
         Ok(coins)
     }
 
-    // TODO: implement input generation with change to avoid error on missing coin denominations
-    /// Select coins to fund a transaction with.
-    ///
-    /// **ATTENTION**: calling this function multiple times without committing the batch to the
-    /// database is not supported and will result in an accidental double spend.
-    pub fn create_coin_input(
+    pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
         &self,
-        mut batch: BatchTx,
-        amount: Amount,
-    ) -> Result<(Vec<KeyPair>, Coins<Coin>)> {
-        let coins = self.select_and_spend_coins(batch.subtransaction(), amount)?;
-        let (spend_keys, coins) = self.create_coin_input_from_coins(coins)?;
-        batch.commit();
-        Ok((spend_keys, coins))
-    }
-
-    pub fn create_coin_input_from_coins(
-        &self,
-        coins: Coins<SpendableCoin>,
-    ) -> Result<(Vec<KeyPair>, Coins<Coin>)> {
-        let coin_key_pairs = coins
-            .into_iter()
-            .map(|(amt, coin)| {
-                let spend_key = secp256k1_zkp::schnorrsig::KeyPair::from_seckey_slice(
-                    self.context.secp,
-                    &coin.spend_key,
-                )
-                .map_err(|_| MintClientError::ReceivedUspendableCoin)?;
-
-                // We check for coin validity in case we got it from an untrusted third party. We
-                // don't want to needlessly create invalid tx and bother the federation with them.
-                let spend_pub_key = secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-                    self.context.secp,
-                    &spend_key,
-                );
-                if &spend_pub_key == coin.coin.spend_key() {
-                    Ok((spend_key, (amt, coin.coin)))
-                } else {
-                    Err(MintClientError::ReceivedUspendableCoin)
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(coin_key_pairs.into_iter().unzip())
-    }
-
-    /// Adds change to a TransactionBuilder as the last output (if necessary) and builds the final Transaction
-    pub fn finalize_change<R: Rng + CryptoRng>(
-        &self,
-        change_required: Amount,
-        batch: BatchTx,
-        mut tx: TransactionBuilder,
-        mut rng: R,
-    ) -> Transaction {
-        let min_change = *self.context.config.tbs_pks.tiers().min().unwrap();
-
-        if change_required >= min_change {
-            self.create_coin_output(batch, change_required, &mut rng, |change_output| {
-                tx.output(Output::Mint(change_output));
-                OutPoint {
-                    txid: tx.tx.tx_hash(),
-                    out_idx: (tx.tx.outputs.len() - 1) as u64,
-                }
-            });
-        }
-
-        tx.build(self.context.secp, &mut rng)
-    }
-
-    pub fn create_coin_output<R: Rng + CryptoRng>(
-        &self,
-        mut batch: BatchTx,
-        amount: Amount,
-        mut rng: R,
-        mut tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
-    ) {
-        let (coin_finalization_data, sig_req) = CoinFinalizationData::new(
-            amount,
-            &self.context.config.tbs_pks,
+        fee_consensus: &FeeConsensus,
+        tx: TransactionBuilder,
+        mut batch: Accumulator<BatchItem>,
+        rng: R,
+    ) -> Result<TransactionId> {
+        let change_required = tx.change_required(fee_consensus);
+        let final_tx = tx.build(
+            change_required,
+            batch.transaction(),
             self.context.secp,
-            &mut rng,
+            &self.context.config.tbs_pks,
+            rng,
+        );
+        let txid = final_tx.tx_hash();
+        let mint_tx_id = self.context.api.submit_transaction(final_tx).await?;
+        assert_eq!(
+            txid, mint_tx_id,
+            "Federation is faulty, returned wrong tx id."
         );
 
-        let coin_output = sig_req
-            .0
-            .into_iter()
-            .map(|(amt, token)| (amt, BlindToken(token)))
-            .collect();
+        self.context.db.apply_batch(batch).expect("DB error");
+        Ok(txid)
+    }
 
-        let out_point = tx(coin_output);
+    pub fn receive_coins<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        mut tx: BatchTx,
+        rng: R,
+        mut create_tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
+    ) {
+        let mut builder = TransactionBuilder::default();
 
-        batch.append_insert_new(OutputFinalizationKey(out_point), coin_finalization_data);
-        batch.commit();
+        let (finalization, coins) = builder.create_output_coins(
+            amount,
+            self.context.secp,
+            &self.context.config.tbs_pks,
+            rng,
+        );
+        let out_point = create_tx(coins);
+        tx.append_insert_new(OutputFinalizationKey(out_point), finalization);
+        tx.commit();
     }
 
     pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, outpoint: OutPoint) -> Result<()> {
@@ -227,43 +163,47 @@ impl<'c> MintClient<'c> {
         Ok(())
     }
 
-    pub fn list_active_issuances(&self) -> Vec<OutPoint> {
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
         self.context
             .db
             .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .map(|res| res.expect("DB error").0 .0)
+            .map(|res| {
+                let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
+                (outpoint, cfd)
+            })
             .collect()
     }
 
-    // FIXME: remove
-    pub async fn fetch_all_coins(&self, mut batch: BatchTx<'_>) -> Result<Vec<TransactionId>> {
-        let active_issuances = self
-            .context
-            .db
-            .find_by_prefix(&OutputFinalizationKeyPrefix)
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .expect("DB error");
-
-        // TODO: return out points instead
-        let mut tx_ids = vec![];
-        for (OutputFinalizationKey(out_point), _) in active_issuances {
-            loop {
-                match self.fetch_coins(batch.subtransaction(), out_point).await {
-                    Ok(()) => {
-                        tx_ids.push(out_point.txid);
-                        break;
-                    }
-                    // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
-                    Err(e) if e.is_retryable_fetch_coins() => {
-                        trace!("Mint returned retryable error: {:?}", e);
-                        minimint_api::task::sleep(Duration::from_secs(1)).await
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
+    pub async fn fetch_all_coins(&self) -> Vec<Result<OutPoint>> {
+        let active_issuances = self.list_active_issuances();
+        if active_issuances.is_empty() {
+            return Vec::new();
         }
-        batch.commit();
-        Ok(tx_ids)
+
+        let stream = active_issuances
+            .into_iter()
+            .map(|(out_point, _)| async move {
+                let mut batch = DbBatch::new();
+                loop {
+                    match self.fetch_coins(batch.transaction(), out_point).await {
+                        Ok(_) => {
+                            self.context.db.apply_batch(batch).expect("DB error");
+                            return Ok(out_point);
+                        }
+                        // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
+                        Err(e) if e.is_retryable() => {
+                            trace!("Mint returned retryable error: {:?}", e);
+                            minimint_api::task::sleep(Duration::from_secs(1)).await
+                        }
+                        Err(e) => {
+                            warn!("Mint returned error: {:?}", e);
+                            return Err(e);
+                        }
+                    }
+                }
+            })
+            .collect::<FuturesUnordered<_>>();
+        stream.collect::<Vec<Result<_>>>().await
     }
 }
 
@@ -348,15 +288,12 @@ impl CoinRequest {
     where
         C: Signing,
     {
-        let spend_key = secp256k1_zkp::schnorrsig::KeyPair::new(ctx, &mut rng);
-        let nonce = CoinNonce(secp256k1_zkp::schnorrsig::PublicKey::from_keypair(
-            ctx, &spend_key,
-        ));
-
+        let spend_key = bitcoin::KeyPair::new(ctx, &mut rng);
+        let nonce = CoinNonce(spend_key.public_key());
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         let cr = CoinRequest {
-            spend_key: spend_key.serialize_secret(),
+            spend_key: spend_key.secret_bytes(),
             nonce,
             blinding_key,
         };
@@ -400,11 +337,10 @@ pub enum MintClientError {
 }
 
 impl MintClientError {
-    /// Returns `true` if the error means that the queried coin output isn't ready yet but might
-    /// become ready later.
-    pub fn is_retryable_fetch_coins(&self) -> bool {
+    /// Returns `true` if queried outpoint isn't ready yet but may become ready later
+    pub fn is_retryable(&self) -> bool {
         match self {
-            MintClientError::ApiError(e) => e.is_retryable_fetch_coins(),
+            MintClientError::ApiError(e) => e.is_retryable(),
             MintClientError::OutputNotReadyYet(_) => true,
             _ => false,
         }
@@ -422,9 +358,10 @@ mod tests {
     use crate::api::FederationApi;
 
     use crate::mint::MintClient;
-    use crate::OwnedClientContext;
+    use crate::{OwnedClientContext, TransactionBuilder};
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
+    use bitcoin::Address;
     use futures::executor::block_on;
     use minimint_api::db::batch::DbBatch;
     use minimint_api::db::mem_impl::MemDatabase;
@@ -436,6 +373,7 @@ mod tests {
     use minimint_core::modules::ln::ContractAccount;
     use minimint_core::modules::mint::config::MintClientConfig;
     use minimint_core::modules::mint::Mint;
+    use minimint_core::modules::wallet::PegOutFees;
     use minimint_core::outcome::{OutputOutcome, TransactionStatus};
     use minimint_core::transaction::Transaction;
     use std::sync::Arc;
@@ -486,6 +424,14 @@ mod tests {
         ) -> crate::api::Result<IncomingContractOffer> {
             unimplemented!();
         }
+
+        async fn fetch_peg_out_fees(
+            &self,
+            _address: &Address,
+            _amount: &bitcoin::Amount,
+        ) -> crate::api::Result<Option<PegOutFees>> {
+            unimplemented!();
+        }
     }
 
     async fn new_mint_and_client() -> (
@@ -524,7 +470,7 @@ mod tests {
         let out_point = OutPoint { txid, out_idx: 0 };
 
         let mut batch = DbBatch::new();
-        client.create_coin_output(batch.transaction(), amt, rng, |output| {
+        client.receive_coins(amt, batch.transaction(), rng, |output| {
             // Agree on output
             let mut fed = block_on(fed.lock());
             block_on(fed.consensus_round(&[], &[(out_point, output)]));
@@ -535,9 +481,7 @@ mod tests {
         });
         client_db.apply_batch(batch).unwrap();
 
-        let mut batch = DbBatch::new();
-        client.fetch_all_coins(batch.transaction()).await.unwrap();
-        client_db.apply_batch(batch).unwrap();
+        client.fetch_all_coins().await;
     }
 
     #[test_log::test(tokio::test)]
@@ -565,7 +509,6 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn create_input() {
         let mut rng = rand::rngs::OsRng::new().unwrap();
-        let ctx = secp256k1_zkp::Secp256k1::new();
 
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
@@ -585,10 +528,16 @@ mod tests {
 
         // Spending works
         let mut batch = DbBatch::new();
-        let coins = client
-            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
+        let mut builder = TransactionBuilder::default();
+        let secp = client.context.secp;
+        let tbs_pks = &client.context.config.tbs_pks;
+        let rng = rand::rngs::OsRng::new().unwrap();
+        let coins = client.select_coins(SPEND_AMOUNT).unwrap();
+        let (spend_keys, input) = builder
+            .create_input_from_coins(coins.clone(), secp)
             .unwrap();
-        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
+        builder.input_coins(coins, secp).unwrap();
+        builder.build(Amount::from_sat(0), batch.transaction(), secp, tbs_pks, rng);
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -597,7 +546,7 @@ mod tests {
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, &key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key))
                 .collect::<Vec<_>>()
         );
 
@@ -614,10 +563,14 @@ mod tests {
 
         // We can exactly spend the remainder
         let mut batch = DbBatch::new();
-        let coins = client
-            .select_and_spend_coins(batch.transaction(), SPEND_AMOUNT)
+        let mut builder = TransactionBuilder::default();
+        let coins = client.select_coins(SPEND_AMOUNT).unwrap();
+        let rng = rand::rngs::OsRng::new().unwrap();
+        let (spend_keys, input) = builder
+            .create_input_from_coins(coins.clone(), secp)
             .unwrap();
-        let (spend_keys, input) = client.create_coin_input_from_coins(coins).unwrap();
+        builder.input_coins(coins, secp).unwrap();
+        builder.build(Amount::from_sat(0), batch.transaction(), secp, tbs_pks, rng);
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
@@ -626,7 +579,7 @@ mod tests {
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::schnorrsig::PublicKey::from_keypair(&ctx, &key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key))
                 .collect::<Vec<_>>()
         );
 

@@ -14,7 +14,10 @@ members = [
     "modules/minimint-wallet",
     "integrationtests",
 ]
+resolver = "2"
 
 [patch.crates-io]
 bitcoin_hashes = { version = "0.10.0", git = 'https://github.com/fedimint/bitcoin_hashes', branch = 'minimint' }
-secp256k1 = { git = "https://github.com/fedimint/rust-secp256k1/", branch = "minimint" }
+secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp/", branch = "sanket-pr" }
+cln-plugin = { git = "https://github.com/ElementsProject/lightning", rev = "42783aa" }
+cln-rpc = { git = "https://github.com/ElementsProject/lightning", rev = "42783aa" }
