@@ -371,11 +371,24 @@
 <span id="365">365</span>
 <span id="366">366</span>
 <span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">cln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">webserver</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln</span>::{<span class="ident">LightningError</span>, <span class="ident">LnRpc</span>};
+<span class="kw">use</span> <span class="ident">axum::http::StatusCode</span>;
+<span class="kw">use</span> <span class="ident">axum::response</span>::{<span class="ident">IntoResponse</span>, <span class="ident">Response</span>};
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span>;
 <span class="kw">use</span> <span class="ident">cln::HtlcAccepted</span>;
@@ -387,6 +400,7 @@
 <span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">ClientError</span>, <span class="ident">GatewayClient</span>};
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Deserializer</span>};
+<span class="kw">use</span> <span class="ident">std::borrow::Cow</span>;
 <span class="kw">use</span> <span class="ident">std</span>::{
     <span class="ident">io::Cursor</span>,
     <span class="ident">sync::Arc</span>,
@@ -486,7 +500,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LnGateway</span> {
     <span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>,
     <span class="ident">ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>,
-    <span class="ident">webserver</span>: <span class="ident">tokio::task::JoinHandle</span><span class="op">&lt;</span><span class="ident">tide::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">webserver</span>: <span class="ident">tokio::task::JoinHandle</span><span class="op">&lt;</span><span class="ident">axum::response::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>,
     <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
 }
 
@@ -738,6 +752,14 @@
             .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">serde::de::Error::custom</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>)))
     }
 }
+
+<span class="kw">impl</span> <span class="ident">IntoResponse</span> <span class="kw">for</span> <span class="ident">LnGatewayError</span> {
+    <span class="kw">fn</span> <span class="ident">into_response</span>(<span class="self">self</span>) -&gt; <span class="ident">Response</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err</span> <span class="op">=</span> <span class="ident">Cow</span>::<span class="op">&lt;</span><span class="lifetime">&#39;static</span>, <span class="ident">str</span><span class="op">&gt;</span><span class="ident">::Owned</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)).<span class="ident">into_response</span>();
+        <span class="kw-2">*</span><span class="ident">err</span>.<span class="ident">status_mut</span>() <span class="op">=</span> <span class="ident">StatusCode::INTERNAL_SERVER_ERROR</span>;
+        <span class="ident">err</span>
+    }
+}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7fe022f5a 2022-07-24)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (6dbae3ad1 2022-07-25)" ></div>
 </body></html>

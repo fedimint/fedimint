@@ -1255,7 +1255,7 @@
         <span class="ident">tracing_subscriber::fmt</span>()
             .<span class="ident">with_env_filter</span>(
                 <span class="ident">EnvFilter::try_from_default_env</span>()
-                    .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">EnvFilter::new</span>(<span class="string">&quot;info,tide=error,minimint::net=trace&quot;</span>)),
+                    .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">EnvFilter::new</span>(<span class="string">&quot;info,minimint::net=trace&quot;</span>)),
             )
             .<span class="ident">init</span>();
 
@@ -1301,5 +1301,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7fe022f5a 2022-07-24)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (6dbae3ad1 2022-07-25)" ></div>
 </body></html>

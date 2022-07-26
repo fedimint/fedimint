@@ -48,13 +48,10 @@
 <span id="42">42</span>
 <span id="43">43</span>
 <span id="44">44</span>
-<span id="45">45</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">axum</span>::{<span class="ident">routing::post</span>, <span class="ident">Extension</span>, <span class="ident">Json</span>, <span class="ident">Router</span>};
 
-<span class="kw">use</span> <span class="ident">tide::Response</span>;
 <span class="kw">use</span> <span class="ident">tokio::sync::mpsc</span>;
 <span class="kw">use</span> <span class="ident">tokio::sync::oneshot</span>;
-<span class="kw">use</span> <span class="ident">tokio::sync::Mutex</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::GatewayRequestInner</span>;
@@ -63,13 +60,12 @@
 
 <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
 <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(
-    <span class="kw-2">mut</span> <span class="ident">req</span>: <span class="ident">tide::Request</span><span class="op">&lt;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-) -&gt; <span class="ident">tide::Result</span> {
-    <span class="kw">let</span> <span class="ident">contract_id</span>: <span class="ident">ContractId</span> <span class="op">=</span> <span class="ident">req</span>.<span class="ident">body_json</span>().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="ident">Extension</span>(<span class="ident">gw_sender</span>): <span class="ident">Extension</span><span class="op">&lt;</span><span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">Json</span>(<span class="ident">contract_id</span>): <span class="ident">Json</span><span class="op">&lt;</span><span class="ident">ContractId</span><span class="op">&gt;</span>,
+) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
     <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
     <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-    <span class="kw">let</span> <span class="ident">gw_sender</span> <span class="op">=</span> { <span class="ident">req</span>.<span class="ident">state</span>().<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">clone</span>() };
 
     <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">GatewayRequestInner</span> {
         <span class="ident">request</span>: <span class="ident">contract_id</span>,
@@ -81,19 +77,21 @@
         .<span class="ident">expect</span>(<span class="string">&quot;failed to send over channel&quot;</span>);
     <span class="ident">receiver</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>(<span class="ident">Response::new</span>(<span class="number">200</span>))
+    <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>) -&gt; <span class="ident">tide::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-    <span class="comment">// Tide state must be Sync</span>
-    <span class="kw">let</span> <span class="ident">sync_sender</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Mutex::new</span>(<span class="ident">sender</span>));
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">app</span> <span class="op">=</span> <span class="ident">tide::with_state</span>(<span class="ident">sync_sender</span>);
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>) -&gt; <span class="ident">axum::response::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">app</span> <span class="op">=</span> <span class="ident">Router::new</span>()
+        .<span class="ident">route</span>(<span class="string">&quot;/pay_invoice&quot;</span>, <span class="ident">post</span>(<span class="ident">pay_invoice</span>))
+        .<span class="ident">layer</span>(<span class="ident">Extension</span>(<span class="ident">sender</span>));
 
-    <span class="ident">app</span>.<span class="ident">at</span>(<span class="string">&quot;/pay_invoice&quot;</span>).<span class="ident">post</span>(<span class="ident">pay_invoice</span>);
-    <span class="ident">app</span>.<span class="ident">listen</span>(<span class="string">&quot;127.0.0.1:8080&quot;</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="ident">axum::Server::bind</span>(<span class="kw-2">&amp;</span><span class="string">&quot;127.0.0.1:8080&quot;</span>.<span class="ident">parse</span>().<span class="ident">unwrap</span>())
+        .<span class="ident">serve</span>(<span class="ident">app</span>.<span class="ident">into_make_service</span>())
+        .<span class="kw">await</span>
+        .<span class="ident">unwrap</span>();
 
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (7fe022f5a 2022-07-24)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (6dbae3ad1 2022-07-25)" ></div>
 </body></html>
