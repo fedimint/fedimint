@@ -40,3 +40,8 @@ function kill_minimint_processes {
   pkill "ln_gateway";
   rm $FM_PID_FILE
 }
+
+function start_gateway() {
+  $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway minimint-cfg=$FM_CFG_DIR &
+  sleep 1 # wait for plugin to start
+}
