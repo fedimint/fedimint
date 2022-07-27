@@ -5,8 +5,6 @@ set -euxo pipefail
 export RUST_LOG=info
 export PEG_IN_AMOUNT=99999
 
-source ./scripts/lib.sh
-source ./scripts/build.sh
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 ./scripts/pegin.sh # peg in user
