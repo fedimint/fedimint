@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 use crate::net::connect::TlsConfig;
-use std::path::PathBuf;
 use tokio_rustls::rustls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,8 +32,6 @@ pub struct ServerConfig {
     pub hbbft_sks: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKeyShare>,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
-
-    pub db_path: PathBuf,
 
     pub wallet: WalletConfig,
     pub mint: MintConfig,
@@ -126,7 +123,6 @@ impl GenerateConfig for ServerConfig {
                     hbbft_sk: SerdeSecret(netinf.secret_key().clone()),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     hbbft_pk_set: netinf.public_key_set().clone(),
-                    db_path: format!("cfg/mint-{}.db", id).into(),
                     wallet: wallet_server_cfg[&id].clone(),
                     mint: mint_server_cfg[&id].clone(),
                     ln: ln_server_cfg[&id].clone(),

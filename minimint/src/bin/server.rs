@@ -11,6 +11,7 @@ use tracing_subscriber::Layer;
 #[derive(Parser)]
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
+    pub db_path: PathBuf,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -46,7 +47,8 @@ async fn main() {
     }
 
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-    run_minimint(cfg).await;
+    let db_path = opts.db_path;
+    run_minimint(cfg, db_path).await;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();
