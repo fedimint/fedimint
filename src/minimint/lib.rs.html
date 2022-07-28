@@ -232,9 +232,11 @@
 <span id="226">226</span>
 <span id="227">227</span>
 <span id="228">228</span>
+<span id="229">229</span>
 </pre><pre class="rust"><code><span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">minimint_api</span>;
 
 <span class="kw">use</span> <span class="ident">std::future::Future</span>;
+<span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
 <span class="kw">use</span> <span class="ident">hbbft::honey_badger</span>::{<span class="ident">HoneyBadger</span>, <span class="ident">Message</span>};
@@ -286,20 +288,20 @@
 }
 
 <span class="doccomment">/// Start all the components of the mint and plug them together</span>
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_minimint</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>) {
-    <span class="kw">let</span> <span class="ident">server</span> <span class="op">=</span> <span class="ident">MinimintServer::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>()).<span class="kw">await</span>;
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_minimint</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">db_path</span>: <span class="ident">PathBuf</span>) {
+    <span class="kw">let</span> <span class="ident">server</span> <span class="op">=</span> <span class="ident">MinimintServer::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>(), <span class="ident">db_path</span>.<span class="ident">clone</span>()).<span class="kw">await</span>;
     <span class="ident">spawn</span>(<span class="ident">net::api::run_server</span>(<span class="ident">cfg</span>, <span class="ident">server</span>.<span class="ident">consensus</span>.<span class="ident">clone</span>()));
     <span class="ident">server</span>.<span class="ident">run_consensus</span>().<span class="kw">await</span>;
 }
 
 <span class="kw">impl</span> <span class="ident">MinimintServer</span> {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">db_path</span>: <span class="ident">PathBuf</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">connector</span>: <span class="ident">PeerConnector</span><span class="op">&lt;</span><span class="ident">Message</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span>
             <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>.<span class="ident">tls_config</span>()).<span class="ident">to_any</span>();
 
         <span class="ident"><span class="self">Self</span>::new_with</span>(
             <span class="ident">cfg</span>.<span class="ident">clone</span>(),
-            <span class="ident">Arc::new</span>(<span class="ident">sled::open</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">db_path</span>).<span class="ident">unwrap</span>().<span class="ident">open_tree</span>(<span class="string">&quot;mint&quot;</span>).<span class="ident">unwrap</span>()),
+            <span class="ident">Arc::new</span>(<span class="ident">sled::open</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>().<span class="ident">open_tree</span>(<span class="string">&quot;mint&quot;</span>).<span class="ident">unwrap</span>()),
             <span class="ident">bitcoincore_rpc::bitcoind_gen</span>(<span class="ident">cfg</span>.<span class="ident">wallet</span>.<span class="ident">clone</span>()),
             <span class="ident">connector</span>,
         )
@@ -461,5 +463,5 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (6dbae3ad1 2022-07-25)" ></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (2643b1646 2022-07-27)" ></div>
 </body></html>
