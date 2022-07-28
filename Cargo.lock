@@ -537,6 +537,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "clientd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bitcoin",
+ "clap",
+ "minimint-api",
+ "minimint-core",
+ "mint-client",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sled",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "clightningrpc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3446,6 +3468,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
