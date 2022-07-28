@@ -2,7 +2,9 @@
 
 set -u
 
-source ./scripts/lib.sh
+FM_FED_SIZE=${1:-4}
+
+source ./scripts/build.sh $FM_FED_SIZE
 
 # Starts Bitcoin and 2 LN nodes, opening a channel between the LN nodes
 POLL_INTERVAL=1

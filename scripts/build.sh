@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+
+source ./scripts/lib.sh
 echo "Run with 'source ./scripts/build.sh [fed_size] [dir]"
 
 # allow for overriding arguments
@@ -45,10 +47,4 @@ alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias clientd="\$FM_CLIENTD"
 alias clientd-cli="\$FM_CLIENTD_CLI"
 
-# Function for killing processes stored in FM_PID_FILE
-function kill_minimint_processes {
-  kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
-  pkill "ln_gateway";
-  rm $FM_PID_FILE
-}
 trap kill_minimint_processes EXIT
