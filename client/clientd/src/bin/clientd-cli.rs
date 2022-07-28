@@ -20,6 +20,8 @@ enum Commands {
     Info,
     /// rpc-method: pending()
     Pending,
+    /// rpc-method: pegin_address()
+    NewPegInAddress,
 }
 #[tokio::main]
 async fn main() {
@@ -31,6 +33,9 @@ async fn main() {
         }
         Commands::Pending => {
             print_json(call("", "/get_pending").await, args.raw_json);
+        }
+        Commands::NewPegInAddress => {
+            print_json(call("", "/get_new_peg_in_address").await, args.raw_json);
         }
     }
 }
