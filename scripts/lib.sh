@@ -37,7 +37,7 @@ function await_server_on_port() {
 # Function for killing processes stored in FM_PID_FILE
 function kill_minimint_processes {
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
-  pkill "ln_gateway";
+  pkill "ln_gateway" || true;
   rm $FM_PID_FILE
 }
 
