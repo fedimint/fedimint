@@ -847,6 +847,10 @@
 <span id="841">841</span>
 <span id="842">842</span>
 <span id="843">843</span>
+<span id="844">844</span>
+<span id="845">845</span>
+<span id="846">846</span>
+<span id="847">847</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -907,7 +911,7 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::LnClientError</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::db</span>::{<span class="ident">CoinKey</span>, <span class="ident">PendingCoinsKeyPrefix</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::MintClientError</span>;
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint</span>::{<span class="ident">CoinFinalizationData</span>, <span class="ident">MintClientError</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::TransactionBuilder</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils</span>::{<span class="ident">network_to_currency</span>, <span class="ident">OwnedClientContext</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::wallet::WalletClientError</span>;
@@ -1234,6 +1238,10 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">coins</span>()
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_active_issuances</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)<span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">list_active_issuances</span>()
     }
 }
 

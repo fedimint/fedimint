@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":[["RpcResult",""]],"fn":[["call",""]],"struct":[["CoinsByTier","Holds a e-cash tier (msat by convention) and a quantity of coins"],["InfoResponse",""],["PendingResponse",""],["PendingTransaction","Holds a pending transaction with the txid, the quantity of coins and the value"]]};

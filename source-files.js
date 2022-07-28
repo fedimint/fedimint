@@ -1,4 +1,6 @@
 var sourcesIndex = {};
+sourcesIndex["clientd"] = {"name":"","files":["lib.rs"]};
+sourcesIndex["clientd_cli"] = {"name":"","files":["clientd-cli.rs"]};
 sourcesIndex["configgen"] = {"name":"","files":["configgen.rs"]};
 sourcesIndex["ln_gateway"] = {"name":"","files":["ln_gateway.rs"]};
 sourcesIndex["minimint"] = {"name":"","dirs":[{"name":"consensus","files":["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]},{"name":"net","files":["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]}],"files":["config.rs","db.rs","lib.rs","rng.rs"]};

@@ -593,6 +593,10 @@
 <span id="587">587</span>
 <span id="588">588</span>
 <span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -870,6 +874,10 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coin_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> {
         <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">coins</span>.<span class="ident">values</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">v</span><span class="op">|</span> <span class="ident">v</span>.<span class="ident">len</span>()).<span class="ident">sum</span>()
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coin_amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
+        <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">amount</span>()
     }
 }
 

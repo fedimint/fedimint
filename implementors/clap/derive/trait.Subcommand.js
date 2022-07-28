@@ -1,3 +1,4 @@
 (function() {var implementors = {};
+implementors["clientd_cli"] = [{"text":"impl Subcommand for <a class=\"enum\" href=\"clientd_cli/enum.Commands.html\" title=\"enum clientd_cli::Commands\">Commands</a>","synthetic":false,"types":["clientd_cli::Commands"]}];
 implementors["mint_client_cli"] = [{"text":"impl Subcommand for <a class=\"enum\" href=\"mint_client_cli/enum.Command.html\" title=\"enum mint_client_cli::Command\">Command</a>","synthetic":false,"types":["mint_client_cli::Command"]}];
 if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
