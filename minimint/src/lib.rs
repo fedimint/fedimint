@@ -1,6 +1,7 @@
 extern crate minimint_api;
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use hbbft::honey_badger::{HoneyBadger, Message};
@@ -52,20 +53,20 @@ pub struct MinimintServer {
 }
 
 /// Start all the components of the mint and plug them together
-pub async fn run_minimint(cfg: ServerConfig) {
-    let server = MinimintServer::new(cfg.clone()).await;
+pub async fn run_minimint(cfg: ServerConfig, db_path: PathBuf) {
+    let server = MinimintServer::new(cfg.clone(), db_path.clone()).await;
     spawn(net::api::run_server(cfg, server.consensus.clone()));
     server.run_consensus().await;
 }
 
 impl MinimintServer {
-    pub async fn new(cfg: ServerConfig) -> Self {
+    pub async fn new(cfg: ServerConfig, db_path: PathBuf) -> Self {
         let connector: PeerConnector<Message<PeerId>> =
             TlsTcpConnector::new(cfg.tls_config()).to_any();
 
         Self::new_with(
             cfg.clone(),
-            Arc::new(sled::open(&cfg.db_path).unwrap().open_tree("mint").unwrap()),
+            Arc::new(sled::open(&db_path).unwrap().open_tree("mint").unwrap()),
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )
