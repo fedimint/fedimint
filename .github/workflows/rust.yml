@@ -153,3 +153,17 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix build
+  check-unused-dependencies:
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Installs cargo-udeps
+        run: cargo install --force cargo-udeps
+      - name: Run cargo udeps
+        run: cargo udeps
