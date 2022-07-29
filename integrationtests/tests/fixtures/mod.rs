@@ -22,6 +22,7 @@ use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::GatewayRequest;
 use minimint_api::task::spawn;
+use minimint_ln::LightningGateway;
 use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
@@ -52,7 +53,6 @@ use minimint_wallet::db::UTXOKey;
 use minimint_wallet::txoproof::TxOutProof;
 use minimint_wallet::SpendableUTXO;
 use mint_client::api::WsFederationApi;
-use mint_client::ln::gateway::LightningGateway;
 
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use real::{RealBitcoinTest, RealLightningTest};
@@ -139,10 +139,7 @@ pub async fn fixtures(
             )
             .await;
 
-            let user_cfg = UserClientConfig {
-                client_config,
-                gateway: gateway.keys.clone(),
-            };
+            let user_cfg = UserClientConfig(client_config);
             let user = UserTest::new(user_cfg, peers).await;
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
@@ -162,10 +159,7 @@ pub async fn fixtures(
                 lightning.gateway_node_pub_key,
             )
             .await;
-            let user_cfg = UserClientConfig {
-                client_config,
-                gateway: gateway.keys.clone(),
-            };
+            let user_cfg = UserClientConfig(client_config);
             let user = UserTest::new(user_cfg, peers).await;
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
@@ -224,10 +218,7 @@ impl GatewayTest {
         };
 
         let database = Box::new(MemDatabase::new());
-        let user_cfg = UserClientConfig {
-            client_config: client_config.clone(),
-            gateway: keys.clone(),
-        };
+        let user_cfg = UserClientConfig(client_config.clone());
         let user_client =
             UserClient::new(user_cfg.clone(), database.clone(), Default::default()).await;
         let user = UserTest {
@@ -239,11 +230,15 @@ impl GatewayTest {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
+            api: "http://127.0.0.1:8080".to_string(),
+            node_pub_key,
         };
         let client =
             Arc::new(GatewayClient::new(gw_cfg, database.clone(), Default::default()).await);
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let server = LnGateway::new(client.clone(), ln_client, sender, receiver);
+        let server = LnGateway::new(client.clone(), ln_client, sender, receiver)
+            .await
+            .expect("Gateway failed to register with federation");
 
         GatewayTest {
             server,
@@ -299,9 +294,9 @@ impl UserTest {
     async fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
         let api = Box::new(
             WsFederationApi::new(
-                config.client_config.max_evil,
+                config.0.max_evil,
                 config
-                    .client_config
+                    .0
                     .api_endpoints
                     .iter()
                     .enumerate()

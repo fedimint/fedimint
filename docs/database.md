@@ -21,8 +21,9 @@ The Database is split into different key spaces based on prefixing that can be u
 
 | Name                  | Prefix | Key                              | Value                           |
 |-----------------------|--------|----------------------------------|---------------------------------|
-| Pending Transactions  | `0x01`   | Transaction ID (sha256, 32bytes) | Transaction                     |
-| Accepted Transactions | `0x02`   | Transaction ID (sha256, 32bytes) | Confirmation epoch, Transaction |
+| Pending Transactions  | `0x01` | Transaction ID (sha256, 32bytes) | Transaction                     |
+| Accepted Transactions | `0x02` | Transaction ID (sha256, 32bytes) | Confirmation epoch, Transaction |
+| Drop Peer             | `0x03` | Peer ID (u16)                    |                                 |
 
 ### Mint
 
@@ -52,6 +53,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | Our Decryption Shares            | `0x42` | contract id (sha256)                | `DecryptionShare`            |
 | Consensus Decryption Shares      | `0x43` | contract id (sha256), peer id (u16) | `DecryptionShare`            |
 | Contract Update (output outcome) | `0x44` | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
+| Lightning Gateways               | `0x45` | Node Pubkey (PublicKey)             | `LightningGateway`                |
 
 ## Client DB Layout
 
@@ -65,3 +67,4 @@ The Database is split into different key spaces based on prefixing that can be u
 | Outgoing Contract Account | `0x25` | contract id (sha256)               | `OutgoingContractAccount`    |
 | Confirmed Invoice         | `0x26` | contract id (sha256 payment hash)  | `ConfirmedInvoice`           |
 | Pending Coins             | `0x27` | mint tx id (sha256 payment hash)   | `Coins<SpendableCoin>`       |
+| LightingGateway           | `0x28` |                                    | `LightningGateway`           |

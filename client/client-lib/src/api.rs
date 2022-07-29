@@ -7,7 +7,7 @@ use minimint_api::task::{RwLock, RwLockWriteGuard};
 use minimint_api::{OutPoint, PeerId, TransactionId};
 use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use minimint_core::modules::ln::contracts::ContractId;
-use minimint_core::modules::ln::ContractAccount;
+use minimint_core::modules::ln::{ContractAccount, LightningGateway};
 use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use minimint_core::transaction::Transaction;
 use minimint_core::CoreError;
@@ -49,6 +49,12 @@ pub trait FederationApi: Send + Sync {
         address: &Address,
         amount: &Amount,
     ) -> Result<Option<PegOutFees>>;
+
+    /// Fetch available lightning gateways
+    async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>>;
+
+    /// Register a gateway with the federation
+    async fn register_gateway(&self, gateway: LightningGateway) -> Result<()>;
 }
 
 impl<'a> dyn FederationApi + 'a {
@@ -211,6 +217,14 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
         self.request("/ln/offer", payment_hash).await
+    }
+
+    async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
+        self.request("/ln/list_gateways", ()).await
+    }
+
+    async fn register_gateway(&self, gateway: LightningGateway) -> Result<()> {
+        self.request("/ln/register_gateway", gateway).await
     }
 }
 

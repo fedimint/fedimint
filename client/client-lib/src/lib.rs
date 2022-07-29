@@ -19,6 +19,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+use ln::db::LightningGatewayKey;
 use minimint_api::{
     db::{
         batch::{Accumulator, BatchItem, DbBatch},
@@ -30,7 +31,7 @@ use minimint_core::modules::ln::contracts::incoming::{
     DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
 use minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-use minimint_core::modules::ln::ContractOutput;
+use minimint_core::modules::ln::{ContractOutput, LightningGateway};
 use minimint_core::modules::wallet::PegOut;
 use minimint_core::outcome::TransactionStatus;
 use minimint_core::transaction::TransactionItem;
@@ -64,7 +65,7 @@ use crate::utils::{network_to_currency, OwnedClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
     api::{ApiError, FederationApi},
-    ln::{gateway::LightningGateway, incoming::ConfirmedInvoice, LnClient},
+    ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableCoin},
     wallet::WalletClient,
 };
@@ -83,10 +84,7 @@ pub struct PaymentParameters {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UserClientConfig {
-    pub client_config: ClientConfig,
-    pub gateway: LightningGateway,
-}
+pub struct UserClientConfig(pub ClientConfig);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GatewayClientConfig {
@@ -94,6 +92,18 @@ pub struct GatewayClientConfig {
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
+    pub api: String,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
+}
+
+impl From<GatewayClientConfig> for LightningGateway {
+    fn from(config: GatewayClientConfig) -> Self {
+        LightningGateway {
+            mint_pub_key: config.redeem_key.public_key(),
+            node_pub_key: config.node_pub_key,
+            api: config.api,
+        }
+    }
 }
 
 pub struct Client<C> {
@@ -108,11 +118,11 @@ impl AsRef<ClientConfig> for GatewayClientConfig {
 
 impl AsRef<ClientConfig> for UserClientConfig {
     fn as_ref(&self) -> &ClientConfig {
-        &self.client_config
+        &self.0
     }
 }
 
-impl<T: AsRef<ClientConfig>> Client<T> {
+impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn ln_client(&self) -> LnClient {
         LnClient {
             context: self
@@ -136,6 +146,10 @@ impl<T: AsRef<ClientConfig>> Client<T> {
                 .borrow_with_module_config(|cfg| &cfg.as_ref().wallet),
             fee_consensus: self.context.config.as_ref().fee_consensus.clone(), // TODO: remove or put into context
         }
+    }
+
+    pub fn config(&self) -> T {
+        self.context.config.clone()
     }
 
     pub async fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
@@ -393,12 +407,35 @@ impl<T: AsRef<ClientConfig>> Client<T> {
 }
 
 impl Client<UserClientConfig> {
+    pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
+        // fetch gateway from db
+        if let Some(gateway) = self
+            .context
+            .db
+            .get_value(&LightningGatewayKey)
+            .expect("DB error")
+        {
+            return Ok(gateway);
+        }
+
+        // if db is empty, fetch from federation and save to db
+        let gateways = self.context.api.fetch_gateways().await?;
+        if gateways.is_empty() {
+            return Err(ClientError::NoGateways);
+        };
+        let gateway = gateways[0].clone();
+        self.context
+            .db
+            .insert_entry(&LightningGatewayKey, &gateway)
+            .expect("DB error");
+        Ok(gateway)
+    }
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
-        gateway: &LightningGateway,
         invoice: Invoice,
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
+        let gateway = self.fetch_gateway().await?;
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
@@ -410,7 +447,7 @@ impl Client<UserClientConfig> {
             .create_outgoing_output(
                 batch.transaction(),
                 invoice,
-                gateway,
+                &gateway,
                 absolute_timelock as u32,
                 &mut rng,
             )
@@ -445,9 +482,9 @@ impl Client<UserClientConfig> {
         &self,
         amount: Amount,
         description: String,
-        gateway: &LightningGateway,
         mut rng: R,
     ) -> Result<ConfirmedInvoice> {
+        let gateway = self.fetch_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
@@ -469,22 +506,21 @@ impl Client<UserClientConfig> {
             htlc_maximum_msat: None,
         }]);
 
-        let invoice = InvoiceBuilder::new(network_to_currency(
-            self.context.config.client_config.wallet.network,
-        ))
-        .amount_milli_satoshis(amount.milli_sat)
-        .description(description)
-        .payment_hash(payment_hash)
-        .payment_secret(payment_secret)
-        .current_timestamp()
-        .min_final_cltv_expiry(18)
-        .payee_pub_key(node_public_key)
-        .private_route(gateway_route_hint)
-        .build_signed(|hash| {
-            self.context
-                .secp
-                .sign_ecdsa_recoverable(hash, &node_secret_key)
-        })?;
+        let invoice =
+            InvoiceBuilder::new(network_to_currency(self.context.config.0.wallet.network))
+                .amount_milli_satoshis(amount.milli_sat)
+                .description(description)
+                .payment_hash(payment_hash)
+                .payment_secret(payment_secret)
+                .current_timestamp()
+                .min_final_cltv_expiry(18)
+                .payee_pub_key(node_public_key)
+                .private_route(gateway_route_hint)
+                .build_signed(|hash| {
+                    self.context
+                        .secp
+                        .sign_ecdsa_recoverable(hash, &node_secret_key)
+                })?;
 
         let offer_output =
             self.ln_client()
@@ -534,6 +570,21 @@ impl Client<UserClientConfig> {
         // TODO: Update database if invoice is paid or expired
 
         Ok(OutPoint { txid, out_idx: 0 })
+    }
+
+    /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
+    /// for them to do so
+    pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
+        let gateway = self.fetch_gateway().await?;
+
+        let future = reqwest::Client::new()
+            .post(&format!("{}/pay_invoice", gateway.api))
+            .json(&contract_id)
+            .send();
+        minimint_api::task::timeout(Duration::from_secs(15), future)
+            .await
+            .map_err(|_| ClientError::OutgoingPaymentTimeout)??;
+        Ok(())
     }
 }
 
@@ -772,6 +823,15 @@ impl Client<GatewayClientConfig> {
             .map(|(outpoint, _)| outpoint)
             .collect()
     }
+
+    /// Register this gateway with the federation
+    pub async fn register_with_federation(&self, config: LightningGateway) -> Result<()> {
+        self.context
+            .api
+            .register_gateway(config)
+            .await
+            .map_err(ClientError::MintApiError)
+    }
 }
 
 // FIXME: move this elsewhere. maybe into "core".
@@ -844,4 +904,10 @@ pub enum ClientError {
     InvalidTransaction(String),
     #[error("Invalid preimage")]
     InvalidPreimage,
+    #[error("Federation has no lightning gateways")]
+    NoGateways,
+    #[error("HTTP Error {0}")]
+    HttpError(#[from] reqwest::Error),
+    #[error("Outgoing payment timeout")]
+    OutgoingPaymentTimeout,
 }

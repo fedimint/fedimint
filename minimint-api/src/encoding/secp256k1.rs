@@ -34,6 +34,22 @@ impl Decodable for secp256k1_zkp::XOnlyPublicKey {
     }
 }
 
+impl Encodable for secp256k1_zkp::PublicKey {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+        let bytes = self.serialize();
+        writer.write_all(&bytes[..])?;
+        Ok(bytes.len())
+    }
+}
+
+impl Decodable for secp256k1_zkp::PublicKey {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut bytes = [0u8; 33];
+        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        secp256k1_zkp::PublicKey::from_slice(&bytes[..]).map_err(DecodeError::from_err)
+    }
+}
+
 impl Encodable for secp256k1_zkp::schnorr::Signature {
     fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
         let bytes = &self[..];

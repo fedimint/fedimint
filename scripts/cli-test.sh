@@ -8,6 +8,7 @@ export PEG_IN_AMOUNT=99999
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 ./scripts/pegin.sh # peg in user
+start_gateway
 ./scripts/pegin.sh $PEG_IN_AMOUNT 1 # peg in gateway
 
 #### BEGIN TESTS ####
