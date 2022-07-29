@@ -15,9 +15,11 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain:
+            - stable
+            - nightly
           default: true
-          components: clippy, rustfmt
+          components: clippy, rustfmt, cargo-udeps
       - uses: Swatinem/rust-cache@v1
       - name: Print toolchain version
         uses: actions-rs/cargo@v1
@@ -43,6 +45,11 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+      - name: Check for unused dependencies
+        uses: actions-rs/carog@v1
+        with:
+          command: udeps +nightly
+          args: --all-features
   build_wasm:
     name: Build (wasm32)
     runs-on: buildjet-8vcpu-ubuntu-2004
