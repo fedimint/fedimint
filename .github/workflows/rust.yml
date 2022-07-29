@@ -43,6 +43,23 @@ jobs:
         with:
           command: fmt
           args: --all -- --check
+  check_udeps:
+    name: Check Udeps
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 5
+    steps:
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+      - name: "Udeps Installation"
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-udeps
+      - name: "Unused Dependency Check"
+        uses: actions-rs/cargo@v1
+        with:
+          command: udeps
   build_wasm:
     name: Build (wasm32)
     runs-on: buildjet-8vcpu-ubuntu-2004
