@@ -413,15 +413,18 @@
 <span id="407">407</span>
 <span id="408">408</span>
 <span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">gateway</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">incoming</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">outgoing</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::db</span>::{<span class="ident">OutgoingPaymentKey</span>, <span class="ident">OutgoingPaymentKeyPrefix</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::gateway::LightningGateway</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::incoming::IncomingContractAccount</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::outgoing</span>::{<span class="ident">OutgoingContractAccount</span>, <span class="ident">OutgoingContractData</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils::BorrowedClientContext</span>;
@@ -436,7 +439,7 @@
     <span class="ident">Contract</span>, <span class="ident">ContractId</span>, <span class="ident">FundedContract</span>, <span class="ident">IdentifyableContract</span>,
 };
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{
-    <span class="ident">ContractAccount</span>, <span class="ident">ContractInput</span>, <span class="ident">ContractOrOfferOutput</span>, <span class="ident">ContractOutput</span>,
+    <span class="ident">ContractAccount</span>, <span class="ident">ContractInput</span>, <span class="ident">ContractOrOfferOutput</span>, <span class="ident">ContractOutput</span>, <span class="ident">LightningGateway</span>,
 };
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
@@ -612,7 +615,6 @@
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">mod</span> <span class="ident">tests</span> {
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::FederationApi</span>;
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::gateway::LightningGateway</span>;
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::LnClient</span>;
     <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::OwnedClientContext</span>;
     <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
@@ -625,8 +627,8 @@
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::config::LightningModuleClientConfig</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
-    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractOrOfferOutput</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningModule</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractOrOfferOutput</span>, <span class="ident">LightningGateway</span>};
     <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOutFees</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">OutputOutcome</span>, <span class="ident">TransactionStatus</span>};
     <span class="kw">use</span> <span class="ident">minimint_core::transaction::Transaction</span>;
@@ -690,6 +692,14 @@
             <span class="ident">_amount</span>: <span class="kw-2">&amp;</span><span class="ident">bitcoin::Amount</span>,
         ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PegOutFees</span><span class="op">&gt;</span><span class="op">&gt;</span> {
             <span class="macro">unimplemented!</span>();
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LightningGateway</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>()
         }
     }
 

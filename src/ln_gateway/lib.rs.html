@@ -382,6 +382,12 @@
 <span id="376">376</span>
 <span id="377">377</span>
 <span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">cln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">webserver</span>;
@@ -505,20 +511,26 @@
 }
 
 <span class="kw">impl</span> <span class="ident">LnGateway</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(
         <span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>,
         <span class="ident">ln_client</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>,
         <span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
         <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="self">Self</span> {
+    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
         <span class="kw">let</span> <span class="ident">ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ln_client</span>.<span class="ident">into</span>();
+        <span class="comment">// Regster gateway with federation</span>
+        <span class="ident">federation_client</span>
+            .<span class="ident">register_with_federation</span>(<span class="ident">federation_client</span>.<span class="ident">config</span>().<span class="ident">into</span>())
+            .<span class="kw">await</span>
+            .<span class="ident">expect</span>(<span class="string">&quot;Failed to register with federation&quot;</span>);
+        <span class="comment">// Run webserver asynchronously in tokio</span>
         <span class="kw">let</span> <span class="ident">webserver</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident">run_webserver</span>(<span class="ident">sender</span>));
-        <span class="ident">LnGateway</span> {
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
             <span class="ident">federation_client</span>,
             <span class="ident">ln_client</span>,
             <span class="ident">webserver</span>,
             <span class="ident">receiver</span>,
-        }
+        })
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">buy_preimage_offer</span>(

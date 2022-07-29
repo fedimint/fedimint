@@ -101,18 +101,40 @@
 <span id="95">95</span>
 <span id="96">96</span>
 <span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts::incoming</span>::{<span class="ident">IncomingContractOffer</span>, <span class="ident">PreimageDecryptionShare</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts::ContractId</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">ContractAccount</span>, <span class="ident">OutputOutcome</span>};
+<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningGateway</span>, <span class="ident">OutputOutcome</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
+<span class="kw">use</span> <span class="ident">secp256k1::PublicKey</span>;
 
 <span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x40</span>;
 <span class="kw">const</span> <span class="ident">DB_PREFIX_OFFER</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x41</span>;
 <span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x42</span>;
 <span class="kw">const</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x43</span>;
 <span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT_UPDATE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x44</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x45</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
@@ -197,6 +219,24 @@
     <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>;
     <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">AgreedDecryptionShareKey</span>;
     <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PreimageDecryptionShare</span>;
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGatewayKey</span>(<span class="kw">pub</span> <span class="ident">PublicKey</span>);
+
+<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LightningGatewayKey</span> {
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">LightningGateway</span>;
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGatewayKeyPrefix</span>;
+
+<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LightningGatewayKeyPrefix</span> {
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">LightningGatewayKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">LightningGateway</span>;
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (9067d5277 2022-07-28)" ></div>
