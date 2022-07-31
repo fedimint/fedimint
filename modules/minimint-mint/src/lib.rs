@@ -449,6 +449,10 @@ impl Mint {
         }
     }
 
+    pub fn pub_key(&self) -> HashMap<Amount, AggregatePublicKey> {
+        self.pub_key.clone()
+    }
+
     fn blind_sign(&self, output: Coins<BlindToken>) -> Result<PartialSigResponse, MintError> {
         Ok(PartialSigResponse(output.map(
             |amt, msg| -> Result<_, InvalidAmountTierError> {
