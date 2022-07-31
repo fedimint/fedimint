@@ -37,7 +37,7 @@ pub async fn run_webserver(sender: mpsc::Sender<GatewayRequest>) -> axum::respon
         .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
-    axum::Server::bind(&"127.0.0.1:8080".parse().unwrap())
+    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
