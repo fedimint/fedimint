@@ -6,6 +6,7 @@ use minimint_core::config::load_from_file;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 
+use mint_client::api::WsFederationConnect;
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
@@ -76,6 +77,9 @@ enum Command {
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
+
+    /// Config enabling client to establish websocket connection to federation
+    ConnectInfo,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -203,6 +207,10 @@ async fn main() {
         }
         Command::WaitBlockHeight { height } => {
             client.await_consensus_block_height(height).await;
+        }
+        Command::ConnectInfo => {
+            let info = WsFederationConnect::from(client.config().as_ref());
+            println!("{}", serde_json::to_string(&info).unwrap());
         }
     }
 }
