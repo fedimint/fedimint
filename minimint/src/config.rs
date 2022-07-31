@@ -86,7 +86,8 @@ impl GenerateConfig for ServerConfig {
                 let id_u16: u16 = id.into();
                 let peer = Peer {
                     connection: ConnectionConfig {
-                        addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                        hbbft_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                        api_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
                     },
                     tls_cert: tls_keys[&id].0.clone(),
                 };
