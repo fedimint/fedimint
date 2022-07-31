@@ -140,7 +140,7 @@ pub async fn fixtures(
             .await;
 
             let user_cfg = UserClientConfig(client_config);
-            let user = UserTest::new(user_cfg, peers).await;
+            let user = UserTest::new(user_cfg, peers);
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
@@ -160,7 +160,7 @@ pub async fn fixtures(
             )
             .await;
             let user_cfg = UserClientConfig(client_config);
-            let user = UserTest::new(user_cfg, peers).await;
+            let user = UserTest::new(user_cfg, peers);
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
@@ -219,8 +219,7 @@ impl GatewayTest {
 
         let database = Box::new(MemDatabase::new());
         let user_cfg = UserClientConfig(client_config.clone());
-        let user_client =
-            UserClient::new(user_cfg.clone(), database.clone(), Default::default()).await;
+        let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
         let user = UserTest {
             client: user_client,
             config: user_cfg,
@@ -233,8 +232,11 @@ impl GatewayTest {
             api: "http://127.0.0.1:8080".to_string(),
             node_pub_key,
         };
-        let client =
-            Arc::new(GatewayClient::new(gw_cfg, database.clone(), Default::default()).await);
+        let client = Arc::new(GatewayClient::new(
+            gw_cfg,
+            database.clone(),
+            Default::default(),
+        ));
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
         let server = LnGateway::new(client.clone(), ln_client, sender, receiver)
             .await
@@ -256,12 +258,12 @@ pub struct UserTest {
 
 impl UserTest {
     /// Returns a new user client connected to a subset of peers.
-    pub async fn new_client(&self, peers: &[u16]) -> Self {
+    pub fn new_client(&self, peers: &[u16]) -> Self {
         let peers = peers
             .iter()
             .map(|i| PeerId::from(*i))
             .collect::<Vec<PeerId>>();
-        Self::new(self.config.clone(), peers).await
+        Self::new(self.config.clone(), peers)
     }
 
     /// Helper to simplify the peg_out method calls
@@ -291,26 +293,23 @@ impl UserTest {
         self.client.coins().amount()
     }
 
-    async fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
-        let api = Box::new(
-            WsFederationApi::new(
-                config.0.max_evil,
-                config
-                    .0
-                    .api_endpoints
-                    .iter()
-                    .enumerate()
-                    .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-                    .map(|(id, url)| {
-                        (
-                            PeerId::from(id as u16),
-                            url.parse().expect("Invalid URL in config"),
-                        )
-                    })
-                    .collect(),
-            )
-            .await,
-        );
+    fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
+        let api = Box::new(WsFederationApi::new(
+            config.0.max_evil,
+            config
+                .0
+                .api_endpoints
+                .iter()
+                .enumerate()
+                .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
+                .map(|(id, url)| {
+                    (
+                        PeerId::from(id as u16),
+                        url.parse().expect("Invalid URL in config"),
+                    )
+                })
+                .collect(),
+        ));
 
         let database = Box::new(MemDatabase::new());
         let client = UserClient::new_with_api(config.clone(), database, api, Default::default());

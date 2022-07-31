@@ -37,7 +37,7 @@ async fn main() {
         .open_tree("mint-client")
         .unwrap();
 
-    let client = Client::new(cfg.clone(), Box::new(db), Default::default()).await;
+    let client = Client::new(cfg.clone(), Box::new(db), Default::default());
 
     let shared_state = Arc::new(State { client });
     let app = Router::new()
