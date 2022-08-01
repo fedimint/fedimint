@@ -1390,6 +1390,7 @@ dependencies = [
  "sled",
  "tbs",
  "thiserror",
+ "threshold_crypto",
  "tokio",
  "tokio-rustls",
  "tokio-util 0.6.10",

@@ -27,7 +27,7 @@ mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 
 # Generate federation client config
-$FM_BIN_DIR/configgen -- $FM_CFG_DIR $FM_FED_SIZE 4000 5000 1000 10000 100000 1000000 10000000
+$FM_BIN_DIR/configgen -- $FM_CFG_DIR $FM_FED_SIZE 4000 5000 5100 5200 5300 1000 10000 100000 1000000 10000000
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"

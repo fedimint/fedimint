@@ -1,5 +1,7 @@
 use crate::Keys;
+use async_trait::async_trait;
 use minimint_api::config::GenerateConfig;
+use minimint_api::net::peers::AnyPeerConnections;
 use minimint_api::{Amount, PeerId};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -17,9 +19,12 @@ pub struct MintClientConfig {
     pub tbs_pks: Keys<AggregatePublicKey>,
 }
 
+#[async_trait(?Send)]
 impl GenerateConfig for MintConfig {
     type Params = [Amount];
     type ClientConfig = MintClientConfig;
+    type ConfigMessage = ();
+    type ConfigError = ();
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
@@ -68,5 +73,16 @@ impl GenerateConfig for MintConfig {
         };
 
         (mint_cfg, client_cfg)
+    }
+
+    async fn distributed_gen(
+        _connections: &mut AnyPeerConnections<Self::ConfigMessage>,
+        _our_id: &PeerId,
+        _peers: &[PeerId],
+        _max_evil: usize,
+        _params: &mut Self::Params,
+        _rng: impl RngCore + CryptoRng,
+    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+        todo!()
     }
 }

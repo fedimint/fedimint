@@ -18,6 +18,7 @@ bytes = "1.1.0"
 clap = { version = "3.1.18", features = ["derive"] }
 futures = "0.3.9"
 hbbft = { git = "https://github.com/fedimint/hbbft" }
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 hex = "0.4.2"
 itertools = "0.10.0"
 jsonrpsee = { version = "0.14.0", features = ["ws-server"] }

@@ -11,6 +11,9 @@ struct Options {
     nodes: u16,
     hbbft_base_port: u16,
     api_base_port: u16,
+    keygen_base_port: u16,
+    wallet_base_port: u16,
+    lightning_base_port: u16,
     amount_tiers: Vec<Amount>,
 }
 
@@ -20,6 +23,9 @@ fn main() {
         nodes,
         hbbft_base_port,
         api_base_port,
+        keygen_base_port,
+        wallet_base_port,
+        lightning_base_port,
         amount_tiers,
     } = Options::parse();
     let mut rng = OsRng::new().unwrap();
@@ -36,11 +42,14 @@ fn main() {
     let params = ServerConfigParams {
         hbbft_base_port,
         api_base_port,
+        keygen_base_port,
+        wallet_base_port,
+        lightning_base_port,
         amount_tiers,
     };
 
     let (server_cfg, client_cfg) =
-        ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, &mut rng);
+        ServerConfig::trusted_dealer_gen(&peers, max_evil, &(params, None), &mut rng);
 
     for (id, cfg) in server_cfg {
         let mut path: PathBuf = cfg_path.clone();

@@ -231,8 +231,8 @@ pub trait PeerSlice {
 impl PeerSlice for Target<PeerId> {
     fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId> {
         let set = match self {
-            Target::AllExcept(exclude) => all_peers.sub(&exclude),
-            Target::Nodes(include) => include.clone()
+            Target::AllExcept(exclude) => all_peers.sub(exclude),
+            Target::Nodes(include) => include.clone(),
         };
 
         set.into_iter().collect()
