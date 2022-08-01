@@ -10,13 +10,15 @@ use async_trait::async_trait;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
+use minimint_api::net::peers::PeerConnections;
 use minimint_api::PeerId;
 use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
+use std::ops::Sub;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -26,49 +28,9 @@ use tracing::{debug, error, info, instrument, trace, warn};
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
-/// Owned [`PeerConnections`] trait object type
-pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
-
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
-
-/// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and resent on reconnect, this
-///   avoids the need to rejoin the consensus, which is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
-#[async_trait]
-pub trait PeerConnections<T>
-where
-    T: Serialize + DeserializeOwned + Unpin + Send,
-{
-    /// Send a message to a target, either all peers or a specific one.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and only cached
-    /// otherwise.
-    async fn send(&mut self, target: Target<PeerId>, msg: T);
-
-    /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> (PeerId, T);
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, peer: PeerId);
-
-    /// Converts the struct to a `PeerConnection` trait object
-    fn to_any(self) -> AnyPeerConnections<T>
-    where
-        Self: Sized + Send + Unpin + 'static,
-    {
-        Box::new(self)
-    }
-}
 
 /// Connection manager that automatically reconnects to peers
 ///
@@ -231,24 +193,13 @@ impl<T> PeerConnections<T> for ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
-    async fn send(&mut self, target: Target<PeerId>, msg: T) {
-        trace!(?target, "Sending message to");
-        match target {
-            Target::AllExcept(not_to) => {
-                for (peer, connection) in &mut self.connections {
-                    if !not_to.contains(peer) {
-                        connection.send(msg.clone()).await;
-                    }
-                }
-            }
-            Target::Nodes(peer_ids) => {
-                for peer_id in peer_ids {
-                    if let Some(peer) = self.connections.get_mut(&peer_id) {
-                        peer.send(msg.clone()).await;
-                    } else {
-                        trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
-                    }
-                }
+    async fn send(&mut self, peers: &[PeerId], msg: T) {
+        for peer_id in peers {
+            trace!(?peer_id, "Sending message to");
+            if let Some(peer) = self.connections.get_mut(peer_id) {
+                peer.send(msg.clone()).await;
+            } else {
+                trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
         }
     }
@@ -270,6 +221,21 @@ where
     async fn ban_peer(&mut self, peer: PeerId) {
         self.connections.remove(&peer);
         warn!("Peer {} banned.", peer);
+    }
+}
+
+pub trait PeerSlice {
+    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId>;
+}
+
+impl PeerSlice for Target<PeerId> {
+    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId> {
+        let set = match self {
+            Target::AllExcept(exclude) => all_peers.sub(&exclude),
+            Target::Nodes(include) => include.clone()
+        };
+
+        set.into_iter().collect()
     }
 }
 
@@ -587,10 +553,8 @@ mod tests {
         ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
     };
     use futures::Future;
-    use hbbft::Target;
     use minimint_api::PeerId;
-    use std::collections::{BTreeSet, HashMap};
-    use std::iter::FromIterator;
+    use std::collections::HashMap;
     use std::time::Duration;
     use tracing_subscriber::EnvFilter;
 
@@ -638,16 +602,12 @@ mod tests {
         let mut peers_a = build_peers("a", 1).await;
         let mut peers_b = build_peers("b", 2).await;
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(2)])), 42)
-            .await;
+        peers_a.send(&[PeerId::from(2)], 42).await;
         let recv = timeout(peers_b.receive()).await.unwrap();
         assert_eq!(recv.0, PeerId::from(1));
         assert_eq!(recv.1, 42);
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(3)])), 21)
-            .await;
+        peers_a.send(&[PeerId::from(3)], 21).await;
 
         let mut peers_c = build_peers("c", 3).await;
         let recv = timeout(peers_c.receive()).await.unwrap();
