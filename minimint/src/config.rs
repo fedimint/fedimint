@@ -1,3 +1,4 @@
+use minimint_api::rand::Rand07Compat;
 pub use minimint_core::config::*;
 
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
@@ -27,8 +28,6 @@ pub struct ServerConfig {
 
     pub peers: BTreeMap<PeerId, Peer>,
     #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_sk: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKey>,
-    #[serde(with = "serde_binary_human_readable")]
     pub hbbft_sks: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKeyShare>,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
@@ -44,8 +43,6 @@ pub struct ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
     pub connection: ConnectionConfig,
-    #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_pk: hbbft::crypto::PublicKey,
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
 }
@@ -67,7 +64,7 @@ impl GenerateConfig for ServerConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
             .expect("Could not generate HBBFT netinfo");
         let tls_keys = peers
             .iter()
@@ -79,13 +76,12 @@ impl GenerateConfig for ServerConfig {
 
         let cfg_peers = netinfo
             .iter()
-            .map(|(&id, netinf)| {
+            .map(|(&id, _)| {
                 let id_u16: u16 = id.into();
                 let peer = Peer {
                     connection: ConnectionConfig {
                         addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
                     },
-                    hbbft_pk: *netinf.public_key(&id).unwrap(),
                     tls_cert: tls_keys[&id].0.clone(),
                 };
 
@@ -120,7 +116,6 @@ impl GenerateConfig for ServerConfig {
                     tls_cert: tls_keys[&id].0.clone(),
                     tls_key: tls_keys[&id].1.clone(),
                     peers: cfg_peers.clone(),
-                    hbbft_sk: SerdeSecret(netinf.secret_key().clone()),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     wallet: wallet_server_cfg[&id].clone(),
