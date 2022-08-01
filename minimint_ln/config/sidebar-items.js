@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""],["Rand07Compat",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["LightningModuleClientConfig",""],["LightningModuleConfig",""]]};
