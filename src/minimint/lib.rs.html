@@ -224,8 +224,25 @@
 <span id="224">224</span>
 <span id="225">225</span>
 <span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
 </pre><pre class="rust"><code><span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">minimint_api</span>;
 
+<span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
 <span class="kw">use</span> <span class="ident">std::future::Future</span>;
 <span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
@@ -381,6 +398,21 @@
         <span class="ident">proposal</span>: <span class="kw">impl</span> <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> <span class="ident">ConsensusProposal</span><span class="op">&gt;</span>,
         <span class="ident">rng</span>: <span class="kw-2">&amp;mut</span> (<span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>),
     ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusOutcome</span><span class="op">&gt;</span> {
+        <span class="comment">// for testing federations with one peer</span>
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">len</span>() <span class="op">==</span> <span class="number">1</span> {
+            <span class="macro">tokio::select!</span> {
+              () <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">transaction_notify</span>.<span class="ident">notified</span>() =&gt; (),
+              () <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">await_consensus_proposal</span>() =&gt; (),
+            }
+            <span class="kw">let</span> <span class="ident">proposal</span> <span class="op">=</span> <span class="ident">proposal</span>.<span class="kw">await</span>;
+            <span class="kw">let</span> <span class="ident">epoch</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">hbbft</span>.<span class="ident">next_epoch</span>() <span class="op">+</span> <span class="number">1</span>;
+            <span class="self">self</span>.<span class="ident">hbbft</span>.<span class="ident">skip_to_epoch</span>(<span class="ident">epoch</span>);
+            <span class="kw">return</span> <span class="macro">vec!</span>[<span class="ident">ConsensusOutcome</span> {
+                <span class="ident">epoch</span>,
+                <span class="ident">contributions</span>: <span class="ident">BTreeMap::from</span>([(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">identity</span>, <span class="ident">proposal</span>.<span class="ident">items</span>)]),
+            }];
+        }
+
         <span class="comment">// process messages until new epoch or we have a proposal</span>
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">outcomes</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusOutcome</span><span class="op">&gt;</span> <span class="op">=</span> <span class="kw">loop</span> {
             <span class="kw">match</span> <span class="self">self</span>.<span class="ident">await_proposal_or_peer_message</span>().<span class="kw">await</span> {
