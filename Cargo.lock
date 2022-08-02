@@ -892,7 +892,7 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 [[package]]
 name = "hbbft"
 version = "0.1.1"
-source = "git+https://github.com/fedimint/hbbft#062553b4404719360afb5331784bbd68e420e367"
+source = "git+https://github.com/fedimint/hbbft#54370366b58c435cf0963a7467731e218da99370"
 dependencies = [
  "bincode",
  "byteorder",
@@ -906,7 +906,7 @@ dependencies = [
  "reed-solomon-erasure",
  "serde",
  "thiserror",
- "threshold_crypto 0.4.0 (git+https://github.com/fedimint/threshold_crypto?rev=a7fbfa4)",
+ "threshold_crypto",
  "tiny-keccak",
 ]
 
@@ -1481,7 +1481,7 @@ dependencies = [
  "serde_json",
  "test-log",
  "thiserror",
- "threshold_crypto 0.4.0 (git+https://github.com/fedimint/threshold_crypto)",
+ "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1532,7 +1532,7 @@ dependencies = [
  "mint-client",
  "rand 0.6.5",
  "serde",
- "threshold_crypto 0.4.0 (git+https://github.com/fedimint/threshold_crypto)",
+ "threshold_crypto",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2726,25 +2726,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d050e60b33d41c19108b32cea32164033a9013fe3b46cbd4457559bfbf77afaa"
 dependencies = [
  "num_cpus",
-]
-
-[[package]]
-name = "threshold_crypto"
-version = "0.4.0"
-source = "git+https://github.com/fedimint/threshold_crypto?rev=a7fbfa4#a7fbfa4522835010b6037fb45388c7b04ee14194"
-dependencies = [
- "byteorder",
- "ff 0.6.0",
- "group 0.6.0",
- "hex_fmt",
- "log",
- "pairing 0.16.0",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
- "serde",
- "thiserror",
- "tiny-keccak",
- "zeroize",
 ]
 
 [[package]]
