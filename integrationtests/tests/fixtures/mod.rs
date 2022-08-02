@@ -630,6 +630,7 @@ impl FederationTest {
                 cfg.clone(),
                 minimint.consensus.clone(),
             ));
+            minimint_api::task::sleep(Duration::from_millis(100)).await; // wait for servers to start
 
             Rc::new(RefCell::new(ServerTest {
                 minimint,
