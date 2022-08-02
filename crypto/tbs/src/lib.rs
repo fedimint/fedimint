@@ -180,6 +180,11 @@ where
     if points.len() < threshold {
         panic!("Not enough signature shares");
     }
+
+    if points.len() == 1 {
+        return BlindedSignature(points.first().unwrap().1.to_affine());
+    }
+
     let bsig: G1Projective = poly::interpolate_zero(points.into_iter());
     BlindedSignature(bsig.to_affine())
 }
@@ -211,6 +216,10 @@ impl Aggregatable for Vec<PublicKeyShare> {
     type Aggregate = AggregatePublicKey;
 
     fn aggregate(&self, threshold: usize) -> Self::Aggregate {
+        if self.len() == 1 {
+            return AggregatePublicKey(self.first().unwrap().0);
+        }
+
         let elements = self
             .iter()
             .enumerate()

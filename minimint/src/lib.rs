@@ -1,5 +1,6 @@
 extern crate minimint_api;
 
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -155,6 +156,21 @@ impl MinimintServer {
         proposal: impl Future<Output = ConsensusProposal>,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
     ) -> Vec<ConsensusOutcome> {
+        // for testing federations with one peer
+        if self.cfg.peers.len() == 1 {
+            tokio::select! {
+              () = self.consensus.transaction_notify.notified() => (),
+              () = self.consensus.await_consensus_proposal() => (),
+            }
+            let proposal = proposal.await;
+            let epoch = self.hbbft.next_epoch() + 1;
+            self.hbbft.skip_to_epoch(epoch);
+            return vec![ConsensusOutcome {
+                epoch,
+                contributions: BTreeMap::from([(self.cfg.identity, proposal.items)]),
+            }];
+        }
+
         // process messages until new epoch or we have a proposal
         let mut outcomes: Vec<ConsensusOutcome> = loop {
             match self.await_proposal_or_peer_message().await {
