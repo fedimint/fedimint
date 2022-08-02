@@ -601,3 +601,10 @@ async fn unbalanced_transactions_get_rejected() {
     // TODO return a more useful error
     assert!(response.is_err());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_have_federations_with_one_peer() {
+    let (fed, user, bitcoin, _, _) = fixtures(1, &[sats(100), sats(1000)]).await;
+    fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
+    user.assert_total_coins(sats(1000)).await;
+}
