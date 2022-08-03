@@ -305,7 +305,7 @@
 
     <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
 
-    <span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">Client::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>(), <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">Default::default</span>()).<span class="kw">await</span>;
+    <span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">Client::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>(), <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">Default::default</span>());
 
     <span class="kw">match</span> <span class="ident">opts</span>.<span class="ident">command</span> {
         <span class="ident">Command::PegInAddress</span> =&gt; {
@@ -407,4 +407,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (fe3342816 2022-08-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (4493a0f47 2022-08-02)" ></div></body></html>

@@ -826,14 +826,14 @@
 
 <span class="kw">impl</span> <span class="ident">WsFederationApi</span><span class="op">&lt;</span><span class="ident">WsClient</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Creates a new API client</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">String</span>)<span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident"><span class="self">Self</span>::new_with_client</span>(<span class="ident">max_evil</span>, <span class="ident">members</span>).<span class="kw">await</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">String</span>)<span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
+        <span class="ident"><span class="self">Self</span>::new_with_client</span>(<span class="ident">max_evil</span>, <span class="ident">members</span>)
     }
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span> <span class="ident">WsFederationApi</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span> {
     <span class="doccomment">/// Creates a new API client</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_with_client</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">String</span>)<span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_with_client</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">String</span>)<span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
         <span class="ident">WsFederationApi</span> {
             <span class="ident">members</span>: <span class="ident">members</span>
                 .<span class="ident">into_iter</span>()
@@ -1157,4 +1157,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (fe3342816 2022-08-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (4493a0f47 2022-08-02)" ></div></body></html>

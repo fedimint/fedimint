@@ -303,7 +303,7 @@
         .<span class="ident">open_tree</span>(<span class="string">&quot;mint-client&quot;</span>)
         .<span class="ident">unwrap</span>();
     <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1::Secp256k1::new</span>();
-    <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Client::new</span>(<span class="ident">gw_client_cfg</span>, <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">ctx</span>).<span class="kw">await</span>);
+    <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Client::new</span>(<span class="ident">gw_client_cfg</span>, <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">ctx</span>));
     <span class="kw">let</span> <span class="ident">ln_client</span> <span class="op">=</span> <span class="ident">Box::new</span>(<span class="ident">Mutex::new</span>(<span class="ident">ln_client</span>));
 
     <span class="ident">LnGateway::new</span>(<span class="ident">federation_client</span>, <span class="ident">ln_client</span>, <span class="ident">sender</span>, <span class="ident">receiver</span>)
@@ -423,4 +423,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (fe3342816 2022-08-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (4493a0f47 2022-08-02)" ></div></body></html>

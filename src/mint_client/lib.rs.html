@@ -910,7 +910,6 @@
 <span id="910">910</span>
 <span id="911">911</span>
 <span id="912">912</span>
-<span id="913">913</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -1065,7 +1064,7 @@
         <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">clone</span>()
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">config</span>: <span class="ident">T</span>, <span class="ident">db</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">secp</span>: <span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">All</span><span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">config</span>: <span class="ident">T</span>, <span class="ident">db</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">secp</span>: <span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">All</span><span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
         <span class="kw">let</span> <span class="ident">api</span> <span class="op">=</span> <span class="ident">api::WsFederationApi::new</span>(
             <span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">max_evil</span>,
             <span class="ident">config</span>
@@ -1079,8 +1078,7 @@
                     (<span class="ident">peer_id</span>, <span class="ident">url</span>)
                 })
                 .<span class="ident">collect</span>(),
-        )
-        .<span class="kw">await</span>;
+        );
         <span class="ident"><span class="self">Self</span>::new_with_api</span>(<span class="ident">config</span>, <span class="ident">db</span>, <span class="ident">Box::new</span>(<span class="ident">api</span>), <span class="ident">secp</span>)
     }
 
@@ -1825,4 +1823,4 @@
     <span class="ident">OutgoingPaymentTimeout</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (fe3342816 2022-08-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.64.0-nightly (4493a0f47 2022-08-02)" ></div></body></html>
