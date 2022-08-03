@@ -36,7 +36,7 @@ pub struct LnClient<'c> {
 impl<'c> LnClient<'c> {
     /// Create an output that incentivizes a Lighning gateway to pay an invoice for us. It has time
     /// till the block height defined by `timelock`, after that we can claim our money back.
-    pub async fn create_outgoing_output<'a>(
+    pub fn create_outgoing_output<'a>(
         &'a self,
         mut batch: BatchTx<'a>,
         invoice: Invoice,
@@ -352,8 +352,8 @@ mod tests {
                 timelock,
                 &mut rng,
             )
-            .await
             .unwrap();
+
         client_context.db.apply_batch(batch).unwrap();
 
         let contract = match &output {

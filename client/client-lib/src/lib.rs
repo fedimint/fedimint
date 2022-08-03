@@ -441,16 +441,14 @@ impl Client<UserClientConfig> {
         let consensus_height = self.context.api.fetch_consensus_block_height().await?;
         let absolute_timelock = consensus_height + TIMELOCK;
 
-        let contract = self
-            .ln_client()
-            .create_outgoing_output(
-                batch.transaction(),
-                invoice,
-                &gateway,
-                absolute_timelock as u32,
-                &mut rng,
-            )
-            .await?;
+        let contract = self.ln_client().create_outgoing_output(
+            batch.transaction(),
+            invoice,
+            &gateway,
+            absolute_timelock as u32,
+            &mut rng,
+        )?;
+
         let contract_id = match &contract {
             ContractOrOfferOutput::Contract(c) => c.contract.contract_id(),
             ContractOrOfferOutput::Offer(_) => {
