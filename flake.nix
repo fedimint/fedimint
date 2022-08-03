@@ -58,7 +58,11 @@
         });
       in
       {
-        packages.default = minimint;
+        packages = {
+          default = minimint;
+          deps = minimintDeps;
+        };
+
         checks = {
           inherit
             minimint
