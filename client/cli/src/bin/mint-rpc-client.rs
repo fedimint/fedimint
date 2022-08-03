@@ -14,7 +14,7 @@ struct ApiCall {
 async fn main() {
     let call = ApiCall::parse();
     let arg: serde_json::Value = serde_json::from_str(&call.arg).unwrap();
-    let api = WsFederationApi::new(0, vec![(PeerId::from(0), call.url)]).await;
+    let api = WsFederationApi::new(0, vec![(PeerId::from(0), call.url)]);
     let response: serde_json::Value = api.request(&call.method, arg).await.unwrap();
     let formatted = serde_json::to_string_pretty(&response).unwrap();
     print!("{}", formatted);

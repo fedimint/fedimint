@@ -127,7 +127,7 @@ async fn peg_outs_must_wait_for_available_utxos() {
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_can_be_exchanged_between_users() {
     let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0, 1]).await;
+    let user_receive = user_send.new_client(&[0, 1]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
@@ -148,7 +148,7 @@ async fn minted_coins_cannot_double_spent_with_different_nodes() {
     fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
     let coins = user1.client.select_and_spend_coins(sats(2000)).unwrap();
 
-    let (user2, user3) = (user1.new_client(&[0]).await, user1.new_client(&[1]).await);
+    let (user2, user3) = (user1.new_client(&[0]), user1.new_client(&[1]));
     let out2 = user2.client.reissue(coins.clone(), rng()).await.unwrap();
     let out3 = user3.client.reissue(coins, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
@@ -166,7 +166,7 @@ async fn minted_coins_cannot_double_spent_with_different_nodes() {
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_in_wallet_can_be_split_into_change() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
-    let user_receive = user_send.new_client(&[0]).await;
+    let user_receive = user_send.new_client(&[0]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
     assert_eq!(
@@ -538,7 +538,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0]).await;
+    let user_receive = user_send.new_client(&[0]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     let coins = user_send.client.select_and_spend_coins(sats(5000)).unwrap();

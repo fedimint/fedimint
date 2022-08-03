@@ -152,7 +152,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.context.config.clone()
     }
 
-    pub async fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
+    pub fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
         let api = api::WsFederationApi::new(
             config.as_ref().max_evil,
             config
@@ -166,8 +166,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     (peer_id, url)
                 })
                 .collect(),
-        )
-        .await;
+        );
         Self::new_with_api(config, db, Box::new(api), secp)
     }
 
