@@ -105,6 +105,23 @@
               darwin.apple_sdk.frameworks.Security
             ];
             RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
+
+            shellHook = ''
+              # auto-install git hooks
+              for hook in misc/git-hooks/* ; do ln -sf "../../$hook" "./.git/hooks/" ; done
+              ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+            '';
+          };
+
+          # this shell is used only in CI, so it should contain minimum amount
+          # of stuff to avoid building and caching things we don't need
+          lint = pkgs.mkShell {
+            nativeBuildInputs = [
+              pkgs.rustfmt
+              pkgs.nixpkgs-fmt
+              pkgs.shellcheck
+              pkgs.git
+            ];
           };
       });
 }
