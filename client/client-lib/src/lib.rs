@@ -20,6 +20,7 @@ use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
 use ln::db::LightningGatewayKey;
+use minimint_api::task::sleep;
 use minimint_api::{
     db::{
         batch::{Accumulator, BatchItem, DbBatch},
@@ -385,6 +386,15 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.context.db.apply_batch(batch).unwrap();
 
         self.reissue(all_coins, rng).await
+    }
+
+    pub async fn await_consensus_block_height(&self, block_height: u64) -> u64 {
+        loop {
+            match self.context.api.fetch_consensus_block_height().await {
+                Ok(height) if height >= block_height => return height,
+                _ => sleep(Duration::from_millis(100)).await,
+            }
+        }
     }
 
     pub async fn fetch_all_coins<'a>(&self) -> Vec<Result<OutPoint>> {

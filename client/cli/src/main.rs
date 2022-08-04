@@ -73,6 +73,9 @@ enum Command {
 
     /// Wait for incoming invoice to be paid
     WaitInvoice { invoice: lightning_invoice::Invoice },
+
+    /// Wait for the fed to reach a consensus block height
+    WaitBlockHeight { height: u64 },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -199,6 +202,9 @@ async fn main() {
                 "Paid in minimint transaction {}. Call 'fetch' to get your coins.",
                 outpoint.txid
             );
+        }
+        Command::WaitBlockHeight { height } => {
+            client.await_consensus_block_height(height).await;
         }
     }
 }

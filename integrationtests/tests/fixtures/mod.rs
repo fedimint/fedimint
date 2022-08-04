@@ -132,15 +132,15 @@ pub async fn fixtures(
             );
             let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+            let user_cfg = UserClientConfig(client_config.clone());
+            let user = UserTest::new(user_cfg.clone(), peers);
+            user.client.await_consensus_block_height(0).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
             )
             .await;
-
-            let user_cfg = UserClientConfig(client_config);
-            let user = UserTest::new(user_cfg, peers);
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
@@ -153,14 +153,15 @@ pub async fn fixtures(
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
             let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+            let user_cfg = UserClientConfig(client_config.clone());
+            let user = UserTest::new(user_cfg.clone(), peers);
+            user.client.await_consensus_block_height(0).await;
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
             )
             .await;
-            let user_cfg = UserClientConfig(client_config);
-            let user = UserTest::new(user_cfg, peers);
 
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
