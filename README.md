@@ -180,6 +180,7 @@ SUBCOMMANDS:
     peg-out           Withdraw funds from the federation
     reissue           Reissue tokens received from a third party to avoid double spends
     spend             Prepare coins to send to a third party as a payment
+    wait-block-height    Wait for the fed to reach a consensus block height
     wait-invoice      Wait for incoming invoice to be paid
 ```
 
