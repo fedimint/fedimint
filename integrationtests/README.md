@@ -32,7 +32,7 @@ Tests run by default with fake Lightning and Bitcoin services for fast concurren
 To run the tests in parallel against fake versions of Lightning and Bitcoin:
 ```shell
 export MINIMINT_TEST_REAL=0
-cargo test -p minimint
+cargo test -p minimint-tests
 ```
 
 When integration tests run they will output a debug log for each epoch:
