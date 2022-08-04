@@ -908,6 +908,16 @@
 <span id="908">908</span>
 <span id="909">909</span>
 <span id="910">910</span>
+<span id="911">911</span>
+<span id="912">912</span>
+<span id="913">913</span>
+<span id="914">914</span>
+<span id="915">915</span>
+<span id="916">916</span>
+<span id="917">917</span>
+<span id="918">918</span>
+<span id="919">919</span>
+<span id="920">920</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -930,6 +940,7 @@
 <span class="kw">use</span> <span class="ident">lightning::routing::router</span>::{<span class="ident">RouteHint</span>, <span class="ident">RouteHintHop</span>};
 <span class="kw">use</span> <span class="ident">lightning_invoice</span>::{<span class="ident">CreationError</span>, <span class="ident">Invoice</span>, <span class="ident">InvoiceBuilder</span>};
 <span class="kw">use</span> <span class="ident">ln::db::LightningGatewayKey</span>;
+<span class="kw">use</span> <span class="ident">minimint_api::task::sleep</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{
     <span class="ident">db</span>::{
         <span class="ident">batch</span>::{<span class="ident">Accumulator</span>, <span class="ident">BatchItem</span>, <span class="ident">DbBatch</span>},
@@ -1295,6 +1306,15 @@
         <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
 
         <span class="self">self</span>.<span class="ident">reissue</span>(<span class="ident">all_coins</span>, <span class="ident">rng</span>).<span class="kw">await</span>
+    }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">block_height</span>: <span class="ident">u64</span>) -&gt; <span class="ident">u64</span> {
+        <span class="kw">loop</span> {
+            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_consensus_block_height</span>().<span class="kw">await</span> {
+                <span class="prelude-val">Ok</span>(<span class="ident">height</span>) <span class="kw">if</span> <span class="ident">height</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">block_height</span> =&gt; <span class="kw">return</span> <span class="ident">height</span>,
+                <span class="kw">_</span> =&gt; <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">100</span>)).<span class="kw">await</span>,
+            }
+        }
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_all_coins</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span><span class="op">&gt;</span> {

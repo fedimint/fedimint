@@ -202,6 +202,12 @@
 <span id="202">202</span>
 <span id="203">203</span>
 <span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::hex::ToHex</span>;
 <span class="kw">use</span> <span class="ident">clap::Parser</span>;
@@ -277,6 +283,9 @@
 
     <span class="doccomment">/// Wait for incoming invoice to be paid</span>
     <span class="ident">WaitInvoice</span> { <span class="ident">invoice</span>: <span class="ident">lightning_invoice::Invoice</span> },
+
+    <span class="doccomment">/// Wait for the fed to reach a consensus block height</span>
+    <span class="ident">WaitBlockHeight</span> { <span class="ident">height</span>: <span class="ident">u64</span> },
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
@@ -403,6 +412,9 @@
                 <span class="string">&quot;Paid in minimint transaction {}. Call &#39;fetch&#39; to get your coins.&quot;</span>,
                 <span class="ident">outpoint</span>.<span class="ident">txid</span>
             );
+        }
+        <span class="ident">Command::WaitBlockHeight</span> { <span class="ident">height</span> } =&gt; {
+            <span class="ident">client</span>.<span class="ident">await_consensus_block_height</span>(<span class="ident">height</span>).<span class="kw">await</span>;
         }
     }
 }
