@@ -14,7 +14,7 @@ echo "Running in temporary directory $FM_TEST_DIR"
 env | sed -En 's/(FM_[^=]*).*/\1/gp' | while read var; do printf 'export %s=%q\n' "$var" "${!var}"; done > .tmpenv
 
 tmuxinator local
-tmux kill-session -t fedimint-dev || true
+tmux -L fedimint-dev kill-session -t fedimint-dev || true
 pkill bitcoind
 pkill lightningd
 
