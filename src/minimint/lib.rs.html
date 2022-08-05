@@ -310,7 +310,7 @@
 
         <span class="ident"><span class="self">Self</span>::new_with</span>(
             <span class="ident">cfg</span>.<span class="ident">clone</span>(),
-            <span class="ident">Arc::new</span>(<span class="ident">sled::open</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>().<span class="ident">open_tree</span>(<span class="string">&quot;mint&quot;</span>).<span class="ident">unwrap</span>()),
+            <span class="ident">Arc::new</span>(<span class="ident">rocksdb::OptimisticTransactionDB::open_default</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>()),
             <span class="ident">bitcoincore_rpc::bitcoind_gen</span>(<span class="ident">cfg</span>.<span class="ident">wallet</span>.<span class="ident">clone</span>()),
             <span class="ident">connector</span>,
         )

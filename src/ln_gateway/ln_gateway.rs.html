@@ -208,8 +208,6 @@
 <span id="208">208</span>
 <span id="209">209</span>
 <span id="210">210</span>
-<span id="211">211</span>
-<span id="212">212</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::path</span>::{<span class="ident">Path</span>, <span class="ident">PathBuf</span>};
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 
@@ -298,10 +296,8 @@
     <span class="comment">// Run the gateway</span>
     <span class="kw">let</span> <span class="ident">db_path</span> <span class="op">=</span> <span class="ident">workdir</span>.<span class="ident">join</span>(<span class="string">&quot;gateway.db&quot;</span>);
     <span class="kw">let</span> <span class="ident">gw_client_cfg</span>: <span class="ident">GatewayClientConfig</span> <span class="op">=</span> <span class="ident">load_from_file</span>(<span class="kw-2">&amp;</span><span class="ident">cfg_path</span>);
-    <span class="kw">let</span> <span class="ident">db</span> <span class="op">=</span> <span class="ident">sled::open</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>)
-        .<span class="ident">unwrap</span>()
-        .<span class="ident">open_tree</span>(<span class="string">&quot;mint-client&quot;</span>)
-        .<span class="ident">unwrap</span>();
+    <span class="kw">let</span> <span class="ident">db</span>: <span class="ident">rocksdb::OptimisticTransactionDB</span><span class="op">&lt;</span><span class="ident">rocksdb::SingleThreaded</span><span class="op">&gt;</span> <span class="op">=</span>
+        <span class="ident">rocksdb::OptimisticTransactionDB::open_default</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>();
     <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1::Secp256k1::new</span>();
     <span class="kw">let</span> <span class="ident">federation_client</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">Client::new</span>(<span class="ident">gw_client_cfg</span>, <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">ctx</span>));
     <span class="kw">let</span> <span class="ident">ln_client</span> <span class="op">=</span> <span class="ident">Box::new</span>(<span class="ident">Mutex::new</span>(<span class="ident">ln_client</span>));
