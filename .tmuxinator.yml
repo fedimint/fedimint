@@ -1,5 +1,6 @@
 name: fedimint-dev
 root: .
+socket_name: fedimint-dev
 pre_window:
   - source .tmpenv
   - alias ln1="\$FM_LN1"
