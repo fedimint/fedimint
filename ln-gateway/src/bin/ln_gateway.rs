@@ -86,10 +86,8 @@ async fn initialize_gateway(
     // Run the gateway
     let db_path = workdir.join("gateway.db");
     let gw_client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
-    let db = sled::open(&db_path)
-        .unwrap()
-        .open_tree("mint-client")
-        .unwrap();
+    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
+        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
     let ctx = secp256k1::Secp256k1::new();
     let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx));
     let ln_client = Box::new(Mutex::new(ln_client));

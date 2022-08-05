@@ -19,14 +19,18 @@
           src = ./.;
 
           buildInputs = with pkgs; [
+            clang
             openssl
             pkg-config
             perl
           ];
 
           nativeBuildInputs = with pkgs; [
+            clang
             pkg-config
           ];
+
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
         };
 
         cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {

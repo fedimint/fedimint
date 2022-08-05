@@ -8,6 +8,8 @@ use tracing::trace;
 
 pub mod batch;
 pub mod mem_impl;
+#[cfg(feature = "rocksdb")]
+mod rocksdb_impl;
 pub mod sled_impl;
 
 pub trait DatabaseKeyPrefixConst {
@@ -32,7 +34,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError>;
 }
 
-pub type PrefixIter = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send>;
+pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
 
 pub trait Database: Send + Sync {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
@@ -41,7 +43,7 @@ pub trait Database: Send + Sync {
 
     fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter;
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<()>;
 }
@@ -103,7 +105,7 @@ impl<'a> dyn Database + 'a {
     pub fn find_by_prefix<KP>(
         &self,
         key_prefix: &KP,
-    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>>
+    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>> + '_
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
@@ -210,12 +212,42 @@ mod tests {
     use crate::encoding::{Decodable, Encodable};
     use std::sync::Arc;
 
+    const DB_PREFIX_TEST: u8 = 0x42;
+    const ALT_DB_PREFIX_TEST: u8 = 0x43;
+
     #[derive(Debug, Encodable, Decodable)]
     struct TestKey(u64);
 
     impl DatabaseKeyPrefixConst for TestKey {
-        const DB_PREFIX: u8 = 0x42;
+        const DB_PREFIX: u8 = DB_PREFIX_TEST;
         type Key = Self;
+        type Value = TestVal;
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct DbPrefixTestPrefix;
+
+    impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
+        const DB_PREFIX: u8 = DB_PREFIX_TEST;
+        type Key = TestKey;
+        type Value = TestVal;
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct AltTestKey(u64);
+
+    impl DatabaseKeyPrefixConst for AltTestKey {
+        const DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        type Key = Self;
+        type Value = TestVal;
+    }
+
+    #[derive(Debug, Encodable, Decodable)]
+    struct AltDbPrefixTestPrefix;
+
+    impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
+        const DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        type Key = AltTestKey;
         type Value = TestVal;
     }
 
@@ -248,5 +280,27 @@ mod tests {
             .unwrap()
             .is_none());
         assert!(db.get_value(&TestKey(42)).is_ok());
+
+        assert!(db.insert_entry(&TestKey(55), &TestVal(9999)).is_ok());
+        assert!(db.insert_entry(&TestKey(54), &TestVal(8888)).is_ok());
+
+        assert!(db.insert_entry(&AltTestKey(55), &TestVal(7777)).is_ok());
+        assert!(db.insert_entry(&AltTestKey(54), &TestVal(6666)).is_ok());
+
+        for res in db.find_by_prefix(&DbPrefixTestPrefix) {
+            match res.as_ref().unwrap().0 {
+                TestKey(55) => assert!(res.unwrap().1.eq(&TestVal(9999))),
+                TestKey(54) => assert!(res.unwrap().1.eq(&TestVal(8888))),
+                _ => {}
+            }
+        }
+
+        for res in db.find_by_prefix(&AltDbPrefixTestPrefix) {
+            match res.as_ref().unwrap().0 {
+                AltTestKey(55) => assert!(res.unwrap().1.eq(&TestVal(7777))),
+                AltTestKey(54) => assert!(res.unwrap().1.eq(&TestVal(6666))),
+                _ => {}
+            }
+        }
     }
 }

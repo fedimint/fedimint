@@ -97,10 +97,8 @@ async fn main() {
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path);
-    let db = sled::open(&db_path)
-        .unwrap()
-        .open_tree("mint-client")
-        .unwrap();
+    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
+        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
 
     let mut rng = rand::rngs::OsRng::new().unwrap();
 
