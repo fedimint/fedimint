@@ -10,6 +10,7 @@ use tbs::{dealer_keygen, AggregatePublicKey};
 pub struct MintConfig {
     pub tbs_sks: Keys<tbs::SecretKeyShare>,
     pub peer_tbs_pks: BTreeMap<PeerId, Keys<tbs::PublicKeyShare>>,
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -55,6 +56,7 @@ impl GenerateConfig for MintConfig {
                             (key_peer, keys)
                         })
                         .collect(),
+                    fee_consensus: FeeConsensus::default(),
                 };
                 (peer, config)
             })

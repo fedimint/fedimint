@@ -35,9 +35,6 @@ pub struct ServerConfig {
     pub wallet: WalletConfig,
     pub mint: MintConfig,
     pub ln: LightningModuleConfig,
-
-    // TODO: make consensus defined
-    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,12 +93,6 @@ impl GenerateConfig for ServerConfig {
         let (ln_server_cfg, ln_client_cfg) =
             LightningModuleConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
 
-        let fee_consensus = FeeConsensus {
-            wallet: minimint_wallet::config::FeeConsensus::default(),
-            mint: minimint_core::modules::mint::config::FeeConsensus::default(),
-            ln: minimint_core::modules::ln::config::FeeConsensus::default(),
-        };
-
         let server_config = netinfo
             .iter()
             .map(|(&id, netinf)| {
@@ -118,7 +109,6 @@ impl GenerateConfig for ServerConfig {
                     wallet: wallet_server_cfg[&id].clone(),
                     mint: mint_server_cfg[&id].clone(),
                     ln: ln_server_cfg[&id].clone(),
-                    fee_consensus: fee_consensus.clone(),
                 };
                 (id, config)
             })
@@ -133,7 +123,7 @@ impl GenerateConfig for ServerConfig {
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
-            fee_consensus,
+            fee_consensus: FeeConsensus::default(),
         };
 
         (server_config, client_config)
@@ -171,6 +161,14 @@ impl ServerConfig {
 
     pub fn max_faulty(&self) -> usize {
         hbbft::util::max_faulty(self.peers.len())
+    }
+
+    pub fn fee_consensus(&self) -> minimint_core::config::FeeConsensus {
+        minimint_core::config::FeeConsensus {
+            wallet: self.wallet.fee_consensus.clone(),
+            mint: self.mint.fee_consensus.clone(),
+            ln: self.ln.fee_consensus.clone(),
+        }
     }
 }
 

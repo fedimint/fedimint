@@ -21,6 +21,7 @@ pub struct WalletConfig {
     pub btc_rpc_address: String,
     pub btc_rpc_user: String,
     pub btc_rpc_pass: String,
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -93,6 +94,7 @@ impl GenerateConfig for WalletConfig {
                     btc_rpc_address: "127.0.0.1:18443".to_string(),
                     btc_rpc_user: "bitcoin".to_string(),
                     btc_rpc_pass: "bitcoin".to_string(),
+                    fee_consensus: FeeConsensus::default(),
                 };
 
                 (*id, cfg)

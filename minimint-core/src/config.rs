@@ -15,8 +15,7 @@ pub struct ClientConfig {
     pub max_evil: usize,
 }
 
-// TODO: get rid of it here, modules should govern their own fees
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub wallet: minimint_wallet::config::FeeConsensus,
     pub mint: minimint_mint::config::FeeConsensus,

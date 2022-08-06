@@ -12,6 +12,7 @@ pub struct LightningModuleConfig {
     pub threshold_sec_key:
         threshold_crypto::serde_impl::SerdeSecret<threshold_crypto::SecretKeyShare>,
     pub threshold: usize,
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +45,7 @@ impl GenerateConfig for LightningModuleConfig {
                         threshold_pub_keys: pks.clone(),
                         threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
                         threshold,
+                        fee_consensus: FeeConsensus::default(),
                     },
                 )
             })

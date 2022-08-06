@@ -716,7 +716,7 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use crate::config::MintClientConfig;
+    use crate::config::{FeeConsensus, MintClientConfig};
     use crate::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
     use minimint_api::config::GenerateConfig;
     use minimint_api::db::mem_impl::MemDatabase;
@@ -904,6 +904,7 @@ mod test {
             MintConfig {
                 tbs_sks: mint_server_cfg1[0].tbs_sks.clone(),
                 peer_tbs_pks: mint_server_cfg2[0].peer_tbs_pks.clone(),
+                fee_consensus: FeeConsensus::default(),
             },
             THRESHOLD,
             Arc::new(MemDatabase::new()),

@@ -97,7 +97,7 @@ where
         let tx_hash = transaction.tx_hash();
         debug!(%tx_hash, "Received mint transaction");
 
-        transaction.validate_funding(&self.cfg.fee_consensus)?;
+        transaction.validate_funding(&self.cfg.fee_consensus())?;
 
         let mut pub_keys = Vec::new();
         for input in &transaction.inputs {
@@ -351,7 +351,7 @@ where
         transaction: Transaction,
         caches: &VerificationCaches,
     ) -> Result<(), TransactionSubmissionError> {
-        transaction.validate_funding(&self.cfg.fee_consensus)?;
+        transaction.validate_funding(&self.cfg.fee_consensus())?;
 
         let tx_hash = transaction.tx_hash();
 
