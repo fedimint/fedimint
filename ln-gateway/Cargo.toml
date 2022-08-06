@@ -27,7 +27,7 @@ minimint = { path = "../minimint" }
 minimint-api = { path = "../minimint-api", features = ["rocksdb"] }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6"
-rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint" }
+rocksdb = "0.19.0"
 secp256k1 = "0.22.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.61"
