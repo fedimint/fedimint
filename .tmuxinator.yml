@@ -6,9 +6,8 @@ pre_window:
   - alias ln1="\$FM_LN1"
   - alias ln2="\$FM_LN2"
   - alias btc_client="\$FM_BTC_CLIENT"
-  - alias mint_client="\$FM_MINT_CLIENT"
+  - alias mint-client-cli="\$FM_MINT_CLIENT"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
-  - clear
 tmux_detached: false
 windows:
   - main:
@@ -26,12 +25,12 @@ windows:
           - fg
         - ln1:
           - sleep 1 # wait for bitcoind
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --minimint-cfg=$FM_CFG_DIR &
+          - lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --minimint-cfg=$FM_CFG_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
         - ln2:
           - sleep 1 # wait for bitcoind
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 &
+          - lightningd --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN2_DIR --addr=127.0.0.1:9001 &
           - echo $! >> $FM_PID_FILE
           - fg
         - federation:
