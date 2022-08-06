@@ -70,3 +70,18 @@ impl GenerateConfig for MintConfig {
         (mint_cfg, client_cfg)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub coin_issuance_abs: minimint_api::Amount,
+    pub coin_spend_abs: minimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            coin_issuance_abs: minimint_api::Amount::ZERO,
+            coin_spend_abs: minimint_api::Amount::ZERO,
+        }
+    }
+}

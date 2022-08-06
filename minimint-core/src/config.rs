@@ -19,9 +19,8 @@ pub struct ClientConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub wallet: minimint_wallet::config::FeeConsensus,
+    pub mint: minimint_mint::config::FeeConsensus,
 
-    pub fee_coin_spend_abs: minimint_api::Amount,
-    pub fee_coin_issuance_abs: minimint_api::Amount,
     pub fee_contract_input: minimint_api::Amount,
     pub fee_contract_output: minimint_api::Amount,
 }
