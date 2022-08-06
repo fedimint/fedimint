@@ -655,7 +655,7 @@ impl FederationTest {
             max_balance_sheet,
             last_consensus,
             fees: server_config.fee_consensus(),
-            wallet: server_config.wallet.clone(),
+            wallet: server_config.wallet,
         }
     }
 }

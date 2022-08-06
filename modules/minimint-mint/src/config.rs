@@ -16,6 +16,7 @@ pub struct MintConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintClientConfig {
     pub tbs_pks: Keys<AggregatePublicKey>,
+    pub fee_consensus: FeeConsensus,
 }
 
 impl GenerateConfig for MintConfig {
@@ -67,6 +68,7 @@ impl GenerateConfig for MintConfig {
                 .into_iter()
                 .map(|(amount, (pk, _, _))| (amount, pk))
                 .collect(),
+            fee_consensus: FeeConsensus::default(),
         };
 
         (mint_cfg, client_cfg)

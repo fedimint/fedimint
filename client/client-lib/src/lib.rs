@@ -217,7 +217,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         Ok(self
             .mint_client()
-            .submit_tx_with_change(&self.context.config.as_ref().fee_consensus, tx, batch, rng)
+            .submit_tx_with_change(
+                &self.context.config.as_ref().fee_consensus(),
+                tx,
+                batch,
+                rng,
+            )
             .await?)
     }
 

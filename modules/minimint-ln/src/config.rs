@@ -18,6 +18,7 @@ pub struct LightningModuleConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningModuleClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
+    pub fee_consensus: FeeConsensus,
 }
 
 impl GenerateConfig for LightningModuleConfig {
@@ -53,6 +54,7 @@ impl GenerateConfig for LightningModuleConfig {
 
         let client_cfg = LightningModuleClientConfig {
             threshold_pub_key: pks.public_key(),
+            fee_consensus: FeeConsensus::default(),
         };
 
         (server_cfg, client_cfg)

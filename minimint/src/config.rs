@@ -123,7 +123,6 @@ impl GenerateConfig for ServerConfig {
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
-            fee_consensus: FeeConsensus::default(),
         };
 
         (server_config, client_config)

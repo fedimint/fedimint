@@ -11,8 +11,17 @@ pub struct ClientConfig {
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
-    pub fee_consensus: FeeConsensus,
     pub max_evil: usize,
+}
+
+impl ClientConfig {
+    pub fn fee_consensus(&self) -> FeeConsensus {
+        FeeConsensus {
+            wallet: self.wallet.fee_consensus.clone(),
+            mint: self.mint.fee_consensus.clone(),
+            ln: self.ln.fee_consensus.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
