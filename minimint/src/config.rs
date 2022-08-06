@@ -97,10 +97,9 @@ impl GenerateConfig for ServerConfig {
             LightningModuleConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
 
         let fee_consensus = FeeConsensus {
+            wallet: minimint_wallet::config::FeeConsensus::default(),
             fee_coin_spend_abs: minimint_api::Amount::ZERO,
-            fee_peg_in_abs: minimint_api::Amount::ZERO,
             fee_coin_issuance_abs: minimint_api::Amount::ZERO,
-            fee_peg_out_abs: minimint_api::Amount::ZERO,
             fee_contract_input: minimint_api::Amount::ZERO,
             fee_contract_output: minimint_api::Amount::ZERO,
         };

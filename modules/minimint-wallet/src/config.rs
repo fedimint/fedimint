@@ -31,6 +31,22 @@ pub struct WalletClientConfig {
     pub network: Network,
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
+    pub fee_consensus: FeeConsensus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub peg_in_abs: minimint_api::Amount,
+    pub peg_out_abs: minimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            peg_in_abs: minimint_api::Amount::ZERO,
+            peg_out_abs: minimint_api::Amount::ZERO,
+        }
+    }
 }
 
 impl GenerateConfig for WalletConfig {
@@ -87,6 +103,7 @@ impl GenerateConfig for WalletConfig {
             peg_in_descriptor,
             network: Network::Regtest,
             finality_delay: FINALITY_DELAY,
+            fee_consensus: FeeConsensus::default(),
         };
 
         (wallet_cfg, client_cfg)
