@@ -56,3 +56,18 @@ impl GenerateConfig for LightningModuleConfig {
         (server_cfg, client_cfg)
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub contract_input: minimint_api::Amount,
+    pub contract_output: minimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            contract_input: minimint_api::Amount::ZERO,
+            contract_output: minimint_api::Amount::ZERO,
+        }
+    }
+}

@@ -99,8 +99,7 @@ impl GenerateConfig for ServerConfig {
         let fee_consensus = FeeConsensus {
             wallet: minimint_wallet::config::FeeConsensus::default(),
             mint: minimint_core::modules::mint::config::FeeConsensus::default(),
-            fee_contract_input: minimint_api::Amount::ZERO,
-            fee_contract_output: minimint_api::Amount::ZERO,
+            ln: minimint_core::modules::ln::config::FeeConsensus::default(),
         };
 
         let server_config = netinfo

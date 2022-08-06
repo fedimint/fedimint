@@ -20,9 +20,7 @@ pub struct ClientConfig {
 pub struct FeeConsensus {
     pub wallet: minimint_wallet::config::FeeConsensus,
     pub mint: minimint_mint::config::FeeConsensus,
-
-    pub fee_contract_input: minimint_api::Amount,
-    pub fee_contract_output: minimint_api::Amount,
+    pub ln: minimint_ln::config::FeeConsensus,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
