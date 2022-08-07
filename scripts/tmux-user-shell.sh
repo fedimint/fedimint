@@ -13,7 +13,7 @@ echo Setting up lightning channel
 open_channel > /dev/null 2>&1
 
 echo Funding e-cash wallet ...
-scripts/pegin.sh 0.00099999 > /dev/null 2>&1
+scripts/pegin.sh 10000.0 > /dev/null 2>&1
 
 echo Done!
 echo

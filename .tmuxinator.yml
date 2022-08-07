@@ -18,7 +18,7 @@ windows:
       layout: 3ed7,272x74,0,0{119x74,0,0,54,152x74,120,0[152x17,120,0,55,152x17,120,18,56,152x17,120,36,57,152x20,120,54,58]}
       panes:
         - user:
-            - # empty user shell
+          - # empty user shell
         - bitcoind:
           - bitcoind -regtest -fallbackfee=0.0004 -txindex -server -rpcuser=bitcoin -rpcpassword=bitcoin -datadir=$FM_BTC_DIR &
           - echo $! >> $FM_PID_FILE
