@@ -17,6 +17,7 @@ use mint_client::{ClientError, GatewayClient};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
+use std::net::SocketAddr;
 use std::{
     io::Cursor,
     sync::Arc,
@@ -119,6 +120,7 @@ impl LnGateway {
         ln_client: Box<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
+        bind_addr: SocketAddr,
     ) -> Result<Self> {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
         // Regster gateway with federation
@@ -127,7 +129,7 @@ impl LnGateway {
             .await
             .expect("Failed to register with federation");
         // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(sender));
+        let webserver = tokio::spawn(run_webserver(bind_addr, sender));
         Ok(Self {
             federation_client,
             ln_client,

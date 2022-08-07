@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::env;
 use std::iter::repeat;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU16;
@@ -227,11 +228,12 @@ impl GatewayTest {
             config: user_cfg,
         };
 
+        let bind_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         let gw_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
-            api: "http://127.0.0.1:8080".to_string(),
+            api: format!("http://{}", bind_addr),
             node_pub_key,
         };
         let client = Arc::new(GatewayClient::new(
@@ -240,7 +242,7 @@ impl GatewayTest {
             Default::default(),
         ));
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let server = LnGateway::new(client.clone(), ln_client, sender, receiver)
+        let server = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr)
             .await
             .expect("Gateway failed to register with federation");
 

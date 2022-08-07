@@ -103,7 +103,7 @@ pub struct NetworkConfig {
 pub struct ConnectionConfig {
     /// The peer's hbbft network address and port (e.g. `10.42.0.10:4000`)
     pub hbbft_addr: String,
-    /// The peer's websocket network address and port (e.g. `10.42.0.10:5000`)
+    /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub api_addr: String,
 }
 
