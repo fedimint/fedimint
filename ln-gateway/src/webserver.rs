@@ -2,6 +2,7 @@ use axum::{routing::post, Extension, Json, Router};
 
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tower_http::cors::CorsLayer;
 use tracing::{debug, instrument};
 
 use crate::GatewayRequestInner;
@@ -33,7 +34,8 @@ pub async fn pay_invoice(
 pub async fn run_webserver(sender: mpsc::Sender<GatewayRequest>) -> axum::response::Result<()> {
     let app = Router::new()
         .route("/pay_invoice", post(pay_invoice))
-        .layer(Extension(sender));
+        .layer(Extension(sender))
+        .layer(CorsLayer::permissive());
 
     axum::Server::bind(&"127.0.0.1:8080".parse().unwrap())
         .serve(app.into_make_service())
