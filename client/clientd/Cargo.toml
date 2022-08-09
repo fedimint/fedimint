@@ -5,6 +5,18 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "clientd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "clientd-cli"
+path = "src/bin/clientd-cli.rs"
+
+[[bin]]
+name = "clientd"
+path = "src/main.rs"
+
 [dependencies]
 mint-client = { path = "../client-lib" }
 minimint-api = { path = "../../minimint-api", features = [ "rocksdb" ] }

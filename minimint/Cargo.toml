@@ -9,6 +9,18 @@ edition = "2018"
 [features]
 telemetry = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"]
 
+[lib]
+name = "minimint"
+path = "src/lib.rs"
+
+[[bin]]
+name = "minimint"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "configgen"
+path  = "src/bin/configgen.rs"
+
 [dependencies]
 anyhow = "1.0.58"
 async-trait = "0.1.42"

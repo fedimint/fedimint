@@ -5,6 +5,8 @@ edition = "2018"
 
 [lib]
 proc-macro = true
+name = "minimint_derive"
+path = "src/lib.rs"
 
 [features]
 diagnostics = []

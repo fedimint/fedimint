@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "mint-rpc-client"
+path = "src/bin/mint-rpc-client.rs"
+
+[[bin]]
+name = "mint-client-cli"
+path = "src/main.rs"
 
 [dependencies]
 bitcoin = "0.28.1"

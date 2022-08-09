@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["elsirion <elsirion@protonmail.com>"]
 edition = "2018"
 
+[lib]
+name = "minimint_wallet"
+path = "src/lib.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 native = ["tokio", "bitcoincore-rpc"]
