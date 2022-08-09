@@ -65,6 +65,7 @@
 <span id="65">65</span>
 <span id="66">66</span>
 <span id="67">67</span>
+<span id="68">68</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::WalletConfig</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">bitcoind::BitcoindRpc</span>, <span class="ident">Feerate</span>};
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
@@ -94,7 +95,8 @@
             <span class="string">&quot;main&quot;</span> =&gt; <span class="ident">Network::Bitcoin</span>,
             <span class="string">&quot;test&quot;</span> =&gt; <span class="ident">Network::Testnet</span>,
             <span class="string">&quot;regtest&quot;</span> =&gt; <span class="ident">Network::Regtest</span>,
-            <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unknown Network&quot;</span>),
+            <span class="string">&quot;signet&quot;</span> =&gt; <span class="ident">Network::Signet</span>,
+            <span class="ident">n</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unknown Network \&quot;{}\&quot;&quot;</span>, <span class="ident">n</span>),
         }
     }
 
