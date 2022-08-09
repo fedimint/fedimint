@@ -1708,6 +1708,7 @@ dependencies = [
  "bitcoin_hashes",
  "futures",
  "hex",
+ "js-sys",
  "jsonrpsee-core",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",

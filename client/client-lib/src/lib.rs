@@ -5,6 +5,7 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
@@ -532,13 +533,22 @@ impl Client<UserClientConfig> {
             htlc_maximum_msat: None,
         }]);
 
+        #[cfg(not(target_family = "wasm"))]
+        let duration_since_epoch = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap();
+
+        #[cfg(target_family = "wasm")]
+        let duration_since_epoch =
+            Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
+
         let invoice =
             InvoiceBuilder::new(network_to_currency(self.context.config.0.wallet.network))
                 .amount_milli_satoshis(amount.milli_sat)
                 .description(description)
                 .payment_hash(payment_hash)
                 .payment_secret(payment_secret)
-                .current_timestamp()
+                .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry(18)
                 .payee_pub_key(node_public_key)
                 .private_route(gateway_route_hint)
