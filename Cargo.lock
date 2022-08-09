@@ -1405,6 +1405,7 @@ dependencies = [
  "sled",
  "thiserror",
  "tokio",
+ "tower-http",
  "tracing",
 ]
 
