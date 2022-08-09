@@ -27,3 +27,4 @@ sled = "0.34.6"
 thiserror = "1.0.30"
 tracing = { version = "0.1.26", default-features = false, features= ["log", "attributes", "std"] }
 tokio = {version = "1.0", features = ["full"]}
+tower-http = { version = "0.3.4", features = ["cors"] }
