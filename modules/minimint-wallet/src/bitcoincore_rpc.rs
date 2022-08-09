@@ -27,7 +27,8 @@ impl BitcoindRpc for bitcoincore_rpc::Client {
             "main" => Network::Bitcoin,
             "test" => Network::Testnet,
             "regtest" => Network::Regtest,
-            _ => panic!("Unknown Network"),
+            "signet" => Network::Signet,
+            n => panic!("Unknown Network \"{}\"", n),
         }
     }
 
