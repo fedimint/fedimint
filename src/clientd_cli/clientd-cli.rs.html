@@ -47,6 +47,11 @@
 <span id="47">47</span>
 <span id="48">48</span>
 <span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">anyhow::Result</span>;
 <span class="kw">use</span> <span class="ident">clap</span>::{<span class="ident">Parser</span>, <span class="ident">Subcommand</span>};
 <span class="kw">use</span> <span class="ident">clientd::call</span>;
@@ -69,6 +74,8 @@
     <span class="ident">Info</span>,
     <span class="doccomment">/// rpc-method: pending()</span>
     <span class="ident">Pending</span>,
+    <span class="doccomment">/// rpc-method: pegin_address()</span>
+    <span class="ident">NewPegInAddress</span>,
 }
 <span class="attribute">#[<span class="ident">tokio::main</span>]</span>
 <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">main</span>() {
@@ -80,6 +87,9 @@
         }
         <span class="ident">Commands::Pending</span> =&gt; {
             <span class="ident">print_json</span>(<span class="ident">call</span>(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_pending&quot;</span>).<span class="kw">await</span>, <span class="ident">args</span>.<span class="ident">raw_json</span>);
+        }
+        <span class="ident">Commands::NewPegInAddress</span> =&gt; {
+            <span class="ident">print_json</span>(<span class="ident">call</span>(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, <span class="ident">args</span>.<span class="ident">raw_json</span>);
         }
     }
 }
