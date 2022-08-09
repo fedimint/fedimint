@@ -8,9 +8,13 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, crane, flake-utils, fenix }:
+  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -121,15 +125,15 @@
             '';
           };
 
-          # this shell is used only in CI, so it should contain minimum amount
-          # of stuff to avoid building and caching things we don't need
-          lint = pkgs.mkShell {
-            nativeBuildInputs = [
-              pkgs.rustfmt
-              pkgs.nixpkgs-fmt
-              pkgs.shellcheck
-              pkgs.git
-            ];
-          };
+        # this shell is used only in CI, so it should contain minimum amount
+        # of stuff to avoid building and caching things we don't need
+        lint = pkgs.mkShell {
+          nativeBuildInputs = [
+            pkgs.rustfmt
+            pkgs.nixpkgs-fmt
+            pkgs.shellcheck
+            pkgs.git
+          ];
+        };
       });
 }
