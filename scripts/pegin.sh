@@ -11,7 +11,8 @@ POLL_INTERVAL=1
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
 USE_GATEWAY=${2:-0}
 
-echo "Pegging in $PEG_IN_AMOUNT"
+FINALITY_DELAY=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay')
+echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 
 # Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
 # random value only known to our client.

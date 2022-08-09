@@ -16,8 +16,8 @@ function open_channel() {
 }
 
 function await_block_sync() {
-  FINALTY_DELAY=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finalty_delay')
-  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALTY_DELAY ))"
+  FINALITY_DELAY=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay')
+  EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
   $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
 }
 

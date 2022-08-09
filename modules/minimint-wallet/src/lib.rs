@@ -742,7 +742,7 @@ impl Wallet {
 
     pub async fn target_height(&self) -> u32 {
         let our_network_height = self.btc_rpc.get_block_height().await as u32;
-        our_network_height.saturating_sub(self.cfg.finalty_delay)
+        our_network_height.saturating_sub(self.cfg.finality_delay)
     }
 
     pub fn consensus_height(&self) -> Option<u32> {
