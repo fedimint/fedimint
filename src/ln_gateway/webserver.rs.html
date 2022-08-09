@@ -42,10 +42,13 @@
 <span id="42">42</span>
 <span id="43">43</span>
 <span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">axum</span>::{<span class="ident">routing::post</span>, <span class="ident">Extension</span>, <span class="ident">Json</span>, <span class="ident">Router</span>};
 
 <span class="kw">use</span> <span class="ident">tokio::sync::mpsc</span>;
 <span class="kw">use</span> <span class="ident">tokio::sync::oneshot</span>;
+<span class="kw">use</span> <span class="ident">tower_http::cors::CorsLayer</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::GatewayRequestInner</span>;
@@ -77,7 +80,8 @@
 <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>) -&gt; <span class="ident">axum::response::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
     <span class="kw">let</span> <span class="ident">app</span> <span class="op">=</span> <span class="ident">Router::new</span>()
         .<span class="ident">route</span>(<span class="string">&quot;/pay_invoice&quot;</span>, <span class="ident">post</span>(<span class="ident">pay_invoice</span>))
-        .<span class="ident">layer</span>(<span class="ident">Extension</span>(<span class="ident">sender</span>));
+        .<span class="ident">layer</span>(<span class="ident">Extension</span>(<span class="ident">sender</span>))
+        .<span class="ident">layer</span>(<span class="ident">CorsLayer::permissive</span>());
 
     <span class="ident">axum::Server::bind</span>(<span class="kw-2">&amp;</span><span class="string">&quot;127.0.0.1:8080&quot;</span>.<span class="ident">parse</span>().<span class="ident">unwrap</span>())
         .<span class="ident">serve</span>(<span class="ident">app</span>.<span class="ident">into_make_service</span>())
@@ -87,4 +91,4 @@
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (d394408fb 2022-08-07)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f03ce3096 2022-08-08)" ></div></body></html>
