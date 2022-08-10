@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["WalletClientConfig",""],["WalletConfig",""]]};
+window.SIDEBAR_ITEMS = {"constant":[["FINALITY_DELAY",""]],"struct":[["WalletClientConfig",""],["WalletConfig",""]]};
