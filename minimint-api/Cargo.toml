@@ -21,7 +21,7 @@ minimint-derive = { path = "../minimint-derive" }
 rand = "0.6.0"
 rand07 = { version = "0.7", package = "rand" }
 secp256k1-zkp = { version = "0.6.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
-rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint", optional = true }
+rocksdb = { version = "0.18.0", optional = true }
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.79"
 sled = "0.34"

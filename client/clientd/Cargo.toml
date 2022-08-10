@@ -21,7 +21,7 @@ path = "src/main.rs"
 mint-client = { path = "../client-lib" }
 minimint-api = { path = "../../minimint-api", features = [ "rocksdb" ] }
 minimint-core = { path = "../../minimint-core" }
-rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint" }
+rocksdb = "0.18.0"
 anyhow = "1.0.58"
 bitcoin = { version = "0.28.1", features = [ "serde" ] }
 sled = "0.34.6"
