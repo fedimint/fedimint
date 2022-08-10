@@ -9,6 +9,18 @@ edition = "2018"
 [features]
 telemetry = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"]
 
+[lib]
+name = "minimint"
+path = "src/lib.rs"
+
+[[bin]]
+name = "minimint"
+path = "src/bin/server.rs"
+
+[[bin]]
+name = "configgen"
+path  = "src/bin/configgen.rs"
+
 [dependencies]
 anyhow = "1.0.58"
 async-trait = "0.1.42"
@@ -21,7 +33,7 @@ hbbft = { git = "https://github.com/fedimint/hbbft" }
 hex = "0.4.2"
 itertools = "0.10.0"
 jsonrpsee = { version = "0.14.0", features = ["ws-server"] }
-minimint-api = { path = "../minimint-api" }
+minimint-api = { path = "../minimint-api", features = ["rocksdb"] }
 minimint-core = { path = "../minimint-core" }
 minimint-derive = { path = "../minimint-derive" }
 minimint-wallet = { path = "../modules/minimint-wallet", features = ["native"] }
@@ -31,6 +43,7 @@ rand = "0.6.5"
 rayon = "1.5.0"
 rcgen = "0.9.2"
 secp256k1-zkp = { version = "0.6.0", features = [ "global-context", "bitcoin_hashes" ] }
+rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint"}
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.61"
 sha3 = "0.9.1"

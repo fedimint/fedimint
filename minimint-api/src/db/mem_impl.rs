@@ -40,7 +40,7 @@ impl Database for MemDatabase {
         Ok(self.data.lock().unwrap().remove(key))
     }
 
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter {
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let mut data = self
             .data
             .lock()

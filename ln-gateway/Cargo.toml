@@ -5,6 +5,14 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "ln_gateway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ln_gateway"
+path = "src/bin/ln_gateway.rs"
+
 [dependencies]
 async-trait = "0.1.52"
 axum = "0.5.12"
@@ -16,9 +24,10 @@ futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.17.0"
 minimint = { path = "../minimint" }
-minimint-api = { path = "../minimint-api" }
+minimint-api = { path = "../minimint-api", features = ["rocksdb"] }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6"
+rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint" }
 secp256k1 = "0.22.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.61"
@@ -26,3 +35,4 @@ sled = "0.34.6"
 thiserror = "1.0.30"
 tracing = { version = "0.1.26", default-features = false, features= ["log", "attributes", "std"] }
 tokio = {version = "1.0", features = ["full"]}
+tower-http = { version = "0.3.4", features = ["cors"] }

@@ -1,9 +1,12 @@
+#!/usr/bin/env bash
+
 source ./scripts/lib.sh
 
 # First wait 1s for the federation (started itself with a 1s delay after bitcoind)
 sleep 2
 
 POLL_INTERVAL=0.5
+export POLL_INTERVAL
 
 echo Setting up bitcoind ...
 btc_client createwallet default > /dev/null 2>&1

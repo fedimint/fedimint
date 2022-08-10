@@ -3,6 +3,14 @@ name = "minimint-tests"
 version = "0.1.0"
 edition = "2018"
 
+[lib]
+name = "minimint_tests"
+path = "src/main.rs"
+
+[[test]]
+name = "minimint-tests"
+path = "tests/tests.rs"
+
 [dependencies]
 assert_matches = "1.5.0"
 async-trait = "0.1.42"

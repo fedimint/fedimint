@@ -19,7 +19,7 @@ Using a public key tweak instead of querying the federation for a new address av
 ### Pegging In - Federation
 - [Wallet::validate_input](../modules/minimint-wallet/src/lib.rs) - verifies that the `PegInProof` is in a block and is spendable by the federation's multisig.
 - [Wallet::apply_input](../modules/minimint-wallet/src/lib.rs) - stores the `SpendableUTXO` containing the transaction details and tweak key in the federation's wallet database.
-- [Wallet::begin_consensus_epoch](../modules/minimint-wallet/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finalty_delay` of 10 blocks after which peg-ins accepted.
+- [Wallet::begin_consensus_epoch](../modules/minimint-wallet/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finality_delay` of 10 blocks after which peg-ins accepted.
 
 ### Pegging Out - User Client
 - [Client::new_peg_out_with_fees](../client/client-lib/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 10 blocks.

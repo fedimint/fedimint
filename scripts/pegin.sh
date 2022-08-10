@@ -7,18 +7,21 @@ source ./scripts/lib.sh
 
 # Let's define some shortcuts for bitcoind and the mint client
 POLL_INTERVAL=1
+export POLL_INTERVAL
 # Bitcoin amount in satoshi
+
 PEG_IN_AMOUNT=${PEG_IN_AMOUNT:-$1}
 USE_GATEWAY=${2:-0}
 
-echo "Pegging in $PEG_IN_AMOUNT"
+FINALITY_DELAY=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay')
+echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 
 # Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
 # random value only known to our client.
 if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address)"; fi
 
 # We send the amount we want to peg-in to this address
-TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR 0$(echo "scale=8; $PEG_IN_AMOUNT/100000000" | bc ))"
+TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR 0"$(echo "scale=8; $PEG_IN_AMOUNT/100000000" | bc )")"
 
 # Now we "wait" for confirmations
 $FM_BTC_CLIENT generatetoaddress 11 "$($FM_BTC_CLIENT getnewaddress)"

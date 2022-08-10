@@ -1,10 +1,12 @@
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
+use bitcoin::secp256k1::rand;
 use clap::Parser;
-use clientd::{InfoResponse, PendingResponse, RpcResult};
+use clientd::{InfoResponse, PegInAddressResponse, PendingResponse, RpcResult};
 use minimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
+use rand::rngs::OsRng;
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +21,7 @@ struct Config {
 }
 struct State {
     client: Client<UserClientConfig>,
+    rng: OsRng,
 }
 #[tokio::main]
 async fn main() {
@@ -32,17 +35,17 @@ async fn main() {
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path);
-    let db = sled::open(&db_path)
-        .unwrap()
-        .open_tree("mint-client")
-        .unwrap();
+    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
+        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
 
     let client = Client::new(cfg.clone(), Box::new(db), Default::default());
+    let rng = OsRng::new().unwrap();
 
-    let shared_state = Arc::new(State { client });
+    let shared_state = Arc::new(State { client, rng });
     let app = Router::new()
         .route("/get_info", post(info))
         .route("/get_pending", post(pending))
+        .route("/get_new_peg_in_address", post(new_peg_in_address))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -75,4 +78,12 @@ async fn pending(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
     Json(RpcResult::Success(json!(PendingResponse::new(
         client.list_active_issuances()
     ))))
+}
+
+async fn new_peg_in_address(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+    let client = &state.client;
+    let mut rng = state.rng.clone();
+    Json(RpcResult::Success(json!(PegInAddressResponse {
+        peg_in_address: client.get_new_pegin_address(&mut rng),
+    })))
 }

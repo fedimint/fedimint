@@ -10,7 +10,7 @@ echo "Setting up env variables in $FM_TMP_DIR"
 
 # Builds the rust executables and sets environment variables
 SRC_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )/.." &> /dev/null && pwd )"
-cd $SRC_DIR
+cd $SRC_DIR || exit 1
 cargo build --release
 
 # Define temporary directories to not overwrite manually created config if run locally

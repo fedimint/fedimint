@@ -5,10 +5,23 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "clientd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "clientd-cli"
+path = "src/bin/clientd-cli.rs"
+
+[[bin]]
+name = "clientd"
+path = "src/main.rs"
+
 [dependencies]
 mint-client = { path = "../client-lib" }
-minimint-api = { path = "../../minimint-api" }
+minimint-api = { path = "../../minimint-api", features = [ "rocksdb" ] }
 minimint-core = { path = "../../minimint-core" }
+rocksdb = { git = "https://github.com/fedimint/rust-rocksdb", branch = "minimint" }
 anyhow = "1.0.58"
 bitcoin = { version = "0.28.1", features = [ "serde" ] }
 sled = "0.34.6"
@@ -22,3 +35,4 @@ clap = { version = "3.1.18", features = ["derive"] }
 axum = "0.5.13"
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = [ "trace" ] }
+rand = "0.6.5"

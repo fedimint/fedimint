@@ -4,8 +4,6 @@
 set -euxo pipefail
 export RUST_LOG=info
 
-source ./scripts/lib.sh
-source ./scripts/build.sh
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 
@@ -17,3 +15,4 @@ await_server_on_port 8081
 #### BEGIN TESTS ####
 [[ $($FM_CLIENTD_CLI info | jq -r 'has("success")') = true ]]
 [[ $($FM_CLIENTD_CLI pending | jq -r 'has("success")') = true ]]
+[[ $($FM_CLIENTD_CLI new-peg-in-address | jq -r 'has("success")') = true ]]
