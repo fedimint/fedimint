@@ -8,6 +8,8 @@ use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+const FINALITY_DELAY: u32 = 10;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfig {
     pub network: Network,
@@ -27,6 +29,8 @@ pub struct WalletClientConfig {
     pub peg_in_descriptor: PegInDescriptor,
     /// The bitcoin network the client will use
     pub network: Network,
+    /// Confirmations required for a peg in to be accepted by federation
+    pub finality_delay: u32,
 }
 
 impl GenerateConfig for WalletConfig {
@@ -68,7 +72,7 @@ impl GenerateConfig for WalletConfig {
                         .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
                         .collect(),
                     peg_in_key: *sk,
-                    finality_delay: 10,
+                    finality_delay: FINALITY_DELAY,
                     default_fee: Feerate { sats_per_kvb: 1000 },
                     btc_rpc_address: "127.0.0.1:18443".to_string(),
                     btc_rpc_user: "bitcoin".to_string(),
@@ -82,6 +86,7 @@ impl GenerateConfig for WalletConfig {
         let client_cfg = WalletClientConfig {
             peg_in_descriptor,
             network: Network::Regtest,
+            finality_delay: FINALITY_DELAY,
         };
 
         (wallet_cfg, client_cfg)
