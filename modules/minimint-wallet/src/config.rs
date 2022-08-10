@@ -14,7 +14,7 @@ pub struct WalletConfig {
     pub peg_in_descriptor: PegInDescriptor,
     pub peer_peg_in_keys: BTreeMap<PeerId, CompressedPublicKey>,
     pub peg_in_key: secp256k1::SecretKey,
-    pub finalty_delay: u32,
+    pub finality_delay: u32,
     pub default_fee: Feerate,
     pub btc_rpc_address: String,
     pub btc_rpc_user: String,
@@ -68,7 +68,7 @@ impl GenerateConfig for WalletConfig {
                         .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
                         .collect(),
                     peg_in_key: *sk,
-                    finalty_delay: 10,
+                    finality_delay: 10,
                     default_fee: Feerate { sats_per_kvb: 1000 },
                     btc_rpc_address: "127.0.0.1:18443".to_string(),
                     btc_rpc_user: "bitcoin".to_string(),
