@@ -103,7 +103,7 @@
     <span class="kw">pub</span> <span class="ident">peg_in_descriptor</span>: <span class="ident">PegInDescriptor</span>,
     <span class="kw">pub</span> <span class="ident">peer_peg_in_keys</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">CompressedPublicKey</span><span class="op">&gt;</span>,
     <span class="kw">pub</span> <span class="ident">peg_in_key</span>: <span class="ident">secp256k1::SecretKey</span>,
-    <span class="kw">pub</span> <span class="ident">finalty_delay</span>: <span class="ident">u32</span>,
+    <span class="kw">pub</span> <span class="ident">finality_delay</span>: <span class="ident">u32</span>,
     <span class="kw">pub</span> <span class="ident">default_fee</span>: <span class="ident">Feerate</span>,
     <span class="kw">pub</span> <span class="ident">btc_rpc_address</span>: <span class="ident">String</span>,
     <span class="kw">pub</span> <span class="ident">btc_rpc_user</span>: <span class="ident">String</span>,
@@ -157,7 +157,7 @@
                         .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer_id</span>, (<span class="kw">_</span>, <span class="ident">pk</span>))<span class="op">|</span> (<span class="kw-2">*</span><span class="ident">peer_id</span>, <span class="ident">CompressedPublicKey</span> { <span class="ident">key</span>: <span class="kw-2">*</span><span class="ident">pk</span> }))
                         .<span class="ident">collect</span>(),
                     <span class="ident">peg_in_key</span>: <span class="kw-2">*</span><span class="ident">sk</span>,
-                    <span class="ident">finalty_delay</span>: <span class="number">10</span>,
+                    <span class="ident">finality_delay</span>: <span class="number">10</span>,
                     <span class="ident">default_fee</span>: <span class="ident">Feerate</span> { <span class="ident">sats_per_kvb</span>: <span class="number">1000</span> },
                     <span class="ident">btc_rpc_address</span>: <span class="string">&quot;127.0.0.1:18443&quot;</span>.<span class="ident">to_string</span>(),
                     <span class="ident">btc_rpc_user</span>: <span class="string">&quot;bitcoin&quot;</span>.<span class="ident">to_string</span>(),
@@ -177,4 +177,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f03ce3096 2022-08-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (34a6cae28 2022-08-09)" ></div></body></html>

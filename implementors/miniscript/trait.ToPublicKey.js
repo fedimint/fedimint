@@ -1,3 +1,3 @@
-(function() {var implementors = {};
-implementors["minimint_wallet"] = [{"text":"impl ToPublicKey for <a class=\"struct\" href=\"minimint_wallet/keys/struct.CompressedPublicKey.html\" title=\"struct minimint_wallet::keys::CompressedPublicKey\">CompressedPublicKey</a>","synthetic":false,"types":["minimint_wallet::keys::CompressedPublicKey"]}];
-if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
+(function() {var implementors = {
+"minimint_wallet":[["impl ToPublicKey for <a class=\"struct\" href=\"minimint_wallet/keys/struct.CompressedPublicKey.html\" title=\"struct minimint_wallet::keys::CompressedPublicKey\">CompressedPublicKey</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

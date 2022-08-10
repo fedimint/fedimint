@@ -1,3 +1,3 @@
-(function() {var implementors = {};
-implementors["minimint_api"] = [{"text":"impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/accum/trait.Sum.html\" title=\"trait core::iter::traits::accum::Sum\">Sum</a>&lt;<a class=\"struct\" href=\"minimint_api/struct.Amount.html\" title=\"struct minimint_api::Amount\">Amount</a>&gt; for <a class=\"struct\" href=\"minimint_api/struct.Amount.html\" title=\"struct minimint_api::Amount\">Amount</a>","synthetic":false,"types":["minimint_api::Amount"]}];
-if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
+(function() {var implementors = {
+"minimint_api":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/iter/traits/accum/trait.Sum.html\" title=\"trait core::iter::traits::accum::Sum\">Sum</a>&lt;<a class=\"struct\" href=\"minimint_api/struct.Amount.html\" title=\"struct minimint_api::Amount\">Amount</a>&gt; for <a class=\"struct\" href=\"minimint_api/struct.Amount.html\" title=\"struct minimint_api::Amount\">Amount</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
