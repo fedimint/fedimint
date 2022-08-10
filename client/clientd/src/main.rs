@@ -3,7 +3,9 @@ use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin::secp256k1::rand;
 use clap::Parser;
-use clientd::{InfoResponse, PegInAddressResponse, PendingResponse, RpcResult};
+use clientd::{
+    InfoResponse, PegInAddressResponse, PendingResponse, RpcResult, WaitBlockHeightPayload,
+};
 use minimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
@@ -46,6 +48,7 @@ async fn main() {
         .route("/get_info", post(info))
         .route("/get_pending", post(pending))
         .route("/get_new_peg_in_address", post(new_peg_in_address))
+        .route("/wait_block_height", post(wait_block_height))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -86,4 +89,13 @@ async fn new_peg_in_address(Extension(state): Extension<Arc<State>>) -> impl Int
     Json(RpcResult::Success(json!(PegInAddressResponse {
         peg_in_address: client.get_new_pegin_address(&mut rng),
     })))
+}
+
+async fn wait_block_height(
+    Extension(state): Extension<Arc<State>>,
+    Json(payload): Json<WaitBlockHeightPayload>,
+) -> impl IntoResponse {
+    let client = &state.client;
+    client.await_consensus_block_height(payload.height).await;
+    Json(RpcResult::Success(json!("")))
 }

@@ -12,6 +12,11 @@ pub enum RpcResult {
     #[serde(rename = "failure")]
     Failure(serde_json::Value),
 }
+/// struct to process wait_block_height request payload
+#[derive(Deserialize, Serialize)]
+pub struct WaitBlockHeightPayload {
+    pub height: u64,
+}
 
 #[derive(Serialize)]
 pub struct InfoResponse {
