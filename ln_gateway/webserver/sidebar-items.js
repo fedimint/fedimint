@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["pay_invoice",""],["run_webserver",""]]};
