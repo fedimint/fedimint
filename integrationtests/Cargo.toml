@@ -11,7 +11,7 @@ path = "src/main.rs"
 name = "minimint-tests"
 path = "tests/tests.rs"
 
-[dependencies]
+[dev-dependencies]
 assert_matches = "1.5.0"
 async-trait = "0.1.42"
 bitcoin = "0.28.1"
