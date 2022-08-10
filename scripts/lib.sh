@@ -20,7 +20,7 @@ function open_channel() {
 }
 
 function await_block_sync() {
-  FINALITY_DELAY=$(cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay')
+  FINALITY_DELAY=$(get_finality_delay)
   EXPECTED_BLOCK_HEIGHT="$(( $($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks') - $FINALITY_DELAY ))"
   $FM_MINT_CLIENT wait-block-height $EXPECTED_BLOCK_HEIGHT
 }
@@ -43,4 +43,8 @@ function kill_minimint_processes {
 function start_gateway() {
   $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway minimint-cfg=$FM_CFG_DIR &
   sleep 1 # wait for plugin to start
+}
+
+function get_finality_delay() {
+    cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay'
 }
