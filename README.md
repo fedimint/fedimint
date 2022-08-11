@@ -1,6 +1,6 @@
-# MiniMint
+# Fedimint
 
-MiniMint is a federated [Chaumian e-cash](https://en.wikipedia.org/wiki/Ecash) mint backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
+Fedimint is a federated [Chaumian e-cash](https://en.wikipedia.org/wiki/Ecash) mint backed by bitcoin with deposits and withdrawals that can occur on-chain or via Lightning.
 
 **DO NOT USE IT WITH REAL MONEY, THERE ARE MULTIPLE KNOWN SECURITY ISSUES.**
 
@@ -12,7 +12,7 @@ Visit our [Telegram group](https://t.me/fedimint) for high-level discussions (no
 
 To get started with development have a look at the:
 * [Developer discord](https://discord.gg/dZYajBMsEB) - only for programming questions and discussing the codebase
-* [GitHub Issues](https://github.com/fedimint/minimint/issues) - things to fix, planned features, longer term architectural choices, etc.
+* [GitHub Issues](https://github.com/fedimint/fedimint/issues) - things to fix, planned features, longer term architectural choices, etc.
 * [Architecture](docs/architecture.md) - high-level description of the codebase and design
 * [Integration tests](integrationtests/README.md) - instructions on how to write and run the integration tests
 * [Scripts](scripts/README.md) - useful scripts for running the tests and federation
@@ -20,21 +20,21 @@ To get started with development have a look at the:
 PRs fixing TODOs or issues are always welcome, but please discuss more involved changes in an issue first. Smaller PRs to fix typos, broken links etc. are also very welcome.
 Happy hacking!
 
-## Running MiniMint
-MiniMint consists of three kinds of executables:
+## Running Fedimint
+Fedimint consists of three kinds of executables:
 * **Federation nodes** - servers who form the mint by running a consensus protocol
 * **Lightning gateways** - allows users send and receive over Lightning by bridging between the mint and an LN node
 * **User clients** - handles user communication with the mint and the gateway
 
 ### Prerequisites
-In order to run MiniMint you will need:
+In order to run Fedimint you will need:
 - The [Rust toolchain](https://www.rust-lang.org/tools/install) to build and run the executables
 - The [Nix package manager](https://nixos.org/download.html) for managing build and test dependencies
 
-Clone and `cd` into the MiniMint repo:
+Clone and `cd` into the Fedimint repo:
 ```shell
-git clone git@github.com:fedimint/minimint.git
-cd minimint
+git clone git@github.com:fedimint/fedimint.git
+cd fedimint
 ```
 
 ### Setting up the federation

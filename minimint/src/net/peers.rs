@@ -504,10 +504,10 @@ where
         if connected_peer == self.peer {
             Ok(conn)
         } else {
-            return Err(anyhow::anyhow!(
+            Err(anyhow::anyhow!(
                 "Peer identified itself incorrectly: {:?}",
                 connected_peer
-            ));
+            ))
         }
     }
 }

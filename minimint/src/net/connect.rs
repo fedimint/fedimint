@@ -410,8 +410,7 @@ mod tests {
         let peer_keys = (0..count)
             .map(|id| {
                 let peer = PeerId::from(id as u16);
-                let cert_key = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
-                cert_key
+                gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap()
             })
             .collect::<Vec<_>>();
 
