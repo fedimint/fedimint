@@ -918,6 +918,16 @@
 <span id="918">918</span>
 <span id="919">919</span>
 <span id="920">920</span>
+<span id="921">921</span>
+<span id="922">922</span>
+<span id="923">923</span>
+<span id="924">924</span>
+<span id="925">925</span>
+<span id="926">926</span>
+<span id="927">927</span>
+<span id="928">928</span>
+<span id="929">929</span>
+<span id="930">930</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -1065,7 +1075,6 @@
             <span class="ident">context</span>: <span class="self">self</span>
                 .<span class="ident">context</span>
                 .<span class="ident">borrow_with_module_config</span>(<span class="op">|</span><span class="ident">cfg</span><span class="op">|</span> <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">as_ref</span>().<span class="ident">wallet</span>),
-            <span class="ident">fee_consensus</span>: <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(), <span class="comment">// TODO: remove or put into context</span>
         }
     }
 
@@ -1119,7 +1128,7 @@
             .<span class="ident">create_pegin_input</span>(<span class="ident">txout_proof</span>, <span class="ident">btc_transaction</span>)<span class="question-mark">?</span>;
 
         <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">Amount::from_sat</span>(<span class="ident">peg_in_proof</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>)
-            .<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>.<span class="ident">fee_peg_in_abs</span>);
+            .<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">wallet</span>.<span class="ident">fee_consensus</span>.<span class="ident">peg_in_abs</span>);
         <span class="kw">if</span> <span class="ident">amount</span> <span class="op">==</span> <span class="ident">Amount::ZERO</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::PegInAmountTooSmall</span>);
         }
@@ -1138,7 +1147,12 @@
     ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>
             .<span class="ident">mint_client</span>()
-            .<span class="ident">submit_tx_with_change</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>, <span class="ident">tx</span>, <span class="ident">batch</span>, <span class="ident">rng</span>)
+            .<span class="ident">submit_tx_with_change</span>(
+                <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>(),
+                <span class="ident">tx</span>,
+                <span class="ident">batch</span>,
+                <span class="ident">rng</span>,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
@@ -1217,7 +1231,13 @@
         <span class="kw">let</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
         <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">TransactionBuilder::default</span>();
 
-        <span class="kw">let</span> <span class="ident">funding_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>.<span class="ident">fee_peg_out_abs</span>
+        <span class="kw">let</span> <span class="ident">funding_amount</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">context</span>
+            .<span class="ident">config</span>
+            .<span class="ident">as_ref</span>()
+            .<span class="ident">wallet</span>
+            .<span class="ident">fee_consensus</span>
+            .<span class="ident">peg_out_abs</span>
             <span class="op">+</span> (<span class="ident">peg_out</span>.<span class="ident">amount</span> <span class="op">+</span> <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>();
         <span class="kw">let</span> <span class="ident">coins</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">funding_amount</span>)<span class="question-mark">?</span>;
         <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;

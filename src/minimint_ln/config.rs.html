@@ -56,6 +56,25 @@
 <span id="56">56</span>
 <span id="57">57</span>
 <span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::rand::Rand07Compat</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
@@ -70,11 +89,13 @@
     <span class="kw">pub</span> <span class="ident">threshold_sec_key</span>:
         <span class="ident">threshold_crypto::serde_impl::SerdeSecret</span><span class="op">&lt;</span><span class="ident">threshold_crypto::SecretKeyShare</span><span class="op">&gt;</span>,
     <span class="kw">pub</span> <span class="ident">threshold</span>: <span class="ident">usize</span>,
+    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningModuleClientConfig</span> {
     <span class="kw">pub</span> <span class="ident">threshold_pub_key</span>: <span class="ident">threshold_crypto::PublicKey</span>,
+    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">GenerateConfig</span> <span class="kw">for</span> <span class="ident">LightningModuleConfig</span> {
@@ -102,6 +123,7 @@
                         <span class="ident">threshold_pub_keys</span>: <span class="ident">pks</span>.<span class="ident">clone</span>(),
                         <span class="ident">threshold_sec_key</span>: <span class="ident">threshold_crypto::serde_impl::SerdeSecret</span>(<span class="ident">sk</span>),
                         <span class="ident">threshold</span>,
+                        <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
                     },
                 )
             })
@@ -109,9 +131,25 @@
 
         <span class="kw">let</span> <span class="ident">client_cfg</span> <span class="op">=</span> <span class="ident">LightningModuleClientConfig</span> {
             <span class="ident">threshold_pub_key</span>: <span class="ident">pks</span>.<span class="ident">public_key</span>(),
+            <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
         };
 
         (<span class="ident">server_cfg</span>, <span class="ident">client_cfg</span>)
+    }
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FeeConsensus</span> {
+    <span class="kw">pub</span> <span class="ident">contract_input</span>: <span class="ident">minimint_api::Amount</span>,
+    <span class="kw">pub</span> <span class="ident">contract_output</span>: <span class="ident">minimint_api::Amount</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">FeeConsensus</span> {
+    <span class="kw">fn</span> <span class="ident">default</span>() -&gt; <span class="self">Self</span> {
+        <span class="self">Self</span> {
+            <span class="ident">contract_input</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
+            <span class="ident">contract_output</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
+        }
     }
 }
 </code></pre></div>

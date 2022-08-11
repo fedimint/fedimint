@@ -9,7 +9,6 @@ var sourcesIndex = JSON.parse('{\
 "minimint_derive":["",[],["lib.rs"]],\
 "minimint_ln":["",[["contracts",[],["account.rs","incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
 "minimint_mint":["",[["tiered",[],["coins.rs","keys.rs","mod.rs"]]],["config.rs","db.rs","lib.rs"]],\
-"minimint_tests":["",[],["main.rs"]],\
 "minimint_wallet":["",[],["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "mint_client":["",[["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","lib.rs","transaction.rs","utils.rs"]],\
 "mint_client_cli":["",[],["main.rs"]],\

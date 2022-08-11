@@ -92,6 +92,25 @@
 <span id="92">92</span>
 <span id="93">93</span>
 <span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::keys::CompressedPublicKey</span>;
 <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Feerate</span>, <span class="ident">PegInDescriptor</span>};
 <span class="kw">use</span> <span class="ident">bitcoin::secp256k1::rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
@@ -115,6 +134,7 @@
     <span class="kw">pub</span> <span class="ident">btc_rpc_address</span>: <span class="ident">String</span>,
     <span class="kw">pub</span> <span class="ident">btc_rpc_user</span>: <span class="ident">String</span>,
     <span class="kw">pub</span> <span class="ident">btc_rpc_pass</span>: <span class="ident">String</span>,
+    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
@@ -125,6 +145,22 @@
     <span class="kw">pub</span> <span class="ident">network</span>: <span class="ident">Network</span>,
     <span class="doccomment">/// Confirmations required for a peg in to be accepted by federation</span>
     <span class="kw">pub</span> <span class="ident">finality_delay</span>: <span class="ident">u32</span>,
+    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FeeConsensus</span> {
+    <span class="kw">pub</span> <span class="ident">peg_in_abs</span>: <span class="ident">minimint_api::Amount</span>,
+    <span class="kw">pub</span> <span class="ident">peg_out_abs</span>: <span class="ident">minimint_api::Amount</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">FeeConsensus</span> {
+    <span class="kw">fn</span> <span class="ident">default</span>() -&gt; <span class="self">Self</span> {
+        <span class="self">Self</span> {
+            <span class="ident">peg_in_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
+            <span class="ident">peg_out_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
+        }
+    }
 }
 
 <span class="kw">impl</span> <span class="ident">GenerateConfig</span> <span class="kw">for</span> <span class="ident">WalletConfig</span> {
@@ -171,6 +207,7 @@
                     <span class="ident">btc_rpc_address</span>: <span class="string">&quot;127.0.0.1:18443&quot;</span>.<span class="ident">to_string</span>(),
                     <span class="ident">btc_rpc_user</span>: <span class="string">&quot;bitcoin&quot;</span>.<span class="ident">to_string</span>(),
                     <span class="ident">btc_rpc_pass</span>: <span class="string">&quot;bitcoin&quot;</span>.<span class="ident">to_string</span>(),
+                    <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
                 };
 
                 (<span class="kw-2">*</span><span class="ident">id</span>, <span class="ident">cfg</span>)
@@ -181,6 +218,7 @@
             <span class="ident">peg_in_descriptor</span>,
             <span class="ident">network</span>: <span class="ident">Network::Regtest</span>,
             <span class="ident">finality_delay</span>: <span class="ident">FINALITY_DELAY</span>,
+            <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
         };
 
         (<span class="ident">wallet_cfg</span>, <span class="ident">client_cfg</span>)

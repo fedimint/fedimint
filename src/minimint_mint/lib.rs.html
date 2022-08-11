@@ -910,6 +910,7 @@
 <span id="910">910</span>
 <span id="911">911</span>
 <span id="912">912</span>
+<span id="913">913</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
     <span class="ident">MintAuditItemKey</span>, <span class="ident">MintAuditItemKeyPrefix</span>, <span class="ident">NonceKey</span>, <span class="ident">OutputOutcomeKey</span>,
@@ -1628,7 +1629,7 @@
 
 <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
 <span class="kw">mod</span> <span class="ident">test</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintClientConfig</span>;
+    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config</span>::{<span class="ident">FeeConsensus</span>, <span class="ident">MintClientConfig</span>};
     <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">BlindToken</span>, <span class="ident">Coins</span>, <span class="ident">CombineError</span>, <span class="ident">Mint</span>, <span class="ident">MintConfig</span>, <span class="ident">PeerErrorType</span>};
     <span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
@@ -1816,6 +1817,7 @@
             <span class="ident">MintConfig</span> {
                 <span class="ident">tbs_sks</span>: <span class="ident">mint_server_cfg1</span>[<span class="number">0</span>].<span class="ident">tbs_sks</span>.<span class="ident">clone</span>(),
                 <span class="ident">peer_tbs_pks</span>: <span class="ident">mint_server_cfg2</span>[<span class="number">0</span>].<span class="ident">peer_tbs_pks</span>.<span class="ident">clone</span>(),
+                <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
             },
             <span class="ident">THRESHOLD</span>,
             <span class="ident">Arc::new</span>(<span class="ident">MemDatabase::new</span>()),

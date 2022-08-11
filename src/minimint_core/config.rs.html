@@ -55,6 +55,11 @@
 <span id="55">55</span>
 <span id="56">56</span>
 <span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_ln::config::LightningModuleClientConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_mint::config::MintClientConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_wallet::config::WalletClientConfig</span>;
@@ -68,19 +73,24 @@
     <span class="kw">pub</span> <span class="ident">mint</span>: <span class="ident">MintClientConfig</span>,
     <span class="kw">pub</span> <span class="ident">wallet</span>: <span class="ident">WalletClientConfig</span>,
     <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">LightningModuleClientConfig</span>,
-    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
     <span class="kw">pub</span> <span class="ident">max_evil</span>: <span class="ident">usize</span>,
 }
 
-<span class="comment">// TODO: get rid of it here, modules should govern their own fees</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
+<span class="kw">impl</span> <span class="ident">ClientConfig</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fee_consensus</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">FeeConsensus</span> {
+        <span class="ident">FeeConsensus</span> {
+            <span class="ident">wallet</span>: <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+            <span class="ident">mint</span>: <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+            <span class="ident">ln</span>: <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+        }
+    }
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Default</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">FeeConsensus</span> {
-    <span class="kw">pub</span> <span class="ident">fee_coin_spend_abs</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fee_peg_in_abs</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fee_coin_issuance_abs</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fee_peg_out_abs</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fee_contract_input</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fee_contract_output</span>: <span class="ident">minimint_api::Amount</span>,
+    <span class="kw">pub</span> <span class="ident">wallet</span>: <span class="ident">minimint_wallet::config::FeeConsensus</span>,
+    <span class="kw">pub</span> <span class="ident">mint</span>: <span class="ident">minimint_mint::config::FeeConsensus</span>,
+    <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">minimint_ln::config::FeeConsensus</span>,
 }
 
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">load_from_file</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">DeserializeOwned</span><span class="op">&gt;</span>(<span class="ident">path</span>: <span class="kw-2">&amp;</span><span class="ident">Path</span>) -&gt; <span class="ident">T</span> {

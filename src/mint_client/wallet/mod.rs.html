@@ -334,23 +334,12 @@
 <span id="334">334</span>
 <span id="335">335</span>
 <span id="336">336</span>
-<span id="337">337</span>
-<span id="338">338</span>
-<span id="339">339</span>
-<span id="340">340</span>
-<span id="341">341</span>
-<span id="342">342</span>
-<span id="343">343</span>
-<span id="344">344</span>
-<span id="345">345</span>
-<span id="346">346</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils::BorrowedClientContext</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::Address</span>;
 <span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
 <span class="kw">use</span> <span class="ident">db::PegInKey</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::db::batch::BatchTx</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::config::FeeConsensus</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::config::WalletClientConfig</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::tweakable::Tweakable</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof</span>::{<span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span>, <span class="ident">TxOutProof</span>};
@@ -366,7 +355,6 @@
 <span class="doccomment">/// outputs of the wallet (on-chain) type.</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">WalletClient</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> {
     <span class="kw">pub</span> <span class="ident">context</span>: <span class="ident">BorrowedClientContext</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">WalletClientConfig</span><span class="op">&gt;</span>,
-    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
 
 <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> <span class="ident">WalletClient</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> {
@@ -447,7 +435,8 @@
             .<span class="ident">map_err</span>(<span class="ident">WalletClientError::PegInProofError</span>)<span class="question-mark">?</span>;
         <span class="kw">let</span> <span class="ident">sats</span> <span class="op">=</span> <span class="ident">peg_in_proof</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>;
 
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">Amount::from_sat</span>(<span class="ident">sats</span>).<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">fee_consensus</span>.<span class="ident">fee_peg_in_abs</span>);
+        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span>
+            <span class="ident">Amount::from_sat</span>(<span class="ident">sats</span>).<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">fee_consensus</span>.<span class="ident">peg_in_abs</span>);
         <span class="kw">if</span> <span class="ident">amount</span> <span class="op">==</span> <span class="ident">Amount::ZERO</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletClientError::PegInAmountTooSmall</span>);
         }
@@ -480,8 +469,7 @@
 
     <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::module::testing::FakeFed</span>;
-    <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
-    <span class="kw">use</span> <span class="ident">minimint_core::config::FeeConsensus</span>;
+    <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningGateway</span>};
@@ -602,14 +590,6 @@
         <span class="kw">let</span> (<span class="ident">fed</span>, <span class="ident">client_context</span>, <span class="ident">btc_rpc</span>) <span class="op">=</span> <span class="ident">new_mint_and_client</span>().<span class="kw">await</span>;
         <span class="kw">let</span> <span class="ident">_client</span> <span class="op">=</span> <span class="ident">WalletClient</span> {
             <span class="ident">context</span>: <span class="ident">client_context</span>.<span class="ident">borrow_with_module_config</span>(<span class="op">|</span><span class="ident">x</span><span class="op">|</span> <span class="ident">x</span>),
-            <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span> {
-                <span class="ident">fee_coin_spend_abs</span>: <span class="ident">Amount::ZERO</span>,
-                <span class="ident">fee_peg_in_abs</span>: <span class="ident">Amount::ZERO</span>,
-                <span class="ident">fee_coin_issuance_abs</span>: <span class="ident">Amount::ZERO</span>,
-                <span class="ident">fee_peg_out_abs</span>: <span class="ident">Amount::ZERO</span>,
-                <span class="ident">fee_contract_input</span>: <span class="ident">Amount::ZERO</span>,
-                <span class="ident">fee_contract_output</span>: <span class="ident">Amount::ZERO</span>,
-            },
         };
 
         <span class="comment">// generate fake UTXO</span>

@@ -240,12 +240,6 @@
 <span id="240">240</span>
 <span id="241">241</span>
 <span id="242">242</span>
-<span id="243">243</span>
-<span id="244">244</span>
-<span id="245">245</span>
-<span id="246">246</span>
-<span id="247">247</span>
-<span id="248">248</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::rand::Rand07Compat</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_core::config</span>::<span class="kw-2">*</span>;
 
@@ -283,9 +277,6 @@
     <span class="kw">pub</span> <span class="ident">wallet</span>: <span class="ident">WalletConfig</span>,
     <span class="kw">pub</span> <span class="ident">mint</span>: <span class="ident">MintConfig</span>,
     <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">LightningModuleConfig</span>,
-
-    <span class="comment">// TODO: make consensus defined</span>
-    <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
@@ -344,15 +335,6 @@
         <span class="kw">let</span> (<span class="ident">ln_server_cfg</span>, <span class="ident">ln_client_cfg</span>) <span class="op">=</span>
             <span class="ident">LightningModuleConfig::trusted_dealer_gen</span>(<span class="ident">peers</span>, <span class="ident">max_evil</span>, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
 
-        <span class="kw">let</span> <span class="ident">fee_consensus</span> <span class="op">=</span> <span class="ident">FeeConsensus</span> {
-            <span class="ident">fee_coin_spend_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-            <span class="ident">fee_peg_in_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-            <span class="ident">fee_coin_issuance_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-            <span class="ident">fee_peg_out_abs</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-            <span class="ident">fee_contract_input</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-            <span class="ident">fee_contract_output</span>: <span class="ident">minimint_api::Amount::ZERO</span>,
-        };
-
         <span class="kw">let</span> <span class="ident">server_config</span> <span class="op">=</span> <span class="ident">netinfo</span>
             .<span class="ident">iter</span>()
             .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>, <span class="ident">netinf</span>)<span class="op">|</span> {
@@ -369,7 +351,6 @@
                     <span class="ident">wallet</span>: <span class="ident">wallet_server_cfg</span>[<span class="kw-2">&amp;</span><span class="ident">id</span>].<span class="ident">clone</span>(),
                     <span class="ident">mint</span>: <span class="ident">mint_server_cfg</span>[<span class="kw-2">&amp;</span><span class="ident">id</span>].<span class="ident">clone</span>(),
                     <span class="ident">ln</span>: <span class="ident">ln_server_cfg</span>[<span class="kw-2">&amp;</span><span class="ident">id</span>].<span class="ident">clone</span>(),
-                    <span class="ident">fee_consensus</span>: <span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
                 };
                 (<span class="ident">id</span>, <span class="ident">config</span>)
             })
@@ -384,7 +365,6 @@
             <span class="ident">mint</span>: <span class="ident">mint_client_cfg</span>,
             <span class="ident">wallet</span>: <span class="ident">wallet_client_cfg</span>,
             <span class="ident">ln</span>: <span class="ident">ln_client_cfg</span>,
-            <span class="ident">fee_consensus</span>,
         };
 
         (<span class="ident">server_config</span>, <span class="ident">client_config</span>)
@@ -422,6 +402,14 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">max_faulty</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> {
         <span class="ident">hbbft::util::max_faulty</span>(<span class="self">self</span>.<span class="ident">peers</span>.<span class="ident">len</span>())
+    }
+
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fee_consensus</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">minimint_core::config::FeeConsensus</span> {
+        <span class="ident">minimint_core::config::FeeConsensus</span> {
+            <span class="ident">wallet</span>: <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+            <span class="ident">mint</span>: <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+            <span class="ident">ln</span>: <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">fee_consensus</span>.<span class="ident">clone</span>(),
+        }
     }
 }
 
