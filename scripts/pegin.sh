@@ -21,7 +21,7 @@ echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address)"; fi
 
 # We send the amount we want to peg-in to this address
-TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR 0"$(echo "scale=8; $PEG_IN_AMOUNT/100000000" | bc )")"
+TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR "$(sat_to_btc $PEG_IN_AMOUNT)")"
 
 # Now we "wait" for confirmations
 $FM_BTC_CLIENT generatetoaddress 11 "$($FM_BTC_CLIENT getnewaddress)"

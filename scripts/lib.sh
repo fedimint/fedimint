@@ -48,3 +48,7 @@ function start_gateway() {
 function get_finality_delay() {
     cat $FM_CFG_DIR/server-0.json | jq -r '.wallet.finality_delay'
 }
+
+function sat_to_btc() {
+    echo "scale=8; $1/100000000" | bc | awk '{printf "%.8f\n", $0}'
+}
