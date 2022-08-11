@@ -14,7 +14,6 @@ var sourcesIndex = JSON.parse('{\
 "mint_client":["",[["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","lib.rs","transaction.rs","utils.rs"]],\
 "mint_client_cli":["",[],["main.rs"]],\
 "mint_rpc_client":["",[],["mint-rpc-client.rs"]],\
-"server":["",[],["server.rs"]],\
 "tbs":["",[["serde_impl",[],["mod.rs","scalar.rs"]]],["hash.rs","lib.rs","poly.rs"]]\
 }');
 createSourceSidebar();
