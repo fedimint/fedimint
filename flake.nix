@@ -83,16 +83,17 @@
         # all the dependencies (as dir) to help limit the
         # amount of things that need to rebuild when some
         # file change
-        pkg = { name, dir, extraDirs ? [ ] }: rec {
+        pkg = { name ? null, dir, extraDirs ? [ ] }: rec {
           package = craneLib.buildPackage (commonArgs // {
             cargoArtifacts = workspaceDeps;
-            pname = name;
 
             src = filterModules ([ dir ] ++ extraDirs) ./.;
 
-            cargoExtraArgs = "--bin ${name}";
             # if needed we will check the whole workspace at once with `workspaceAll`
             doCheck = false;
+          } // lib.optionalAttrs (name != null) {
+            pname = name;
+            cargoExtraArgs = "--bin ${name}";
           });
         };
 
@@ -180,7 +181,6 @@
         };
 
         minimint-tests = pkg {
-          name = "minimint-tests";
           dir = "integrationtests";
           extraDirs = [
             "client/cli"
