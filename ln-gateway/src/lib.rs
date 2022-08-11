@@ -27,6 +27,8 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
 use webserver::run_webserver;
 
+pub type Result<T> = std::result::Result<T, LnGatewayError>;
+
 #[derive(Debug)]
 pub struct BalancePayload;
 
@@ -58,26 +60,20 @@ pub enum GatewayRequest {
 #[derive(Debug)]
 pub struct GatewayRequestInner<R: GatewayRequestTrait> {
     request: R,
-    sender: oneshot::Sender<Result<R::Response, LnGatewayError>>,
+    sender: oneshot::Sender<Result<R::Response>>,
 }
 
 pub trait GatewayRequestTrait {
     type Response;
 
-    fn to_enum(
-        self,
-        sender: oneshot::Sender<Result<Self::Response, LnGatewayError>>,
-    ) -> GatewayRequest;
+    fn to_enum(self, sender: oneshot::Sender<Result<Self::Response>>) -> GatewayRequest;
 }
 
 macro_rules! impl_gateway_request_trait {
     ($req:ty, $res:ty, $variant:expr) => {
         impl GatewayRequestTrait for $req {
             type Response = $res;
-            fn to_enum(
-                self,
-                sender: oneshot::Sender<Result<Self::Response, LnGatewayError>>,
-            ) -> GatewayRequest {
+            fn to_enum(self, sender: oneshot::Sender<Result<Self::Response>>) -> GatewayRequest {
                 $variant(GatewayRequestInner {
                     request: self,
                     sender,
@@ -102,10 +98,7 @@ where
     T: GatewayRequestTrait,
     T::Response: std::fmt::Debug,
 {
-    async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response, LnGatewayError>>>(
-        self,
-        handler: F,
-    ) {
+    async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response>>>(self, handler: F) {
         let result = handler(self.request).await;
         self.sender
             .send(result)
@@ -126,7 +119,7 @@ impl LnGateway {
         ln_client: Box<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-    ) -> Result<Self, LnGatewayError> {
+    ) -> Result<Self> {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
         // Regster gateway with federation
         federation_client
@@ -148,7 +141,7 @@ impl LnGateway {
         payment_hash: &Hash,
         amount: &Amount,
         rng: impl RngCore + CryptoRng,
-    ) -> Result<(OutPoint, ContractId), LnGatewayError> {
+    ) -> Result<(OutPoint, ContractId)> {
         let (outpoint, contract_id) = self
             .federation_client
             .buy_preimage_offer(payment_hash, amount, rng)
@@ -156,10 +149,7 @@ impl LnGateway {
         Ok((outpoint, contract_id))
     }
 
-    pub async fn await_preimage_decryption(
-        &self,
-        outpoint: OutPoint,
-    ) -> Result<Preimage, LnGatewayError> {
+    pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
         let preimage = self
             .federation_client
             .await_preimage_decryption(outpoint)
@@ -172,7 +162,7 @@ impl LnGateway {
         &self,
         contract_id: ContractId,
         rng: impl RngCore + CryptoRng,
-    ) -> Result<OutPoint, LnGatewayError> {
+    ) -> Result<OutPoint> {
         debug!("Fetching contract");
         let contract_account = self
             .federation_client
@@ -226,14 +216,14 @@ impl LnGateway {
         &self,
         contract_id: ContractId,
         outpoint: OutPoint,
-    ) -> Result<(), LnGatewayError> {
+    ) -> Result<()> {
         Ok(self
             .federation_client
             .await_outgoing_contract_claimed(contract_id, outpoint)
             .await?)
     }
 
-    async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<(), LnGatewayError> {
+    async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<()> {
         let rng = rand::rngs::OsRng::new().unwrap();
         let outpoint = self.pay_invoice(contract_id, rng).await?;
         self.await_outgoing_contract_claimed(contract_id, outpoint)
@@ -241,10 +231,7 @@ impl LnGateway {
         Ok(())
     }
 
-    async fn handle_htlc_incoming_msg(
-        &self,
-        htlc_accepted: HtlcAccepted,
-    ) -> Result<Preimage, LnGatewayError> {
+    async fn handle_htlc_incoming_msg(&self, htlc_accepted: HtlcAccepted) -> Result<Preimage> {
         let amount = htlc_accepted.htlc.amount;
         let payment_hash = htlc_accepted.htlc.payment_hash;
         let rng = rand::rngs::OsRng::new().unwrap();
@@ -258,20 +245,19 @@ impl LnGateway {
         Ok(preimage)
     }
 
-    async fn handle_balance_msg(&self) -> Result<Amount, LnGatewayError> {
+    async fn handle_balance_msg(&self) -> Result<Amount> {
         let fetch_results = self.federation_client.fetch_all_coins().await;
-        fetch_results.into_iter().collect::<Result<Vec<_>, _>>()?;
+        fetch_results
+            .into_iter()
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(self.federation_client.coins().amount())
     }
-    async fn handle_address_msg(&self) -> Result<Address, LnGatewayError> {
+    async fn handle_address_msg(&self) -> Result<Address> {
         let mut rng = rand::rngs::OsRng::new().unwrap();
         Ok(self.federation_client.get_new_pegin_address(&mut rng))
     }
 
-    async fn handle_deposit_msg(
-        &self,
-        deposit: DepositPayload,
-    ) -> Result<TransactionId, LnGatewayError> {
+    async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
         let rng = rand::rngs::OsRng::new().unwrap();
         self.federation_client
             .peg_in(deposit.0, deposit.1, rng)
@@ -279,10 +265,7 @@ impl LnGateway {
             .map_err(LnGatewayError::ClientError)
     }
 
-    async fn handle_withdraw_msg(
-        &self,
-        withdraw: WithdrawPayload,
-    ) -> Result<TransactionId, LnGatewayError> {
+    async fn handle_withdraw_msg(&self, withdraw: WithdrawPayload) -> Result<TransactionId> {
         let rng = rand::rngs::OsRng::new().unwrap();
         let peg_out = self
             .federation_client
@@ -295,7 +278,7 @@ impl LnGateway {
             .map_err(LnGatewayError::ClientError)
     }
 
-    pub async fn run(&mut self) -> Result<(), LnGatewayError> {
+    pub async fn run(&mut self) -> Result<()> {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
@@ -362,7 +345,7 @@ pub enum LnGatewayError {
 
 pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
     d: D,
-) -> Result<T, D::Error> {
+) -> std::result::Result<T, D::Error> {
     if d.is_human_readable() {
         let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
             .map_err(serde::de::Error::custom)?;
