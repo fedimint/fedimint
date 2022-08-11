@@ -32,6 +32,9 @@ jobs:
       - name: Commit check
         run: nix develop --ignore-environment --extra-experimental-features nix-command --extra-experimental-features flakes .#lint --command ./misc/git-hooks/pre-commit
 
+      - name: Commit check
+        run: nix develop --ignore-environment --extra-experimental-features nix-command --extra-experimental-features flakes .#lint --command cargo udeps
+
   build:
     name: "Build"
     runs-on: buildjet-8vcpu-ubuntu-2004

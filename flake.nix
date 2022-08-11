@@ -310,6 +310,7 @@
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
+                pkgs.cargo-udeps
               ];
             };
           };
