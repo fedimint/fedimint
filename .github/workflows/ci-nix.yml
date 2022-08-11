@@ -20,12 +20,13 @@ jobs:
     runs-on: buildjet-8vcpu-ubuntu-2004
     steps:
       - uses: actions/checkout@v3
-
-      - name: Cache install Nix packages
-        uses: mtoohey31/cache-flake-attrs@v2
+      - uses: cachix/install-nix-action@v15
         with:
-          key: ${{ runner.os }}-nix-${{ hashFiles('./flake.lock', './flake.nix') }}-lint
-          flake_paths: ".#devShells.x86_64-linux.lint"
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v10
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
@@ -36,12 +37,13 @@ jobs:
     runs-on: buildjet-8vcpu-ubuntu-2004
     steps:
       - uses: actions/checkout@v3
-
-      - name: Cache install Nix packages
-        uses: mtoohey31/cache-flake-attrs@v2
+      - uses: cachix/install-nix-action@v15
         with:
-          key: ${{ runner.os }}-nix-${{ hashFiles('./flake.lock', './flake.nix', './Cargo.lock') }}-deps
-          flake_paths: ".#packages.x86_64-linux.deps"
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v10
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Run tests
         run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#ci
