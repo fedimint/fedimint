@@ -1161,10 +1161,10 @@
         <span class="kw">if</span> <span class="ident">connected_peer</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">peer</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">conn</span>)
         } <span class="kw">else</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
+            <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">&quot;Peer identified itself incorrectly: {:?}&quot;</span>,
                 <span class="ident">connected_peer</span>
-            ));
+            ))
         }
     }
 }

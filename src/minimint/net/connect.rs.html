@@ -578,7 +578,6 @@
 <span id="578">578</span>
 <span id="579">579</span>
 <span id="580">580</span>
-<span id="581">581</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations</span>
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">AnyFramedTransport</span>, <span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
@@ -991,8 +990,7 @@
         <span class="kw">let</span> <span class="ident">peer_keys</span> <span class="op">=</span> (<span class="number">0</span>..<span class="ident">count</span>)
             .<span class="ident">map</span>(<span class="op">|</span><span class="ident">id</span><span class="op">|</span> {
                 <span class="kw">let</span> <span class="ident">peer</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>);
-                <span class="kw">let</span> <span class="ident">cert_key</span> <span class="op">=</span> <span class="ident">gen_cert_and_key</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>())).<span class="ident">unwrap</span>();
-                <span class="ident">cert_key</span>
+                <span class="ident">gen_cert_and_key</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>())).<span class="ident">unwrap</span>()
             })
             .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
 
