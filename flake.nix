@@ -91,7 +91,7 @@
 
             src = filterModules ([ dir ] ++ extraDirs) ./.;
 
-            # if needed we will check the whole workspace at once with `workspaceAll`
+            # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
           } // lib.optionalAttrs (name != null) {
             pname = name;
@@ -99,19 +99,24 @@
           });
         };
 
+        workspaceBuild = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceDeps;
+          doCheck = false;
+        });
+
+        workspaceTest = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceBuild;
+          doCheck = true;
+        });
+
         # Note: can't use `cargoClippy` because it implies `--all-targets`, while
         # we can't build benches on stable
         # See: https://github.com/ipetkov/crane/issues/64
         workspaceClippy = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceDeps;
+          cargoArtifacts = workspaceBuild;
 
           cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
           doCheck = false;
-        });
-
-        workspaceAll = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-          doCheck = true;
         });
 
         workspaceCoverage = craneLib.cargoTarpaulin (commonArgs // {
@@ -214,13 +219,14 @@
           clientd = clientd.package;
           mint-client-cli = mint-client-cli.package;
           deps = workspaceDeps;
-          ci = workspaceAll;
+          workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
+          workspaceTest = workspaceTest;
         };
 
         checks = {
           inherit
-            workspaceAll
+            workspaceBuild
             workspaceClippy
             workspaceCoverage;
         };
