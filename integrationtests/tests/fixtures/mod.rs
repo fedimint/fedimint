@@ -644,7 +644,6 @@ impl FederationTest {
 
         // Consumes the empty epoch 0 outcome from all servers
         let server_config = server_config.iter().last().unwrap().1.clone();
-        let wallet = server_config.wallet;
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),
@@ -655,8 +654,8 @@ impl FederationTest {
             servers,
             max_balance_sheet,
             last_consensus,
-            fees: server_config.fee_consensus,
-            wallet,
+            fees: server_config.fee_consensus(),
+            wallet: server_config.wallet,
         }
     }
 }

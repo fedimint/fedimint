@@ -52,9 +52,9 @@ impl TransactionItem for Input {
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Input::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Input::Wallet(_) => fee_consensus.fee_peg_in_abs,
-            Input::LN(_) => fee_consensus.fee_contract_input,
+            Input::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.coins.len() as u64),
+            Input::Wallet(_) => fee_consensus.wallet.peg_in_abs,
+            Input::LN(_) => fee_consensus.ln.contract_input,
         }
     }
 }
@@ -71,10 +71,10 @@ impl TransactionItem for Output {
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Output::Mint(coins) => fee_consensus.fee_coin_spend_abs * (coins.coins.len() as u64),
-            Output::Wallet(_) => fee_consensus.fee_peg_out_abs,
+            Output::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.coins.len() as u64),
+            Output::Wallet(_) => fee_consensus.wallet.peg_out_abs,
             Output::LN(minimint_ln::ContractOrOfferOutput::Contract(_)) => {
-                fee_consensus.fee_contract_output
+                fee_consensus.ln.contract_output
             }
             // TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
             Output::LN(minimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,

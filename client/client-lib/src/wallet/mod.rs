@@ -4,7 +4,6 @@ use bitcoin::KeyPair;
 use db::PegInKey;
 use minimint_api::db::batch::BatchTx;
 use minimint_api::Amount;
-use minimint_core::config::FeeConsensus;
 use minimint_core::modules::wallet::config::WalletClientConfig;
 use minimint_core::modules::wallet::tweakable::Tweakable;
 use minimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
@@ -20,7 +19,6 @@ mod db;
 /// outputs of the wallet (on-chain) type.
 pub struct WalletClient<'c> {
     pub context: BorrowedClientContext<'c, WalletClientConfig>,
-    pub fee_consensus: FeeConsensus,
 }
 
 impl<'c> WalletClient<'c> {
@@ -101,7 +99,8 @@ impl<'c> WalletClient<'c> {
             .map_err(WalletClientError::PegInProofError)?;
         let sats = peg_in_proof.tx_output().value;
 
-        let amount = Amount::from_sat(sats).saturating_sub(self.fee_consensus.fee_peg_in_abs);
+        let amount =
+            Amount::from_sat(sats).saturating_sub(self.context.config.fee_consensus.peg_in_abs);
         if amount == Amount::ZERO {
             return Err(WalletClientError::PegInAmountTooSmall);
         }
@@ -134,8 +133,7 @@ mod tests {
 
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
-    use minimint_api::{Amount, OutPoint, TransactionId};
-    use minimint_core::config::FeeConsensus;
+    use minimint_api::{OutPoint, TransactionId};
     use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use minimint_core::modules::ln::contracts::ContractId;
     use minimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -256,14 +254,6 @@ mod tests {
         let (fed, client_context, btc_rpc) = new_mint_and_client().await;
         let _client = WalletClient {
             context: client_context.borrow_with_module_config(|x| x),
-            fee_consensus: FeeConsensus {
-                fee_coin_spend_abs: Amount::ZERO,
-                fee_peg_in_abs: Amount::ZERO,
-                fee_coin_issuance_abs: Amount::ZERO,
-                fee_peg_out_abs: Amount::ZERO,
-                fee_contract_input: Amount::ZERO,
-                fee_contract_output: Amount::ZERO,
-            },
         };
 
         // generate fake UTXO

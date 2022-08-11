@@ -145,7 +145,6 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             context: self
                 .context
                 .borrow_with_module_config(|cfg| &cfg.as_ref().wallet),
-            fee_consensus: self.context.config.as_ref().fee_consensus.clone(), // TODO: remove or put into context
         }
     }
 
@@ -199,7 +198,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .create_pegin_input(txout_proof, btc_transaction)?;
 
         let amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(self.context.config.as_ref().fee_consensus.fee_peg_in_abs);
+            .saturating_sub(self.context.config.as_ref().wallet.fee_consensus.peg_in_abs);
         if amount == Amount::ZERO {
             return Err(ClientError::PegInAmountTooSmall);
         }
@@ -218,7 +217,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         Ok(self
             .mint_client()
-            .submit_tx_with_change(&self.context.config.as_ref().fee_consensus, tx, batch, rng)
+            .submit_tx_with_change(
+                &self.context.config.as_ref().fee_consensus(),
+                tx,
+                batch,
+                rng,
+            )
             .await?)
     }
 
@@ -297,7 +301,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount = self.context.config.as_ref().fee_consensus.fee_peg_out_abs
+        let funding_amount = self
+            .context
+            .config
+            .as_ref()
+            .wallet
+            .fee_consensus
+            .peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins, &self.context.secp)?;

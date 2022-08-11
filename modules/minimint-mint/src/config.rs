@@ -10,11 +10,13 @@ use tbs::{dealer_keygen, AggregatePublicKey};
 pub struct MintConfig {
     pub tbs_sks: Keys<tbs::SecretKeyShare>,
     pub peer_tbs_pks: BTreeMap<PeerId, Keys<tbs::PublicKeyShare>>,
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintClientConfig {
     pub tbs_pks: Keys<AggregatePublicKey>,
+    pub fee_consensus: FeeConsensus,
 }
 
 impl GenerateConfig for MintConfig {
@@ -55,6 +57,7 @@ impl GenerateConfig for MintConfig {
                             (key_peer, keys)
                         })
                         .collect(),
+                    fee_consensus: FeeConsensus::default(),
                 };
                 (peer, config)
             })
@@ -65,8 +68,24 @@ impl GenerateConfig for MintConfig {
                 .into_iter()
                 .map(|(amount, (pk, _, _))| (amount, pk))
                 .collect(),
+            fee_consensus: FeeConsensus::default(),
         };
 
         (mint_cfg, client_cfg)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub coin_issuance_abs: minimint_api::Amount,
+    pub coin_spend_abs: minimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            coin_issuance_abs: minimint_api::Amount::ZERO,
+            coin_spend_abs: minimint_api::Amount::ZERO,
+        }
     }
 }

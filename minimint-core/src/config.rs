@@ -11,19 +11,24 @@ pub struct ClientConfig {
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
-    pub fee_consensus: FeeConsensus,
     pub max_evil: usize,
 }
 
-// TODO: get rid of it here, modules should govern their own fees
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl ClientConfig {
+    pub fn fee_consensus(&self) -> FeeConsensus {
+        FeeConsensus {
+            wallet: self.wallet.fee_consensus.clone(),
+            mint: self.mint.fee_consensus.clone(),
+            ln: self.ln.fee_consensus.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct FeeConsensus {
-    pub fee_coin_spend_abs: minimint_api::Amount,
-    pub fee_peg_in_abs: minimint_api::Amount,
-    pub fee_coin_issuance_abs: minimint_api::Amount,
-    pub fee_peg_out_abs: minimint_api::Amount,
-    pub fee_contract_input: minimint_api::Amount,
-    pub fee_contract_output: minimint_api::Amount,
+    pub wallet: minimint_wallet::config::FeeConsensus,
+    pub mint: minimint_mint::config::FeeConsensus,
+    pub ln: minimint_ln::config::FeeConsensus,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {

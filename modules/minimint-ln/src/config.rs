@@ -12,11 +12,13 @@ pub struct LightningModuleConfig {
     pub threshold_sec_key:
         threshold_crypto::serde_impl::SerdeSecret<threshold_crypto::SecretKeyShare>,
     pub threshold: usize,
+    pub fee_consensus: FeeConsensus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningModuleClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
+    pub fee_consensus: FeeConsensus,
 }
 
 impl GenerateConfig for LightningModuleConfig {
@@ -44,6 +46,7 @@ impl GenerateConfig for LightningModuleConfig {
                         threshold_pub_keys: pks.clone(),
                         threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
                         threshold,
+                        fee_consensus: FeeConsensus::default(),
                     },
                 )
             })
@@ -51,8 +54,24 @@ impl GenerateConfig for LightningModuleConfig {
 
         let client_cfg = LightningModuleClientConfig {
             threshold_pub_key: pks.public_key(),
+            fee_consensus: FeeConsensus::default(),
         };
 
         (server_cfg, client_cfg)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub contract_input: minimint_api::Amount,
+    pub contract_output: minimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            contract_input: minimint_api::Amount::ZERO,
+            contract_output: minimint_api::Amount::ZERO,
+        }
     }
 }
