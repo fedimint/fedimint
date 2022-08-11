@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "minimint"
-path = "src/bin/server.rs"
+path = "src/bin/minimint.rs"
 
 [[bin]]
 name = "configgen"
