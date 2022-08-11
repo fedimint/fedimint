@@ -99,10 +99,14 @@
           });
         };
 
-        workspaceClippy = craneLib.cargoClippy (commonArgs // {
+        # Note: can't use `cargoClippy` because it implies `--all-targets`, while
+        # we can't build benches on stable
+        # See: https://github.com/ipetkov/crane/issues/64
+        workspaceClippy = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
-          # `--all-targets` is the default
-          cargoClippyExtraArgs = "-- --deny warnings";
+
+          cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
+          doCheck = false;
         });
 
         workspaceAll = craneLib.cargoBuild (commonArgs // {
