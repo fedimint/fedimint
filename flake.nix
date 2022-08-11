@@ -28,6 +28,7 @@
         craneLib = (crane.mkLib pkgs).overrideScope' (final: prev: {
           cargo = fenix-channel.cargo;
           rustc = fenix-channel.rustc;
+          clippy = fenix-channel.clippy;
         });
 
         # filter source code at path `src` to include only the list of `modules`
@@ -62,6 +63,7 @@
             pkg-config
             perl
             fenix-channel.rustc
+            fenix-channel.clippy
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -99,6 +101,7 @@
 
         workspaceClippy = craneLib.cargoClippy (commonArgs // {
           cargoArtifacts = workspaceDeps;
+          # `--all-targets` is the default
           cargoClippyExtraArgs = "-- --deny warnings";
         });
 
@@ -208,6 +211,7 @@
           mint-client-cli = mint-client-cli.package;
           deps = workspaceDeps;
           ci = workspaceAll;
+          workspaceClippy = workspaceClippy;
         };
 
         checks = {
