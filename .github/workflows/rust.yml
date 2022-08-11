@@ -7,42 +7,6 @@ on:
 name: CI
 
 jobs:
-  build_and_unit_test:
-    name: Unit Tests
-    runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v1
-      - name: Print toolchain version
-        uses: actions-rs/cargo@v1
-        with:
-          command: version
-      - name: Build everything
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --workspace
-      - name: Run unit tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --workspace
-      - name: Lint code with clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --lib --bins --tests --examples --workspace -- -D warnings
-      - name: Lint code with rustfmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
   build_wasm:
     name: Build (wasm32)
     runs-on: buildjet-8vcpu-ubuntu-2004
@@ -125,36 +89,8 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - name: Integration Tests with nix-shell
         run: nix-shell --command ./scripts/rust-tests.sh
-  nix-build_test:
-    name: Nix-Build Tests
-    runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v2.4.0
-      - uses: cachix/install-nix-action@v16
-        with:
-          nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v10
-        with:
-          name: fedimint
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - run: nix-build
-  nix-flake:
-    name: Nix-flake Tests
-    runs-on: buildjet-8vcpu-ubuntu-2004
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v2.4.0
-      - uses: cachix/install-nix-action@v16
-        with:
-          nix_path: nixpkgs=channel:nixos-22.05
-      - uses: cachix/cachix-action@v10
-        with:
-          name: fedimint
-          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - run: nix build
   check-unused-dependencies:
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: buildjet-2vcpu-ubuntu-2004
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3

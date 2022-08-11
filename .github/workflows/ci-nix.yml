@@ -17,7 +17,7 @@ on:
 jobs:
   lint:
     name: "Lint"
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: buildjet-2vcpu-ubuntu-2004
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v15
@@ -45,5 +45,11 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Run tests
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#ci
+      - name: Build workspace
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceBuild
+
+      - name: Clippy workspace
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceClippy
+
+      - name: Test workspace
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceTest

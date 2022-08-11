@@ -28,6 +28,7 @@
         craneLib = (crane.mkLib pkgs).overrideScope' (final: prev: {
           cargo = fenix-channel.cargo;
           rustc = fenix-channel.rustc;
+          clippy = fenix-channel.clippy;
         });
 
         # filter source code at path `src` to include only the list of `modules`
@@ -62,6 +63,7 @@
             pkg-config
             perl
             fenix-channel.rustc
+            fenix-channel.clippy
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -89,7 +91,7 @@
 
             src = filterModules ([ dir ] ++ extraDirs) ./.;
 
-            # if needed we will check the whole workspace at once with `workspaceAll`
+            # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
           } // lib.optionalAttrs (name != null) {
             pname = name;
@@ -97,14 +99,24 @@
           });
         };
 
-        workspaceClippy = craneLib.cargoClippy (commonArgs // {
+        workspaceBuild = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
-          cargoClippyExtraArgs = "-- --deny warnings";
+          doCheck = false;
         });
 
-        workspaceAll = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceDeps;
+        workspaceTest = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceBuild;
           doCheck = true;
+        });
+
+        # Note: can't use `cargoClippy` because it implies `--all-targets`, while
+        # we can't build benches on stable
+        # See: https://github.com/ipetkov/crane/issues/64
+        workspaceClippy = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceBuild;
+
+          cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
+          doCheck = false;
         });
 
         workspaceCoverage = craneLib.cargoTarpaulin (commonArgs // {
@@ -207,12 +219,14 @@
           clientd = clientd.package;
           mint-client-cli = mint-client-cli.package;
           deps = workspaceDeps;
-          ci = workspaceAll;
+          workspaceBuild = workspaceBuild;
+          workspaceClippy = workspaceClippy;
+          workspaceTest = workspaceTest;
         };
 
         checks = {
           inherit
-            workspaceAll
+            workspaceBuild
             workspaceClippy
             workspaceCoverage;
         };
