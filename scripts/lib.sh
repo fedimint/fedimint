@@ -52,3 +52,33 @@ function get_finality_delay() {
 function sat_to_btc() {
     echo "scale=8; $1/100000000" | bc | awk '{printf "%.8f\n", $0}'
 }
+
+#caller should call mine_blocks() after this
+function send_bitcoin() {
+    local RECV_ADDRESS
+    RECV_ADDRESS=$1
+    local SEND_AMT
+    SEND_AMT=$2
+
+    local TX_ID
+    TX_ID="$($FM_BTC_CLIENT sendtoaddress $RECV_ADDRESS "$(sat_to_btc $SEND_AMT)")"
+    echo $TX_ID
+}
+
+function get_txout_proof() {
+    local TX_ID
+    TX_ID=$1
+
+    local TXOUT_PROOF
+    TXOUT_PROOF="$($FM_BTC_CLIENT gettxoutproof "[\"$TX_ID\"]")"
+    echo $TXOUT_PROOF
+}
+
+function get_raw_transaction() {
+    local TX_ID
+    TX_ID=$1
+
+    local TRANSACTION
+    TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
+    echo $TRANSACTION
+}

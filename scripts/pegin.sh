@@ -16,22 +16,16 @@ USE_GATEWAY=${2:-0}
 FINALITY_DELAY=$(get_finality_delay)
 echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 
-# Get a peg-in address, which is derived from the federation's descriptor in which every key was tweaked with the same
-# random value only known to our client.
+# get a peg-in address from either the gateway or the client
 if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address)"; fi
-
-# We send the amount we want to peg-in to this address
-TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR "$(sat_to_btc $PEG_IN_AMOUNT)")"
-
-# Now we "wait" for confirmations
-$FM_BTC_CLIENT generatetoaddress 11 "$($FM_BTC_CLIENT getnewaddress)"
+# send bitcoin to that address and save the txid
+TX_ID=$(send_bitcoin $ADDR $PEG_IN_AMOUNT)
+# wait for confirmation and wait for the fed to sync
+mine_blocks 11
 await_block_sync
-
-# We then get a proof from our bitcoind that we sent coins to the peg-in address. This proof can be evaluated by just
-# looking at block headers. The federation uses this so that it only needs to be aware of valid block hashes and not
-# entire blocks.
-TXOUT_PROOF="$($FM_BTC_CLIENT gettxoutproof "[\"$TX_ID\"]")"
-TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
+#get the txoutproof and the raw transaction from the txid
+TXOUT_PROOF=$(get_txout_proof $TX_ID)
+TRANSACTION=$(get_raw_transaction $TX_ID)
 
 # With these proofs we can instruct the client to start the peg-in process. Our client will add the tweak used to derive
 # the peg-in address to the request so that the federation can claim the funds later.
