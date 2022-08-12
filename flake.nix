@@ -22,8 +22,25 @@
         };
         lib = pkgs.lib;
 
+        clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
+          configureFlags = [ "--enable-developer" "--disable-valgrind" ];
+        } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
+          NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
+        });
+
         fenix-pkgs = fenix.packages.${system};
         fenix-channel = fenix-pkgs.stable;
+
+        # utilities that cli-tests require
+        testPkgs = with pkgs; [
+          bc
+          bitcoind
+          clightning-dev
+          jq
+          netcat
+          perl
+          procps
+        ];
 
         craneLib = (crane.mkLib pkgs).overrideScope' (final: prev: {
           cargo = fenix-channel.cargo;
@@ -71,9 +88,18 @@
 
           nativeBuildInputs = with pkgs; [
             pkg-config
+            # for test scripts
+            bash
+            coreutils
           ];
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+          CI = "true";
+          HOME = "/tmp";
+        };
+
+        commonTestArgs = commonArgs // {
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ testPkgs;
         };
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
@@ -121,6 +147,30 @@
 
         workspaceCoverage = craneLib.cargoTarpaulin (commonArgs // {
           cargoArtifacts = workspaceDeps;
+        });
+
+        cliTestLatency = craneLib.cargoBuild (commonTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
+          doCheck = false;
+        });
+
+        cliTestCli = craneLib.cargoBuild (commonTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
+          doCheck = false;
+        });
+
+        cliTestClientd = craneLib.cargoBuild (commonTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
+          doCheck = false;
+        });
+
+        cliRustTests = craneLib.cargoBuild (commonTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
+          doCheck = false;
         });
 
         minimint = pkg {
@@ -222,6 +272,13 @@
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
+
+          cli-test = {
+            latency = cliTestLatency;
+            cli = cliTestCli;
+            clientd = cliTestClientd;
+            rust-tests = cliRustTests;
+          };
         };
 
         checks = {
@@ -232,13 +289,6 @@
         };
 
         devShells =
-          let
-            clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
-              configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-            } // pkgs.lib.optionalAttrs (!pkgs.stdenv.isDarwin) {
-              NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
-            });
-          in
           {
             # The default shell - meant to developers working on the project,
             # so notably not building any project binaries, but including all
@@ -251,12 +301,6 @@
                 fenix-channel.rustc
                 fenix-channel.cargo
 
-                bc
-                perl
-                bitcoind
-                clightning-dev
-                jq
-                procps
                 tmux
                 tmuxinator
 
@@ -265,7 +309,7 @@
                 pkgs.shellcheck
                 pkgs.rnix-lsp
                 pkgs.nodePackages.bash-language-server
-              ];
+              ] ++ testPkgs;
               RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
 

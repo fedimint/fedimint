@@ -53,3 +53,19 @@ jobs:
 
       - name: Test workspace
         run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceTest
+
+      - name: Latency Tests
+        # run: nix-shell --command ./scripts/latency-test.sh
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.latency
+
+      - name: CLI Tests
+        # run: nix-shell --command ./scripts/cli-test.sh
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.cli
+
+      - name: Clientd and clientd-cli tests
+        # run: nix-shell --command ./scripts/clientd-tests.sh
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.clientd
+
+      - name: Integration Tests
+        # run: nix-shell --command ./scripts/rust-tests.sh
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.rust-tests
