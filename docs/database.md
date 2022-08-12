@@ -24,6 +24,9 @@ The Database is split into different key spaces based on prefixing that can be u
 | Pending Transactions  | `0x01` | Transaction ID (sha256, 32bytes) | Transaction                     |
 | Accepted Transactions | `0x02` | Transaction ID (sha256, 32bytes) | Confirmation epoch, Transaction |
 | Drop Peer             | `0x03` | Peer ID (u16)                    |                                 |
+| Rejected Transaction  | `0x04` | Transaction ID (sha256, 32bytes) | Reason for rejection (string)   |
+| Epoch History         | `0x05` | Epoch ID (u16)                   | Epoch history record            |
+| Last Epoch            | `0x06` | none                             | Epoch history key               |
 
 ### Mint
 

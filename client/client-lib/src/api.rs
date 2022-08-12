@@ -20,6 +20,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
 use bitcoin::{Address, Amount};
+use minimint_core::epoch::EpochHistory;
 use minimint_core::modules::wallet::PegOutFees;
 use std::time::Duration;
 use thiserror::Error;
@@ -32,6 +33,8 @@ pub trait FederationApi: Send + Sync {
 
     /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
+
+    async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory>;
 
     // TODO: more generic module API extensibility
     /// Fetch ln contract state
@@ -196,6 +199,10 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         // TODO: check the id is correct
         self.request("/transaction", tx).await
+    }
+
+    async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory> {
+        self.request("/fetch_epoch_history", epoch).await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {

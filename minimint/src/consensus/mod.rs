@@ -8,42 +8,54 @@ use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
 use crate::consensus::interconnect::MinimintInterconnect;
 use crate::db::{
-    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, ProposedTransactionKey,
-    ProposedTransactionKeyPrefix, RejectedTransactionKey,
+    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
+    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
-use minimint_api::db::batch::{BatchTx, DbBatch};
+use minimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 use minimint_api::db::Database;
 use minimint_api::encoding::{Decodable, Encodable};
 use minimint_api::module::audit::Audit;
 use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
+use minimint_core::epoch::*;
 use minimint_core::modules::ln::{LightningModule, LightningModuleError};
 use minimint_core::modules::mint::{Mint, MintError};
 use minimint_core::modules::wallet::{Wallet, WalletError};
 use minimint_core::outcome::TransactionStatus;
-use minimint_derive::UnzipConsensus;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
+use std::iter::FromIterator;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus)]
-pub enum ConsensusItem {
-    Transaction(Transaction),
-    Mint(<Mint as FederationModule>::ConsensusItem),
-    Wallet(<Wallet as FederationModule>::ConsensusItem),
-    LN(<LightningModule as FederationModule>::ConsensusItem),
+pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
+pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
+
+// TODO remove HBBFT `Batch` from `ConsensusOutcome`
+#[derive(Debug, Clone)]
+pub struct ConsensusOutcomeConversion(pub ConsensusOutcome);
+
+impl PartialEq<Self> for ConsensusOutcomeConversion {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.epoch.eq(&other.0.epoch) && self.0.contributions.eq(&other.0.contributions)
+    }
 }
 
-pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;
-pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
+impl From<OutcomeHistory> for ConsensusOutcomeConversion {
+    fn from(history: OutcomeHistory) -> Self {
+        ConsensusOutcomeConversion(Batch {
+            epoch: history.epoch,
+            contributions: BTreeMap::from_iter(history.items.into_iter()),
+        })
+    }
+}
 
 /// Proposed HBBFT consensus changes including removing peers
 #[derive(Debug, Clone)]
@@ -166,8 +178,10 @@ where
         let epoch = consensus_outcome.epoch;
         let epoch_peers: HashSet<PeerId> =
             consensus_outcome.contributions.keys().copied().collect();
+        let outcome = consensus_outcome.clone();
 
         let UnzipConsensusItem {
+            epoch_info: epoch_info_cis,
             transaction: transaction_cis,
             wallet: wallet_cis,
             mint: mint_cis,
@@ -256,6 +270,13 @@ where
             let mut db_batch = DbBatch::new();
             let mut drop_peers = Vec::<PeerId>::new();
 
+            self.save_epoch_history(
+                outcome,
+                epoch_info_cis,
+                db_batch.transaction(),
+                &mut drop_peers,
+            );
+
             let mut drop_wallet = self
                 .wallet
                 .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
@@ -293,6 +314,66 @@ where
         }
     }
 
+    pub fn epoch_history(&self, epoch: u64) -> Option<EpochHistory> {
+        self.db.get_value(&EpochHistoryKey(epoch)).unwrap()
+    }
+
+    fn save_epoch_history(
+        &self,
+        outcome: ConsensusOutcome,
+        signatures: Vec<(PeerId, EpochSignatureShare)>,
+        mut transaction: AccumulatorTx<BatchItem>,
+        drop_peers: &mut Vec<PeerId>,
+    ) {
+        let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
+        let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
+        let maybe_prev_epoch = self.db.get_value(&prev_epoch_key).expect("DB error");
+
+        // save current epoch
+        let current = EpochHistory::new(outcome.epoch, outcome.contributions, &maybe_prev_epoch);
+        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
+        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
+
+        // validate and update sigs on last epoch
+        if let Some(mut prev_epoch) = maybe_prev_epoch {
+            let mut valid_sigs: HashSet<PeerId> = HashSet::new();
+
+            let filtered: BTreeMap<_, _> = signatures
+                .iter()
+                .filter(|(peer, sig)| {
+                    let pub_key = self.cfg.epoch_pk_set.public_key_share(peer.to_usize());
+                    pub_key.verify(&sig.0, prev_epoch.hash)
+                })
+                .map(|(peer, sig)| {
+                    valid_sigs.insert(*peer);
+                    (peer.to_usize(), &sig.0)
+                })
+                .collect();
+
+            for peer in peers {
+                if !valid_sigs.contains(&peer) {
+                    warn!("Dropping {} for not contributing valid epoch sigs.", peer);
+                    drop_peers.push(peer);
+                }
+            }
+
+            if let Ok(final_sig) = self.cfg.epoch_pk_set.combine_signatures(filtered) {
+                assert!(self
+                    .cfg
+                    .epoch_pk_set
+                    .public_key()
+                    .verify(&final_sig, prev_epoch.hash));
+
+                prev_epoch.signature = Some(EpochSignature(final_sig));
+                transaction.append_insert(prev_epoch_key, prev_epoch);
+            } else {
+                warn!("Unable to sign epoch {}", prev_epoch.outcome.epoch);
+            }
+        }
+
+        transaction.commit();
+    }
+
     pub async fn await_consensus_proposal(&self) {
         select_all(vec![
             self.wallet.await_consensus_proposal(self.rng_gen.get_rng()),
@@ -312,7 +393,7 @@ where
             })
             .collect();
 
-        let items = self
+        let mut items: Vec<ConsensusItem> = self
             .db
             .find_by_prefix(&ProposedTransactionKeyPrefix)
             .map(|res| {
@@ -341,6 +422,13 @@ where
                     .map(ConsensusItem::LN),
             )
             .collect();
+
+        if let Some(epoch) = self.db.get_value(&LastEpochKey).unwrap() {
+            let last_epoch = self.db.get_value(&epoch).unwrap().unwrap();
+            let sig = self.cfg.epoch_sks.0.sign(last_epoch.hash);
+            let item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
+            items.push(item);
+        };
 
         ConsensusProposal { items, drop_peers }
     }

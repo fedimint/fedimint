@@ -8,6 +8,7 @@ pub mod modules {
 
 /// MiniMint toplevel config
 pub mod config;
+pub mod epoch;
 pub mod outcome;
 pub mod transaction;
 

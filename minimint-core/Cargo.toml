@@ -29,3 +29,5 @@ sha3 = "0.9.1"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
 tracing ="0.1.22"
+threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+bitcoin_hashes = "0.10.0"

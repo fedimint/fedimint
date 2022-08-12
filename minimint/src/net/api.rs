@@ -7,6 +7,7 @@ use minimint_api::{
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
+use minimint_core::epoch::EpochHistory;
 use minimint_core::outcome::TransactionStatus;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -124,6 +125,13 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)
+            }
+        },
+        api_endpoint! {
+            "/fetch_epoch_history",
+            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, epoch: u64| -> EpochHistory {
+                let epoch = minimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
+                Ok(epoch)
             }
         },
     ];

@@ -22,6 +22,7 @@ pub fn epoch_message(consensus: &ConsensusOutcome) -> String {
 
 fn item_message(item: &ConsensusItem) -> String {
     match item {
+        ConsensusItem::EpochInfo(_) => "Outcome Signature".to_string(),
         ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height,
             ..

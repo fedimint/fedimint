@@ -61,13 +61,15 @@ pub type PartialSig = Vec<u8>;
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
+)]
 pub enum WalletConsensusItem {
     RoundConsensus(RoundConsensusItem),
     PegOutSignature(PegOutSignatureItem),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct RoundConsensusItem {
     pub block_height: u32, // FIXME: use block hash instead, but needs more complicated verification logic
     pub fee_rate: Feerate,

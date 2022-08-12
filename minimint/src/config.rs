@@ -28,9 +28,14 @@ pub struct ServerConfig {
 
     pub peers: BTreeMap<PeerId, Peer>,
     #[serde(with = "serde_binary_human_readable")]
-    pub hbbft_sks: hbbft::crypto::serde_impl::SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    pub hbbft_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
     #[serde(with = "serde_binary_human_readable")]
     pub hbbft_pk_set: hbbft::crypto::PublicKeySet,
+
+    #[serde(with = "serde_binary_human_readable")]
+    pub epoch_sks: SerdeSecret<hbbft::crypto::SecretKeyShare>,
+    #[serde(with = "serde_binary_human_readable")]
+    pub epoch_pk_set: hbbft::crypto::PublicKeySet,
 
     pub wallet: WalletConfig,
     pub mint: MintConfig,
@@ -63,6 +68,10 @@ impl GenerateConfig for ServerConfig {
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
             .expect("Could not generate HBBFT netinfo");
+        let epochinfo =
+            hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
+                .expect("Could not generate HBBFT netinfo");
+
         let tls_keys = peers
             .iter()
             .map(|peer| {
@@ -97,6 +106,7 @@ impl GenerateConfig for ServerConfig {
             .iter()
             .map(|(&id, netinf)| {
                 let id_u16: u16 = id.into();
+                let epoch_keys = epochinfo.get(&id).unwrap();
                 let config = ServerConfig {
                     identity: id,
                     hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
@@ -106,6 +116,8 @@ impl GenerateConfig for ServerConfig {
                     peers: cfg_peers.clone(),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     hbbft_pk_set: netinf.public_key_set().clone(),
+                    epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
+                    epoch_pk_set: epoch_keys.public_key_set().clone(),
                     wallet: wallet_server_cfg[&id].clone(),
                     mint: mint_server_cfg[&id].clone(),
                     ln: ln_server_cfg[&id].clone(),

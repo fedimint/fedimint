@@ -47,7 +47,7 @@ pub struct Mint {
     db: Arc<dyn Database>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PartiallySignedRequest {
     pub out_point: OutPoint,
     pub partial_signature: PartialSigResponse,
