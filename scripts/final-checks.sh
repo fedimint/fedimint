@@ -6,15 +6,15 @@
 set -e
 
 cargo fmt --all
-cargo clippy --lib --bins --tests --examples --workspace -- -D warnings
+cargo clippy --fix --lib --bins --tests --examples --workspace --allow-dirty
 
 export MINIMINT_TEST_REAL=0
 cargo test
 
-export MINIMINT_TEST_REAL=1
-./scripts/rust-tests.sh
-./scripts/cli-test.sh
-./scripts/clientd-tests.sh
-sleep 3
+if [ "$1" == "nix" ]; then
+  nix-shell --run ./scripts/cli-test.sh
+  nix-shell --run ./scripts/rust-tests.sh
+  nix-shell --run ./scripts/clientd-tests.sh
+fi
 
-echo "CLI test exit status $?"
+echo "Tests succeeded"
