@@ -10,4 +10,4 @@
   # Since a lot of existing CI tests is based on `shell.nix`
   # we forward to the integrationTests shell, instead of the
   # default (developer) shell.
-).shellNix.devShells."${builtins.currentSystem}".integrationTests
+).shellNix
