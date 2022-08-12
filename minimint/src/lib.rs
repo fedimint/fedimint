@@ -21,9 +21,10 @@ use minimint_core::modules::ln::LightningModule;
 use minimint_core::modules::wallet::bitcoind::BitcoindRpc;
 use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
+use minimint_core::epoch::ConsensusItem;
 pub use minimint_core::*;
 
-use crate::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal, MinimintConsensus};
+use crate::consensus::{ConsensusOutcome, ConsensusProposal, MinimintConsensus};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{
     AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,

@@ -52,7 +52,7 @@ pub fn derive_unzip_consensus(input: TokenStream) -> TokenStream {
         }
 
         pub struct #unzip_struct_ident {
-            #(#unzip_s_ident: Vec<(PeerId, #unzip_s_type)>),*
+            #(pub #unzip_s_ident: Vec<(PeerId, #unzip_s_type)>),*
         }
 
         impl<I> #unzip_trait_ident for I

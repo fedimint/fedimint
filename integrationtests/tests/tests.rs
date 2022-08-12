@@ -7,17 +7,17 @@ use bitcoin::{Amount, KeyPair};
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
+use minimint::consensus::ConsensusOutcomeConversion;
 use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
-use minimint::consensus::ConsensusItem;
+use minimint::epoch::{ConsensusItem, EpochVerifyError};
 use minimint::transaction::Output;
 use minimint_api::db::batch::DbBatch;
 use minimint_ln::contracts::incoming::PreimageDecryptionShare;
 use minimint_ln::DecryptionShareCI;
 use minimint_mint::tiered::coins::Coins;
 use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
-use minimint_wallet::WalletConsensusItem;
 use minimint_wallet::WalletConsensusItem::PegOutSignature;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
@@ -505,12 +505,12 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
     bitcoin.mine_blocks(100); // create non-empty epoch
     fed.run_consensus_epochs(1).await; // if valid would create contract to mint coins
 
-    fed.last_consensus_items().iter().for_each(|item| {
-        assert_matches!(
-            item,
-            ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(_))
-        )
-    });
+    let ln_items = fed
+        .last_consensus_items()
+        .iter()
+        .filter(|item| matches!(item, ConsensusItem::LN(_)))
+        .count();
+    assert_eq!(ln_items, 0);
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -607,4 +607,27 @@ async fn can_have_federations_with_one_peer() {
     let (fed, user, bitcoin, _, _) = fixtures(1, &[sats(100), sats(1000)]).await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     user.assert_total_coins(sats(1000)).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_get_signed_epoch_history() {
+    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
+    fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
+
+    let epoch0 = user.client.fetch_epoch_history(0).await.unwrap();
+    let epoch1 = user.client.fetch_epoch_history(1).await.unwrap();
+    let pubkey = fed.cfg.epoch_pk_set.public_key();
+
+    assert!(epoch0.signature.is_some());
+    assert_eq!(epoch0.verify(&pubkey, None), Ok(()));
+    assert_eq!(
+        epoch1.verify(&pubkey, Some(&epoch0)),
+        Err(EpochVerifyError::MissingSignature)
+    );
+    assert_eq!(
+        ConsensusOutcomeConversion(fed.last_consensus()),
+        epoch1.outcome.into()
+    )
 }

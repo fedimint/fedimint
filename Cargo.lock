@@ -1510,6 +1510,7 @@ dependencies = [
  "sled",
  "tbs",
  "thiserror",
+ "threshold_crypto",
  "tokio",
  "tokio-rustls",
  "tokio-util 0.6.10",
@@ -1557,6 +1558,7 @@ dependencies = [
  "async-trait",
  "bincode",
  "bitcoin",
+ "bitcoin_hashes",
  "futures",
  "hex",
  "itertools",
@@ -1572,6 +1574,7 @@ dependencies = [
  "sha3",
  "tbs",
  "thiserror",
+ "threshold_crypto",
  "tracing",
 ]
 

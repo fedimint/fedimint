@@ -134,6 +134,8 @@ mod tests {
     use minimint_api::db::mem_impl::MemDatabase;
     use minimint_api::module::testing::FakeFed;
     use minimint_api::{OutPoint, TransactionId};
+
+    use minimint_core::epoch::EpochHistory;
     use minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use minimint_core::modules::ln::contracts::ContractId;
     use minimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -206,6 +208,10 @@ mod tests {
         }
 
         async fn register_gateway(&self, _gateway: LightningGateway) -> crate::api::Result<()> {
+            unimplemented!()
+        }
+
+        async fn fetch_epoch_history(&self, _epoch: u64) -> crate::api::Result<EpochHistory> {
             unimplemented!()
         }
     }

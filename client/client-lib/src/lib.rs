@@ -28,6 +28,7 @@ use minimint_api::{
     },
     Amount, OutPoint, PeerId, TransactionId,
 };
+use minimint_core::epoch::EpochHistory;
 use minimint_core::modules::ln::contracts::incoming::{
     DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
@@ -423,6 +424,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
         self.mint_client().list_active_issuances()
     }
+
+    pub async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory> {
+        self.context
+            .api
+            .fetch_epoch_history(epoch)
+            .await
+            .map_err(|e| e.into())
+    }
 }
 
 impl Client<UserClientConfig> {
@@ -552,7 +561,7 @@ impl Client<UserClientConfig> {
             .await?;
 
         // Await acceptance by the federation
-        let timeout = std::time::Duration::from_secs(10);
+        let timeout = std::time::Duration::from_secs(15);
         let outpoint = OutPoint { txid, out_idx: 0 };
         self.context
             .api

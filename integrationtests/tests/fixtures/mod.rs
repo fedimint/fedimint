@@ -34,8 +34,9 @@ use fake::{FakeBitcoinTest, FakeLightningTest};
 use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
 use minimint::config::ServerConfigParams;
-use minimint::config::{ClientConfig, FeeConsensus, ServerConfig};
-use minimint::consensus::{ConsensusItem, ConsensusOutcome, ConsensusProposal};
+use minimint::config::{ClientConfig, ServerConfig};
+use minimint::consensus::{ConsensusOutcome, ConsensusProposal};
+use minimint::epoch::ConsensusItem;
 use minimint::net::connect::mock::MockNetwork;
 use minimint::net::connect::{Connector, TlsTcpConnector};
 use minimint::net::peers::PeerConnector;
@@ -333,7 +334,7 @@ pub struct FederationTest {
     last_consensus: Rc<RefCell<ConsensusOutcome>>,
     max_balance_sheet: Rc<RefCell<i64>>,
     pub wallet: WalletConfig,
-    pub fees: FeeConsensus,
+    pub cfg: ServerConfig,
 }
 
 struct ServerTest {
@@ -346,11 +347,14 @@ struct ServerTest {
 }
 
 impl FederationTest {
+    pub fn last_consensus(&self) -> ConsensusOutcome {
+        self.last_consensus.borrow().clone()
+    }
+
     /// Returns the items that were in the last consensus
     /// Filters out redundant consensus rounds where the block height doesn't change
     pub fn last_consensus_items(&self) -> Vec<ConsensusItem> {
-        self.last_consensus
-            .borrow()
+        self.last_consensus()
             .contributions
             .values()
             .flat_map(|items| items.clone())
@@ -360,12 +364,22 @@ impl FederationTest {
     /// Sends a custom proposal, ignoring whatever is in MinimintConsensus
     /// Useful for simulating malicious federation nodes
     pub fn override_proposal(&self, items: Vec<ConsensusItem>) {
-        let proposal = ConsensusProposal {
-            items,
-            drop_peers: vec![],
-        };
-
         for server in &self.servers {
+            let mut epoch_sig =
+                block_on(server.borrow().minimint.consensus.get_consensus_proposal())
+                    .items
+                    .into_iter()
+                    .filter(|item| matches!(item, ConsensusItem::EpochInfo(_)))
+                    .collect();
+
+            let mut items = items.clone();
+            items.append(&mut epoch_sig);
+
+            let proposal = ConsensusProposal {
+                items,
+                drop_peers: vec![],
+            };
+
             server.borrow_mut().override_proposal = Some(proposal.clone());
         }
     }
@@ -398,7 +412,7 @@ impl FederationTest {
                 .map(Rc::clone)
                 .collect(),
             wallet: self.wallet.clone(),
-            fees: self.fees.clone(),
+            cfg: self.cfg.clone(),
             last_consensus: self.last_consensus.clone(),
             max_balance_sheet: self.max_balance_sheet.clone(),
         }
@@ -643,7 +657,8 @@ impl FederationTest {
         .await;
 
         // Consumes the empty epoch 0 outcome from all servers
-        let server_config = server_config.iter().last().unwrap().1.clone();
+        let cfg = server_config.iter().last().unwrap().1.clone();
+        let wallet = cfg.wallet.clone();
         let last_consensus = Rc::new(RefCell::new(Batch {
             epoch: 0,
             contributions: BTreeMap::new(),
@@ -654,8 +669,8 @@ impl FederationTest {
             servers,
             max_balance_sheet,
             last_consensus,
-            fees: server_config.fee_consensus(),
-            wallet: server_config.wallet,
+            cfg,
+            wallet,
         }
     }
 }

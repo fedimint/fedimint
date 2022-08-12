@@ -14,7 +14,7 @@ cargo test
 export MINIMINT_TEST_REAL=1
 ./scripts/rust-tests.sh
 ./scripts/cli-test.sh
-./scripts/clientd-test.sh
+./scripts/clientd-tests.sh
 sleep 3
 
 echo "CLI test exit status $?"
