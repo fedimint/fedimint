@@ -578,6 +578,94 @@
 <span id="578">578</span>
 <span id="579">579</span>
 <span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
 </pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
 
 <span class="kw">mod</span> <span class="ident">conflictfilter</span>;
@@ -588,42 +676,54 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::conflictfilter::ConflictFilterable</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::interconnect::MinimintInterconnect</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
-    <span class="ident">AcceptedTransactionKey</span>, <span class="ident">DropPeerKey</span>, <span class="ident">DropPeerKeyPrefix</span>, <span class="ident">ProposedTransactionKey</span>,
-    <span class="ident">ProposedTransactionKeyPrefix</span>, <span class="ident">RejectedTransactionKey</span>,
+    <span class="ident">AcceptedTransactionKey</span>, <span class="ident">DropPeerKey</span>, <span class="ident">DropPeerKeyPrefix</span>, <span class="ident">EpochHistoryKey</span>, <span class="ident">LastEpochKey</span>,
+    <span class="ident">ProposedTransactionKey</span>, <span class="ident">ProposedTransactionKeyPrefix</span>, <span class="ident">RejectedTransactionKey</span>,
 };
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::outcome::OutputOutcome</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::rng::RngGenerator</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction</span>::{<span class="ident">Input</span>, <span class="ident">Output</span>, <span class="ident">Transaction</span>, <span class="ident">TransactionError</span>};
 <span class="kw">use</span> <span class="ident">futures::future::select_all</span>;
 <span class="kw">use</span> <span class="ident">hbbft::honey_badger::Batch</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
+<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">AccumulatorTx</span>, <span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
 <span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
 <span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::epoch</span>::<span class="kw-2">*</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">LightningModule</span>, <span class="ident">LightningModuleError</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::mint</span>::{<span class="ident">Mint</span>, <span class="ident">MintError</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">Wallet</span>, <span class="ident">WalletError</span>};
 <span class="kw">use</span> <span class="ident">minimint_core::outcome::TransactionStatus</span>;
-<span class="kw">use</span> <span class="ident">minimint_derive::UnzipConsensus</span>;
 <span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
 <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
+<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashSet</span>};
+<span class="kw">use</span> <span class="ident">std::iter::FromIterator</span>;
 <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
 <span class="kw">use</span> <span class="ident">tokio::sync::Notify</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">info_span</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">UnzipConsensus</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ConsensusItem</span> {
-    <span class="ident">Transaction</span>(<span class="ident">Transaction</span>),
-    <span class="ident">Mint</span>(<span class="op">&lt;</span><span class="ident">Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::ConsensusItem</span>),
-    <span class="ident">Wallet</span>(<span class="op">&lt;</span><span class="ident">Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::ConsensusItem</span>),
-    <span class="ident">LN</span>(<span class="op">&lt;</span><span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::ConsensusItem</span>),
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConsensusOutcome</span> <span class="op">=</span> <span class="ident">Batch</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>, <span class="ident">PeerId</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">HoneyBadgerMessage</span> <span class="op">=</span> <span class="ident">hbbft::honey_badger::Message</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>;
+
+<span class="comment">// TODO remove HBBFT `Batch` from `ConsensusOutcome`</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConsensusOutcomeConversion</span>(<span class="kw">pub</span> <span class="ident">ConsensusOutcome</span>);
+
+<span class="kw">impl</span> <span class="ident">PartialEq</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
+    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">epoch</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">epoch</span>) <span class="op">&amp;&amp;</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">contributions</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">contributions</span>)
+    }
 }
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">HoneyBadgerMessage</span> <span class="op">=</span> <span class="ident">hbbft::honey_badger::Message</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConsensusOutcome</span> <span class="op">=</span> <span class="ident">Batch</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>, <span class="ident">PeerId</span><span class="op">&gt;</span>;
+<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">OutcomeHistory</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
+    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">history</span>: <span class="ident">OutcomeHistory</span>) -&gt; <span class="self">Self</span> {
+        <span class="ident">ConsensusOutcomeConversion</span>(<span class="ident">Batch</span> {
+            <span class="ident">epoch</span>: <span class="ident">history</span>.<span class="ident">epoch</span>,
+            <span class="ident">contributions</span>: <span class="ident">BTreeMap::from_iter</span>(<span class="ident">history</span>.<span class="ident">items</span>.<span class="ident">into_iter</span>()),
+        })
+    }
+}
 
 <span class="doccomment">/// Proposed HBBFT consensus changes including removing peers</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
@@ -746,8 +846,10 @@
         <span class="kw">let</span> <span class="ident">epoch</span> <span class="op">=</span> <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>;
         <span class="kw">let</span> <span class="ident">epoch_peers</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span>
             <span class="ident">consensus_outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">copied</span>().<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="ident">consensus_outcome</span>.<span class="ident">clone</span>();
 
         <span class="kw">let</span> <span class="ident">UnzipConsensusItem</span> {
+            <span class="ident">epoch_info</span>: <span class="ident">epoch_info_cis</span>,
             <span class="ident">transaction</span>: <span class="ident">transaction_cis</span>,
             <span class="ident">wallet</span>: <span class="ident">wallet_cis</span>,
             <span class="ident">mint</span>: <span class="ident">mint_cis</span>,
@@ -836,6 +938,13 @@
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
 
+            <span class="self">self</span>.<span class="ident">save_epoch_history</span>(
+                <span class="ident">outcome</span>,
+                <span class="ident">epoch_info_cis</span>,
+                <span class="ident">db_batch</span>.<span class="ident">transaction</span>(),
+                <span class="kw-2">&amp;mut</span> <span class="ident">drop_peers</span>,
+            );
+
             <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_wallet</span> <span class="op">=</span> <span class="self">self</span>
                 .<span class="ident">wallet</span>
                 .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
@@ -873,6 +982,66 @@
         }
     }
 
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">EpochHistoryKey</span>(<span class="ident">epoch</span>)).<span class="ident">unwrap</span>()
+    }
+
+    <span class="kw">fn</span> <span class="ident">save_epoch_history</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">outcome</span>: <span class="ident">ConsensusOutcome</span>,
+        <span class="ident">signatures</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">EpochSignatureShare</span>)<span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">transaction</span>: <span class="ident">AccumulatorTx</span><span class="op">&lt;</span><span class="ident">BatchItem</span><span class="op">&gt;</span>,
+        <span class="ident">drop_peers</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
+    ) {
+        <span class="kw">let</span> <span class="ident">prev_epoch_key</span> <span class="op">=</span> <span class="ident">EpochHistoryKey</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>.<span class="ident">saturating_sub</span>(<span class="number">1</span>));
+        <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">maybe_prev_epoch</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">prev_epoch_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+
+        <span class="comment">// save current epoch</span>
+        <span class="kw">let</span> <span class="ident">current</span> <span class="op">=</span> <span class="ident">EpochHistory::new</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>, <span class="ident">outcome</span>.<span class="ident">contributions</span>, <span class="kw-2">&amp;</span><span class="ident">maybe_prev_epoch</span>);
+        <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">LastEpochKey</span>, <span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>));
+        <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>), <span class="ident">current</span>);
+
+        <span class="comment">// validate and update sigs on last epoch</span>
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="kw-2">mut</span> <span class="ident">prev_epoch</span>) <span class="op">=</span> <span class="ident">maybe_prev_epoch</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">valid_sigs</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">HashSet::new</span>();
+
+            <span class="kw">let</span> <span class="ident">filtered</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">signatures</span>
+                .<span class="ident">iter</span>()
+                .<span class="ident">filter</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sig</span>)<span class="op">|</span> {
+                    <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">public_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
+                    <span class="ident">pub_key</span>.<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>)
+                })
+                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sig</span>)<span class="op">|</span> {
+                    <span class="ident">valid_sigs</span>.<span class="ident">insert</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
+                    (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>)
+                })
+                .<span class="ident">collect</span>();
+
+            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">peers</span> {
+                <span class="kw">if</span> <span class="op">!</span><span class="ident">valid_sigs</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>) {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, <span class="ident">peer</span>);
+                    <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
+                }
+            }
+
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">final_sig</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">combine_signatures</span>(<span class="ident">filtered</span>) {
+                <span class="macro">assert!</span>(<span class="self">self</span>
+                    .<span class="ident">cfg</span>
+                    .<span class="ident">epoch_pk_set</span>
+                    .<span class="ident">public_key</span>()
+                    .<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">final_sig</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>));
+
+                <span class="ident">prev_epoch</span>.<span class="ident">signature</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">EpochSignature</span>(<span class="ident">final_sig</span>));
+                <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">prev_epoch_key</span>, <span class="ident">prev_epoch</span>);
+            } <span class="kw">else</span> {
+                <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, <span class="ident">prev_epoch</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>);
+            }
+        }
+
+        <span class="ident">transaction</span>.<span class="ident">commit</span>();
+    }
+
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="ident">select_all</span>(<span class="macro">vec!</span>[
             <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
@@ -892,7 +1061,7 @@
             })
             .<span class="ident">collect</span>();
 
-        <span class="kw">let</span> <span class="ident">items</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">items</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedTransactionKeyPrefix</span>)
             .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
@@ -921,6 +1090,13 @@
                     .<span class="ident">map</span>(<span class="ident">ConsensusItem::LN</span>),
             )
             .<span class="ident">collect</span>();
+
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">epoch</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">LastEpochKey</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">let</span> <span class="ident">last_epoch</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">epoch</span>).<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_sks</span>.<span class="number">0</span>.<span class="ident">sign</span>(<span class="ident">last_epoch</span>.<span class="ident">hash</span>);
+            <span class="kw">let</span> <span class="ident">item</span> <span class="op">=</span> <span class="ident">ConsensusItem::EpochInfo</span>(<span class="ident">EpochSignatureShare</span>(<span class="ident">sig</span>));
+            <span class="ident">items</span>.<span class="ident">push</span>(<span class="ident">item</span>);
+        };
 
         <span class="ident">ConsensusProposal</span> { <span class="ident">items</span>, <span class="ident">drop_peers</span> }
     }

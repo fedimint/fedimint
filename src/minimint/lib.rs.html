@@ -240,6 +240,7 @@
 <span id="240">240</span>
 <span id="241">241</span>
 <span id="242">242</span>
+<span id="243">243</span>
 </pre><pre class="rust"><code><span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">minimint_api</span>;
 
 <span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
@@ -263,9 +264,10 @@
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::bitcoind::BitcoindRpc</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">bitcoincore_rpc</span>, <span class="ident">Wallet</span>};
 
+<span class="kw">use</span> <span class="ident">minimint_core::epoch::ConsensusItem</span>;
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_core</span>::<span class="kw-2">*</span>;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus</span>::{<span class="ident">ConsensusItem</span>, <span class="ident">ConsensusOutcome</span>, <span class="ident">ConsensusProposal</span>, <span class="ident">MinimintConsensus</span>};
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus</span>::{<span class="ident">ConsensusOutcome</span>, <span class="ident">ConsensusProposal</span>, <span class="ident">MinimintConsensus</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">Connector</span>, <span class="ident">TlsTcpConnector</span>};
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::peers</span>::{
     <span class="ident">AnyPeerConnections</span>, <span class="ident">PeerConnections</span>, <span class="ident">PeerConnector</span>, <span class="ident">ReconnectPeerConnections</span>,

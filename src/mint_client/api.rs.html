@@ -577,6 +577,13 @@
 <span id="577">577</span>
 <span id="578">578</span>
 <span id="579">579</span>
+<span id="580">580</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
 </pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
 <span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
 <span class="kw">use</span> <span class="ident">jsonrpsee_core::client::ClientT</span>;
@@ -599,6 +606,7 @@
 <span class="kw">use</span> <span class="ident">jsonrpsee_wasm_client</span>::{<span class="ident">Client</span> <span class="kw">as</span> <span class="ident">WsClient</span>, <span class="ident">WasmClientBuilder</span> <span class="kw">as</span> <span class="ident">WsClientBuilder</span>};
 
 <span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Amount</span>};
+<span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOutFees</span>;
 <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 <span class="kw">use</span> <span class="ident">thiserror::Error</span>;
@@ -611,6 +619,8 @@
 
     <span class="doccomment">/// Submit a transaction to all federation members</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span>;
+
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span>;
 
     <span class="comment">// TODO: more generic module API extensibility</span>
     <span class="doccomment">/// Fetch ln contract state</span>
@@ -775,6 +785,10 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
         <span class="comment">// TODO: check the id is correct</span>
         <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/transaction&quot;</span>, <span class="ident">tx</span>).<span class="kw">await</span>
+    }
+
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/fetch_epoch_history&quot;</span>, <span class="ident">epoch</span>).<span class="kw">await</span>
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_contract</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ContractAccount</span><span class="op">&gt;</span> {

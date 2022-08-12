@@ -928,6 +928,15 @@
 <span id="928">928</span>
 <span id="929">929</span>
 <span id="930">930</span>
+<span id="931">931</span>
+<span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
+<span id="936">936</span>
+<span id="937">937</span>
+<span id="938">938</span>
+<span id="939">939</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
@@ -958,6 +967,7 @@
     },
     <span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>,
 };
+<span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
 <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming</span>::{
     <span class="ident">DecryptedPreimage</span>, <span class="ident">IncomingContract</span>, <span class="ident">IncomingContractOffer</span>, <span class="ident">OfferId</span>, <span class="ident">Preimage</span>,
 };
@@ -1353,6 +1363,14 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_active_issuances</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)<span class="op">&gt;</span> {
         <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">list_active_issuances</span>()
     }
+
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">context</span>
+            .<span class="ident">api</span>
+            .<span class="ident">fetch_epoch_history</span>(<span class="ident">epoch</span>)
+            .<span class="kw">await</span>
+            .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">e</span>.<span class="ident">into</span>())
+    }
 }
 
 <span class="kw">impl</span> <span class="ident">Client</span><span class="op">&lt;</span><span class="ident">UserClientConfig</span><span class="op">&gt;</span> {
@@ -1482,7 +1500,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Await acceptance by the federation</span>
-        <span class="kw">let</span> <span class="ident">timeout</span> <span class="op">=</span> <span class="ident">std::time::Duration::from_secs</span>(<span class="number">10</span>);
+        <span class="kw">let</span> <span class="ident">timeout</span> <span class="op">=</span> <span class="ident">std::time::Duration::from_secs</span>(<span class="number">15</span>);
         <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
         <span class="self">self</span>.<span class="ident">context</span>
             .<span class="ident">api</span>

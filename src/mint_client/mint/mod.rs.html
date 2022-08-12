@@ -599,6 +599,11 @@
 <span id="599">599</span>
 <span id="600">600</span>
 <span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
 </pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::ApiError</span>;
@@ -973,6 +978,7 @@
     <span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::module::testing::FakeFed</span>;
     <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningGateway</span>};
@@ -1043,6 +1049,10 @@
         }
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_epoch</span>: <span class="ident">u64</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
             <span class="macro">unimplemented!</span>()
         }
     }

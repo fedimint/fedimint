@@ -339,7 +339,7 @@
         }
 
         <span class="kw">pub</span> <span class="kw">struct</span> #<span class="ident">unzip_struct_ident</span> {
-            #(#<span class="ident">unzip_s_ident</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, #<span class="ident">unzip_s_type</span>)<span class="op">&gt;</span>),<span class="op">*</span>
+            #(<span class="kw">pub</span> #<span class="ident">unzip_s_ident</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, #<span class="ident">unzip_s_type</span>)<span class="op">&gt;</span>),<span class="op">*</span>
         }
 
         <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">I</span><span class="op">&gt;</span> #<span class="ident">unzip_trait_ident</span> <span class="kw">for</span> <span class="ident">I</span>

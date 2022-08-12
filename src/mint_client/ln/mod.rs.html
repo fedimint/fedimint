@@ -412,6 +412,11 @@
 <span id="412">412</span>
 <span id="413">413</span>
 <span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">incoming</span>;
@@ -618,6 +623,7 @@
     <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
     <span class="kw">use</span> <span class="ident">minimint_api::module::testing::FakeFed</span>;
     <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">TransactionId</span>};
+    <span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::config::LightningModuleClientConfig</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
     <span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
@@ -693,6 +699,10 @@
         }
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_epoch</span>: <span class="ident">u64</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
             <span class="macro">unimplemented!</span>()
         }
     }
