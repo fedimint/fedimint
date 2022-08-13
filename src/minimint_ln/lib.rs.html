@@ -741,7 +741,7 @@
 <span class="doccomment">/// [Incoming]: contracts::incoming::IncomingContract</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningModule</span> {
     <span class="ident">cfg</span>: <span class="ident">LightningModuleConfig</span>,
-    <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -752,7 +752,7 @@
     <span class="doccomment">/// Of the three contract types only the outgoing one needs any other witness data than a</span>
     <span class="doccomment">/// signature. The signature is aggregated on the transaction level, so only the optional</span>
     <span class="doccomment">/// preimage remains.</span>
-    <span class="kw">pub</span> <span class="ident">witness</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">contracts::outgoing::Preimage</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">witness</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">contracts::outgoing::Preimage</span>&gt;,
 }
 
 <span class="doccomment">/// Represents an output of the Lightning module.</span>
@@ -809,41 +809,41 @@
 
 <span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
 <span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">LightningModule</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">LightningModuleError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> <span class="op">=</span> <span class="ident">ContractInput</span>;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> <span class="op">=</span> <span class="ident">ContractOrOfferOutput</span>;
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> <span class="op">=</span> <span class="ident">OutputOutcome</span>;
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> <span class="op">=</span> <span class="ident">DecryptionShareCI</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> <span class="op">=</span> ();
+    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">LightningModuleError</span>;
+    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">ContractInput</span>;
+    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">ContractOrOfferOutput</span>;
+    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = <span class="ident">OutputOutcome</span>;
+    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">DecryptionShareCI</span>;
+    <span class="kw">type</span> <span class="ident">VerificationCache</span> = ();
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>) {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">is_empty</span>() {
             <span class="ident">std::future::pending</span>().<span class="kw">await</span>
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::ConsensusItem</span><span class="op">&gt;</span> {
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposeDecryptionShareKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">ProposeDecryptionShareKey</span>(<span class="ident">contract_id</span>), <span class="ident">share</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">ProposeDecryptionShareKey</span>(<span class="ident">contract_id</span>), <span class="ident">share</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 <span class="ident">DecryptionShareCI</span> { <span class="ident">contract_id</span>, <span class="ident">share</span> }
             })
             .<span class="ident">collect</span>()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)<span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
     ) {
-        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">decryption_share</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">span</span> <span class="op">=</span> <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, <span class="op">%</span><span class="ident">peer</span>);
-            <span class="kw">let</span> <span class="ident">_guard</span> <span class="op">=</span> <span class="ident">span</span>.<span class="ident">enter</span>();
+        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">decryption_share</span>)| {
+            <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %<span class="ident">peer</span>);
+            <span class="kw">let</span> <span class="ident">_guard</span> = <span class="ident">span</span>.<span class="ident">enter</span>();
 
             <span class="ident">BatchItem::insert_new</span>(
                 <span class="ident">AgreedDecryptionShareKey</span>(<span class="ident">decryption_share</span>.<span class="ident">contract_id</span>, <span class="ident">peer</span>),
@@ -853,34 +853,34 @@
         <span class="ident">batch</span>.<span class="ident">commit</span>();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span><span class="op">&gt;</span>,
+        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt;,
     ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
         <span class="ident">_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">account</span>: <span class="ident">ContractAccount</span> <span class="op">=</span> <span class="self">self</span>
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">account</span>: <span class="ident">ContractAccount</span> = <span class="self">self</span>
             .<span class="ident">get_contract_account</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>)
             .<span class="ident">ok_or</span>(<span class="ident">LightningModuleError::UnknownContract</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">account</span>.<span class="ident">amount</span> <span class="op">&lt;</span> <span class="ident">input</span>.<span class="ident">amount</span> {
+        <span class="kw">if</span> <span class="ident">account</span>.<span class="ident">amount</span> &lt; <span class="ident">input</span>.<span class="ident">amount</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InsufficientFunds</span>(
                 <span class="ident">account</span>.<span class="ident">amount</span>,
                 <span class="ident">input</span>.<span class="ident">amount</span>,
             ));
         }
 
-        <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">account</span>.<span class="ident">contract</span> {
+        <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="kw">match</span> <span class="ident">account</span>.<span class="ident">contract</span> {
             <span class="ident">FundedContract::Outgoing</span>(<span class="ident">outgoing</span>) =&gt; {
-                <span class="kw">if</span> <span class="ident">outgoing</span>.<span class="ident">timelock</span> <span class="op">&gt;</span> <span class="ident">block_height</span>(<span class="ident">interconnect</span>) {
+                <span class="kw">if</span> <span class="ident">outgoing</span>.<span class="ident">timelock</span> &gt; <span class="ident">block_height</span>(<span class="ident">interconnect</span>) {
                     <span class="comment">// If the timelock hasn&#39;t expired yet …</span>
-                    <span class="kw">let</span> <span class="ident">preimage_hash</span> <span class="op">=</span> <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(
+                    <span class="kw">let</span> <span class="ident">preimage_hash</span> = <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(
                         <span class="kw-2">&amp;</span><span class="ident">input</span>
                             .<span class="ident">witness</span>
                             .<span class="ident">as_ref</span>()
@@ -889,7 +889,7 @@
                     );
 
                     <span class="comment">// … and the spender provides a valid preimage …</span>
-                    <span class="kw">if</span> <span class="ident">preimage_hash</span> <span class="op">!</span><span class="op">=</span> <span class="ident">outgoing</span>.<span class="ident">hash</span> {
+                    <span class="kw">if</span> <span class="ident">preimage_hash</span> != <span class="ident">outgoing</span>.<span class="ident">hash</span> {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InvalidPreimage</span>);
                     }
 
@@ -919,40 +919,40 @@
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
         <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;b</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">meta</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">account_db_key</span> <span class="op">=</span> <span class="ident">ContractKey</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">account_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">account_db_key</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
-        <span class="ident">contract_account</span>.<span class="ident">amount</span> <span class="op">-</span><span class="op">=</span> <span class="ident">meta</span>.<span class="ident">amount</span>;
+        <span class="ident">contract_account</span>.<span class="ident">amount</span> -= <span class="ident">meta</span>.<span class="ident">amount</span>;
         <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">account_db_key</span>, <span class="ident">contract_account</span>);
 
         <span class="ident">batch</span>.<span class="ident">commit</span>();
         <span class="prelude-val">Ok</span>(<span class="ident">meta</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
         <span class="kw">match</span> <span class="ident">output</span> {
             <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract</span>) =&gt; {
                 <span class="comment">// Incoming contracts are special, they need to match an offer</span>
-                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> <span class="op">=</span> <span class="self">self</span>
+                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) = <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
+                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="self">self</span>
                         .<span class="ident">db</span>
                         .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))
                         .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
                         .<span class="ident">ok_or</span>(<span class="ident">LightningModuleError::NoOffer</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))<span class="question-mark">?</span>;
 
-                    <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> <span class="op">&lt;</span> <span class="ident">offer</span>.<span class="ident">amount</span> {
+                    <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> &lt; <span class="ident">offer</span>.<span class="ident">amount</span> {
                         <span class="comment">// If the account is not sufficiently funded fail the output</span>
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InsufficientIncomingFunding</span>(
                             <span class="ident">offer</span>.<span class="ident">amount</span>,
@@ -961,14 +961,14 @@
                     }
                 }
 
-                <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> <span class="op">==</span> <span class="ident">Amount::ZERO</span> {
+                <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> == <span class="ident">Amount::ZERO</span> {
                     <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::ZeroOutput</span>)
                 } <span class="kw">else</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">contract</span>.<span class="ident">amount</span>)
                 }
             }
             <span class="ident">ContractOrOfferOutput::Offer</span>(<span class="ident">offer</span>) =&gt; {
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">offer</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>.<span class="ident">verify</span>() {
+                <span class="kw">if</span> !<span class="ident">offer</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>.<span class="ident">verify</span>() {
                     <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InvalidEncryptedPreimage</span>)
                 } <span class="kw">else</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">Amount::ZERO</span>)
@@ -977,26 +977,26 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
         <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">amount</span> = <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
 
         <span class="kw">match</span> <span class="ident">output</span> {
             <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract</span>) =&gt; {
-                <span class="kw">let</span> <span class="ident">contract_db_key</span> <span class="op">=</span> <span class="ident">ContractKey</span>(<span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>());
-                <span class="kw">let</span> <span class="ident">updated_contract_account</span> <span class="op">=</span> <span class="self">self</span>
+                <span class="kw">let</span> <span class="ident">contract_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>());
+                <span class="kw">let</span> <span class="ident">updated_contract_account</span> = <span class="self">self</span>
                     .<span class="ident">db</span>
                     .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">contract_db_key</span>)
                     .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="kw-2">mut</span> <span class="ident">value</span>: <span class="ident">ContractAccount</span><span class="op">|</span> {
-                        <span class="ident">value</span>.<span class="ident">amount</span> <span class="op">+</span><span class="op">=</span> <span class="ident">amount</span>;
+                    .<span class="ident">map</span>(|<span class="kw-2">mut</span> <span class="ident">value</span>: <span class="ident">ContractAccount</span>| {
+                        <span class="ident">value</span>.<span class="ident">amount</span> += <span class="ident">amount</span>;
                         <span class="ident">value</span>
                     })
-                    .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">ContractAccount</span> {
+                    .<span class="ident">unwrap_or_else</span>(|| <span class="ident">ContractAccount</span> {
                         <span class="ident">amount</span>,
                         <span class="ident">contract</span>: <span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">clone</span>().<span class="ident">to_funded</span>(<span class="ident">out_point</span>),
                     });
@@ -1010,14 +1010,14 @@
                     },
                 );
 
-                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> <span class="op">=</span> <span class="self">self</span>
+                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) = <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
+                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="self">self</span>
                         .<span class="ident">db</span>
                         .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))
                         .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
                         .<span class="ident">expect</span>(<span class="string">&quot;offer exists if output is valid&quot;</span>);
 
-                    <span class="kw">let</span> <span class="ident">decryption_share</span> <span class="op">=</span> <span class="self">self</span>
+                    <span class="kw">let</span> <span class="ident">decryption_share</span> = <span class="self">self</span>
                         .<span class="ident">cfg</span>
                         .<span class="ident">threshold_sec_key</span>
                         .<span class="ident">decrypt_share</span>(<span class="kw-2">&amp;</span><span class="ident">incoming</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>)
@@ -1044,29 +1044,29 @@
     }
 
     <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
         <span class="comment">// Decrypt preimages</span>
-        <span class="kw">let</span> <span class="ident">preimage_decryption_shares</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">preimage_decryption_shares</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">AgreedDecryptionShareKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">value</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">value</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 (<span class="ident">key</span>.<span class="number">0</span>, (<span class="ident">key</span>.<span class="number">1</span>, <span class="ident">value</span>))
             })
             .<span class="ident">into_group_map</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bad_peers</span> <span class="op">=</span> <span class="macro">vec!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bad_peers</span> = <span class="macro">vec!</span>[];
         <span class="kw">for</span> (<span class="ident">contract_id</span>, <span class="ident">shares</span>) <span class="kw">in</span> <span class="ident">preimage_decryption_shares</span> {
-            <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">shares</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">peer</span>).<span class="ident">collect</span>();
-            <span class="kw">let</span> <span class="ident">span</span> <span class="op">=</span> <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, <span class="op">%</span><span class="ident">contract_id</span>);
-            <span class="kw">let</span> <span class="ident">_gaurd</span> <span class="op">=</span> <span class="ident">span</span>.<span class="ident">enter</span>();
+            <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">shares</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">peer</span>).<span class="ident">collect</span>();
+            <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %<span class="ident">contract_id</span>);
+            <span class="kw">let</span> <span class="ident">_gaurd</span> = <span class="ident">span</span>.<span class="ident">enter</span>();
 
-            <span class="kw">let</span> <span class="ident">incoming_contract</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>) {
+            <span class="kw">let</span> <span class="ident">incoming_contract</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>) {
                 <span class="prelude-val">Some</span>(<span class="ident">ContractAccount</span> {
                     <span class="ident">contract</span>: <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>),
                     ..
@@ -1080,9 +1080,9 @@
                 }
             };
 
-            <span class="kw">let</span> <span class="ident">valid_shares</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">PreimageDecryptionShare</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">shares</span>
+            <span class="kw">let</span> <span class="ident">valid_shares</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">PreimageDecryptionShare</span>&gt; = <span class="ident">shares</span>
                 .<span class="ident">into_iter</span>()
-                .<span class="ident">filter</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">share</span>)<span class="op">|</span> {
+                .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| {
                     <span class="self">self</span>.<span class="ident">validate_decryption_share</span>(
                         <span class="kw-2">*</span><span class="ident">peer</span>,
                         <span class="ident">share</span>,
@@ -1096,28 +1096,28 @@
                 <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, <span class="ident">peer</span>);
             }
 
-            <span class="kw">if</span> <span class="ident">valid_shares</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span> {
+            <span class="kw">if</span> <span class="ident">valid_shares</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span> {
                 <span class="macro">warn!</span>(
-                    <span class="ident">valid_shares</span> <span class="op">=</span> <span class="op">%</span><span class="ident">valid_shares</span>.<span class="ident">len</span>(),
-                    <span class="ident">shares_needed</span> <span class="op">=</span> <span class="op">%</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span>,
+                    <span class="ident">valid_shares</span> = %<span class="ident">valid_shares</span>.<span class="ident">len</span>(),
+                    <span class="ident">shares_needed</span> = %<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span>,
                     <span class="string">&quot;Too few decryption shares&quot;</span>
                 );
                 <span class="kw">continue</span>;
             }
             <span class="macro">debug!</span>(<span class="string">&quot;Beginning to decrypt preimage&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">contract</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">contract</span> = <span class="self">self</span>
                 .<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify</span>
 
-            <span class="kw">let</span> (<span class="ident">incoming_contract</span>, <span class="ident">out_point</span>) <span class="op">=</span> <span class="kw">match</span> <span class="ident">contract</span>.<span class="ident">contract</span> {
+            <span class="kw">let</span> (<span class="ident">incoming_contract</span>, <span class="ident">out_point</span>) = <span class="kw">match</span> <span class="ident">contract</span>.<span class="ident">contract</span> {
                 <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>) =&gt; (<span class="ident">incoming</span>.<span class="ident">contract</span>, <span class="ident">incoming</span>.<span class="ident">out_point</span>),
                 <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(
                     <span class="string">&quot;decryption shares without incoming contracts should be discarded earlier&quot;</span>
                 ),
             };
 
-            <span class="kw">if</span> <span class="op">!</span><span class="macro">matches!</span>(
+            <span class="kw">if</span> !<span class="macro">matches!</span>(
                 <span class="ident">incoming_contract</span>.<span class="ident">decrypted_preimage</span>,
                 <span class="ident">DecryptedPreimage::Pending</span>
             ) {
@@ -1125,16 +1125,16 @@
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold_pub_keys</span>.<span class="ident">decrypt</span>(
+            <span class="kw">let</span> <span class="ident">preimage</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold_pub_keys</span>.<span class="ident">decrypt</span>(
                 <span class="ident">valid_shares</span>
                     .<span class="ident">iter</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">share</span>)<span class="op">|</span> (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">share</span>.<span class="number">0</span>)),
+                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">share</span>.<span class="number">0</span>)),
                 <span class="kw-2">&amp;</span><span class="ident">incoming_contract</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>,
             ) {
                 <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>) =&gt; <span class="ident">preimage</span>,
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                     <span class="comment">// TODO: check if that can happen even though shares are verified before</span>
-                    <span class="macro">error!</span>(<span class="ident">contract_hash</span> <span class="op">=</span> <span class="op">%</span><span class="ident">incoming_contract</span>.<span class="ident">hash</span>, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
+                    <span class="macro">error!</span>(<span class="ident">contract_hash</span> = %<span class="ident">incoming_contract</span>.<span class="ident">hash</span>, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
                     <span class="kw">continue</span>;
                 }
             };
@@ -1145,10 +1145,10 @@
                 <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">AgreedDecryptionShareKey</span>(<span class="ident">contract_id</span>, <span class="ident">peer</span>));
             }
 
-            <span class="kw">let</span> <span class="ident">decrypted_preimage</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">preimage</span>.<span class="ident">len</span>() <span class="op">!</span><span class="op">=</span> <span class="number">32</span> {
+            <span class="kw">let</span> <span class="ident">decrypted_preimage</span> = <span class="kw">if</span> <span class="ident">preimage</span>.<span class="ident">len</span>() != <span class="number">32</span> {
                 <span class="ident">DecryptedPreimage::Invalid</span>
-            } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">incoming_contract</span>.<span class="ident">hash</span> <span class="op">==</span> <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
-                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">preimage_key</span>) <span class="op">=</span> <span class="ident">secp256k1::XOnlyPublicKey::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
+            } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">incoming_contract</span>.<span class="ident">hash</span> == <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">preimage_key</span>) = <span class="ident">secp256k1::XOnlyPublicKey::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
                     <span class="ident">DecryptedPreimage::Some</span>(<span class="ident"><span class="kw">crate</span>::contracts::incoming::Preimage</span>(<span class="ident">preimage_key</span>))
                 } <span class="kw">else</span> {
                     <span class="ident">DecryptedPreimage::Invalid</span>
@@ -1160,35 +1160,35 @@
 
             <span class="comment">// TODO: maybe define update helper fn</span>
             <span class="comment">// Update contract</span>
-            <span class="kw">let</span> <span class="ident">contract_db_key</span> <span class="op">=</span> <span class="ident">ContractKey</span>(<span class="ident">contract_id</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">contract_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">contract_id</span>);
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> = <span class="self">self</span>
                 .<span class="ident">db</span>
                 .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">contract_db_key</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;checked before that it exists&quot;</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">incoming</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">contract_account</span>.<span class="ident">contract</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">incoming</span> = <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">contract_account</span>.<span class="ident">contract</span> {
                 <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>) =&gt; <span class="ident">incoming</span>,
                 <span class="kw">_</span> =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;previously checked that it&#39;s an incoming contrac&quot;</span>),
             };
-            <span class="ident">incoming</span>.<span class="ident">contract</span>.<span class="ident">decrypted_preimage</span> <span class="op">=</span> <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
+            <span class="ident">incoming</span>.<span class="ident">contract</span>.<span class="ident">decrypted_preimage</span> = <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
             <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">contract_account</span>, <span class="string">&quot;Updating contract account&quot;</span>);
             <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">contract_db_key</span>, <span class="ident">contract_account</span>);
 
             <span class="comment">// Update output outcome</span>
-            <span class="kw">let</span> <span class="ident">outcome_db_key</span> <span class="op">=</span> <span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">outcome_db_key</span> = <span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>);
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">outcome</span> = <span class="self">self</span>
                 .<span class="ident">db</span>
                 .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">outcome_db_key</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;outcome was created on funding&quot;</span>);
-            <span class="kw">let</span> <span class="ident">incoming_contract_outcome_preimage</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">outcome</span> {
+            <span class="kw">let</span> <span class="ident">incoming_contract_outcome_preimage</span> = <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">outcome</span> {
                 <span class="ident">OutputOutcome::Contract</span> {
                     <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">decryption_outcome</span>),
                     ..
                 } =&gt; <span class="ident">decryption_outcome</span>,
                 <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
             };
-            <span class="kw-2">*</span><span class="ident">incoming_contract_outcome_preimage</span> <span class="op">=</span> <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
+            <span class="kw-2">*</span><span class="ident">incoming_contract_outcome_preimage</span> = <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
             <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">outcome_db_key</span>, <span class="ident">outcome</span>);
         }
         <span class="ident">batch</span>.<span class="ident">commit</span>();
@@ -1196,15 +1196,15 @@
         <span class="ident">bad_peers</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">ContractKeyPrefix</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
-            <span class="op">-</span>(<span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>)
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">ContractKeyPrefix</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
+            -(<span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>)
         });
     }
 
@@ -1212,42 +1212,42 @@
         <span class="string">&quot;ln&quot;</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>] {
-        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">LightningModule</span><span class="op">&gt;</span>] <span class="op">=</span> <span class="kw-2">&amp;</span>[
+    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
+        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span>&lt;<span class="ident">LightningModule</span>&gt;] = <span class="kw-2">&amp;</span>[
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/account&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span><span class="op">|</span> -&gt; <span class="ident">ContractAccount</span> {
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>| -&gt; <span class="ident">ContractAccount</span> {
                     <span class="ident">module</span>
                         .<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>)
-                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Contract not found&quot;</span>)))
+                        .<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/offers&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_params</span>: ()<span class="op">|</span> -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_params</span>: ()| -&gt; <span class="ident">Vec</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
                     <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">get_offers</span>())
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/offer&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span><span class="op">|</span> -&gt; <span class="ident">IncomingContractOffer</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> <span class="op">=</span> <span class="ident">module</span>
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>| -&gt; <span class="ident">IncomingContractOffer</span> {
+                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="ident">module</span>
                         .<span class="ident">get_offer</span>(<span class="ident">payment_hash</span>)
-                        .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
+                        .<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
-                    <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">payment_hash</span>, <span class="string">&quot;Sending offer info&quot;</span>);
+                    <span class="macro">debug!</span>(%<span class="ident">payment_hash</span>, <span class="string">&quot;Sending offer info&quot;</span>);
                     <span class="prelude-val">Ok</span>(<span class="ident">offer</span>)
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/list_gateways&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_v</span>: ()<span class="op">|</span> -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LightningGateway</span><span class="op">&gt;</span> {
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_v</span>: ()| -&gt; <span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt; {
                     <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">list_gateways</span>())
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/register_gateway&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span><span class="op">|</span> -&gt; () {
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span>| -&gt; () {
                     <span class="ident">module</span>.<span class="ident">register_gateway</span>(<span class="ident">gateway</span>);
                     <span class="prelude-val">Ok</span>(())
                 }
@@ -1258,7 +1258,7 @@
 }
 
 <span class="kw">impl</span> <span class="ident">LightningModule</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">LightningModuleConfig</span>, <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>) -&gt; <span class="ident">LightningModule</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">LightningModuleConfig</span>, <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;) -&gt; <span class="ident">LightningModule</span> {
         <span class="ident">LightningModule</span> { <span class="ident">cfg</span>, <span class="ident">db</span> }
     }
 
@@ -1277,29 +1277,29 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offer</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
-    ) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">payment_hash</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .<span class="ident">collect</span>()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_contract_account</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">ContractAccount</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_contract_account</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">ContractAccount</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ContractKey</span>(<span class="ident">contract_id</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LightningGateway</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">LightningGatewayKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
             .<span class="ident">collect</span>()
     }
 
@@ -1313,7 +1313,7 @@
 <span class="kw">fn</span> <span class="ident">block_height</span>(<span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>) -&gt; <span class="ident">u32</span> {
     <span class="comment">// This is a future because we are normally reading from a network socket. But for internal</span>
     <span class="comment">// calls the data is available instantly in one go, so we can just block on it.</span>
-    <span class="kw">let</span> <span class="ident">body</span> <span class="op">=</span> <span class="ident">futures::executor::block_on</span>(<span class="ident">interconnect</span>.<span class="ident">call</span>(
+    <span class="kw">let</span> <span class="ident">body</span> = <span class="ident">futures::executor::block_on</span>(<span class="ident">interconnect</span>.<span class="ident">call</span>(
         <span class="string">&quot;wallet&quot;</span>,
         <span class="string">&quot;/block_height&quot;</span>.<span class="ident">to_owned</span>(),
         <span class="ident">Default::default</span>(),
@@ -1347,4 +1347,4 @@
     <span class="ident">NoOffer</span>(<span class="ident">secp256k1::hashes::sha256::Hash</span>),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

@@ -87,7 +87,7 @@
     <span class="kw">pub</span> <span class="ident">threshold_pub_keys</span>: <span class="ident">threshold_crypto::PublicKeySet</span>,
     <span class="comment">// TODO: propose serde(with = &quot;…&quot;) based protection upstream instead</span>
     <span class="kw">pub</span> <span class="ident">threshold_sec_key</span>:
-        <span class="ident">threshold_crypto::serde_impl::SerdeSecret</span><span class="op">&lt;</span><span class="ident">threshold_crypto::SecretKeyShare</span><span class="op">&gt;</span>,
+        <span class="ident">threshold_crypto::serde_impl::SerdeSecret</span>&lt;<span class="ident">threshold_crypto::SecretKeyShare</span>&gt;,
     <span class="kw">pub</span> <span class="ident">threshold</span>: <span class="ident">usize</span>,
     <span class="kw">pub</span> <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus</span>,
 }
@@ -99,23 +99,23 @@
 }
 
 <span class="kw">impl</span> <span class="ident">GenerateConfig</span> <span class="kw">for</span> <span class="ident">LightningModuleConfig</span> {
-    <span class="kw">type</span> <span class="ident">Params</span> <span class="op">=</span> ();
-    <span class="kw">type</span> <span class="ident">ClientConfig</span> <span class="op">=</span> <span class="ident">LightningModuleClientConfig</span>;
+    <span class="kw">type</span> <span class="ident">Params</span> = ();
+    <span class="kw">type</span> <span class="ident">ClientConfig</span> = <span class="ident">LightningModuleClientConfig</span>;
 
     <span class="kw">fn</span> <span class="ident">trusted_dealer_gen</span>(
         <span class="ident">peers</span>: <span class="kw-2">&amp;</span>[<span class="ident">PeerId</span>],
         <span class="ident">max_evil</span>: <span class="ident">usize</span>,
         <span class="ident">_params</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::Params</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
-    ) -&gt; (<span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="self">Self</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::ClientConfig</span>) {
-        <span class="kw">let</span> <span class="ident">threshold</span> <span class="op">=</span> <span class="ident">peers</span>.<span class="ident">len</span>() <span class="op">-</span> <span class="ident">max_evil</span>;
-        <span class="kw">let</span> <span class="ident">sks</span> <span class="op">=</span> <span class="ident">threshold_crypto::SecretKeySet::random</span>(<span class="ident">threshold</span> <span class="op">-</span> <span class="number">1</span>, <span class="kw-2">&amp;mut</span> <span class="ident">Rand07Compat</span>(<span class="ident">rng</span>));
-        <span class="kw">let</span> <span class="ident">pks</span> <span class="op">=</span> <span class="ident">sks</span>.<span class="ident">public_keys</span>();
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+    ) -&gt; (<span class="ident">BTreeMap</span>&lt;<span class="ident">PeerId</span>, <span class="self">Self</span>&gt;, <span class="ident"><span class="self">Self</span>::ClientConfig</span>) {
+        <span class="kw">let</span> <span class="ident">threshold</span> = <span class="ident">peers</span>.<span class="ident">len</span>() - <span class="ident">max_evil</span>;
+        <span class="kw">let</span> <span class="ident">sks</span> = <span class="ident">threshold_crypto::SecretKeySet::random</span>(<span class="ident">threshold</span> - <span class="number">1</span>, <span class="kw-2">&amp;mut</span> <span class="ident">Rand07Compat</span>(<span class="ident">rng</span>));
+        <span class="kw">let</span> <span class="ident">pks</span> = <span class="ident">sks</span>.<span class="ident">public_keys</span>();
 
-        <span class="kw">let</span> <span class="ident">server_cfg</span> <span class="op">=</span> <span class="ident">peers</span>
+        <span class="kw">let</span> <span class="ident">server_cfg</span> = <span class="ident">peers</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span><span class="kw-2">&amp;</span><span class="ident">peer</span><span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">sk</span> <span class="op">=</span> <span class="ident">sks</span>.<span class="ident">secret_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
+            .<span class="ident">map</span>(|<span class="kw-2">&amp;</span><span class="ident">peer</span>| {
+                <span class="kw">let</span> <span class="ident">sk</span> = <span class="ident">sks</span>.<span class="ident">secret_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
 
                 (
                     <span class="ident">peer</span>,
@@ -129,7 +129,7 @@
             })
             .<span class="ident">collect</span>();
 
-        <span class="kw">let</span> <span class="ident">client_cfg</span> <span class="op">=</span> <span class="ident">LightningModuleClientConfig</span> {
+        <span class="kw">let</span> <span class="ident">client_cfg</span> = <span class="ident">LightningModuleClientConfig</span> {
             <span class="ident">threshold_pub_key</span>: <span class="ident">pks</span>.<span class="ident">public_key</span>(),
             <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
         };
@@ -153,4 +153,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

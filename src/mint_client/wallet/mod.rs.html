@@ -359,11 +359,11 @@
 
 <span class="doccomment">/// Federation module client for the Wallet module. It can both create transaction inputs and</span>
 <span class="doccomment">/// outputs of the wallet (on-chain) type.</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">WalletClient</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> {
-    <span class="kw">pub</span> <span class="ident">context</span>: <span class="ident">BorrowedClientContext</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span>, <span class="ident">WalletClientConfig</span><span class="op">&gt;</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">WalletClient</span>&lt;<span class="lifetime">&#39;c</span>&gt; {
+    <span class="kw">pub</span> <span class="ident">context</span>: <span class="ident">BorrowedClientContext</span>&lt;<span class="lifetime">&#39;c</span>, <span class="ident">WalletClientConfig</span>&gt;,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> <span class="ident">WalletClient</span><span class="op">&lt;</span><span class="lifetime">&#39;c</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; <span class="ident">WalletClient</span>&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="doccomment">/// Returns a bitcoin-address derived from the federations peg-in-descriptor and a random tweak</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// This function will create a public/secret [keypair](bitcoin::KeyPair). The public key is used to tweak the</span>
@@ -373,24 +373,24 @@
     <span class="doccomment">/// prevent front-running by a malicious  federation member</span>
     <span class="doccomment">/// The returned bitcoin-address is derived from the script. Thus sending bitcoin to that address will result in a</span>
     <span class="doccomment">/// transaction containing the scripts public-key in at least one of it&#39;s outpoints.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_new_pegin_address</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_new_pegin_address</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;_</span>&gt;,
         <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="ident">Address</span> {
-        <span class="kw">let</span> <span class="ident">peg_in_keypair</span> <span class="op">=</span> <span class="ident">bitcoin::KeyPair::new</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">peg_in_pub_key</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_keypair</span>(<span class="kw-2">&amp;</span><span class="ident">peg_in_keypair</span>);
+        <span class="kw">let</span> <span class="ident">peg_in_keypair</span> = <span class="ident">bitcoin::KeyPair::new</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+        <span class="kw">let</span> <span class="ident">peg_in_pub_key</span> = <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_keypair</span>(<span class="kw-2">&amp;</span><span class="ident">peg_in_keypair</span>);
 
         <span class="comment">// TODO: check at startup that no bare descriptor is used in config</span>
         <span class="comment">// TODO: check if there are other failure cases</span>
-        <span class="kw">let</span> <span class="ident">script</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">script</span> = <span class="self">self</span>
             .<span class="ident">context</span>
             .<span class="ident">config</span>
             .<span class="ident">peg_in_descriptor</span>
             .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">peg_in_pub_key</span>, <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)
             .<span class="ident">script_pubkey</span>();
         <span class="macro">debug!</span>(<span class="question-mark">?</span><span class="ident">script</span>);
-        <span class="kw">let</span> <span class="ident">address</span> <span class="op">=</span> <span class="ident">Address::from_script</span>(<span class="kw-2">&amp;</span><span class="ident">script</span>, <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">network</span>)
+        <span class="kw">let</span> <span class="ident">address</span> = <span class="ident">Address::from_script</span>(<span class="kw-2">&amp;</span><span class="ident">script</span>, <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">network</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;Script from descriptor should have an address&quot;</span>);
 
         <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
@@ -408,27 +408,27 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
         <span class="ident">btc_transaction</span>: <span class="ident">bitcoin::Transaction</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">KeyPair</span>, <span class="ident">PegInProof</span>)<span class="op">&gt;</span> {
-        <span class="kw">let</span> (<span class="ident">output_idx</span>, <span class="ident">secret_tweak_key_bytes</span>) <span class="op">=</span> <span class="ident">btc_transaction</span>
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">KeyPair</span>, <span class="ident">PegInProof</span>)&gt; {
+        <span class="kw">let</span> (<span class="ident">output_idx</span>, <span class="ident">secret_tweak_key_bytes</span>) = <span class="ident">btc_transaction</span>
             .<span class="ident">output</span>
             .<span class="ident">iter</span>()
             .<span class="ident">enumerate</span>()
-            .<span class="ident">find_map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="ident">out</span>)<span class="op">|</span> {
-                <span class="macro">debug!</span>(<span class="ident">output_script</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">out</span>.<span class="ident">script_pubkey</span>);
+            .<span class="ident">find_map</span>(|(<span class="ident">idx</span>, <span class="ident">out</span>)| {
+                <span class="macro">debug!</span>(<span class="ident">output_script</span> = <span class="question-mark">?</span><span class="ident">out</span>.<span class="ident">script_pubkey</span>);
                 <span class="self">self</span>.<span class="ident">context</span>
                     .<span class="ident">db</span>
                     .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">PegInKey</span> {
                         <span class="ident">peg_in_script</span>: <span class="ident">out</span>.<span class="ident">script_pubkey</span>.<span class="ident">clone</span>(),
                     })
                     .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">tweak_secret</span><span class="op">|</span> (<span class="ident">idx</span>, <span class="ident">tweak_secret</span>))
+                    .<span class="ident">map</span>(|<span class="ident">tweak_secret</span>| (<span class="ident">idx</span>, <span class="ident">tweak_secret</span>))
             })
             .<span class="ident">ok_or</span>(<span class="ident">WalletClientError::NoMatchingPegInFound</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">secret_tweak_key</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">secret_tweak_key</span> =
             <span class="ident">bitcoin::KeyPair::from_seckey_slice</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">secret_tweak_key_bytes</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;sec key was generated and saved by us&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">peg_in_proof</span> <span class="op">=</span> <span class="ident">PegInProof::new</span>(
+        <span class="kw">let</span> <span class="ident">peg_in_proof</span> = <span class="ident">PegInProof::new</span>(
             <span class="ident">txout_proof</span>,
             <span class="ident">btc_transaction</span>,
             <span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">u32</span>,
@@ -439,11 +439,11 @@
         <span class="ident">peg_in_proof</span>
             .<span class="ident">verify</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">peg_in_descriptor</span>)
             .<span class="ident">map_err</span>(<span class="ident">WalletClientError::PegInProofError</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">sats</span> <span class="op">=</span> <span class="ident">peg_in_proof</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>;
+        <span class="kw">let</span> <span class="ident">sats</span> = <span class="ident">peg_in_proof</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>;
 
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">amount</span> =
             <span class="ident">Amount::from_sat</span>(<span class="ident">sats</span>).<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">fee_consensus</span>.<span class="ident">peg_in_abs</span>);
-        <span class="kw">if</span> <span class="ident">amount</span> <span class="op">==</span> <span class="ident">Amount::ZERO</span> {
+        <span class="kw">if</span> <span class="ident">amount</span> == <span class="ident">Amount::ZERO</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletClientError::PegInAmountTooSmall</span>);
         }
 
@@ -453,7 +453,7 @@
     }
 }
 
-<span class="kw">type</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">WalletClientError</span><span class="op">&gt;</span>;
+<span class="kw">type</span> <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt; = <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">WalletClientError</span>&gt;;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Error</span>, <span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">WalletClientError</span> {
@@ -495,8 +495,8 @@
     <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
     <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
 
-    <span class="kw">type</span> <span class="ident">Fed</span> <span class="op">=</span> <span class="ident">FakeFed</span><span class="op">&lt;</span><span class="ident">Wallet</span>, <span class="ident">WalletClientConfig</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">SharedFed</span> <span class="op">=</span> <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">tokio::sync::Mutex</span><span class="op">&lt;</span><span class="ident">Fed</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+    <span class="kw">type</span> <span class="ident">Fed</span> = <span class="ident">FakeFed</span>&lt;<span class="ident">Wallet</span>, <span class="ident">WalletClientConfig</span>&gt;;
+    <span class="kw">type</span> <span class="ident">SharedFed</span> = <span class="ident">Arc</span>&lt;<span class="ident">tokio::sync::Mutex</span>&lt;<span class="ident">Fed</span>&gt;&gt;;
 
     <span class="kw">struct</span> <span class="ident">FakeApi</span> {
         <span class="comment">// for later use once wallet outcomes are implemented</span>
@@ -508,32 +508,32 @@
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_tx_outcome</span>(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             <span class="ident">_tx</span>: <span class="ident">TransactionId</span>,
-        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">TransactionStatus</span><span class="op">&gt;</span> {
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">TransactionStatus</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="ident">TransactionStatus::Accepted</span> {
                 <span class="ident">epoch</span>: <span class="number">0</span>,
                 <span class="ident">outputs</span>: <span class="macro">vec!</span>[<span class="ident">OutputOutcome::Wallet</span>(())],
             })
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_contract</span>(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             <span class="ident">_contract</span>: <span class="ident">ContractId</span>,
-        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">ContractAccount</span><span class="op">&gt;</span> {
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">ContractAccount</span>&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> {
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">u64</span>&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_offer</span>(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             <span class="ident">_payment_hash</span>: <span class="ident">bitcoin::hashes::sha256::Hash</span>,
-        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">IncomingContractOffer</span><span class="op">&gt;</span> {
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
             <span class="macro">unimplemented!</span>();
         }
 
@@ -541,39 +541,39 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             <span class="ident">_address</span>: <span class="kw-2">&amp;</span><span class="ident">Address</span>,
             <span class="ident">_amount</span>: <span class="kw-2">&amp;</span><span class="ident">bitcoin::Amount</span>,
-        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PegOutFees</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        ) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">PegOutFees</span>&gt;&gt; {
             <span class="macro">unimplemented!</span>();
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">LightningGateway</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt;&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;()&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_epoch</span>: <span class="ident">u64</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_epoch</span>: <span class="ident">u64</span>) -&gt; <span class="ident"><span class="kw">crate</span>::api::Result</span>&lt;<span class="ident">EpochHistory</span>&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_mint_and_client</span>() -&gt; (
-        <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">tokio::sync::Mutex</span><span class="op">&lt;</span><span class="ident">Fed</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">OwnedClientContext</span><span class="op">&lt;</span><span class="ident">WalletClientConfig</span><span class="op">&gt;</span>,
+        <span class="ident">Arc</span>&lt;<span class="ident">tokio::sync::Mutex</span>&lt;<span class="ident">Fed</span>&gt;&gt;,
+        <span class="ident">OwnedClientContext</span>&lt;<span class="ident">WalletClientConfig</span>&gt;,
         <span class="ident">FakeBitcoindRpcController</span>,
     ) {
-        <span class="kw">let</span> <span class="ident">btc_rpc</span> <span class="op">=</span> <span class="ident">FakeBitcoindRpc::new</span>();
-        <span class="kw">let</span> <span class="ident">btc_rpc_controller</span> <span class="op">=</span> <span class="ident">btc_rpc</span>.<span class="ident">controller</span>();
+        <span class="kw">let</span> <span class="ident">btc_rpc</span> = <span class="ident">FakeBitcoindRpc::new</span>();
+        <span class="kw">let</span> <span class="ident">btc_rpc_controller</span> = <span class="ident">btc_rpc</span>.<span class="ident">controller</span>();
 
-        <span class="kw">let</span> <span class="ident">fed</span> <span class="op">=</span> <span class="ident">Arc::new</span>(<span class="ident">tokio::sync::Mutex::new</span>(
-            <span class="ident">FakeFed</span>::<span class="op">&lt;</span><span class="ident">Wallet</span>, <span class="ident">WalletClientConfig</span><span class="op">&gt;</span><span class="ident">::new</span>(
+        <span class="kw">let</span> <span class="ident">fed</span> = <span class="ident">Arc::new</span>(<span class="ident">tokio::sync::Mutex::new</span>(
+            <span class="ident">FakeFed</span>::&lt;<span class="ident">Wallet</span>, <span class="ident">WalletClientConfig</span>&gt;<span class="ident">::new</span>(
                 <span class="number">4</span>,
                 <span class="number">1</span>,
-                <span class="kw">move</span> <span class="op">|</span><span class="ident">cfg</span>, <span class="ident">db</span><span class="op">|</span> {
-                    <span class="kw">let</span> <span class="ident">btc_rpc_clone</span> <span class="op">=</span> <span class="ident">btc_rpc</span>.<span class="ident">clone</span>();
+                <span class="kw">move</span> |<span class="ident">cfg</span>, <span class="ident">db</span>| {
+                    <span class="kw">let</span> <span class="ident">btc_rpc_clone</span> = <span class="ident">btc_rpc</span>.<span class="ident">clone</span>();
                     <span class="kw">async</span> <span class="kw">move</span> {
-                        <span class="ident">Wallet::new_with_bitcoind</span>(<span class="ident">cfg</span>, <span class="ident">Arc::new</span>(<span class="ident">db</span>), <span class="op">|</span><span class="op">|</span> {
+                        <span class="ident">Wallet::new_with_bitcoind</span>(<span class="ident">cfg</span>, <span class="ident">Arc::new</span>(<span class="ident">db</span>), || {
                             <span class="ident">Box::new</span>(<span class="ident">btc_rpc_clone</span>.<span class="ident">clone</span>())
                         })
                         .<span class="kw">await</span>
@@ -585,9 +585,9 @@
             .<span class="kw">await</span>,
         ));
 
-        <span class="kw">let</span> <span class="ident">api</span> <span class="op">=</span> <span class="ident">FakeApi</span> { <span class="ident">_mint</span>: <span class="ident">fed</span>.<span class="ident">clone</span>() };
+        <span class="kw">let</span> <span class="ident">api</span> = <span class="ident">FakeApi</span> { <span class="ident">_mint</span>: <span class="ident">fed</span>.<span class="ident">clone</span>() };
 
-        <span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">OwnedClientContext</span> {
+        <span class="kw">let</span> <span class="ident">client</span> = <span class="ident">OwnedClientContext</span> {
             <span class="ident">config</span>: <span class="ident">fed</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">client_cfg</span>().<span class="ident">clone</span>(),
             <span class="ident">db</span>: <span class="ident">Box::new</span>(<span class="ident">MemDatabase::new</span>()),
             <span class="ident">api</span>: <span class="ident">Box::new</span>(<span class="ident">api</span>),
@@ -599,16 +599,16 @@
 
     <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">create_output</span>() {
-        <span class="kw">let</span> (<span class="ident">fed</span>, <span class="ident">client_context</span>, <span class="ident">btc_rpc</span>) <span class="op">=</span> <span class="ident">new_mint_and_client</span>().<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="ident">_client</span> <span class="op">=</span> <span class="ident">WalletClient</span> {
-            <span class="ident">context</span>: <span class="ident">client_context</span>.<span class="ident">borrow_with_module_config</span>(<span class="op">|</span><span class="ident">x</span><span class="op">|</span> <span class="ident">x</span>),
+        <span class="kw">let</span> (<span class="ident">fed</span>, <span class="ident">client_context</span>, <span class="ident">btc_rpc</span>) = <span class="ident">new_mint_and_client</span>().<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">_client</span> = <span class="ident">WalletClient</span> {
+            <span class="ident">context</span>: <span class="ident">client_context</span>.<span class="ident">borrow_with_module_config</span>(|<span class="ident">x</span>| <span class="ident">x</span>),
         };
 
         <span class="comment">// generate fake UTXO</span>
-        <span class="ident">fed</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">patch_dbs</span>(<span class="op">|</span><span class="ident">db</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">out_point</span> <span class="op">=</span> <span class="ident">bitcoin::OutPoint::default</span>();
-            <span class="kw">let</span> <span class="ident">tweak</span> <span class="op">=</span> [<span class="number">42</span>; <span class="number">32</span>];
-            <span class="kw">let</span> <span class="ident">utxo</span> <span class="op">=</span> <span class="ident">SpendableUTXO</span> {
+        <span class="ident">fed</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">patch_dbs</span>(|<span class="ident">db</span>| {
+            <span class="kw">let</span> <span class="ident">out_point</span> = <span class="ident">bitcoin::OutPoint::default</span>();
+            <span class="kw">let</span> <span class="ident">tweak</span> = [<span class="number">42</span>; <span class="number">32</span>];
+            <span class="kw">let</span> <span class="ident">utxo</span> = <span class="ident">SpendableUTXO</span> {
                 <span class="ident">tweak</span>,
                 <span class="ident">amount</span>: <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">48000</span>),
             };
@@ -626,14 +626,14 @@
             .<span class="ident">unwrap</span>();
         });
 
-        <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="ident">Address::from_str</span>(<span class="string">&quot;msFGPqHVk8rbARMd69FfGYxwcboZLemdBi&quot;</span>).<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">42000</span>);
+        <span class="kw">let</span> <span class="ident">addr</span> = <span class="ident">Address::from_str</span>(<span class="string">&quot;msFGPqHVk8rbARMd69FfGYxwcboZLemdBi&quot;</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">amount</span> = <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">42000</span>);
 
-        <span class="kw">let</span> <span class="ident">out_point</span> <span class="op">=</span> <span class="ident">OutPoint</span> {
+        <span class="kw">let</span> <span class="ident">out_point</span> = <span class="ident">OutPoint</span> {
             <span class="ident">txid</span>: <span class="ident">Default::default</span>(),
             <span class="ident">out_idx</span>: <span class="number">0</span>,
         };
-        <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="ident">PegOut</span> {
+        <span class="kw">let</span> <span class="ident">output</span> = <span class="ident">PegOut</span> {
             <span class="ident">recipient</span>: <span class="ident">addr</span>.<span class="ident">clone</span>(),
             <span class="ident">amount</span>,
             <span class="ident">fees</span>: <span class="ident">PegOutFees</span> {
@@ -664,10 +664,10 @@
         <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">12</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(<span class="ident">btc_rpc</span>.<span class="ident">is_btc_sent_to</span>(<span class="ident">amount</span>, <span class="ident">addr</span>).<span class="kw">await</span>);
 
-        <span class="kw">let</span> <span class="ident">wallet_value</span> <span class="op">=</span> <span class="ident">fed</span>
+        <span class="kw">let</span> <span class="ident">wallet_value</span> = <span class="ident">fed</span>
             .<span class="ident">lock</span>()
             .<span class="kw">await</span>
-            .<span class="ident">fetch_from_all</span>(<span class="op">|</span><span class="ident">wallet</span><span class="op">|</span> <span class="ident">wallet</span>.<span class="ident">get_wallet_value</span>());
+            .<span class="ident">fetch_from_all</span>(|<span class="ident">wallet</span>| <span class="ident">wallet</span>.<span class="ident">get_wallet_value</span>());
         <span class="macro">assert_eq!</span>(<span class="ident">wallet_value</span>, <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>));
 
         <span class="comment">// test change recognition, wallet should hold some sats</span>
@@ -675,12 +675,12 @@
         <span class="ident">btc_rpc</span>.<span class="ident">set_block_height</span>(<span class="number">301</span>).<span class="kw">await</span>;
         <span class="ident">fed</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">consensus_round</span>(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">wallet_value</span> <span class="op">=</span> <span class="ident">fed</span>
+        <span class="kw">let</span> <span class="ident">wallet_value</span> = <span class="ident">fed</span>
             .<span class="ident">lock</span>()
             .<span class="kw">await</span>
-            .<span class="ident">fetch_from_all</span>(<span class="op">|</span><span class="ident">wallet</span><span class="op">|</span> <span class="ident">wallet</span>.<span class="ident">get_wallet_value</span>());
-        <span class="macro">assert!</span>(<span class="ident">wallet_value</span> <span class="op">&gt;</span> <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>));
+            .<span class="ident">fetch_from_all</span>(|<span class="ident">wallet</span>| <span class="ident">wallet</span>.<span class="ident">get_wallet_value</span>());
+        <span class="macro">assert!</span>(<span class="ident">wallet_value</span> &gt; <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>));
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

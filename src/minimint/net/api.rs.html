@@ -161,20 +161,20 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
 <span class="kw">struct</span> <span class="ident">State</span> {
-    <span class="ident">minimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">minimint</span>: <span class="ident">Arc</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;&gt;,
 }
 
 <span class="kw">impl</span> <span class="ident">std::fmt::Debug</span> <span class="kw">for</span> <span class="ident">State</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">std::fmt::Result</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Formatter</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">std::fmt::Result</span> {
         <span class="ident">f</span>.<span class="ident">write_str</span>(<span class="string">&quot;State { ... }&quot;</span>)
     }
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_server</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">minimint</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>) {
-    <span class="kw">let</span> <span class="ident">state</span> <span class="op">=</span> <span class="ident">State</span> {
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_server</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">minimint</span>: <span class="ident">Arc</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;&gt;) {
+    <span class="kw">let</span> <span class="ident">state</span> = <span class="ident">State</span> {
         <span class="ident">minimint</span>: <span class="ident">minimint</span>.<span class="ident">clone</span>(),
     };
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rpc_module</span> <span class="op">=</span> <span class="ident">RpcModule::new</span>(<span class="ident">state</span>);
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rpc_module</span> = <span class="ident">RpcModule::new</span>(<span class="ident">state</span>);
 
     <span class="ident">attach_endpoints</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rpc_module</span>, <span class="ident">server_endpoints</span>(), <span class="prelude-val">None</span>);
     <span class="ident">attach_endpoints</span>(
@@ -193,7 +193,7 @@
         <span class="prelude-val">Some</span>(<span class="ident">minimint</span>.<span class="ident">ln</span>.<span class="ident">api_base_name</span>()),
     );
 
-    <span class="kw">let</span> <span class="ident">server</span> <span class="op">=</span> <span class="ident">WsServerBuilder::new</span>()
+    <span class="kw">let</span> <span class="ident">server</span> = <span class="ident">WsServerBuilder::new</span>()
         .<span class="ident">build</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">api_bind_addr</span>)
         .<span class="kw">await</span>
         .<span class="ident">expect</span>(<span class="string">&quot;Could not start API server&quot;</span>);
@@ -204,17 +204,17 @@
         .<span class="kw">await</span>;
 }
 
-<span class="kw">fn</span> <span class="ident">attach_endpoints</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>(
-    <span class="ident">rpc_module</span>: <span class="kw-2">&amp;mut</span> <span class="ident">RpcModule</span><span class="op">&lt;</span><span class="ident">State</span><span class="op">&gt;</span>,
-    <span class="ident">endpoints</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>],
-    <span class="ident">base_name</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="ident">str</span><span class="op">&gt;</span>,
+<span class="kw">fn</span> <span class="ident">attach_endpoints</span>&lt;<span class="ident">M</span>&gt;(
+    <span class="ident">rpc_module</span>: <span class="kw-2">&amp;mut</span> <span class="ident">RpcModule</span>&lt;<span class="ident">State</span>&gt;,
+    <span class="ident">endpoints</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="ident">M</span>&gt;],
+    <span class="ident">base_name</span>: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="ident">str</span>&gt;,
 ) <span class="kw">where</span>
-    <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span>: <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
+    <span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;: <span class="ident">AsRef</span>&lt;<span class="ident">M</span>&gt;,
     <span class="ident">M</span>: <span class="ident">Sync</span>,
 {
     <span class="kw">for</span> <span class="ident">endpoint</span> <span class="kw">in</span> <span class="ident">endpoints</span> {
-        <span class="kw">let</span> <span class="ident">endpoint</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">endpoint</span>;
-        <span class="kw">let</span> <span class="ident">path</span> <span class="op">=</span> <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">base_name</span>) <span class="op">=</span> <span class="ident">base_name</span> {
+        <span class="kw">let</span> <span class="ident">endpoint</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">ApiEndpoint</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">endpoint</span>;
+        <span class="kw">let</span> <span class="ident">path</span> = <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">base_name</span>) = <span class="ident">base_name</span> {
             <span class="comment">// This memory leak is fine because it only happens on server startup</span>
             <span class="comment">// and path has to live till the end of program anyways.</span>
             <span class="ident">Box::leak</span>(<span class="macro">format!</span>(<span class="string">&quot;/{}{}&quot;</span>, <span class="ident">base_name</span>, <span class="ident">endpoint</span>.<span class="ident">path</span>).<span class="ident">into_boxed_str</span>())
@@ -222,14 +222,14 @@
             <span class="ident">endpoint</span>.<span class="ident">path</span>
         };
         <span class="ident">rpc_module</span>
-            .<span class="ident">register_async_method</span>(<span class="ident">path</span>, <span class="kw">move</span> <span class="op">|</span><span class="ident">params</span>, <span class="ident">state</span><span class="op">|</span> {
+            .<span class="ident">register_async_method</span>(<span class="ident">path</span>, <span class="kw">move</span> |<span class="ident">params</span>, <span class="ident">state</span>| {
                 <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                    <span class="kw">let</span> <span class="ident">params</span> <span class="op">=</span> <span class="ident">params</span>.<span class="ident">one</span>::<span class="op">&lt;</span><span class="ident">serde_json::Value</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+                    <span class="kw">let</span> <span class="ident">params</span> = <span class="ident">params</span>.<span class="ident">one</span>::&lt;<span class="ident">serde_json::Value</span>&gt;()<span class="question-mark">?</span>;
                     (<span class="ident">endpoint</span>.<span class="ident">handler</span>)((<span class="kw-2">*</span><span class="ident">state</span>.<span class="ident">minimint</span>).<span class="ident">as_ref</span>(), <span class="ident">params</span>)
                         .<span class="kw">await</span>
-                        .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> {
+                        .<span class="ident">map_err</span>(|<span class="ident">e</span>| {
                             <span class="ident">jsonrpsee::core::Error::Call</span>(<span class="ident">CallError::Custom</span>(<span class="ident">ErrorObject::owned</span>(
-                                <span class="ident">e</span>.<span class="ident">code</span>, <span class="ident">e</span>.<span class="ident">message</span>, <span class="prelude-val">None</span>::<span class="op">&lt;</span>()<span class="op">&gt;</span>,
+                                <span class="ident">e</span>.<span class="ident">code</span>, <span class="ident">e</span>.<span class="ident">message</span>, <span class="prelude-val">None</span>::&lt;()&gt;,
                             )))
                         })
                 })
@@ -238,16 +238,16 @@
     }
 }
 
-<span class="kw">fn</span> <span class="ident">server_endpoints</span>() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>] {
-    <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span><span class="op">&gt;</span>] <span class="op">=</span> <span class="kw-2">&amp;</span>[
+<span class="kw">fn</span> <span class="ident">server_endpoints</span>() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;&gt;] {
+    <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;&gt;] = <span class="kw-2">&amp;</span>[
         <span class="macro">api_endpoint!</span> {
             <span class="string">&quot;/transaction&quot;</span>,
-            <span class="kw">async</span> <span class="op">|</span><span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span>, <span class="ident">transaction</span>: <span class="ident">serde_json::Value</span><span class="op">|</span> -&gt; <span class="ident">TransactionId</span> {
+            <span class="kw">async</span> |<span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;, <span class="ident">transaction</span>: <span class="ident">serde_json::Value</span>| -&gt; <span class="ident">TransactionId</span> {
                 <span class="comment">// deserializing Transaction from json Value always fails</span>
                 <span class="comment">// we need to convert it to string first</span>
-                <span class="kw">let</span> <span class="ident">string</span> <span class="op">=</span> <span class="ident">serde_json::to_string</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>).<span class="ident">expect</span>(<span class="string">&quot;encoding error&quot;</span>);
-                <span class="kw">let</span> <span class="ident">transaction</span>: <span class="ident">Transaction</span> <span class="op">=</span> <span class="ident">serde_json::from_str</span>(<span class="kw-2">&amp;</span><span class="ident">string</span>).<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">ApiError::bad_request</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
-                <span class="kw">let</span> <span class="ident">tx_id</span> <span class="op">=</span> <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
+                <span class="kw">let</span> <span class="ident">string</span> = <span class="ident">serde_json::to_string</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>).<span class="ident">expect</span>(<span class="string">&quot;encoding error&quot;</span>);
+                <span class="kw">let</span> <span class="ident">transaction</span>: <span class="ident">Transaction</span> = <span class="ident">serde_json::from_str</span>(<span class="kw-2">&amp;</span><span class="ident">string</span>).<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">ApiError::bad_request</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
+                <span class="kw">let</span> <span class="ident">tx_id</span> = <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
 
                 <span class="ident">minimint</span>
                     .<span class="ident">submit_transaction</span>(<span class="ident">transaction</span>)
@@ -258,19 +258,19 @@
         },
         <span class="macro">api_endpoint!</span> {
             <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">async</span> <span class="op">|</span><span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span>, <span class="ident">tx_hash</span>: <span class="ident">TransactionId</span><span class="op">|</span> -&gt; <span class="ident">TransactionStatus</span> {
-                <span class="macro">debug!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx_hash</span>, <span class="string">&quot;Recieved request&quot;</span>);
+            <span class="kw">async</span> |<span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;, <span class="ident">tx_hash</span>: <span class="ident">TransactionId</span>| -&gt; <span class="ident">TransactionStatus</span> {
+                <span class="macro">debug!</span>(<span class="ident">transaction</span> = %<span class="ident">tx_hash</span>, <span class="string">&quot;Recieved request&quot;</span>);
 
-                <span class="kw">let</span> <span class="ident">tx_status</span> <span class="op">=</span> <span class="ident">minimint</span>.<span class="ident">transaction_status</span>(<span class="ident">tx_hash</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;transaction not found&quot;</span>)))<span class="question-mark">?</span>;
+                <span class="kw">let</span> <span class="ident">tx_status</span> = <span class="ident">minimint</span>.<span class="ident">transaction_status</span>(<span class="ident">tx_hash</span>).<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;transaction not found&quot;</span>)))<span class="question-mark">?</span>;
 
-                <span class="macro">debug!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx_hash</span>, <span class="string">&quot;Sending outcome&quot;</span>);
+                <span class="macro">debug!</span>(<span class="ident">transaction</span> = %<span class="ident">tx_hash</span>, <span class="string">&quot;Sending outcome&quot;</span>);
                 <span class="prelude-val">Ok</span>(<span class="ident">tx_status</span>)
             }
         },
         <span class="macro">api_endpoint!</span> {
             <span class="string">&quot;/fetch_epoch_history&quot;</span>,
-            <span class="kw">async</span> <span class="op">|</span><span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">rand::rngs::OsRng</span><span class="op">&gt;</span>, <span class="ident">epoch</span>: <span class="ident">u64</span><span class="op">|</span> -&gt; <span class="ident">EpochHistory</span> {
-                <span class="kw">let</span> <span class="ident">epoch</span> <span class="op">=</span> <span class="ident">minimint</span>.<span class="ident">epoch_history</span>(<span class="ident">epoch</span>).<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
+            <span class="kw">async</span> |<span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span>&lt;<span class="ident">rand::rngs::OsRng</span>&gt;, <span class="ident">epoch</span>: <span class="ident">u64</span>| -&gt; <span class="ident">EpochHistory</span> {
+                <span class="kw">let</span> <span class="ident">epoch</span> = <span class="ident">minimint</span>.<span class="ident">epoch_history</span>(<span class="ident">epoch</span>).<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(<span class="ident">epoch</span>)
             }
         },
@@ -279,4 +279,4 @@
     <span class="ident">ENDPOINTS</span>
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

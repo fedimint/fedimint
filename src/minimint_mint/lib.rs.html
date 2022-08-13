@@ -911,7 +911,13 @@
 <span id="911">911</span>
 <span id="912">912</span>
 <span id="913">913</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
+<span id="914">914</span>
+<span id="915">915</span>
+<span id="916">916</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
+<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+
+<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
     <span class="ident">MintAuditItemKey</span>, <span class="ident">MintAuditItemKeyPrefix</span>, <span class="ident">NonceKey</span>, <span class="ident">OutputOutcomeKey</span>,
     <span class="ident">ProposedPartialSignatureKey</span>, <span class="ident">ProposedPartialSignaturesKeyPrefix</span>, <span class="ident">ReceivedPartialSignatureKey</span>,
@@ -953,11 +959,11 @@
 
 <span class="doccomment">/// Federated mint member mint</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Mint</span> {
-    <span class="ident">sec_key</span>: <span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">SecretKeyShare</span><span class="op">&gt;</span>,
-    <span class="ident">pub_key_shares</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">PublicKeyShare</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">pub_key</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident">AggregatePublicKey</span><span class="op">&gt;</span>,
+    <span class="ident">sec_key</span>: <span class="ident">Keys</span>&lt;<span class="ident">SecretKeyShare</span>&gt;,
+    <span class="ident">pub_key_shares</span>: <span class="ident">BTreeMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">Keys</span>&lt;<span class="ident">PublicKeyShare</span>&gt;&gt;,
+    <span class="ident">pub_key</span>: <span class="ident">HashMap</span>&lt;<span class="ident">Amount</span>, <span class="ident">AggregatePublicKey</span>&gt;,
     <span class="ident">threshold</span>: <span class="ident">usize</span>, <span class="comment">// TODO: move to cfg</span>
-    <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -968,16 +974,16 @@
 
 <span class="doccomment">/// Request to blind sign a certain amount of coins</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SignRequest</span>(<span class="kw">pub</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">tbs::BlindedMessage</span><span class="op">&gt;</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SignRequest</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;<span class="ident">tbs::BlindedMessage</span>&gt;);
 
 <span class="comment">// FIXME: optimize out blinded msg by making the mint remember it</span>
 <span class="doccomment">/// Blind signature share for a [`SignRequest`]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PartialSigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span><span class="op">&lt;</span>(<span class="ident">tbs::BlindedMessage</span>, <span class="ident">tbs::BlindedSignatureShare</span>)<span class="op">&gt;</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PartialSigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;(<span class="ident">tbs::BlindedMessage</span>, <span class="ident">tbs::BlindedSignatureShare</span>)&gt;);
 
 <span class="doccomment">/// Blind signature for a [`SignRequest`]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">tbs::BlindedSignature</span><span class="op">&gt;</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;<span class="ident">tbs::BlindedSignature</span>&gt;);
 
 <span class="doccomment">/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In</span>
 <span class="doccomment">/// this form it can oly be validated, not spent since for that the corresponding secret spend key</span>
@@ -995,32 +1001,32 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">VerificationCache</span> {
-    <span class="ident">valid_coins</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">Coin</span>, <span class="ident">Amount</span><span class="op">&gt;</span>,
+    <span class="ident">valid_coins</span>: <span class="ident">HashMap</span>&lt;<span class="ident">Coin</span>, <span class="ident">Amount</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
 <span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">Mint</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">MintError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> <span class="op">=</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">Coin</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> <span class="op">=</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> <span class="op">=</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">SigResponse</span><span class="op">&gt;</span>; <span class="comment">// TODO: make newtype</span>
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> <span class="op">=</span> <span class="ident">PartiallySignedRequest</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> <span class="op">=</span> <span class="ident">VerificationCache</span>;
+    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">MintError</span>;
+    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">Coins</span>&lt;<span class="ident">Coin</span>&gt;;
+    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;;
+    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = <span class="prelude-ty">Option</span>&lt;<span class="ident">SigResponse</span>&gt;; <span class="comment">// TODO: make newtype</span>
+    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">PartiallySignedRequest</span>;
+    <span class="kw">type</span> <span class="ident">VerificationCache</span> = <span class="ident">VerificationCache</span>;
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>) {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
         <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">is_empty</span>() {
             <span class="ident">std::future::pending</span>().<span class="kw">await</span>
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::ConsensusItem</span><span class="op">&gt;</span> {
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedPartialSignaturesKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_signature</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_signature</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 <span class="ident">PartiallySignedRequest</span> {
                     <span class="ident">out_point</span>: <span class="ident">key</span>.<span class="ident">request_id</span>,
                     <span class="ident">partial_signature</span>,
@@ -1029,11 +1035,11 @@
             .<span class="ident">collect</span>()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)<span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
     ) {
         <span class="kw">for</span> (<span class="ident">peer</span>, <span class="ident">partial_sig</span>) <span class="kw">in</span> <span class="ident">consensus_items</span> {
             <span class="self">self</span>.<span class="ident">process_partial_signature</span>(
@@ -1046,18 +1052,18 @@
         <span class="ident">batch</span>.<span class="ident">commit</span>();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span>,
+        <span class="ident">inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt; + <span class="ident">Send</span>,
     ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
         <span class="comment">// We build a lookup table for checking the validity of all coins for certain amounts. This</span>
         <span class="comment">// calculation can happen massively in parallel since verification is a pure function and</span>
         <span class="comment">// thus has no side effects.</span>
-        <span class="kw">let</span> <span class="ident">valid_coins</span> <span class="op">=</span> <span class="ident">inputs</span>
-            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">inputs</span><span class="op">|</span> <span class="ident">inputs</span>.<span class="ident">iter</span>())
+        <span class="kw">let</span> <span class="ident">valid_coins</span> = <span class="ident">inputs</span>
+            .<span class="ident">flat_map</span>(|<span class="ident">inputs</span>| <span class="ident">inputs</span>.<span class="ident">iter</span>())
             .<span class="ident">par_bridge</span>()
-            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">amount_key</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pub_key</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">amount</span>)<span class="question-mark">?</span>;
+            .<span class="ident">filter_map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
+                <span class="kw">let</span> <span class="ident">amount_key</span> = <span class="self">self</span>.<span class="ident">pub_key</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">amount</span>)<span class="question-mark">?</span>;
                 <span class="kw">if</span> <span class="ident">coin</span>.<span class="ident">verify</span>(<span class="kw-2">*</span><span class="ident">amount_key</span>) {
                     <span class="prelude-val">Some</span>((<span class="ident">coin</span>.<span class="ident">clone</span>(), <span class="ident">amount</span>))
                 } <span class="kw">else</span> {
@@ -1069,20 +1075,20 @@
         <span class="ident">VerificationCache</span> { <span class="ident">valid_coins</span> }
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">_interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
         <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">try_for_each</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">coin_valid</span> <span class="op">=</span> <span class="ident">cache</span>
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">try_for_each</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
+            <span class="kw">let</span> <span class="ident">coin_valid</span> = <span class="ident">cache</span>
                 .<span class="ident">valid_coins</span>
                 .<span class="ident">get</span>(<span class="ident">coin</span>) <span class="comment">// We validated the coin</span>
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">coint_amount</span><span class="op">|</span> <span class="kw-2">*</span><span class="ident">coint_amount</span> <span class="op">==</span> <span class="ident">amount</span>) <span class="comment">// It has the right amount tier</span>
+                .<span class="ident">map</span>(|<span class="ident">coint_amount</span>| <span class="kw-2">*</span><span class="ident">coint_amount</span> == <span class="ident">amount</span>) <span class="comment">// It has the right amount tier</span>
                 .<span class="ident">unwrap_or</span>(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false</span>
 
-            <span class="kw">if</span> <span class="op">!</span><span class="ident">coin_valid</span> {
+            <span class="kw">if</span> !<span class="ident">coin_valid</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">MintError::InvalidSignature</span>);
             }
 
@@ -1100,21 +1106,21 @@
 
         <span class="prelude-val">Ok</span>(<span class="ident">InputMeta</span> {
             <span class="ident">amount</span>: <span class="ident">input</span>.<span class="ident">amount</span>(),
-            <span class="ident">puk_keys</span>: <span class="ident">Box::new</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">coin</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">coin</span>.<span class="ident">spend_key</span>())),
+            <span class="ident">puk_keys</span>: <span class="ident">Box::new</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">coin</span>)| <span class="kw-2">*</span><span class="ident">coin</span>.<span class="ident">spend_key</span>())),
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
         <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;b</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">meta</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
 
-        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">flat_map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="ident">NonceKey</span>(<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>());
+        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">flat_map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
+            <span class="kw">let</span> <span class="ident">key</span> = <span class="ident">NonceKey</span>(<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>());
             <span class="macro">vec!</span>[
                 <span class="ident">BatchItem::insert_new</span>(<span class="ident">key</span>.<span class="ident">clone</span>(), ()),
                 <span class="ident">BatchItem::insert_new</span>(<span class="ident">MintAuditItemKey::Redemption</span>(<span class="ident">key</span>), <span class="ident">amount</span>),
@@ -1125,8 +1131,8 @@
         <span class="prelude-val">Ok</span>(<span class="ident">meta</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">amount</span>) <span class="op">=</span> <span class="ident">output</span>.<span class="ident">iter</span>().<span class="ident">find_map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="kw">_</span>)<span class="op">|</span> {
+    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">amount</span>) = <span class="ident">output</span>.<span class="ident">iter</span>().<span class="ident">find_map</span>(|(<span class="ident">amount</span>, <span class="kw">_</span>)| {
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">pub_key</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">amount</span>).<span class="ident">is_none</span>() {
                 <span class="prelude-val">Some</span>(<span class="ident">amount</span>)
             } <span class="kw">else</span> {
@@ -1139,15 +1145,15 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
         <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
         <span class="comment">// TODO: move actual signing to worker thread</span>
         <span class="comment">// TODO: get rid of clone</span>
-        <span class="kw">let</span> <span class="ident">partial_sig</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">blind_sign</span>(<span class="ident">output</span>.<span class="ident">clone</span>())<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">partial_sig</span> = <span class="self">self</span>.<span class="ident">blind_sign</span>(<span class="ident">output</span>.<span class="ident">clone</span>())<span class="question-mark">?</span>;
 
         <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
             <span class="ident">ProposedPartialSignatureKey</span> {
@@ -1160,37 +1166,37 @@
         <span class="prelude-val">Ok</span>(<span class="ident">output</span>.<span class="ident">amount</span>())
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
         <span class="comment">// Finalize partial signatures for which we now have enough shares</span>
-        <span class="kw">let</span> <span class="ident">req_psigs</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">req_psigs</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ReceivedPartialSignaturesKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">entry_res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_sig</span>) <span class="op">=</span> <span class="ident">entry_res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">entry_res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_sig</span>) = <span class="ident">entry_res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 (<span class="ident">key</span>.<span class="ident">request_id</span>, (<span class="ident">key</span>.<span class="ident">peer_id</span>, <span class="ident">partial_sig</span>))
             })
             .<span class="ident">into_group_map</span>();
 
         <span class="comment">// TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn&#39;t need consensus)</span>
-        <span class="kw">let</span> <span class="ident">par_batches</span> <span class="op">=</span> <span class="ident">req_psigs</span>
+        <span class="kw">let</span> <span class="ident">par_batches</span> = <span class="ident">req_psigs</span>
             .<span class="ident">into_par_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">issuance_id</span>, <span class="ident">shares</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">batch</span>.<span class="ident">transaction</span>();
-                <span class="kw">let</span> <span class="ident">proposal_key</span> <span class="op">=</span> <span class="ident">ProposedPartialSignatureKey</span> {
+            .<span class="ident">map</span>(|(<span class="ident">issuance_id</span>, <span class="ident">shares</span>)| {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">batch</span>.<span class="ident">transaction</span>();
+                <span class="kw">let</span> <span class="ident">proposal_key</span> = <span class="ident">ProposedPartialSignatureKey</span> {
                     <span class="ident">request_id</span>: <span class="ident">issuance_id</span>,
                 };
-                <span class="kw">let</span> <span class="ident">our_contribution</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">proposal_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">our_contribution</span>, <span class="ident">shares</span>.<span class="ident">clone</span>());
+                <span class="kw">let</span> <span class="ident">our_contribution</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">proposal_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) = <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">our_contribution</span>, <span class="ident">shares</span>.<span class="ident">clone</span>());
 
                 <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible</span>
-                <span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">error</span>)<span class="op">|</span> {
+                <span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="ident">peer</span>, <span class="ident">error</span>)| {
                     <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, <span class="ident">peer</span>, <span class="ident">error</span>);
                     <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
                 });
@@ -1198,11 +1204,11 @@
                 <span class="kw">match</span> <span class="ident">bsig</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">blind_signature</span>) =&gt; {
                         <span class="macro">debug!</span>(
-                            <span class="op">%</span><span class="ident">issuance_id</span>,
+                            %<span class="ident">issuance_id</span>,
                             <span class="string">&quot;Successfully combined signature shares&quot;</span>,
                         );
 
-                        <span class="ident">batch_tx</span>.<span class="ident">append_from_iter</span>(<span class="ident">shares</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> {
+                        <span class="ident">batch_tx</span>.<span class="ident">append_from_iter</span>(<span class="ident">shares</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| {
                             <span class="ident">BatchItem::delete</span>(<span class="ident">ReceivedPartialSignatureKey</span> {
                                 <span class="ident">request_id</span>: <span class="ident">issuance_id</span>,
                                 <span class="ident">peer_id</span>: <span class="ident">peer</span>,
@@ -1219,66 +1225,66 @@
                         }
                     }
                     <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                        <span class="macro">warn!</span>(<span class="op">%</span><span class="ident">error</span>, <span class="string">&quot;Could not combine shares&quot;</span>);
+                        <span class="macro">warn!</span>(%<span class="ident">error</span>, <span class="string">&quot;Could not combine shares&quot;</span>);
                     }
                 }
                 <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
                 (<span class="ident">batch</span>, <span class="ident">drop_peers</span>)
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">dropped_peers</span> <span class="op">=</span> <span class="ident">par_batches</span>
+        <span class="kw">let</span> <span class="ident">dropped_peers</span> = <span class="ident">par_batches</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">flat_map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">peers</span>)<span class="op">|</span> <span class="ident">peers</span>)
+            .<span class="ident">flat_map</span>(|(<span class="kw">_</span>, <span class="ident">peers</span>)| <span class="ident">peers</span>)
             .<span class="ident">copied</span>()
             .<span class="ident">collect</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">redemptions</span> <span class="op">=</span> <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">issuances</span> <span class="op">=</span> <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">redemptions</span> = <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">issuances</span> = <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">MintAuditItemKeyPrefix</span>)
-            .<span class="ident">for_each</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">amount</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">for_each</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">amount</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 <span class="kw">match</span> <span class="ident">key</span> {
-                    <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; <span class="ident">issuances</span> <span class="op">+</span><span class="op">=</span> <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; <span class="ident">issuances</span> <span class="op">+</span><span class="op">=</span> <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::Redemption</span>(<span class="kw">_</span>) =&gt; <span class="ident">redemptions</span> <span class="op">+</span><span class="op">=</span> <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::RedemptionTotal</span> =&gt; <span class="ident">redemptions</span> <span class="op">+</span><span class="op">=</span> <span class="ident">amount</span>,
+                    <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; <span class="ident">issuances</span> += <span class="ident">amount</span>,
+                    <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; <span class="ident">issuances</span> += <span class="ident">amount</span>,
+                    <span class="ident">MintAuditItemKey::Redemption</span>(<span class="kw">_</span>) =&gt; <span class="ident">redemptions</span> += <span class="ident">amount</span>,
+                    <span class="ident">MintAuditItemKey::RedemptionTotal</span> =&gt; <span class="ident">redemptions</span> += <span class="ident">amount</span>,
                 }
                 <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">key</span>);
             });
         <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">MintAuditItemKey::IssuanceTotal</span>, <span class="ident">issuances</span>);
         <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">MintAuditItemKey::RedemptionTotal</span>, <span class="ident">redemptions</span>);
 
-        <span class="ident">batch</span>.<span class="ident">append_from_accumulators</span>(<span class="ident">par_batches</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">batch</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">batch</span>));
+        <span class="ident">batch</span>.<span class="ident">append_from_accumulators</span>(<span class="ident">par_batches</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">batch</span>, <span class="kw">_</span>)| <span class="ident">batch</span>));
         <span class="ident">batch</span>.<span class="ident">commit</span>();
 
         <span class="ident">dropped_peers</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">we_proposed</span> <span class="op">=</span> <span class="self">self</span>
+    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
+        <span class="kw">let</span> <span class="ident">we_proposed</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedPartialSignatureKey</span> {
                 <span class="ident">request_id</span>: <span class="ident">out_point</span>,
             })
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
             .<span class="ident">is_some</span>();
-        <span class="kw">let</span> <span class="ident">was_consensus_outcome</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">was_consensus_outcome</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ReceivedPartialSignatureKeyOutputPrefix</span> {
                 <span class="ident">request_id</span>: <span class="ident">out_point</span>,
             })
-            .<span class="ident">any</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="ident">res</span>.<span class="ident">is_ok</span>());
+            .<span class="ident">any</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">is_ok</span>());
 
-        <span class="kw">let</span> <span class="ident">final_sig</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">final_sig</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OutputOutcomeKey</span>(<span class="ident">out_point</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="kw">if</span> <span class="ident">final_sig</span>.<span class="ident">is_some</span>() {
             <span class="prelude-val">Some</span>(<span class="ident">final_sig</span>)
-        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">we_proposed</span> <span class="op">|</span><span class="op">|</span> <span class="ident">was_consensus_outcome</span> {
+        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">we_proposed</span> || <span class="ident">was_consensus_outcome</span> {
             <span class="prelude-val">Some</span>(<span class="prelude-val">None</span>)
         } <span class="kw">else</span> {
             <span class="prelude-val">None</span>
@@ -1286,9 +1292,9 @@
     }
 
     <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">MintAuditItemKeyPrefix</span>, <span class="op">|</span><span class="ident">k</span>, <span class="ident">v</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">k</span> {
-            <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; <span class="op">-</span>(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
-            <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; <span class="op">-</span>(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">MintAuditItemKeyPrefix</span>, |<span class="ident">k</span>, <span class="ident">v</span>| <span class="kw">match</span> <span class="ident">k</span> {
+            <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; -(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
+            <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; -(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
             <span class="ident">MintAuditItemKey::Redemption</span>(<span class="kw">_</span>) =&gt; <span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>,
             <span class="ident">MintAuditItemKey::RedemptionTotal</span> =&gt; <span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>,
         });
@@ -1298,7 +1304,7 @@
         <span class="string">&quot;mint&quot;</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>] {
+    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
         <span class="kw-2">&amp;</span>[]
     }
 }
@@ -1310,42 +1316,42 @@
     <span class="doccomment">/// * If there are no amount tiers</span>
     <span class="doccomment">/// * If the amount tiers for secret and public keys are inconsistent</span>
     <span class="doccomment">/// * If the pub key belonging to the secret key share is not in the pub key list.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">MintConfig</span>, <span class="ident">threshold</span>: <span class="ident">usize</span>, <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>) -&gt; <span class="ident">Mint</span> {
-        <span class="macro">assert!</span>(<span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">tiers</span>().<span class="ident">count</span>() <span class="op">&gt;</span> <span class="number">0</span>);
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">MintConfig</span>, <span class="ident">threshold</span>: <span class="ident">usize</span>, <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;) -&gt; <span class="ident">Mint</span> {
+        <span class="macro">assert!</span>(<span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">tiers</span>().<span class="ident">count</span>() &gt; <span class="number">0</span>);
 
         <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally</span>
         <span class="comment">// consistent.</span>
         <span class="macro">assert!</span>(<span class="ident">cfg</span>
             .<span class="ident">peer_tbs_pks</span>
             .<span class="ident">values</span>()
-            .<span class="ident">all</span>(<span class="op">|</span><span class="ident">pk</span><span class="op">|</span> <span class="ident">pk</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">tbs_sks</span>)));
+            .<span class="ident">all</span>(|<span class="ident">pk</span>| <span class="ident">pk</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">tbs_sks</span>)));
 
-        <span class="kw">let</span> <span class="ident">ref_pub_key</span> <span class="op">=</span> <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">to_public</span>();
+        <span class="kw">let</span> <span class="ident">ref_pub_key</span> = <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">to_public</span>();
 
         <span class="comment">// Find our key index and make sure we know the private key for all our public key shares</span>
-        <span class="kw">let</span> <span class="ident">our_id</span> <span class="op">=</span> <span class="ident">cfg</span> <span class="comment">// FIXME: make sure we use id instead of idx everywhere</span>
+        <span class="kw">let</span> <span class="ident">our_id</span> = <span class="ident">cfg</span> <span class="comment">// FIXME: make sure we use id instead of idx everywhere</span>
             .<span class="ident">peer_tbs_pks</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">find_map</span>(<span class="op">|</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>, <span class="ident">pk</span>)<span class="op">|</span> <span class="kw">if</span> <span class="ident">pk</span> <span class="op">==</span> <span class="kw-2">&amp;</span><span class="ident">ref_pub_key</span> { <span class="prelude-val">Some</span>(<span class="ident">id</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
+            .<span class="ident">find_map</span>(|(<span class="kw-2">&amp;</span><span class="ident">id</span>, <span class="ident">pk</span>)| <span class="kw">if</span> <span class="ident">pk</span> == <span class="kw-2">&amp;</span><span class="ident">ref_pub_key</span> { <span class="prelude-val">Some</span>(<span class="ident">id</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
             .<span class="ident">expect</span>(<span class="string">&quot;Own key not found among pub keys.&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
             <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>[<span class="kw-2">&amp;</span><span class="ident">our_id</span>],
             <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">sk</span>)<span class="op">|</span> (<span class="ident">amount</span>, <span class="ident">sk</span>.<span class="ident">to_pub_key_share</span>()))
+                .<span class="ident">map</span>(|(<span class="ident">amount</span>, <span class="ident">sk</span>)| (<span class="ident">amount</span>, <span class="ident">sk</span>.<span class="ident">to_pub_key_share</span>()))
                 .<span class="ident">collect</span>()
         );
 
-        <span class="kw">let</span> <span class="ident">aggregate_pub_keys</span> <span class="op">=</span> <span class="ident">TieredMultiZip::new</span>(
+        <span class="kw">let</span> <span class="ident">aggregate_pub_keys</span> = <span class="ident">TieredMultiZip::new</span>(
             <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">keys</span>)<span class="op">|</span> <span class="ident">keys</span>.<span class="ident">iter</span>())
+                .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">keys</span>)| <span class="ident">keys</span>.<span class="ident">iter</span>())
                 .<span class="ident">collect</span>(),
         )
-        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amt</span>, <span class="ident">keys</span>)<span class="op">|</span> {
+        .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">keys</span>)| {
             <span class="comment">// TODO: avoid this through better aggregation API allowing references or</span>
-            <span class="kw">let</span> <span class="ident">keys</span> <span class="op">=</span> <span class="ident">keys</span>.<span class="ident">into_iter</span>().<span class="ident">copied</span>().<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            <span class="kw">let</span> <span class="ident">keys</span> = <span class="ident">keys</span>.<span class="ident">into_iter</span>().<span class="ident">copied</span>().<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
             (<span class="ident">amt</span>, <span class="ident">keys</span>.<span class="ident">aggregate</span>(<span class="ident">threshold</span>))
         })
         .<span class="ident">collect</span>();
@@ -1359,11 +1365,11 @@
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">blind_sign</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PartialSigResponse</span>, <span class="ident">MintError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">blind_sign</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PartialSigResponse</span>, <span class="ident">MintError</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="ident">PartialSigResponse</span>(<span class="ident">output</span>.<span class="ident">map</span>(
-            <span class="op">|</span><span class="ident">amt</span>, <span class="ident">msg</span><span class="op">|</span> -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">InvalidAmountTierError</span><span class="op">&gt;</span> {
-                <span class="kw">let</span> <span class="ident">sec_key</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">sec_key</span>.<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>)<span class="question-mark">?</span>;
-                <span class="kw">let</span> <span class="ident">blind_signature</span> <span class="op">=</span> <span class="ident">sign_blinded_msg</span>(<span class="ident">msg</span>.<span class="number">0</span>, <span class="kw-2">*</span><span class="ident">sec_key</span>);
+            |<span class="ident">amt</span>, <span class="ident">msg</span>| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="ident">InvalidAmountTierError</span>&gt; {
+                <span class="kw">let</span> <span class="ident">sec_key</span> = <span class="self">self</span>.<span class="ident">sec_key</span>.<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>)<span class="question-mark">?</span>;
+                <span class="kw">let</span> <span class="ident">blind_signature</span> = <span class="ident">sign_blinded_msg</span>(<span class="ident">msg</span>.<span class="number">0</span>, <span class="kw-2">*</span><span class="ident">sec_key</span>);
                 <span class="prelude-val">Ok</span>((<span class="ident">msg</span>.<span class="number">0</span>, <span class="ident">blind_signature</span>))
             },
         )<span class="question-mark">?</span>))
@@ -1371,14 +1377,14 @@
 
     <span class="kw">fn</span> <span class="ident">combine</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">our_contribution</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PartialSigResponse</span><span class="op">&gt;</span>,
-        <span class="ident">partial_sigs</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PartialSigResponse</span>)<span class="op">&gt;</span>,
-    ) -&gt; (<span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">SigResponse</span>, <span class="ident">CombineError</span><span class="op">&gt;</span>, <span class="ident">MintShareErrors</span>) {
+        <span class="ident">our_contribution</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">PartialSigResponse</span>&gt;,
+        <span class="ident">partial_sigs</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PartialSigResponse</span>)&gt;,
+    ) -&gt; (<span class="prelude-ty">Result</span>&lt;<span class="ident">SigResponse</span>, <span class="ident">CombineError</span>&gt;, <span class="ident">MintShareErrors</span>) {
         <span class="comment">// Terminate early if there are not enough shares</span>
-        <span class="kw">if</span> <span class="ident">partial_sigs</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">threshold</span> {
+        <span class="kw">if</span> <span class="ident">partial_sigs</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">threshold</span> {
             <span class="kw">return</span> (
                 <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                    <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
+                    <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
                     <span class="self">self</span>.<span class="ident">threshold</span>,
                 )),
                 <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
@@ -1387,11 +1393,11 @@
 
         <span class="comment">// FIXME: decide on right boundary place for this invariant</span>
         <span class="comment">// Filter out duplicate contributions, they make share combinations fail</span>
-        <span class="kw">let</span> <span class="ident">peer_contrib_counts</span> <span class="op">=</span> <span class="ident">partial_sigs</span>
+        <span class="kw">let</span> <span class="ident">peer_contrib_counts</span> = <span class="ident">partial_sigs</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">idx</span>)
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">counter::Counter</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="ident">count</span>)) <span class="op">=</span> <span class="ident">peer_contrib_counts</span>.<span class="ident">into_iter</span>().<span class="ident">find</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">cnt</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">cnt</span> <span class="op">&gt;</span> <span class="number">1</span>) {
+            .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">idx</span>)
+            .<span class="ident">collect</span>::&lt;<span class="ident">counter::Counter</span>&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="ident">count</span>)) = <span class="ident">peer_contrib_counts</span>.<span class="ident">into_iter</span>().<span class="ident">find</span>(|(<span class="kw">_</span>, <span class="ident">cnt</span>)| <span class="kw-2">*</span><span class="ident">cnt</span> &gt; <span class="number">1</span>) {
             <span class="kw">return</span> (
                 <span class="prelude-val">Err</span>(<span class="ident">CombineError::MultiplePeerContributions</span>(<span class="ident">peer</span>, <span class="ident">count</span>)),
                 <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
@@ -1399,7 +1405,7 @@
         }
 
         <span class="comment">// Determine the reference response to check against</span>
-        <span class="kw">let</span> <span class="ident">our_contribution</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">our_contribution</span> {
+        <span class="kw">let</span> <span class="ident">our_contribution</span> = <span class="kw">match</span> <span class="ident">our_contribution</span> {
             <span class="prelude-val">Some</span>(<span class="ident">psig</span>) =&gt; <span class="ident">psig</span>,
             <span class="prelude-val">None</span> =&gt; {
                 <span class="kw">return</span> (
@@ -1409,16 +1415,16 @@
             }
         };
 
-        <span class="kw">let</span> <span class="ident">reference_msgs</span> <span class="op">=</span> <span class="ident">our_contribution</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">_amt</span>, (<span class="ident">msg</span>, <span class="ident">_sig</span>))<span class="op">|</span> <span class="ident">msg</span>);
+        <span class="kw">let</span> <span class="ident">reference_msgs</span> = <span class="ident">our_contribution</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">_amt</span>, (<span class="ident">msg</span>, <span class="ident">_sig</span>))| <span class="ident">msg</span>);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_errors</span> <span class="op">=</span> <span class="macro">vec!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_errors</span> = <span class="macro">vec!</span>[];
 
-        <span class="kw">let</span> <span class="ident">partial_sigs</span> <span class="op">=</span> <span class="ident">partial_sigs</span>
+        <span class="kw">let</span> <span class="ident">partial_sigs</span> = <span class="ident">partial_sigs</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">filter</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sigs</span>)<span class="op">|</span> {
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">sigs</span>.<span class="number">0</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">our_contribution</span>.<span class="number">0</span>) {
+            .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">sigs</span>)| {
+                <span class="kw">if</span> !<span class="ident">sigs</span>.<span class="number">0</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">our_contribution</span>.<span class="number">0</span>) {
                     <span class="macro">warn!</span>(
-                        <span class="op">%</span><span class="ident">peer</span>,
+                        %<span class="ident">peer</span>,
                         <span class="string">&quot;Peer proposed a sig share of wrong structure (different than ours)&quot;</span>,
                     );
                     <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="kw-2">*</span><span class="ident">peer</span>, <span class="ident">PeerErrorType::DifferentStructureSigShare</span>));
@@ -1427,28 +1433,28 @@
                     <span class="bool-val">true</span>
                 }
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">debug!</span>(
             <span class="string">&quot;After length filtering {} sig shares are left.&quot;</span>,
             <span class="ident">partial_sigs</span>.<span class="ident">len</span>()
         );
 
-        <span class="kw">let</span> <span class="ident">bsigs</span> <span class="op">=</span> <span class="ident">TieredMultiZip::new</span>(
+        <span class="kw">let</span> <span class="ident">bsigs</span> = <span class="ident">TieredMultiZip::new</span>(
             <span class="ident">partial_sigs</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">_peer</span>, <span class="ident">sig_share</span>)<span class="op">|</span> <span class="ident">sig_share</span>.<span class="number">0</span>.<span class="ident">iter</span>())
+                .<span class="ident">map</span>(|(<span class="ident">_peer</span>, <span class="ident">sig_share</span>)| <span class="ident">sig_share</span>.<span class="number">0</span>.<span class="ident">iter</span>())
                 .<span class="ident">collect</span>(),
         )
         .<span class="ident">zip</span>(<span class="ident">reference_msgs</span>)
-        .<span class="ident">map</span>(<span class="op">|</span>((<span class="ident">amt</span>, <span class="ident">sig_shares</span>), <span class="ident">ref_msg</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">peer_ids</span> <span class="op">=</span> <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">peer</span>);
+        .<span class="ident">map</span>(|((<span class="ident">amt</span>, <span class="ident">sig_shares</span>), <span class="ident">ref_msg</span>)| {
+            <span class="kw">let</span> <span class="ident">peer_ids</span> = <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">peer</span>);
 
             <span class="comment">// Filter out invalid peer contributions</span>
-            <span class="kw">let</span> <span class="ident">valid_sigs</span> <span class="op">=</span> <span class="ident">sig_shares</span>
+            <span class="kw">let</span> <span class="ident">valid_sigs</span> = <span class="ident">sig_shares</span>
                 .<span class="ident">into_iter</span>()
                 .<span class="ident">zip</span>(<span class="ident">peer_ids</span>)
-                .<span class="ident">filter_map</span>(<span class="op">|</span>((<span class="ident">msg</span>, <span class="ident">sig</span>), <span class="ident">peer</span>)<span class="op">|</span> {
-                    <span class="kw">let</span> <span class="ident">amount_key</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">pub_key_shares</span>[<span class="kw-2">&amp;</span><span class="ident">peer</span>].<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>) {
+                .<span class="ident">filter_map</span>(|((<span class="ident">msg</span>, <span class="ident">sig</span>), <span class="ident">peer</span>)| {
+                    <span class="kw">let</span> <span class="ident">amount_key</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">pub_key_shares</span>[<span class="kw-2">&amp;</span><span class="ident">peer</span>].<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>) {
                         <span class="prelude-val">Ok</span>(<span class="ident">key</span>) =&gt; <span class="ident">key</span>,
                         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
                             <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::InvalidAmountTier</span>));
@@ -1456,20 +1462,20 @@
                         }
                     };
 
-                    <span class="kw">if</span> <span class="ident">msg</span> <span class="op">!</span><span class="op">=</span> <span class="ident">ref_msg</span> {
+                    <span class="kw">if</span> <span class="ident">msg</span> != <span class="ident">ref_msg</span> {
                         <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::DifferentNonce</span>));
                         <span class="prelude-val">None</span>
-                    } <span class="kw">else</span> <span class="kw">if</span> <span class="op">!</span><span class="ident">verify_blind_share</span>(<span class="kw-2">*</span><span class="ident">msg</span>, <span class="kw-2">*</span><span class="ident">sig</span>, <span class="kw-2">*</span><span class="ident">amount_key</span>) {
+                    } <span class="kw">else</span> <span class="kw">if</span> !<span class="ident">verify_blind_share</span>(<span class="kw-2">*</span><span class="ident">msg</span>, <span class="kw-2">*</span><span class="ident">sig</span>, <span class="kw-2">*</span><span class="ident">amount_key</span>) {
                         <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::InvalidSignature</span>));
                         <span class="prelude-val">None</span>
                     } <span class="kw">else</span> {
                         <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="kw-2">*</span><span class="ident">sig</span>))
                     }
                 })
-                .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="comment">// Check that there are still sufficient</span>
-            <span class="kw">if</span> <span class="ident">valid_sigs</span>.<span class="ident">len</span>() <span class="op">&lt;</span> <span class="self">self</span>.<span class="ident">threshold</span> {
+            <span class="kw">if</span> <span class="ident">valid_sigs</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">threshold</span> {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewValidShares</span>(
                     <span class="ident">valid_sigs</span>.<span class="ident">len</span>(),
                     <span class="ident">partial_sigs</span>.<span class="ident">len</span>(),
@@ -1477,18 +1483,18 @@
                 ));
             }
 
-            <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">combine_valid_shares</span>(
+            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">combine_valid_shares</span>(
                 <span class="ident">valid_sigs</span>
                     .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">share</span>)<span class="op">|</span> (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="ident">share</span>)),
+                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="ident">share</span>)),
                 <span class="self">self</span>.<span class="ident">threshold</span>,
             );
 
             <span class="prelude-val">Ok</span>((<span class="ident">amt</span>, <span class="ident">sig</span>))
         })
-        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">CombineError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+        .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Coins</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">CombineError</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">bsigs</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">bsigs</span> {
+        <span class="kw">let</span> <span class="ident">bsigs</span> = <span class="kw">match</span> <span class="ident">bsigs</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">bs</span>) =&gt; <span class="ident">bs</span>,
             <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> (<span class="prelude-val">Err</span>(<span class="ident">e</span>), <span class="ident">MintShareErrors</span>(<span class="ident">peer_errors</span>)),
         };
@@ -1510,15 +1516,15 @@
             .<span class="ident">is_some</span>()
         {
             <span class="macro">debug!</span>(
-                <span class="ident">issuance</span> <span class="op">=</span> <span class="op">%</span><span class="ident">output_id</span>,
+                <span class="ident">issuance</span> = %<span class="ident">output_id</span>,
                 <span class="string">&quot;Received sig share for finalized issuance, ignoring&quot;</span>,
             );
             <span class="kw">return</span>;
         }
 
         <span class="macro">debug!</span>(
-            <span class="op">%</span><span class="ident">peer</span>,
-            <span class="ident">issuance</span> <span class="op">=</span> <span class="op">%</span><span class="ident">output_id</span>,
+            %<span class="ident">peer</span>,
+            <span class="ident">issuance</span> = %<span class="ident">output_id</span>,
             <span class="string">&quot;Received sig share&quot;</span>
         );
         <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
@@ -1546,8 +1552,8 @@
 }
 
 <span class="kw">impl</span> <span class="ident">CoinNonce</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="macro">vec!</span>[];
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> = <span class="macro">vec!</span>[];
         <span class="ident">bincode::serialize_into</span>(<span class="kw-2">&amp;mut</span> <span class="ident">bytes</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).<span class="ident">unwrap</span>();
         <span class="ident">bytes</span>
     }
@@ -1562,12 +1568,12 @@
     }
 }
 
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">SignRequest</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span> {
+<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">SignRequest</span>&gt; <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt; {
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">sig_req</span>: <span class="ident">SignRequest</span>) -&gt; <span class="self">Self</span> {
         <span class="ident">sig_req</span>
             .<span class="number">0</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amt</span>, <span class="ident">token</span>)<span class="op">|</span> (<span class="ident">amt</span>, <span class="ident"><span class="kw">crate</span>::BlindToken</span>(<span class="ident">token</span>)))
+            .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">token</span>)| (<span class="ident">amt</span>, <span class="ident"><span class="kw">crate</span>::BlindToken</span>(<span class="ident">token</span>)))
             .<span class="ident">collect</span>()
     }
 }
@@ -1576,14 +1582,14 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InvalidAmountTierError</span>(<span class="kw">pub</span> <span class="ident">Amount</span>);
 
 <span class="kw">impl</span> <span class="ident">std::fmt::Display</span> <span class="kw">for</span> <span class="ident">InvalidAmountTierError</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;mut</span> <span class="ident">std::fmt::Formatter</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) -&gt; <span class="ident">std::fmt::Result</span> {
+    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;mut</span> <span class="ident">std::fmt::Formatter</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">std::fmt::Result</span> {
         <span class="macro">write!</span>(<span class="ident">f</span>, <span class="string">&quot;Amount tier unknown to mint: {}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
     }
 }
 
 <span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MintShareErrors</span>(<span class="kw">pub</span> <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PeerErrorType</span>)<span class="op">&gt;</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MintShareErrors</span>(<span class="kw">pub</span> <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PeerErrorType</span>)&gt;);
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">PeerErrorType</span> {
@@ -1596,7 +1602,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Error</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">CombineError</span> {
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]</span>
-    <span class="ident">TooFewShares</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>, <span class="ident">usize</span>),
+    <span class="ident">TooFewShares</span>(<span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;, <span class="ident">usize</span>),
     <span class="attribute">#[<span class="ident">error</span>(
         <span class="string">&quot;Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid&quot;</span>
     )]</span>
@@ -1621,7 +1627,7 @@
     <span class="ident">InvalidSignature</span>,
 }
 
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">InvalidAmountTierError</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MintError</span> {
+<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">InvalidAmountTierError</span>&gt; <span class="kw">for</span> <span class="ident">MintError</span> {
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">InvalidAmountTierError</span>) -&gt; <span class="self">Self</span> {
         <span class="ident">MintError::InvalidAmountTier</span>(<span class="ident">e</span>.<span class="number">0</span>)
     }
@@ -1638,40 +1644,40 @@
     <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
     <span class="kw">use</span> <span class="ident">tbs</span>::{<span class="ident">blind_message</span>, <span class="ident">unblind_signature</span>, <span class="ident">verify</span>, <span class="ident">AggregatePublicKey</span>, <span class="ident">Message</span>};
 
-    <span class="kw">const</span> <span class="ident">THRESHOLD</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">1</span>;
-    <span class="kw">const</span> <span class="ident">MINTS</span>: <span class="ident">usize</span> <span class="op">=</span> <span class="number">5</span>;
+    <span class="kw">const</span> <span class="ident">THRESHOLD</span>: <span class="ident">usize</span> = <span class="number">1</span>;
+    <span class="kw">const</span> <span class="ident">MINTS</span>: <span class="ident">usize</span> = <span class="number">5</span>;
 
-    <span class="kw">fn</span> <span class="ident">build_configs</span>() -&gt; (<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">MintConfig</span><span class="op">&gt;</span>, <span class="ident">MintClientConfig</span>) {
-        <span class="kw">let</span> <span class="ident">peers</span> <span class="op">=</span> (<span class="number">0</span>..<span class="ident">MINTS</span> <span class="kw">as</span> <span class="ident">u16</span>).<span class="ident">map</span>(<span class="ident">PeerId::from</span>).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) <span class="op">=</span> <span class="ident">MintConfig::trusted_dealer_gen</span>(
+    <span class="kw">fn</span> <span class="ident">build_configs</span>() -&gt; (<span class="ident">Vec</span>&lt;<span class="ident">MintConfig</span>&gt;, <span class="ident">MintClientConfig</span>) {
+        <span class="kw">let</span> <span class="ident">peers</span> = (<span class="number">0</span>..<span class="ident">MINTS</span> <span class="kw">as</span> <span class="ident">u16</span>).<span class="ident">map</span>(<span class="ident">PeerId::from</span>).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) = <span class="ident">MintConfig::trusted_dealer_gen</span>(
             <span class="kw-2">&amp;</span><span class="ident">peers</span>,
             <span class="ident">THRESHOLD</span>,
             <span class="kw-2">&amp;</span>[<span class="ident">Amount::from_sat</span>(<span class="number">1</span>)],
             <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>(),
         );
 
-        (<span class="ident">mint_cfg</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">c</span>)<span class="op">|</span> <span class="ident">c</span>).<span class="ident">collect</span>(), <span class="ident">client_cfg</span>)
+        (<span class="ident">mint_cfg</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">c</span>)| <span class="ident">c</span>).<span class="ident">collect</span>(), <span class="ident">client_cfg</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">build_mints</span>() -&gt; (<span class="ident">AggregatePublicKey</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Mint</span><span class="op">&gt;</span>) {
-        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) <span class="op">=</span> <span class="ident">build_configs</span>();
-        <span class="kw">let</span> <span class="ident">mints</span> <span class="op">=</span> <span class="ident">mint_cfg</span>
+    <span class="kw">fn</span> <span class="ident">build_mints</span>() -&gt; (<span class="ident">AggregatePublicKey</span>, <span class="ident">Vec</span>&lt;<span class="ident">Mint</span>&gt;) {
+        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) = <span class="ident">build_configs</span>();
+        <span class="kw">let</span> <span class="ident">mints</span> = <span class="ident">mint_cfg</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">config</span><span class="op">|</span> <span class="ident">Mint::new</span>(<span class="ident">config</span>, <span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>, <span class="ident">Arc::new</span>(<span class="ident">MemDatabase::new</span>())))
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">map</span>(|<span class="ident">config</span>| <span class="ident">Mint::new</span>(<span class="ident">config</span>, <span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>, <span class="ident">Arc::new</span>(<span class="ident">MemDatabase::new</span>())))
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">agg_pk</span> <span class="op">=</span> <span class="kw-2">*</span><span class="ident">client_cfg</span>.<span class="ident">tbs_pks</span>.<span class="ident">keys</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">agg_pk</span> = <span class="kw-2">*</span><span class="ident">client_cfg</span>.<span class="ident">tbs_pks</span>.<span class="ident">keys</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>();
 
         (<span class="ident">agg_pk</span>, <span class="ident">mints</span>)
     }
 
     <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_issuance</span>() {
-        <span class="kw">let</span> (<span class="ident">pk</span>, <span class="kw-2">mut</span> <span class="ident">mints</span>) <span class="op">=</span> <span class="ident">build_mints</span>();
+        <span class="kw">let</span> (<span class="ident">pk</span>, <span class="kw-2">mut</span> <span class="ident">mints</span>) = <span class="ident">build_mints</span>();
 
-        <span class="kw">let</span> <span class="ident">nonce</span> <span class="op">=</span> <span class="ident">Message::from_bytes</span>(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
-        <span class="kw">let</span> (<span class="ident">bkey</span>, <span class="ident">bmsg</span>) <span class="op">=</span> <span class="ident">blind_message</span>(<span class="ident">nonce</span>);
-        <span class="kw">let</span> <span class="ident">blind_tokens</span> <span class="op">=</span> <span class="ident">Coins</span> {
+        <span class="kw">let</span> <span class="ident">nonce</span> = <span class="ident">Message::from_bytes</span>(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
+        <span class="kw">let</span> (<span class="ident">bkey</span>, <span class="ident">bmsg</span>) = <span class="ident">blind_message</span>(<span class="ident">nonce</span>);
+        <span class="kw">let</span> <span class="ident">blind_tokens</span> = <span class="ident">Coins</span> {
             <span class="ident">coins</span>: <span class="macro">vec!</span>[(
                 <span class="ident">Amount::from_sat</span>(<span class="number">1</span>),
                 <span class="macro">vec!</span>[<span class="ident">BlindToken</span>(<span class="ident">bmsg</span>), <span class="ident">BlindToken</span>(<span class="ident">bmsg</span>)],
@@ -1680,62 +1686,62 @@
             .<span class="ident">collect</span>(),
         };
 
-        <span class="kw">let</span> <span class="ident">psigs</span> <span class="op">=</span> <span class="ident">mints</span>
+        <span class="kw">let</span> <span class="ident">psigs</span> = <span class="ident">mints</span>
             .<span class="ident">iter</span>()
             .<span class="ident">enumerate</span>()
-            .<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span>(<span class="ident">id</span>, <span class="ident">m</span>)<span class="op">|</span> {
+            .<span class="ident">map</span>(<span class="kw">move</span> |(<span class="ident">id</span>, <span class="ident">m</span>)| {
                 (
                     <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>),
                     <span class="ident">m</span>.<span class="ident">blind_sign</span>(<span class="ident">blind_tokens</span>.<span class="ident">clone</span>()).<span class="ident">unwrap</span>(),
                 )
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">our_sig</span> <span class="op">=</span> <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span>.<span class="ident">clone</span>();
-        <span class="kw">let</span> <span class="ident">mint</span> <span class="op">=</span> <span class="kw-2">&amp;mut</span> <span class="ident">mints</span>[<span class="number">0</span>];
+        <span class="kw">let</span> <span class="ident">our_sig</span> = <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">mint</span> = <span class="kw-2">&amp;mut</span> <span class="ident">mints</span>[<span class="number">0</span>];
 
         <span class="comment">// Test happy path</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>.<span class="ident">clone</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>.<span class="ident">clone</span>());
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
-        <span class="kw">let</span> <span class="ident">bsig</span> <span class="op">=</span> <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">bsig</span> = <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">bsig</span>.<span class="number">0</span>.<span class="ident">amount</span>(), <span class="ident">Amount::from_sat</span>(<span class="number">2</span>));
 
-        <span class="ident">bsig</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">bs</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
+        <span class="ident">bsig</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="kw">_</span>, <span class="ident">bs</span>)| {
+            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
             <span class="macro">assert!</span>(<span class="ident">verify</span>(<span class="ident">nonce</span>, <span class="ident">sig</span>, <span class="ident">pk</span>));
         });
 
         <span class="comment">// Test threshold sig shares</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span>
-            <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>)].<span class="ident">to_vec</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) =
+            <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>)].<span class="ident">to_vec</span>());
         <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
-        <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>().<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">bs</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
+        <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>().<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="kw">_</span>, <span class="ident">bs</span>)| {
+            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
             <span class="macro">assert!</span>(<span class="ident">verify</span>(<span class="ident">nonce</span>, <span class="ident">sig</span>, <span class="ident">pk</span>));
         });
 
         <span class="comment">// Test too few sig shares</span>
-        <span class="kw">let</span> <span class="ident">few_sigs</span> <span class="op">=</span> <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span> <span class="op">-</span> <span class="number">1</span>)].<span class="ident">to_vec</span>();
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">few_sigs</span>.<span class="ident">clone</span>());
+        <span class="kw">let</span> <span class="ident">few_sigs</span> = <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span> - <span class="number">1</span>)].<span class="ident">to_vec</span>();
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">few_sigs</span>.<span class="ident">clone</span>());
         <span class="macro">assert_eq!</span>(
             <span class="ident">bsig_res</span>,
             <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                <span class="ident">few_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
-                <span class="ident">MINTS</span> <span class="op">-</span> <span class="ident">THRESHOLD</span>
+                <span class="ident">few_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
+                <span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>
             ))
         );
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="comment">// Test no own share</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">None</span>, <span class="ident">psigs</span>[<span class="number">1</span>..].<span class="ident">to_vec</span>());
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">None</span>, <span class="ident">psigs</span>[<span class="number">1</span>..].<span class="ident">to_vec</span>());
         <span class="macro">assert_eq!</span>(<span class="ident">bsig_res</span>, <span class="prelude-val">Err</span>(<span class="ident">CombineError::NoOwnContribution</span>));
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="comment">// Test multiple peer contributions</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
             <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
@@ -1750,13 +1756,13 @@
         <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
 
         <span class="comment">// Test wrong length response</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
             <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psigs</span>)<span class="op">|</span> {
-                    <span class="kw">if</span> <span class="ident">peer</span> <span class="op">==</span> <span class="ident">PeerId::from</span>(<span class="number">1</span>) {
+                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psigs</span>)| {
+                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">1</span>) {
                         <span class="ident">psigs</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>().<span class="ident">pop</span>();
                     }
                     (<span class="ident">peer</span>, <span class="ident">psigs</span>)
@@ -1768,14 +1774,14 @@
             .<span class="number">0</span>
             .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">1</span>), <span class="ident">PeerErrorType::DifferentStructureSigShare</span>)));
 
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
             <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)<span class="op">|</span> {
-                    <span class="kw">if</span> <span class="ident">peer</span> <span class="op">==</span> <span class="ident">PeerId::from</span>(<span class="number">2</span>) {
-                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">1</span> <span class="op">=</span>
+                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)| {
+                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">2</span>) {
+                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">1</span> =
                             <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span> .<span class="number">0</span>.<span class="ident">coins</span>[<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)][<span class="number">0</span>].<span class="number">1</span>;
                     }
                     (<span class="ident">peer</span>, <span class="ident">psig</span>)
@@ -1787,15 +1793,15 @@
             .<span class="number">0</span>
             .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">2</span>), <span class="ident">PeerErrorType::InvalidSignature</span>)));
 
-        <span class="kw">let</span> (<span class="ident">_bk</span>, <span class="ident">bmsg</span>) <span class="op">=</span> <span class="ident">blind_message</span>(<span class="ident">Message::from_bytes</span>(<span class="string">b&quot;test&quot;</span>));
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) <span class="op">=</span> <span class="ident">mint</span>.<span class="ident">combine</span>(
+        <span class="kw">let</span> (<span class="ident">_bk</span>, <span class="ident">bmsg</span>) = <span class="ident">blind_message</span>(<span class="ident">Message::from_bytes</span>(<span class="string">b&quot;test&quot;</span>));
+        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
             <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>),
             <span class="ident">psigs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)<span class="op">|</span> {
-                    <span class="kw">if</span> <span class="ident">peer</span> <span class="op">==</span> <span class="ident">PeerId::from</span>(<span class="number">3</span>) {
-                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">0</span> <span class="op">=</span> <span class="ident">bmsg</span>;
+                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)| {
+                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">3</span>) {
+                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">0</span> = <span class="ident">bmsg</span>;
                     }
                     (<span class="ident">peer</span>, <span class="ident">psig</span>)
                 })
@@ -1808,10 +1814,10 @@
     }
 
     <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="attribute">#[<span class="ident">should_panic</span>(<span class="ident">expected</span> <span class="op">=</span> <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]</span>
+    <span class="attribute">#[<span class="ident">should_panic</span>(<span class="ident">expected</span> = <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]</span>
     <span class="kw">fn</span> <span class="ident">test_new_panic_without_own_pub_key</span>() {
-        <span class="kw">let</span> (<span class="ident">mint_server_cfg1</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">build_configs</span>();
-        <span class="kw">let</span> (<span class="ident">mint_server_cfg2</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">build_configs</span>();
+        <span class="kw">let</span> (<span class="ident">mint_server_cfg1</span>, <span class="kw">_</span>) = <span class="ident">build_configs</span>();
+        <span class="kw">let</span> (<span class="ident">mint_server_cfg2</span>, <span class="kw">_</span>) = <span class="ident">build_configs</span>();
 
         <span class="ident">Mint::new</span>(
             <span class="ident">MintConfig</span> {
@@ -1825,4 +1831,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

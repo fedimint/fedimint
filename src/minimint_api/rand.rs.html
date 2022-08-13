@@ -21,9 +21,9 @@
 <span id="21">21</span>
 <span id="22">22</span>
 </pre><pre class="rust"><code><span class="comment">// rand 0.6 -&gt; rand 0.7 adapter</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Rand07Compat</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">rand::RngCore</span><span class="op">&gt;</span>(<span class="kw">pub</span> <span class="ident">R</span>);
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Rand07Compat</span>&lt;<span class="ident">R</span>: <span class="ident">rand::RngCore</span>&gt;(<span class="kw">pub</span> <span class="ident">R</span>);
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">rand::RngCore</span><span class="op">&gt;</span> <span class="ident">rand07::RngCore</span> <span class="kw">for</span> <span class="ident">Rand07Compat</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">rand::RngCore</span>&gt; <span class="ident">rand07::RngCore</span> <span class="kw">for</span> <span class="ident">Rand07Compat</span>&lt;<span class="ident">R</span>&gt; {
     <span class="kw">fn</span> <span class="ident">next_u32</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="ident">u32</span> {
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">next_u32</span>()
     }
@@ -36,11 +36,11 @@
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">fill_bytes</span>(<span class="ident">dest</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">try_fill_bytes</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">dest</span>: <span class="kw-2">&amp;mut</span> [<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">rand07::Error</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_fill_bytes</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">dest</span>: <span class="kw-2">&amp;mut</span> [<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">rand07::Error</span>&gt; {
         <span class="self">self</span>.<span class="number">0</span>.<span class="ident">try_fill_bytes</span>(<span class="ident">dest</span>).<span class="ident">map_err</span>(<span class="ident">rand07::Error::new</span>)
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">rand::RngCore</span> <span class="op">+</span> <span class="ident">rand::CryptoRng</span><span class="op">&gt;</span> <span class="ident">rand07::CryptoRng</span> <span class="kw">for</span> <span class="ident">Rand07Compat</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {}
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">rand::RngCore</span> + <span class="ident">rand::CryptoRng</span>&gt; <span class="ident">rand07::CryptoRng</span> <span class="kw">for</span> <span class="ident">Rand07Compat</span>&lt;<span class="ident">R</span>&gt; {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

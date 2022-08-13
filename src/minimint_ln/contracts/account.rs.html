@@ -29,10 +29,10 @@
 
 <span class="kw">impl</span> <span class="ident">IdentifyableContract</span> <span class="kw">for</span> <span class="ident">AccountContract</span> {
     <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> <span class="op">=</span> <span class="ident">ContractId::engine</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> = <span class="ident">ContractId::engine</span>();
         <span class="ident">Encodable::consensus_encode</span>(<span class="self">self</span>, <span class="kw-2">&amp;mut</span> <span class="ident">engine</span>).<span class="ident">expect</span>(<span class="string">&quot;Hashing never fails&quot;</span>);
         <span class="ident">ContractId::from_engine</span>(<span class="ident">engine</span>)
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

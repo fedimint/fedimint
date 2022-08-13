@@ -285,7 +285,7 @@
 <span id="285">285</span>
 <span id="286">286</span>
 <span id="287">287</span>
-</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>, <span class="ident">feature</span>(<span class="ident">proc_macro_diagnostic</span>))]</span>
+</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">cfg_attr</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>, <span class="ident">feature</span>(<span class="ident">proc_macro_diagnostic</span>))]</span>
 
 <span class="kw">use</span> <span class="ident">heck::SnakeCase</span>;
 <span class="kw">use</span> <span class="ident">proc_macro</span>::{<span class="self">self</span>, <span class="ident">TokenStream</span>};
@@ -294,71 +294,71 @@
 
 <span class="attribute">#[<span class="ident">proc_macro_derive</span>(<span class="ident">UnzipConsensus</span>)]</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">derive_unzip_consensus</span>(<span class="ident">input</span>: <span class="ident">TokenStream</span>) -&gt; <span class="ident">TokenStream</span> {
-    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } <span class="op">=</span> <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
+    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } = <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
 
-    <span class="kw">let</span> <span class="ident">variants</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">data</span> {
+    <span class="kw">let</span> <span class="ident">variants</span> = <span class="kw">match</span> <span class="ident">data</span> {
         <span class="ident">syn::Data::Enum</span>(<span class="ident">DataEnum</span> { <span class="ident">variants</span>, .. }) =&gt; <span class="ident">variants</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">variant</span><span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">fields</span> <span class="op">=</span> <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">map</span>(|<span class="ident">variant</span>| {
+                <span class="kw">let</span> <span class="ident">fields</span> = <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
-                <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">len</span>() <span class="op">!</span><span class="op">=</span> <span class="number">1</span> <span class="op">|</span><span class="op">|</span> <span class="ident">fields</span>[<span class="number">0</span>].<span class="ident">ident</span>.<span class="ident">is_some</span>() {
+                <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">len</span>() != <span class="number">1</span> || <span class="ident">fields</span>[<span class="number">0</span>].<span class="ident">ident</span>.<span class="ident">is_some</span>() {
                     <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="string">&quot;UnzipConsensus only supports 1-tuple variants&quot;</span>);
                 }
 
                 <span class="prelude-val">Ok</span>((<span class="ident">variant</span>.<span class="ident">ident</span>.<span class="ident">clone</span>(), <span class="ident">fields</span>[<span class="number">0</span>].<span class="ident">ty</span>.<span class="ident">clone</span>()))
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>(),
+            .<span class="ident">collect</span>::&lt;<span class="ident">std::result::Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;(),
         <span class="kw">_</span> =&gt; <span class="prelude-val">Err</span>(<span class="string">&quot;UnzipConsensus can only be derived for enums&quot;</span>),
     };
 
     <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unreachable_code</span>)]</span>
-    <span class="kw">let</span> <span class="ident">variants</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">variants</span> {
+    <span class="kw">let</span> <span class="ident">variants</span> = <span class="kw">match</span> <span class="ident">variants</span> {
         <span class="prelude-val">Ok</span>(<span class="ident">variants</span>) =&gt; <span class="ident">variants</span>,
         <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>)]</span>
             <span class="ident">ident</span>.<span class="ident">span</span>().<span class="ident">unstable</span>().<span class="ident">error</span>(<span class="ident">e</span>).<span class="ident">emit</span>();
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>))]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>))]</span>
             <span class="macro">panic!</span>(<span class="string">&quot;Error: {}&quot;</span>, <span class="ident">e</span>);
             <span class="kw">return</span> <span class="ident">TokenStream::new</span>();
         }
     };
 
-    <span class="kw">let</span> <span class="ident">unzip_struct_ident</span> <span class="op">=</span> <span class="macro">format_ident!</span>(<span class="string">&quot;Unzip{}&quot;</span>, <span class="ident">ident</span>);
-    <span class="kw">let</span> (<span class="ident">unzip_s_ident</span>, <span class="ident">unzip_s_type</span>): (<span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">variants</span>
+    <span class="kw">let</span> <span class="ident">unzip_struct_ident</span> = <span class="macro">format_ident!</span>(<span class="string">&quot;Unzip{}&quot;</span>, <span class="ident">ident</span>);
+    <span class="kw">let</span> (<span class="ident">unzip_s_ident</span>, <span class="ident">unzip_s_type</span>): (<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;) = <span class="ident">variants</span>
         .<span class="ident">iter</span>()
-        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">ident</span>, <span class="ident">ty</span>)<span class="op">|</span> (<span class="macro">format_ident!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">ident</span>.<span class="ident">to_string</span>().<span class="ident">to_snake_case</span>()), <span class="ident">ty</span>))
+        .<span class="ident">map</span>(|(<span class="ident">ident</span>, <span class="ident">ty</span>)| (<span class="macro">format_ident!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">ident</span>.<span class="ident">to_string</span>().<span class="ident">to_snake_case</span>()), <span class="ident">ty</span>))
         .<span class="ident">unzip</span>();
-    <span class="kw">let</span> <span class="ident">unzip_e_ident</span> <span class="op">=</span> <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">ident</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">ident</span>).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-    <span class="kw">let</span> <span class="ident">unzip_fn_ident</span> <span class="op">=</span> <span class="macro">format_ident!</span>(<span class="string">&quot;unzip_{}&quot;</span>, <span class="ident">ident</span>.<span class="ident">to_string</span>().<span class="ident">to_snake_case</span>());
-    <span class="kw">let</span> <span class="ident">unzip_trait_ident</span> <span class="op">=</span> <span class="macro">format_ident!</span>(<span class="string">&quot;IterUnzip{}&quot;</span>, <span class="ident">ident</span>);
+    <span class="kw">let</span> <span class="ident">unzip_e_ident</span> = <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">ident</span>, <span class="kw">_</span>)| <span class="ident">ident</span>).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let</span> <span class="ident">unzip_fn_ident</span> = <span class="macro">format_ident!</span>(<span class="string">&quot;unzip_{}&quot;</span>, <span class="ident">ident</span>.<span class="ident">to_string</span>().<span class="ident">to_snake_case</span>());
+    <span class="kw">let</span> <span class="ident">unzip_trait_ident</span> = <span class="macro">format_ident!</span>(<span class="string">&quot;IterUnzip{}&quot;</span>, <span class="ident">ident</span>);
 
-    <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="macro">quote!</span> {
+    <span class="kw">let</span> <span class="ident">output</span> = <span class="macro">quote!</span> {
         <span class="kw">pub</span> <span class="kw">trait</span> #<span class="ident">unzip_trait_ident</span> {
             <span class="kw">fn</span> #<span class="ident">unzip_fn_ident</span>(<span class="self">self</span>) -&gt; #<span class="ident">unzip_struct_ident</span>;
         }
 
         <span class="kw">pub</span> <span class="kw">struct</span> #<span class="ident">unzip_struct_ident</span> {
-            #(<span class="kw">pub</span> #<span class="ident">unzip_s_ident</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, #<span class="ident">unzip_s_type</span>)<span class="op">&gt;</span>),<span class="op">*</span>
+            #(<span class="kw">pub</span> #<span class="ident">unzip_s_ident</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, #<span class="ident">unzip_s_type</span>)&gt;),*
         }
 
-        <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">I</span><span class="op">&gt;</span> #<span class="ident">unzip_trait_ident</span> <span class="kw">for</span> <span class="ident">I</span>
+        <span class="kw">impl</span>&lt;<span class="ident">I</span>&gt; #<span class="ident">unzip_trait_ident</span> <span class="kw">for</span> <span class="ident">I</span>
         <span class="kw">where</span>
-            <span class="ident">I</span>: <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">PeerId</span>, #<span class="ident">ident</span>)<span class="op">&gt;</span>,
+            <span class="ident">I</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">PeerId</span>, #<span class="ident">ident</span>)&gt;,
         {
             <span class="kw">fn</span> #<span class="ident">unzip_fn_ident</span>(<span class="kw-2">mut</span> <span class="self">self</span>) -&gt; #<span class="ident">unzip_struct_ident</span> {
-                #(<span class="kw">let</span> <span class="kw-2">mut</span> #<span class="ident">unzip_s_ident</span> <span class="op">=</span> <span class="ident">Vec::new</span>();)<span class="op">*</span>
+                #(<span class="kw">let</span> <span class="kw-2">mut</span> #<span class="ident">unzip_s_ident</span> = <span class="ident">Vec::new</span>();)*
 
-                <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="ident">consensus_item</span>)) <span class="op">=</span> <span class="self">self</span>.<span class="ident">next</span>() {
+                <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="ident">consensus_item</span>)) = <span class="self">self</span>.<span class="ident">next</span>() {
                     <span class="kw">match</span> <span class="ident">consensus_item</span> {
                         #(#<span class="ident">ident</span>::#<span class="ident">unzip_e_ident</span>(<span class="ident">item</span>) =&gt; {
                             #<span class="ident">unzip_s_ident</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">item</span>));
-                        })<span class="op">*</span>
+                        })*
                     }
                 }
 
                 #<span class="ident">unzip_struct_ident</span> {
-                    #(#<span class="ident">unzip_s_ident</span>),<span class="op">*</span>
+                    #(#<span class="ident">unzip_s_ident</span>),*
                 }
             }
         }
@@ -370,37 +370,37 @@
 
 <span class="attribute">#[<span class="ident">proc_macro_derive</span>(<span class="ident">Encodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">derive_encodable</span>(<span class="ident">input</span>: <span class="ident">TokenStream</span>) -&gt; <span class="ident">TokenStream</span> {
-    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } <span class="op">=</span> <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
+    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } = <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
 
-    <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">data</span> {
+    <span class="kw">let</span> <span class="ident">output</span> = <span class="kw">match</span> <span class="ident">data</span> {
         <span class="ident">Data::Struct</span>(<span class="ident">DataStruct</span> { <span class="ident">fields</span>, .. }) =&gt; {
-            <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
+            <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
                 <span class="comment">// Tuple struct</span>
-                <span class="kw">let</span> <span class="ident">field_names</span> <span class="op">=</span> <span class="ident">fields</span>
+                <span class="kw">let</span> <span class="ident">field_names</span> = <span class="ident">fields</span>
                     .<span class="ident">iter</span>()
                     .<span class="ident">enumerate</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">Index::from</span>(<span class="ident">idx</span>))
-                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                    .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="ident">Index::from</span>(<span class="ident">idx</span>))
+                    .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote!</span> {
                     <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                        <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
-                            #(<span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.#<span class="ident">field_names</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                        <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
+                            #(<span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.#<span class="ident">field_names</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
                         }
                     }
                 }
             } <span class="kw">else</span> {
                 <span class="comment">// Tuple struct</span>
-                <span class="kw">let</span> <span class="ident">field_names</span> <span class="op">=</span> <span class="ident">fields</span>
+                <span class="kw">let</span> <span class="ident">field_names</span> = <span class="ident">fields</span>
                     .<span class="ident">iter</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
-                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                    .<span class="ident">map</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
+                    .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote!</span> {
                     <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                        <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
-                            #(<span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.#<span class="ident">field_names</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                        <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
+                            #(<span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.#<span class="ident">field_names</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
                         }
                     }
@@ -408,29 +408,29 @@
             }
         }
         <span class="ident">syn::Data::Enum</span>(<span class="ident">DataEnum</span> { <span class="ident">variants</span>, .. }) =&gt; {
-            <span class="kw">let</span> <span class="ident">match_arms</span> <span class="op">=</span> <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">variant_idx</span>, <span class="ident">variant</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">variant_ident</span> <span class="op">=</span> <span class="ident">variant</span>.<span class="ident">ident</span>.<span class="ident">clone</span>();
+            <span class="kw">let</span> <span class="ident">match_arms</span> = <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>().<span class="ident">map</span>(|(<span class="ident">variant_idx</span>, <span class="ident">variant</span>)| {
+                <span class="kw">let</span> <span class="ident">variant_ident</span> = <span class="ident">variant</span>.<span class="ident">ident</span>.<span class="ident">clone</span>();
 
-                <span class="kw">if</span> <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
-                    <span class="kw">let</span> <span class="ident">variant_fields</span> <span class="op">=</span> <span class="ident">variant</span>
+                <span class="kw">if</span> <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
+                    <span class="kw">let</span> <span class="ident">variant_fields</span> = <span class="ident">variant</span>
                         .<span class="ident">fields</span>
                         .<span class="ident">iter</span>()
                         .<span class="ident">enumerate</span>()
-                        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, <span class="ident">idx</span>))
-                        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                        .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, <span class="ident">idx</span>))
+                        .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote!</span> {
                         #<span class="ident">ident</span>::#<span class="ident">variant_ident</span>(#(#<span class="ident">variant_fields</span>,)<span class="kw-2">*</span>) =&gt; {
-                            <span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span>(#<span class="ident">variant_idx</span> <span class="kw">as</span> <span class="ident">u64</span>), <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
-                            #(<span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(#<span class="ident">variant_fields</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                            <span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span>(#<span class="ident">variant_idx</span> <span class="kw">as</span> <span class="ident">u64</span>), <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
+                            #(<span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(#<span class="ident">variant_fields</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)*
                         }
                     }
                 } <span class="kw">else</span> {
-                    <span class="kw">let</span> <span class="ident">variant_fields</span> <span class="op">=</span>
-                        <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>()).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                    <span class="kw">let</span> <span class="ident">variant_fields</span> =
+                        <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>()).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote!</span> {
                         #<span class="ident">ident</span>::#<span class="ident">variant_ident</span> { #(#<span class="ident">variant_fields</span>,)<span class="kw-2">*</span>} =&gt; {
-                            <span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span>(#<span class="ident">variant_idx</span> <span class="kw">as</span> <span class="ident">u64</span>), <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
-                            #(<span class="ident">len</span> <span class="op">+</span><span class="op">=</span> <span class="ident">Encodable::consensus_encode</span>(#<span class="ident">variant_fields</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                            <span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(<span class="kw-2">&amp;</span>(#<span class="ident">variant_idx</span> <span class="kw">as</span> <span class="ident">u64</span>), <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
+                            #(<span class="ident">len</span> += <span class="ident">Encodable::consensus_encode</span>(#<span class="ident">variant_fields</span>, <span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;)*
                         }
                     }
                 }
@@ -438,10 +438,10 @@
 
             <span class="macro">quote!</span> {
                 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-                        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
+                    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+                        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
                         <span class="kw">match</span> <span class="self">self</span> {
-                            #(#<span class="ident">match_arms</span>)<span class="op">*</span>
+                            #(#<span class="ident">match_arms</span>)*
                         }
                         <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
                     }
@@ -450,13 +450,13 @@
         }
         <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unreachable_code</span>)]</span>
         <span class="ident">syn::Data::Union</span>(<span class="kw">_</span>) =&gt; {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>)]</span>
             <span class="ident">ident</span>
                 .<span class="ident">span</span>()
                 .<span class="ident">unstable</span>()
                 .<span class="ident">error</span>(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
                 .<span class="ident">emit</span>();
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>))]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>))]</span>
             <span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
             <span class="kw">return</span> <span class="ident">TokenStream::new</span>();
         }
@@ -467,39 +467,39 @@
 
 <span class="attribute">#[<span class="ident">proc_macro_derive</span>(<span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">derive_decodable</span>(<span class="ident">input</span>: <span class="ident">TokenStream</span>) -&gt; <span class="ident">TokenStream</span> {
-    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } <span class="op">=</span> <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
+    <span class="kw">let</span> <span class="ident">DeriveInput</span> { <span class="ident">ident</span>, <span class="ident">data</span>, .. } = <span class="macro">parse_macro_input!</span>(<span class="ident">input</span>);
 
-    <span class="kw">let</span> <span class="ident">output</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">data</span> {
+    <span class="kw">let</span> <span class="ident">output</span> = <span class="kw">match</span> <span class="ident">data</span> {
         <span class="ident">Data::Struct</span>(<span class="ident">DataStruct</span> { <span class="ident">fields</span>, .. }) =&gt; {
-            <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
+            <span class="kw">if</span> <span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
                 <span class="comment">// Tuple struct</span>
-                <span class="kw">let</span> <span class="ident">field_names</span> <span class="op">=</span> <span class="ident">fields</span>
+                <span class="kw">let</span> <span class="ident">field_names</span> = <span class="ident">fields</span>
                     .<span class="ident">iter</span>()
                     .<span class="ident">enumerate</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="macro">format_ident!</span>(<span class="string">&quot;field_{}&quot;</span>, <span class="ident">idx</span>))
-                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                    .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;field_{}&quot;</span>, <span class="ident">idx</span>))
+                    .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote!</span> {
                     <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                        <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span><span class="op">&gt;</span> {
-                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
-                            #(<span class="kw">let</span> #<span class="ident">field_names</span> <span class="op">=</span> <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                        <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span>&gt; {
+                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
+                            #(<span class="kw">let</span> #<span class="ident">field_names</span> = <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#<span class="ident">ident</span>(#(#<span class="ident">field_names</span>,)<span class="kw-2">*</span>))
                         }
                     }
                 }
             } <span class="kw">else</span> {
                 <span class="comment">// Tuple struct</span>
-                <span class="kw">let</span> <span class="ident">field_names</span> <span class="op">=</span> <span class="ident">fields</span>
+                <span class="kw">let</span> <span class="ident">field_names</span> = <span class="ident">fields</span>
                     .<span class="ident">iter</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
-                    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                    .<span class="ident">map</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
+                    .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote!</span> {
                     <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                        <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span><span class="op">&gt;</span> {
-                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> <span class="op">=</span> <span class="number">0</span>;
-                            #(<span class="kw">let</span> #<span class="ident">field_names</span> <span class="op">=</span> <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                        <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span>&gt; {
+                            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
+                            #(<span class="kw">let</span> #<span class="ident">field_names</span> = <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#<span class="ident">ident</span>{
-                                #(#<span class="ident">field_names</span>,)<span class="op">*</span>
+                                #(#<span class="ident">field_names</span>,)*
                             })
                         }
                     }
@@ -507,33 +507,33 @@
             }
         }
         <span class="ident">syn::Data::Enum</span>(<span class="ident">DataEnum</span> { <span class="ident">variants</span>, .. }) =&gt; {
-            <span class="kw">let</span> <span class="ident">match_arms</span> <span class="op">=</span> <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">variant_idx</span>, <span class="ident">variant</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">variant_ident</span> <span class="op">=</span> <span class="ident">variant</span>.<span class="ident">ident</span>.<span class="ident">clone</span>();
+            <span class="kw">let</span> <span class="ident">match_arms</span> = <span class="ident">variants</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>().<span class="ident">map</span>(|(<span class="ident">variant_idx</span>, <span class="ident">variant</span>)| {
+                <span class="kw">let</span> <span class="ident">variant_ident</span> = <span class="ident">variant</span>.<span class="ident">ident</span>.<span class="ident">clone</span>();
 
-                <span class="kw">if</span> <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
-                    <span class="kw">let</span> <span class="ident">variant_fields</span> <span class="op">=</span> <span class="ident">variant</span>
+                <span class="kw">if</span> <span class="ident">variant</span>.<span class="ident">fields</span>.<span class="ident">iter</span>().<span class="ident">any</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">is_none</span>()) {
+                    <span class="kw">let</span> <span class="ident">variant_fields</span> = <span class="ident">variant</span>
                         .<span class="ident">fields</span>
                         .<span class="ident">iter</span>()
                         .<span class="ident">enumerate</span>()
-                        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, <span class="ident">idx</span>))
-                        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                        .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">&quot;bound_{}&quot;</span>, <span class="ident">idx</span>))
+                        .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote!</span> {
                         #<span class="ident">variant_idx</span> =&gt; {
-                            #(<span class="kw">let</span> #<span class="ident">variant_fields</span> <span class="op">=</span> <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                            #(<span class="kw">let</span> #<span class="ident">variant_fields</span> = <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)*
                             #<span class="ident">ident</span>::#<span class="ident">variant_ident</span>(#(#<span class="ident">variant_fields</span>,)<span class="kw-2">*</span>)
                         }
                     }
                 } <span class="kw">else</span> {
-                    <span class="kw">let</span> <span class="ident">variant_fields</span> <span class="op">=</span> <span class="ident">variant</span>
+                    <span class="kw">let</span> <span class="ident">variant_fields</span> = <span class="ident">variant</span>
                         .<span class="ident">fields</span>
                         .<span class="ident">iter</span>()
-                        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">field</span><span class="op">|</span> <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
-                        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                        .<span class="ident">map</span>(|<span class="ident">field</span>| <span class="ident">field</span>.<span class="ident">ident</span>.<span class="ident">clone</span>().<span class="ident">unwrap</span>())
+                        .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote!</span> {
                         #<span class="ident">variant_idx</span> =&gt; {
-                            #(<span class="kw">let</span> #<span class="ident">variant_fields</span> <span class="op">=</span> <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)<span class="op">*</span>
+                            #(<span class="kw">let</span> #<span class="ident">variant_fields</span> = <span class="ident">Decodable::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;)*
                             #<span class="ident">ident</span>::#<span class="ident">variant_ident</span>{
-                                #(#<span class="ident">variant_fields</span>,)<span class="op">*</span>
+                                #(#<span class="ident">variant_fields</span>,)*
                             }
                         }
                     }
@@ -542,10 +542,10 @@
 
             <span class="macro">quote!</span> {
                 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> #<span class="ident">ident</span> {
-                    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span><span class="op">&gt;</span> {
-                        <span class="kw">let</span> <span class="ident">variant</span> <span class="op">=</span> <span class="op">&lt;</span><span class="ident">u64</span> <span class="kw">as</span> <span class="ident">Decodable</span><span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span> <span class="kw">as</span> <span class="ident">usize</span>;
-                        <span class="kw">let</span> <span class="ident">decoded</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">variant</span> {
-                            #(#<span class="ident">match_arms</span>)<span class="op">*</span>
+                    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="self">Self</span>, <span class="ident">::minimint_api::encoding::DecodeError</span>&gt; {
+                        <span class="kw">let</span> <span class="ident">variant</span> = &lt;<span class="ident">u64</span> <span class="kw">as</span> <span class="ident">Decodable</span>&gt;<span class="ident">::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span> <span class="kw">as</span> <span class="ident">usize</span>;
+                        <span class="kw">let</span> <span class="ident">decoded</span> = <span class="kw">match</span> <span class="ident">variant</span> {
+                            #(#<span class="ident">match_arms</span>)*
                             <span class="kw">_</span> =&gt; {
                                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">::minimint_api::encoding::DecodeError::from_str</span>(<span class="string">&quot;invalid enum variant&quot;</span>));
                             }
@@ -557,13 +557,13 @@
         }
         <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unreachable_code</span>)]</span>
         <span class="ident">syn::Data::Union</span>(<span class="kw">_</span>) =&gt; {
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>)]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>)]</span>
             <span class="ident">ident</span>
                 .<span class="ident">span</span>()
                 .<span class="ident">unstable</span>()
                 .<span class="ident">error</span>(<span class="string">&quot;Encodable can&#39;t be derived for unions&quot;</span>)
                 .<span class="ident">emit</span>();
-            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;diagnostics&quot;</span>))]</span>
+            <span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">feature</span> = <span class="string">&quot;diagnostics&quot;</span>))]</span>
             <span class="macro">panic!</span>(<span class="string">&quot;Error: Encodable can&#39;t be derived for unions&quot;</span>);
 
             <span class="kw">return</span> <span class="ident">TokenStream::new</span>();
@@ -573,4 +573,4 @@
     <span class="ident">output</span>.<span class="ident">into</span>()
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_derive" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_derive" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

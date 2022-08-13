@@ -123,56 +123,56 @@
 <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
 <span class="kw">use</span> <span class="ident">secp256k1::PublicKey</span>;
 
-<span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x40</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_OFFER</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x41</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x42</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x43</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT_UPDATE</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x44</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="number">0x45</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT</span>: <span class="ident">u8</span> = <span class="number">0x40</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_OFFER</span>: <span class="ident">u8</span> = <span class="number">0x41</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>: <span class="ident">u8</span> = <span class="number">0x42</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>: <span class="ident">u8</span> = <span class="number">0x43</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_CONTRACT_UPDATE</span>: <span class="ident">u8</span> = <span class="number">0x44</span>;
+<span class="kw">const</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>: <span class="ident">u8</span> = <span class="number">0x45</span>;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ContractKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_CONTRACT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">ContractAccount</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_CONTRACT</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">ContractAccount</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractKeyPrefix</span>;
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ContractKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_CONTRACT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">ContractKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">ContractAccount</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_CONTRACT</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ContractKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">ContractAccount</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractUpdateKey</span>(<span class="kw">pub</span> <span class="ident">OutPoint</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ContractUpdateKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_CONTRACT_UPDATE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">OutputOutcome</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_CONTRACT_UPDATE</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">OutputOutcome</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OfferKey</span>(<span class="kw">pub</span> <span class="ident">bitcoin_hashes::sha256::Hash</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OfferKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_OFFER</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">IncomingContractOffer</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OFFER</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">IncomingContractOffer</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OfferKeyPrefix</span>;
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OfferKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_OFFER</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">OfferKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">IncomingContractOffer</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OFFER</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">OfferKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">IncomingContractOffer</span>;
 }
 
 <span class="comment">// TODO: remove redundancy</span>
@@ -180,9 +180,9 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposeDecryptionShareKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposeDecryptionShareKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PreimageDecryptionShare</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PreimageDecryptionShare</span>;
 }
 
 <span class="doccomment">/// Our preimage decryption shares that still need to be broadcasted</span>
@@ -190,9 +190,9 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposeDecryptionShareKeyPrefix</span>;
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposeDecryptionShareKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">ProposeDecryptionShareKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PreimageDecryptionShare</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSE_DECRYPTION_SHARE</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ProposeDecryptionShareKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PreimageDecryptionShare</span>;
 }
 
 <span class="doccomment">/// Preimage decryption shares we received</span>
@@ -200,9 +200,9 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AgreedDecryptionShareKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>, <span class="kw">pub</span> <span class="ident">PeerId</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">AgreedDecryptionShareKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PreimageDecryptionShare</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PreimageDecryptionShare</span>;
 }
 
 <span class="doccomment">/// Preimage decryption shares we received</span>
@@ -210,27 +210,27 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AgreedDecryptionShareKeyPrefix</span>;
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">AgreedDecryptionShareKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">AgreedDecryptionShareKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">PreimageDecryptionShare</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_AGREED_DECRYPTION_SHARE</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">AgreedDecryptionShareKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PreimageDecryptionShare</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGatewayKey</span>(<span class="kw">pub</span> <span class="ident">PublicKey</span>);
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LightningGatewayKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">LightningGateway</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">LightningGateway</span>;
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGatewayKeyPrefix</span>;
 
 <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LightningGatewayKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> <span class="op">=</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> <span class="op">=</span> <span class="ident">LightningGatewayKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> <span class="op">=</span> <span class="ident">LightningGateway</span>;
+    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
+    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">LightningGatewayKey</span>;
+    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">LightningGateway</span>;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

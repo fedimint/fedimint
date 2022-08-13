@@ -102,34 +102,34 @@
 <span class="kw">use</span> <span class="ident">std::ops</span>::{<span class="ident">Add</span>, <span class="ident">AddAssign</span>, <span class="ident">Mul</span>, <span class="ident">MulAssign</span>};
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Poly</span><span class="op">&lt;</span><span class="ident">G</span>, <span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Poly</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;
 <span class="kw">where</span>
     <span class="ident">G</span>: <span class="ident">Debug</span>,
 {
-    <span class="ident">coefficients</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">G</span><span class="op">&gt;</span>,
-    <span class="ident">_pd</span>: <span class="ident">PhantomData</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>,
+    <span class="ident">coefficients</span>: <span class="ident">Vec</span>&lt;<span class="ident">G</span>&gt;,
+    <span class="ident">_pd</span>: <span class="ident">PhantomData</span>&lt;<span class="ident">S</span>&gt;,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">G</span>, <span class="ident">S</span><span class="op">&gt;</span> <span class="ident">Poly</span><span class="op">&lt;</span><span class="ident">G</span>, <span class="ident">S</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt; <span class="ident">Poly</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">G</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">MulAssign</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">AddAssign</span><span class="op">&lt;</span><span class="ident">G</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">FromRandom</span> <span class="op">+</span> <span class="ident">Copy</span>,
+    <span class="ident">G</span>: <span class="ident">Debug</span> + <span class="ident">MulAssign</span>&lt;<span class="ident">S</span>&gt; + <span class="ident">AddAssign</span>&lt;<span class="ident">G</span>&gt; + <span class="ident">FromRandom</span> + <span class="ident">Copy</span>,
     <span class="ident">S</span>: <span class="ident">Copy</span>,
 {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">random</span>(<span class="ident">degree</span>: <span class="ident">usize</span>, <span class="ident">rng</span>: <span class="kw-2">&amp;mut</span> <span class="kw">impl</span> <span class="ident">RngCore</span>) -&gt; <span class="self">Self</span> {
         <span class="macro">assert_ne!</span>(<span class="ident">degree</span>, <span class="ident">usize::max_value</span>());
-        <span class="kw">let</span> <span class="ident">coefficients</span> <span class="op">=</span> (<span class="number">0</span>..<span class="op">=</span><span class="ident">degree</span>).<span class="ident">map</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">G::from_random</span>(<span class="ident">rng</span>)).<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">coefficients</span> = (<span class="number">0</span>..=<span class="ident">degree</span>).<span class="ident">map</span>(|<span class="kw">_</span>| <span class="ident">G::from_random</span>(<span class="ident">rng</span>)).<span class="ident">collect</span>();
         <span class="ident">Poly</span> {
             <span class="ident">coefficients</span>,
             <span class="ident">_pd</span>: <span class="ident">PhantomData</span>,
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">evaluate</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">x</span>: <span class="kw">impl</span> <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>) -&gt; <span class="ident">G</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">result</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">evaluate</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">x</span>: <span class="kw">impl</span> <span class="ident">Into</span>&lt;<span class="ident">S</span>&gt;) -&gt; <span class="ident">G</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">result</span> = <span class="kw-2">*</span><span class="self">self</span>
             .<span class="ident">coefficients</span>
             .<span class="ident">last</span>()
             .<span class="ident">expect</span>(<span class="string">&quot;Polynomial has no coefficients&quot;</span>);
-        <span class="kw">let</span> <span class="ident">x</span>: <span class="ident">S</span> <span class="op">=</span> <span class="ident">x</span>.<span class="ident">into</span>();
+        <span class="kw">let</span> <span class="ident">x</span>: <span class="ident">S</span> = <span class="ident">x</span>.<span class="ident">into</span>();
         <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="ident">c</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">coefficients</span>.<span class="ident">iter</span>().<span class="ident">rev</span>().<span class="ident">skip</span>(<span class="number">1</span>) {
             <span class="ident">result</span>.<span class="ident">mul_assign</span>(<span class="ident">x</span>);
             <span class="ident">result</span>.<span class="ident">add_assign</span>(<span class="ident">c</span>);
@@ -142,33 +142,33 @@
 <span class="doccomment">///</span>
 <span class="doccomment">/// # Panics</span>
 <span class="doccomment">/// If less than 2 points are supplied.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">interpolate_zero</span><span class="op">&lt;</span><span class="ident">G</span>, <span class="ident">S</span><span class="op">&gt;</span>(<span class="ident">elements</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">S</span>, <span class="ident">G</span>)<span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Clone</span>) -&gt; <span class="ident">G</span>
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">interpolate_zero</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;(<span class="ident">elements</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">S</span>, <span class="ident">G</span>)&gt; + <span class="ident">Clone</span>) -&gt; <span class="ident">G</span>
 <span class="kw">where</span>
-    <span class="ident">G</span>: <span class="ident">Copy</span> <span class="op">+</span> <span class="ident">Mul</span><span class="op">&lt;</span><span class="ident">S</span>, <span class="ident">Output</span> <span class="op">=</span> <span class="ident">G</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Add</span><span class="op">&lt;</span><span class="ident">G</span>, <span class="ident">Output</span> <span class="op">=</span> <span class="ident">G</span><span class="op">&gt;</span>,
-    <span class="ident">S</span>: <span class="ident">Copy</span> <span class="op">+</span> <span class="ident">Field</span>,
+    <span class="ident">G</span>: <span class="ident">Copy</span> + <span class="ident">Mul</span>&lt;<span class="ident">S</span>, <span class="ident">Output</span> = <span class="ident">G</span>&gt; + <span class="ident">Add</span>&lt;<span class="ident">G</span>, <span class="ident">Output</span> = <span class="ident">G</span>&gt;,
+    <span class="ident">S</span>: <span class="ident">Copy</span> + <span class="ident">Field</span>,
 {
-    <span class="kw">let</span> <span class="ident">elements_closure</span> <span class="op">=</span> <span class="ident">elements</span>.<span class="ident">clone</span>();
-    <span class="kw">let</span> <span class="ident">lagrange_coefficient</span> <span class="op">=</span> <span class="kw">move</span> <span class="op">|</span><span class="ident">i</span>: <span class="ident">usize</span><span class="op">|</span> -&gt; <span class="ident">S</span> {
-        <span class="kw">let</span> <span class="ident">xi</span> <span class="op">=</span> <span class="ident">elements_closure</span>.<span class="ident">clone</span>().<span class="ident">nth</span>(<span class="ident">i</span>).<span class="ident">unwrap</span>().<span class="number">0</span>;
+    <span class="kw">let</span> <span class="ident">elements_closure</span> = <span class="ident">elements</span>.<span class="ident">clone</span>();
+    <span class="kw">let</span> <span class="ident">lagrange_coefficient</span> = <span class="kw">move</span> |<span class="ident">i</span>: <span class="ident">usize</span>| -&gt; <span class="ident">S</span> {
+        <span class="kw">let</span> <span class="ident">xi</span> = <span class="ident">elements_closure</span>.<span class="ident">clone</span>().<span class="ident">nth</span>(<span class="ident">i</span>).<span class="ident">unwrap</span>().<span class="number">0</span>;
 
         <span class="ident">elements_closure</span>
             .<span class="ident">clone</span>()
             .<span class="ident">enumerate</span>()
-            .<span class="ident">filter_map</span>(<span class="op">|</span>(<span class="ident">idx</span>, (<span class="ident">x</span>, <span class="kw">_</span>))<span class="op">|</span> {
-                <span class="kw">if</span> <span class="ident">idx</span> <span class="op">!</span><span class="op">=</span> <span class="ident">i</span> {
-                    <span class="prelude-val">Some</span>(<span class="op">-</span><span class="ident">x</span> <span class="op">*</span> (<span class="ident">xi</span> <span class="op">-</span> <span class="ident">x</span>).<span class="ident">invert</span>().<span class="ident">unwrap</span>())
+            .<span class="ident">filter_map</span>(|(<span class="ident">idx</span>, (<span class="ident">x</span>, <span class="kw">_</span>))| {
+                <span class="kw">if</span> <span class="ident">idx</span> != <span class="ident">i</span> {
+                    <span class="prelude-val">Some</span>(-<span class="ident">x</span> * (<span class="ident">xi</span> - <span class="ident">x</span>).<span class="ident">invert</span>().<span class="ident">unwrap</span>())
                 } <span class="kw">else</span> {
                     <span class="prelude-val">None</span>
                 }
             })
-            .<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>, <span class="ident">b</span><span class="op">|</span> <span class="ident">a</span> <span class="op">*</span> <span class="ident">b</span>)
+            .<span class="ident">reduce</span>(|<span class="ident">a</span>, <span class="ident">b</span>| <span class="ident">a</span> * <span class="ident">b</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;Elements may not be empty!&quot;</span>)
     };
 
     <span class="ident">elements</span>
         .<span class="ident">enumerate</span>()
-        .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, (<span class="kw">_</span>, <span class="ident">y</span>))<span class="op">|</span> <span class="ident">y</span> <span class="op">*</span> <span class="ident">lagrange_coefficient</span>(<span class="ident">idx</span>))
-        .<span class="ident">reduce</span>(<span class="op">|</span><span class="ident">a</span>, <span class="ident">b</span><span class="op">|</span> <span class="ident">a</span> <span class="op">+</span> <span class="ident">b</span>)
+        .<span class="ident">map</span>(|(<span class="ident">idx</span>, (<span class="kw">_</span>, <span class="ident">y</span>))| <span class="ident">y</span> * <span class="ident">lagrange_coefficient</span>(<span class="ident">idx</span>))
+        .<span class="ident">reduce</span>(|<span class="ident">a</span>, <span class="ident">b</span>| <span class="ident">a</span> + <span class="ident">b</span>)
         .<span class="ident">expect</span>(<span class="string">&quot;Elements may not be empty!&quot;</span>)
 }
 
@@ -179,7 +179,7 @@
         <span class="kw">use</span> <span class="ident">bls12_381::Scalar</span>;
 
         <span class="comment">// f(x) = 6 + 3x + 5x^2</span>
-        <span class="kw">let</span> <span class="ident">vals</span> <span class="op">=</span> <span class="macro">vec!</span>[
+        <span class="kw">let</span> <span class="ident">vals</span> = <span class="macro">vec!</span>[
             (<span class="ident">Scalar::from</span>(<span class="number">1</span>), <span class="ident">Scalar::from</span>(<span class="number">14</span>)),
             (<span class="ident">Scalar::from</span>(<span class="number">2</span>), <span class="ident">Scalar::from</span>(<span class="number">32</span>)),
             (<span class="ident">Scalar::from</span>(<span class="number">3</span>), <span class="ident">Scalar::from</span>(<span class="number">60</span>)),
@@ -191,4 +191,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

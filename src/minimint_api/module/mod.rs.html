@@ -262,9 +262,9 @@
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::audit::Audit</span>;
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::module::interconnect::ModuleInterconect</span>;
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">puk_keys</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">XOnlyPublicKey</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">puk_keys</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">XOnlyPublicKey</span>&gt; + <span class="lifetime">&#39;a</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
@@ -294,10 +294,10 @@
     <span class="doccomment">/// example: /transaction</span>
     <span class="kw">const</span> <span class="ident">PATH</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>;
 
-    <span class="kw">type</span> <span class="ident">Param</span>: <span class="ident">serde::de::DeserializeOwned</span> <span class="op">+</span> <span class="ident">Send</span>;
+    <span class="kw">type</span> <span class="ident">Param</span>: <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span>;
     <span class="kw">type</span> <span class="ident">Response</span>: <span class="ident">serde::Serialize</span>;
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::State</span>, <span class="ident">params</span>: <span class="ident"><span class="self">Self</span>::Param</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Response</span>, <span class="ident">ApiError</span><span class="op">&gt;</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle</span>(<span class="ident">state</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::State</span>, <span class="ident">params</span>: <span class="ident"><span class="self">Self</span>::Param</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident"><span class="self">Self</span>::Response</span>, <span class="ident">ApiError</span>&gt;;
 }
 
 <span class="attribute">#[<span class="ident">doc</span>(<span class="ident">hidden</span>)]</span>
@@ -322,34 +322,34 @@
 <span class="macro">macro_rules!</span> <span class="ident">__api_endpoint</span> {
     (
         <span class="macro-nonterminal">$</span><span class="macro-nonterminal">path</span>:<span class="ident">expr</span>,
-        <span class="kw">async</span> <span class="op">|</span><span class="macro-nonterminal">$</span><span class="macro-nonterminal">state</span>:<span class="ident">ident</span>: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$</span><span class="macro-nonterminal">state_ty</span>:<span class="ident">ty</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param</span>:<span class="ident">ident</span>: <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param_ty</span>:<span class="ident">ty</span><span class="op">|</span> -&gt; <span class="macro-nonterminal">$</span><span class="macro-nonterminal">resp_ty</span>:<span class="ident">ty</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">body</span>:<span class="ident">block</span>
+        <span class="kw">async</span> |<span class="macro-nonterminal">$</span><span class="macro-nonterminal">state</span>:<span class="ident">ident</span>: <span class="kw-2">&amp;</span><span class="macro-nonterminal">$</span><span class="macro-nonterminal">state_ty</span>:<span class="ident">ty</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param</span>:<span class="ident">ident</span>: <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param_ty</span>:<span class="ident">ty</span>| -&gt; <span class="macro-nonterminal">$</span><span class="macro-nonterminal">resp_ty</span>:<span class="ident">ty</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">body</span>:<span class="ident">block</span>
     ) =&gt; {{
         <span class="kw">struct</span> <span class="ident">Endpoint</span>;
 
         <span class="attribute">#[<span class="ident">async_trait::async_trait</span>]</span>
         <span class="kw">impl</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::TypedApiEndpoint</span> <span class="kw">for</span> <span class="ident">Endpoint</span> {
-            <span class="kw">const</span> <span class="ident">PATH</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">path</span>;
-            <span class="kw">type</span> <span class="ident">State</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">state_ty</span>;
-            <span class="kw">type</span> <span class="ident">Param</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param_ty</span>;
-            <span class="kw">type</span> <span class="ident">Response</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">resp_ty</span>;
+            <span class="kw">const</span> <span class="ident">PATH</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">path</span>;
+            <span class="kw">type</span> <span class="ident">State</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">state_ty</span>;
+            <span class="kw">type</span> <span class="ident">Param</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param_ty</span>;
+            <span class="kw">type</span> <span class="ident">Response</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">resp_ty</span>;
 
             <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle</span>(
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">state</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::State</span>,
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">param</span>: <span class="ident"><span class="self">Self</span>::Param</span>,
-            ) -&gt; <span class="ident">::std::result::Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Response</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::ApiError</span><span class="op">&gt;</span> {
+            ) -&gt; <span class="ident">::std::result::Result</span>&lt;<span class="ident"><span class="self">Self</span>::Response</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::ApiError</span>&gt; {
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">body</span>
             }
         }
 
         <span class="ident">ApiEndpoint</span> {
-            <span class="ident">path</span>: <span class="op">&lt;</span><span class="ident">Endpoint</span> <span class="kw">as</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::TypedApiEndpoint</span><span class="op">&gt;</span><span class="ident">::PATH</span>,
-            <span class="ident">handler</span>: <span class="op">|</span><span class="ident">m</span>, <span class="ident">param</span><span class="op">|</span> {
+            <span class="ident">path</span>: &lt;<span class="ident">Endpoint</span> <span class="kw">as</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::TypedApiEndpoint</span>&gt;<span class="ident">::PATH</span>,
+            <span class="ident">handler</span>: |<span class="ident">m</span>, <span class="ident">param</span>| {
                 <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                    <span class="kw">let</span> <span class="ident">params</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::__reexports::serde_json::from_value</span>(<span class="ident">param</span>)
-                        .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::ApiError::bad_request</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
+                    <span class="kw">let</span> <span class="ident">params</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::__reexports::serde_json::from_value</span>(<span class="ident">param</span>)
+                        .<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::ApiError::bad_request</span>(<span class="ident">e</span>.<span class="ident">to_string</span>()))<span class="question-mark">?</span>;
 
-                    <span class="kw">let</span> <span class="ident">ret</span> <span class="op">=</span>
-                        <span class="op">&lt;</span><span class="ident">Endpoint</span> <span class="kw">as</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::TypedApiEndpoint</span><span class="op">&gt;</span><span class="ident">::handle</span>(<span class="ident">m</span>, <span class="ident">params</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let</span> <span class="ident">ret</span> =
+                        &lt;<span class="ident">Endpoint</span> <span class="kw">as</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::TypedApiEndpoint</span>&gt;<span class="ident">::handle</span>(<span class="ident">m</span>, <span class="ident">params</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">crate::module::__reexports::serde_json::to_value</span>(<span class="ident">ret</span>)
                         .<span class="ident">expect</span>(<span class="string">&quot;encoding error&quot;</span>))
                 })
@@ -361,7 +361,7 @@
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">__api_endpoint</span> <span class="kw">as</span> <span class="ident">api_endpoint</span>;
 
 <span class="doccomment">/// Definition of an API endpoint defined by a module `M`.</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ApiEndpoint</span>&lt;<span class="ident">M</span>&gt; {
     <span class="doccomment">/// Path under which the API endpoint can be reached. It should start with a `/`</span>
     <span class="doccomment">/// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`</span>
     <span class="doccomment">/// depending on the module name returned by `[FedertionModule::api_base_name]`.</span>
@@ -370,57 +370,57 @@
     <span class="doccomment">///   * Reference to the module which defined it</span>
     <span class="doccomment">///   * Request parameters parsed into JSON `[Value](serde_json::Value)`</span>
     <span class="kw">pub</span> <span class="ident">handler</span>:
-        <span class="kw">for</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="kw">fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">M</span>, <span class="ident">serde_json::Value</span>) -&gt; <span class="ident">BoxFuture</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">fn</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">M</span>, <span class="ident">serde_json::Value</span>) -&gt; <span class="ident">BoxFuture</span>&lt;<span class="lifetime">&#39;a</span>, <span class="prelude-ty">Result</span>&lt;<span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span>&gt;&gt;,
 }
 
 <span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">FederationModule</span>: <span class="ident">Sized</span> {
     <span class="kw">type</span> <span class="ident">Error</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span>: <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span>;
+    <span class="kw">type</span> <span class="ident">TxInput</span>: <span class="ident">Send</span> + <span class="ident">Sync</span>;
     <span class="kw">type</span> <span class="ident">TxOutput</span>;
     <span class="kw">type</span> <span class="ident">TxOutputOutcome</span>;
     <span class="kw">type</span> <span class="ident">ConsensusItem</span>;
     <span class="kw">type</span> <span class="ident">VerificationCache</span>;
 
     <span class="doccomment">/// Blocks until a new `consensus_proposal` is available.</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>);
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>);
 
     <span class="doccomment">/// This module&#39;s contribution to the next consensus proposal</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::ConsensusItem</span><span class="op">&gt;</span>;
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt;;
 
     <span class="doccomment">/// This function is called once before transaction processing starts. All module consensus</span>
     <span class="doccomment">/// items of this round are supplied as `consensus_items`. The batch will be committed to the</span>
     <span class="doccomment">/// database after all other modules ran `begin_consensus_epoch`, so the results are available</span>
     <span class="doccomment">/// when processing transactions.</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)<span class="op">&gt;</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
+        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
     );
 
     <span class="doccomment">/// Some modules may have slow to verify inputs that would block transaction processing. If the</span>
     <span class="doccomment">/// slow part of verification can be modeled as a pure function not involving any system state</span>
     <span class="doccomment">/// we can build a lookup table in a hyper-parallelized manner. This function is meant for</span>
     <span class="doccomment">/// constructing such lookup tables.</span>
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span>,
+        <span class="ident">inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt; + <span class="ident">Send</span>,
     ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span>;
 
     <span class="doccomment">/// Validate a transaction input before submitting it to the unconfirmed transaction pool. This</span>
     <span class="doccomment">/// function has no side effects and may be called at any time. False positives due to outdated</span>
     <span class="doccomment">/// database state are ok since they get filtered out after consensus has been reached on them</span>
     <span class="doccomment">/// and merely generate a warning.</span>
-    <span class="kw">fn</span> <span class="ident">validate_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
         <span class="ident">verification_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt;;
 
     <span class="doccomment">/// Try to spend a transaction input. On success all necessary updates will be part of the</span>
     <span class="doccomment">/// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will</span>
@@ -429,19 +429,19 @@
     <span class="doccomment">/// This function may only be called after `begin_consensus_epoch` and before</span>
     <span class="doccomment">/// `end_consensus_epoch`. Data is only written to the database once all transaction have been</span>
     <span class="doccomment">/// processed.</span>
-    <span class="kw">fn</span> <span class="ident">apply_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
         <span class="ident">verification_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;b</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt;;
 
     <span class="doccomment">/// Validate a transaction output before submitting it to the unconfirmed transaction pool. This</span>
     <span class="doccomment">/// function has no side effects and may be called at any time. False positives due to outdated</span>
     <span class="doccomment">/// database state are ok since they get filtered out after consensus has been reached on them</span>
     <span class="doccomment">/// and merely generate a warning.</span>
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt;;
 
     <span class="doccomment">/// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates</span>
     <span class="doccomment">/// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is</span>
@@ -453,29 +453,29 @@
     <span class="doccomment">/// This function may only be called after `begin_consensus_epoch` and before</span>
     <span class="doccomment">/// `end_consensus_epoch`. Data is only written to the database once all transactions have been</span>
     <span class="doccomment">/// processed.</span>
-    <span class="kw">fn</span> <span class="ident">apply_output</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
         <span class="ident">out_point</span>: <span class="ident"><span class="kw">crate</span>::OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt;;
 
     <span class="doccomment">/// This function is called once all transactions have been processed and changes were written</span>
     <span class="doccomment">/// to the database. This allows running finalization code before the next epoch.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers</span>
     <span class="doccomment">/// to drop if any are misbehaving.</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>;
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
+        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data</span>
     <span class="doccomment">/// needed by the client to access funds or give an estimate of when funds will be available.</span>
     <span class="doccomment">/// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.</span>
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident"><span class="kw">crate</span>::OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident"><span class="kw">crate</span>::OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt;;
 
     <span class="doccomment">/// Queries the database and returns all assets and liabilities of the module.</span>
     <span class="doccomment">///</span>
@@ -492,7 +492,7 @@
     <span class="doccomment">/// Returns a list of custom API endpoints defined by the module. These are made available both</span>
     <span class="doccomment">/// to users as well as to other modules. They thus should be deterministic, only dependant on</span>
     <span class="doccomment">/// their input and the current epoch.</span>
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>];
+    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;];
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

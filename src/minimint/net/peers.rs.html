@@ -681,14 +681,14 @@
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
 <span class="doccomment">/// Maximum connection failures we consider for our back-off strategy</span>
-<span class="kw">const</span> <span class="ident">MAX_FAIL_RECONNECT_COUNTER</span>: <span class="ident">u64</span> <span class="op">=</span> <span class="number">300</span>;
+<span class="kw">const</span> <span class="ident">MAX_FAIL_RECONNECT_COUNTER</span>: <span class="ident">u64</span> = <span class="number">300</span>;
 
 <span class="doccomment">/// Owned [`PeerConnections`] trait object type</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyPeerConnections</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">PeerConnections</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyPeerConnections</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">PeerConnections</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
 
 <span class="doccomment">/// Owned [`Connector`](crate::net::connect::Connector) trait object used by</span>
 <span class="doccomment">/// [`ReconnectPeerConnections`]</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PeerConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">AnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PeerConnector</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">AnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;;
 
 <span class="doccomment">/// Connection manager that tries to keep connections open to all peers</span>
 <span class="doccomment">///</span>
@@ -702,15 +702,15 @@
 <span class="doccomment">/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.</span>
 <span class="doccomment">/// The thus disconnected peer will need to rejoin the consensus at a later time.  </span>
 <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">PeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">PeerConnections</span>&lt;<span class="ident">T</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Serialize</span> <span class="op">+</span> <span class="ident">DeserializeOwned</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="ident">Send</span>,
+    <span class="ident">T</span>: <span class="ident">Serialize</span> + <span class="ident">DeserializeOwned</span> + <span class="ident">Unpin</span> + <span class="ident">Send</span>,
 {
     <span class="doccomment">/// Send a message to a target, either all peers or a specific one.</span>
     <span class="doccomment">///</span>
     <span class="doccomment">/// The message is sent immediately and cached if the peer is reachable and only cached</span>
     <span class="doccomment">/// otherwise.</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">target</span>: <span class="ident">Target</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>, <span class="ident">msg</span>: <span class="ident">T</span>);
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">target</span>: <span class="ident">Target</span>&lt;<span class="ident">PeerId</span>&gt;, <span class="ident">msg</span>: <span class="ident">T</span>);
 
     <span class="doccomment">/// Await receipt of a message from any connected peer.</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="ident">PeerId</span>, <span class="ident">T</span>);
@@ -719,9 +719,9 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">ban_peer</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>);
 
     <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object</span>
-    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyPeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyPeerConnections</span>&lt;<span class="ident">T</span>&gt;
     <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="self">Self</span>: <span class="ident">Sized</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
     {
         <span class="ident">Box::new</span>(<span class="self">self</span>)
     }
@@ -733,15 +733,15 @@
 <span class="doccomment">/// which is used to open [`FramedTransport`](crate::net::framed::FramedTransport) connections. For</span>
 <span class="doccomment">/// production deployments the `Connector` has to ensure that connections are authenticated and</span>
 <span class="doccomment">/// encrypted.</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ReconnectPeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="ident">connections</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">PeerConnection</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">_listen_task</span>: <span class="ident">JoinHandle</span><span class="op">&lt;</span>()<span class="op">&gt;</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ReconnectPeerConnections</span>&lt;<span class="ident">T</span>&gt; {
+    <span class="ident">connections</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">PeerConnection</span>&lt;<span class="ident">T</span>&gt;&gt;,
+    <span class="ident">_listen_task</span>: <span class="ident">JoinHandle</span>&lt;()&gt;,
 }
 
-<span class="kw">struct</span> <span class="ident">PeerConnection</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> {
-    <span class="ident">outgoing</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
-    <span class="ident">incoming</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>,
-    <span class="ident">_io_task</span>: <span class="ident">JoinHandle</span><span class="op">&lt;</span>()<span class="op">&gt;</span>,
+<span class="kw">struct</span> <span class="ident">PeerConnection</span>&lt;<span class="ident">T</span>&gt; {
+    <span class="ident">outgoing</span>: <span class="ident">Sender</span>&lt;<span class="ident">T</span>&gt;,
+    <span class="ident">incoming</span>: <span class="ident">Receiver</span>&lt;<span class="ident">T</span>&gt;,
+    <span class="ident">_io_task</span>: <span class="ident">JoinHandle</span>&lt;()&gt;,
 }
 
 <span class="doccomment">/// Specifies the network configuration for federation-internal communication</span>
@@ -752,7 +752,7 @@
     <span class="doccomment">/// Our listen address for incoming connections from other federation members</span>
     <span class="kw">pub</span> <span class="ident">bind_addr</span>: <span class="ident">String</span>,
     <span class="doccomment">/// Map of all peers&#39; connection information we want to be connected to</span>
-    <span class="kw">pub</span> <span class="ident">peers</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">ConnectionConfig</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">peers</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">ConnectionConfig</span>&gt;,
 }
 
 <span class="doccomment">/// Information needed to connect to one other federation member</span>
@@ -765,25 +765,25 @@
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the</span>
 <span class="doccomment">/// public interface.</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-    <span class="ident">msg</span>: <span class="ident">UniqueMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-    <span class="ident">ack</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">MessageId</span><span class="op">&gt;</span>,
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt; {
+    <span class="ident">msg</span>: <span class="ident">UniqueMessage</span>&lt;<span class="ident">M</span>&gt;,
+    <span class="ident">ack</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">MessageId</span>&gt;,
 }
 
-<span class="kw">struct</span> <span class="ident">PeerConnectionStateMachine</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-    <span class="ident">common</span>: <span class="ident">CommonPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-    <span class="ident">state</span>: <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
+<span class="kw">struct</span> <span class="ident">PeerConnectionStateMachine</span>&lt;<span class="ident">M</span>&gt; {
+    <span class="ident">common</span>: <span class="ident">CommonPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;,
+    <span class="ident">state</span>: <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt;,
 }
 
-<span class="kw">struct</span> <span class="ident">CommonPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-    <span class="ident">resend_queue</span>: <span class="ident">MessageQueue</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-    <span class="ident">incoming</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-    <span class="ident">outgoing</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
+<span class="kw">struct</span> <span class="ident">CommonPeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+    <span class="ident">resend_queue</span>: <span class="ident">MessageQueue</span>&lt;<span class="ident">M</span>&gt;,
+    <span class="ident">incoming</span>: <span class="ident">Sender</span>&lt;<span class="ident">M</span>&gt;,
+    <span class="ident">outgoing</span>: <span class="ident">Receiver</span>&lt;<span class="ident">M</span>&gt;,
     <span class="ident">peer</span>: <span class="ident">PeerId</span>,
     <span class="ident">cfg</span>: <span class="ident">ConnectionConfig</span>,
-    <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">last_received</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">MessageId</span><span class="op">&gt;</span>,
+    <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
+    <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span>&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;&gt;,
+    <span class="ident">last_received</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">MessageId</span>&gt;,
 }
 
 <span class="kw">struct</span> <span class="ident">DisconnectedPeerConnectionState</span> {
@@ -791,35 +791,35 @@
     <span class="ident">failed_reconnect_counter</span>: <span class="ident">u64</span>,
 }
 
-<span class="kw">struct</span> <span class="ident">ConnectedPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-    <span class="ident">connection</span>: <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+<span class="kw">struct</span> <span class="ident">ConnectedPeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+    <span class="ident">connection</span>: <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
 }
 
-<span class="kw">enum</span> <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+<span class="kw">enum</span> <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
     <span class="ident">Disconnected</span>(<span class="ident">DisconnectedPeerConnectionState</span>),
-    <span class="ident">Connected</span>(<span class="ident">ConnectedPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>),
+    <span class="ident">Connected</span>(<span class="ident">ConnectedPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;),
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="lifetime">&#39;static</span><span class="op">&gt;</span> <span class="ident">ReconnectPeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">T</span>: <span class="lifetime">&#39;static</span>&gt; <span class="ident">ReconnectPeerConnections</span>&lt;<span class="ident">T</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">std::fmt::Debug</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Serialize</span> <span class="op">+</span> <span class="ident">DeserializeOwned</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span>,
+    <span class="ident">T</span>: <span class="ident">std::fmt::Debug</span> + <span class="ident">Clone</span> + <span class="ident">Serialize</span> + <span class="ident">DeserializeOwned</span> + <span class="ident">Unpin</span> + <span class="ident">Send</span> + <span class="ident">Sync</span>,
 {
     <span class="doccomment">/// Creates a new `ReconnectPeerConnections` connection manager from a network config and a</span>
     <span class="doccomment">/// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for</span>
     <span class="doccomment">/// requirements on the `Connector`.</span>
     <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">NetworkConfig</span>, <span class="ident">connect</span>: <span class="ident">PeerConnector</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">NetworkConfig</span>, <span class="ident">connect</span>: <span class="ident">PeerConnector</span>&lt;<span class="ident">T</span>&gt;) -&gt; <span class="self">Self</span> {
         <span class="macro">info!</span>(<span class="string">&quot;Starting mint {}&quot;</span>, <span class="ident">cfg</span>.<span class="ident">identity</span>);
 
-        <span class="kw">let</span> <span class="ident">shared_connector</span>: <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">connect</span>.<span class="ident">into</span>();
+        <span class="kw">let</span> <span class="ident">shared_connector</span>: <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">T</span>&gt;&gt; = <span class="ident">connect</span>.<span class="ident">into</span>();
 
-        <span class="kw">let</span> (<span class="ident">connection_senders</span>, <span class="ident">connections</span>) <span class="op">=</span> <span class="ident">cfg</span>
+        <span class="kw">let</span> (<span class="ident">connection_senders</span>, <span class="ident">connections</span>) = <span class="ident">cfg</span>
             .<span class="ident">peers</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">filter</span>(<span class="op">|</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="kw">_</span>)<span class="op">|</span> <span class="ident">peer</span> <span class="op">!</span><span class="op">=</span> <span class="ident">cfg</span>.<span class="ident">identity</span>)
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">cfg</span>)<span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">connection_sender</span>, <span class="ident">connection_receiver</span>) <span class="op">=</span>
-                    <span class="ident">tokio::sync::mpsc::channel</span>::<span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="number">4</span>);
+            .<span class="ident">filter</span>(|(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="kw">_</span>)| <span class="ident">peer</span> != <span class="ident">cfg</span>.<span class="ident">identity</span>)
+            .<span class="ident">map</span>(|(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">cfg</span>)| {
+                <span class="kw">let</span> (<span class="ident">connection_sender</span>, <span class="ident">connection_receiver</span>) =
+                    <span class="ident">tokio::sync::mpsc::channel</span>::&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">T</span>&gt;&gt;&gt;(<span class="number">4</span>);
                 (
                     (<span class="ident">peer</span>, <span class="ident">connection_sender</span>),
                     (
@@ -835,7 +835,7 @@
             })
             .<span class="ident">unzip</span>();
 
-        <span class="kw">let</span> <span class="ident">listen_task</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident"><span class="self">Self</span>::run_listen_task</span>(
+        <span class="kw">let</span> <span class="ident">listen_task</span> = <span class="ident">tokio::spawn</span>(<span class="ident"><span class="self">Self</span>::run_listen_task</span>(
             <span class="ident">cfg</span>,
             <span class="ident">shared_connector</span>,
             <span class="ident">connection_senders</span>,
@@ -849,24 +849,24 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_listen_task</span>(
         <span class="ident">cfg</span>: <span class="ident">NetworkConfig</span>,
-        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">connection_senders</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">T</span>&gt;&gt;,
+        <span class="kw-2">mut</span> <span class="ident">connection_senders</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">Sender</span>&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">T</span>&gt;&gt;&gt;&gt;,
     ) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">connect</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> = <span class="ident">connect</span>
             .<span class="ident">listen</span>(<span class="ident">cfg</span>.<span class="ident">bind_addr</span>.<span class="ident">clone</span>())
             .<span class="kw">await</span>
             .<span class="ident">expect</span>(<span class="string">&quot;Could not bind port&quot;</span>);
 
         <span class="kw">loop</span> {
-            <span class="kw">let</span> (<span class="ident">peer</span>, <span class="ident">connection</span>) <span class="op">=</span> <span class="kw">match</span> <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener closed&quot;</span>) {
+            <span class="kw">let</span> (<span class="ident">peer</span>, <span class="ident">connection</span>) = <span class="kw">match</span> <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener closed&quot;</span>) {
                 <span class="prelude-val">Ok</span>(<span class="ident">connection</span>) =&gt; <span class="ident">connection</span>,
                 <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; {
-                    <span class="macro">error!</span>(<span class="ident">mint</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">cfg</span>.<span class="ident">identity</span>, <span class="ident">err</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
+                    <span class="macro">error!</span>(<span class="ident">mint</span> = <span class="question-mark">?</span><span class="ident">cfg</span>.<span class="ident">identity</span>, <span class="ident">err</span> = %<span class="ident">e</span>, <span class="string">&quot;Error while opening incoming connection&quot;</span>);
                     <span class="kw">continue</span>;
                 }
             };
 
-            <span class="kw">let</span> <span class="ident">err</span> <span class="op">=</span> <span class="ident">connection_senders</span>
+            <span class="kw">let</span> <span class="ident">err</span> = <span class="ident">connection_senders</span>
                 .<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;Authenticating connectors should not return unknown peers&quot;</span>)
                 .<span class="ident">send</span>(<span class="ident">connection</span>)
@@ -884,26 +884,26 @@
 }
 
 <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">PeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ReconnectPeerConnections</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">PeerConnections</span>&lt;<span class="ident">T</span>&gt; <span class="kw">for</span> <span class="ident">ReconnectPeerConnections</span>&lt;<span class="ident">T</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">std::fmt::Debug</span> <span class="op">+</span> <span class="ident">Serialize</span> <span class="op">+</span> <span class="ident">DeserializeOwned</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+    <span class="ident">T</span>: <span class="ident">std::fmt::Debug</span> + <span class="ident">Serialize</span> + <span class="ident">DeserializeOwned</span> + <span class="ident">Clone</span> + <span class="ident">Unpin</span> + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">target</span>: <span class="ident">Target</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>, <span class="ident">msg</span>: <span class="ident">T</span>) {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">target</span>: <span class="ident">Target</span>&lt;<span class="ident">PeerId</span>&gt;, <span class="ident">msg</span>: <span class="ident">T</span>) {
         <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">target</span>, <span class="string">&quot;Sending message to&quot;</span>);
         <span class="kw">match</span> <span class="ident">target</span> {
             <span class="ident">Target::AllExcept</span>(<span class="ident">not_to</span>) =&gt; {
                 <span class="kw">for</span> (<span class="ident">peer</span>, <span class="ident">connection</span>) <span class="kw">in</span> <span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">connections</span> {
-                    <span class="kw">if</span> <span class="op">!</span><span class="ident">not_to</span>.<span class="ident">contains</span>(<span class="ident">peer</span>) {
+                    <span class="kw">if</span> !<span class="ident">not_to</span>.<span class="ident">contains</span>(<span class="ident">peer</span>) {
                         <span class="ident">connection</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">clone</span>()).<span class="kw">await</span>;
                     }
                 }
             }
             <span class="ident">Target::Nodes</span>(<span class="ident">peer_ids</span>) =&gt; {
                 <span class="kw">for</span> <span class="ident">peer_id</span> <span class="kw">in</span> <span class="ident">peer_ids</span> {
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">peer</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">peer_id</span>) {
+                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">peer</span>) = <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">peer_id</span>) {
                         <span class="ident">peer</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">clone</span>()).<span class="kw">await</span>;
                     } <span class="kw">else</span> {
-                        <span class="macro">trace!</span>(<span class="ident">peer</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">peer_id</span>, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
+                        <span class="macro">trace!</span>(<span class="ident">peer</span> = <span class="question-mark">?</span><span class="ident">peer_id</span>, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
                     }
                 }
             }
@@ -913,9 +913,9 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="ident">PeerId</span>, <span class="ident">T</span>) {
         <span class="comment">// TODO: optimize, don&#39;t throw away remaining futures</span>
 
-        <span class="kw">let</span> <span class="ident">futures_non_banned</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">iter_mut</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">connection</span>)<span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">receive_future</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">connection</span>.<span class="ident">receive</span>().<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">futures_non_banned</span> = <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">iter_mut</span>().<span class="ident">map</span>(|(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">connection</span>)| {
+            <span class="kw">let</span> <span class="ident">receive_future</span> = <span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">connection</span>.<span class="ident">receive</span>().<span class="kw">await</span>;
                 (<span class="ident">peer</span>, <span class="ident">msg</span>)
             };
             <span class="ident">Box::pin</span>(<span class="ident">receive_future</span>)
@@ -930,20 +930,20 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="ident">PeerConnectionStateMachine</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">PeerConnectionStateMachine</span>&lt;<span class="ident">M</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">Clone</span>,
+    <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">Clone</span>,
 {
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run</span>(<span class="kw-2">mut</span> <span class="self">self</span>) {
         <span class="kw">loop</span> {
-            <span class="self">self</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">state_transition</span>().<span class="kw">await</span>;
+            <span class="self">self</span> = <span class="self">self</span>.<span class="ident">state_transition</span>().<span class="kw">await</span>;
         }
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">state_transition</span>(<span class="self">self</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="ident">PeerConnectionStateMachine</span> { <span class="kw-2">mut</span> <span class="ident">common</span>, <span class="ident">state</span> } <span class="op">=</span> <span class="self">self</span>;
+        <span class="kw">let</span> <span class="ident">PeerConnectionStateMachine</span> { <span class="kw-2">mut</span> <span class="ident">common</span>, <span class="ident">state</span> } = <span class="self">self</span>;
 
-        <span class="kw">let</span> <span class="ident">new_state</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">state</span> {
+        <span class="kw">let</span> <span class="ident">new_state</span> = <span class="kw">match</span> <span class="ident">state</span> {
             <span class="ident">PeerConnectionState::Disconnected</span>(<span class="ident">disconnected</span>) =&gt; {
                 <span class="ident">common</span>.<span class="ident">state_transition_disconnected</span>(<span class="ident">disconnected</span>).<span class="kw">await</span>
             }
@@ -959,25 +959,25 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="ident">CommonPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">CommonPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">Clone</span>,
+    <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">Clone</span>,
 {
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">state_transition_connected</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+        <span class="kw-2">mut</span> <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;,
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
         <span class="macro">tokio::select!</span> {
-            <span class="ident">maybe_msg</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outgoing</span>.<span class="ident">recv</span>() =&gt; {
-                <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">maybe_msg</span>.<span class="ident">expect</span>(<span class="string">&quot;Peer connection was dropped&quot;</span>);
+            <span class="ident">maybe_msg</span> = <span class="self">self</span>.<span class="ident">outgoing</span>.<span class="ident">recv</span>() =&gt; {
+                <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">maybe_msg</span>.<span class="ident">expect</span>(<span class="string">&quot;Peer connection was dropped&quot;</span>);
                 <span class="self">self</span>.<span class="ident">send_message_connected</span>(<span class="ident">connected</span>, <span class="ident">msg</span>).<span class="kw">await</span>
             },
-            <span class="ident">new_connection_res</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">incoming_connections</span>.<span class="ident">recv</span>() =&gt; {
-                <span class="kw">let</span> <span class="ident">new_connection</span> <span class="op">=</span> <span class="ident">new_connection_res</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener task died&quot;</span>);
+            <span class="ident">new_connection_res</span> = <span class="self">self</span>.<span class="ident">incoming_connections</span>.<span class="ident">recv</span>() =&gt; {
+                <span class="kw">let</span> <span class="ident">new_connection</span> = <span class="ident">new_connection_res</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener task died&quot;</span>);
                 <span class="macro">warn!</span>(<span class="string">&quot;Replacing existing connection&quot;</span>);
                 <span class="self">self</span>.<span class="ident">connect</span>(<span class="ident">new_connection</span>, <span class="number">0</span>).<span class="kw">await</span>
             },
-            <span class="prelude-val">Some</span>(<span class="ident">msg_res</span>) <span class="op">=</span> <span class="ident">connected</span>.<span class="ident">connection</span>.<span class="ident">next</span>() =&gt; {
+            <span class="prelude-val">Some</span>(<span class="ident">msg_res</span>) = <span class="ident">connected</span>.<span class="ident">connection</span>.<span class="ident">next</span>() =&gt; {
                 <span class="self">self</span>.<span class="ident">receive_message</span>(<span class="ident">connected</span>, <span class="ident">msg_res</span>).<span class="kw">await</span>
             },
         }
@@ -985,10 +985,10 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">new_connection</span>: <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">new_connection</span>: <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
         <span class="ident">disconnect_count</span>: <span class="ident">u64</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="macro">debug!</span>(<span class="ident">peer</span> <span class="op">=</span> <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="string">&quot;Received incoming connection&quot;</span>);
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="macro">debug!</span>(<span class="ident">peer</span> = <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="string">&quot;Received incoming connection&quot;</span>);
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">resend_buffer_contents</span>(<span class="kw-2">&amp;mut</span> <span class="ident">new_connection</span>).<span class="kw">await</span> {
             <span class="prelude-val">Ok</span>(()) =&gt; <span class="ident">PeerConnectionState::Connected</span>(<span class="ident">ConnectedPeerConnectionState</span> {
                 <span class="ident">connection</span>: <span class="ident">new_connection</span>,
@@ -999,8 +999,8 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">resend_buffer_contents</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">connection</span>: <span class="kw-2">&amp;mut</span> <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">anyhow::Error</span><span class="op">&gt;</span> {
+        <span class="ident">connection</span>: <span class="kw-2">&amp;mut</span> <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">anyhow::Error</span>&gt; {
         <span class="kw">for</span> <span class="ident">msg</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">iter</span>().<span class="ident">cloned</span>() {
             <span class="ident">connection</span>
                 .<span class="ident">send</span>(<span class="ident">PeerMessage</span> {
@@ -1013,14 +1013,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn</span> <span class="ident">disconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">disconnect_count</span>: <span class="ident">u64</span>) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="ident">disconnect_count</span> <span class="op">+</span><span class="op">=</span> <span class="number">1</span>;
+    <span class="kw">fn</span> <span class="ident">disconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">disconnect_count</span>: <span class="ident">u64</span>) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="ident">disconnect_count</span> += <span class="number">1</span>;
 
-        <span class="kw">let</span> <span class="ident">reconnect_at</span> <span class="op">=</span> {
-            <span class="kw">let</span> <span class="ident">scaling_factor</span> <span class="op">=</span> <span class="ident">disconnect_count</span> <span class="kw">as</span> <span class="ident">f64</span>;
-            <span class="kw">let</span> <span class="ident">delay</span>: <span class="ident">f64</span> <span class="op">=</span> <span class="ident">thread_rng</span>().<span class="ident">gen_range</span>(<span class="number">1.0</span> <span class="op">*</span> <span class="ident">scaling_factor</span>, <span class="number">4.0</span> <span class="op">*</span> <span class="ident">scaling_factor</span>);
+        <span class="kw">let</span> <span class="ident">reconnect_at</span> = {
+            <span class="kw">let</span> <span class="ident">scaling_factor</span> = <span class="ident">disconnect_count</span> <span class="kw">as</span> <span class="ident">f64</span>;
+            <span class="kw">let</span> <span class="ident">delay</span>: <span class="ident">f64</span> = <span class="ident">thread_rng</span>().<span class="ident">gen_range</span>(<span class="number">1.0</span> * <span class="ident">scaling_factor</span>, <span class="number">4.0</span> * <span class="ident">scaling_factor</span>);
             <span class="macro">debug!</span>(<span class="ident">delay</span>, <span class="string">&quot;Scheduling reopening of connection&quot;</span>);
-            <span class="ident">Instant::now</span>() <span class="op">+</span> <span class="ident">Duration::from_secs_f64</span>(<span class="ident">delay</span>)
+            <span class="ident">Instant::now</span>() + <span class="ident">Duration::from_secs_f64</span>(<span class="ident">delay</span>)
         };
 
         <span class="ident">PeerConnectionState::Disconnected</span>(<span class="ident">DisconnectedPeerConnectionState</span> {
@@ -1029,18 +1029,18 @@
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">disconnect_err</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">err</span>: <span class="ident">anyhow::Error</span>, <span class="ident">disconnect_count</span>: <span class="ident">u64</span>) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="macro">warn!</span>(<span class="ident">peer</span> <span class="op">=</span> <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="op">%</span><span class="ident">err</span>, <span class="op">%</span><span class="ident">disconnect_count</span>, <span class="string">&quot;Some error occurred, disconnecting&quot;</span>);
+    <span class="kw">fn</span> <span class="ident">disconnect_err</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">err</span>: <span class="ident">anyhow::Error</span>, <span class="ident">disconnect_count</span>: <span class="ident">u64</span>) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="macro">warn!</span>(<span class="ident">peer</span> = <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, %<span class="ident">err</span>, %<span class="ident">disconnect_count</span>, <span class="string">&quot;Some error occurred, disconnecting&quot;</span>);
         <span class="self">self</span>.<span class="ident">disconnect</span>(<span class="ident">disconnect_count</span>)
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">send_message_connected</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;,
         <span class="ident">msg</span>: <span class="ident">M</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">umsg</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">push</span>(<span class="ident">msg</span>);
-        <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="ident">id</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">umsg</span>.<span class="ident">id</span>, <span class="string">&quot;Sending outgoing message&quot;</span>);
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="kw">let</span> <span class="ident">umsg</span> = <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">push</span>(<span class="ident">msg</span>);
+        <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="ident">id</span> = <span class="question-mark">?</span><span class="ident">umsg</span>.<span class="ident">id</span>, <span class="string">&quot;Sending outgoing message&quot;</span>);
 
         <span class="kw">match</span> <span class="ident">connected</span>
             .<span class="ident">connection</span>
@@ -1057,9 +1057,9 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive_message</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-        <span class="ident">msg_res</span>: <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+        <span class="ident">connected</span>: <span class="ident">ConnectedPeerConnectionState</span>&lt;<span class="ident">M</span>&gt;,
+        <span class="ident">msg_res</span>: <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt;,
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">receive_message_inner</span>(<span class="ident">msg_res</span>).<span class="kw">await</span> {
             <span class="prelude-val">Ok</span>(()) =&gt; <span class="ident">PeerConnectionState::Connected</span>(<span class="ident">connected</span>),
             <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="self">self</span>.<span class="ident">disconnect_err</span>(<span class="ident">e</span>, <span class="number">0</span>),
@@ -1068,29 +1068,29 @@
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive_message_inner</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">msg_res</span>: <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">anyhow::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">PeerMessage</span> { <span class="ident">msg</span>, <span class="ident">ack</span> } <span class="op">=</span> <span class="ident">msg_res</span><span class="question-mark">?</span>;
-        <span class="macro">trace!</span>(<span class="ident">peer</span> <span class="op">=</span> <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="ident">id</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received incoming message&quot;</span>);
+        <span class="ident">msg_res</span>: <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">anyhow::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">PeerMessage</span> { <span class="ident">msg</span>, <span class="ident">ack</span> } = <span class="ident">msg_res</span><span class="question-mark">?</span>;
+        <span class="macro">trace!</span>(<span class="ident">peer</span> = <span class="question-mark">?</span><span class="self">self</span>.<span class="ident">peer</span>, <span class="ident">id</span> = <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received incoming message&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">expected</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">expected</span> = <span class="self">self</span>
             .<span class="ident">last_received</span>
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">last_id</span><span class="op">|</span> <span class="ident">last_id</span>.<span class="ident">increment</span>())
+            .<span class="ident">map</span>(|<span class="ident">last_id</span>| <span class="ident">last_id</span>.<span class="ident">increment</span>())
             .<span class="ident">unwrap_or</span>(<span class="ident">MessageId</span>(<span class="number">1</span>));
 
-        <span class="kw">if</span> <span class="ident">msg</span>.<span class="ident">id</span> <span class="op">&lt;</span> <span class="ident">expected</span> {
-            <span class="macro">debug!</span>(<span class="question-mark">?</span><span class="ident">expected</span>, <span class="ident">received</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received old message&quot;</span>);
+        <span class="kw">if</span> <span class="ident">msg</span>.<span class="ident">id</span> &lt; <span class="ident">expected</span> {
+            <span class="macro">debug!</span>(<span class="question-mark">?</span><span class="ident">expected</span>, <span class="ident">received</span> = <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received old message&quot;</span>);
             <span class="kw">return</span> <span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">if</span> <span class="ident">msg</span>.<span class="ident">id</span> <span class="op">&gt;</span> <span class="ident">expected</span> {
-            <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">expected</span>, <span class="ident">received</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received message from the future&quot;</span>);
+        <span class="kw">if</span> <span class="ident">msg</span>.<span class="ident">id</span> &gt; <span class="ident">expected</span> {
+            <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">expected</span>, <span class="ident">received</span> = <span class="question-mark">?</span><span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;Received message from the future&quot;</span>);
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Received message from the future&quot;</span>));
         }
 
         <span class="macro">debug_assert_eq!</span>(<span class="ident">expected</span>, <span class="ident">msg</span>.<span class="ident">id</span>, <span class="string">&quot;someone removed the check above&quot;</span>);
-        <span class="self">self</span>.<span class="ident">last_received</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">expected</span>);
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">ack</span>) <span class="op">=</span> <span class="ident">ack</span> {
+        <span class="self">self</span>.<span class="ident">last_received</span> = <span class="prelude-val">Some</span>(<span class="ident">expected</span>);
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">ack</span>) = <span class="ident">ack</span> {
             <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">ack</span>(<span class="ident">ack</span>);
         }
 
@@ -1105,17 +1105,17 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">state_transition_disconnected</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">disconnected</span>: <span class="ident">DisconnectedPeerConnectionState</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
         <span class="macro">tokio::select!</span> {
-            <span class="ident">maybe_msg</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">outgoing</span>.<span class="ident">recv</span>() =&gt; {
-                <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">maybe_msg</span>.<span class="ident">expect</span>(<span class="string">&quot;Peer connection was dropped&quot;</span>);
+            <span class="ident">maybe_msg</span> = <span class="self">self</span>.<span class="ident">outgoing</span>.<span class="ident">recv</span>() =&gt; {
+                <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">maybe_msg</span>.<span class="ident">expect</span>(<span class="string">&quot;Peer connection was dropped&quot;</span>);
                 <span class="self">self</span>.<span class="ident">send_message</span>(<span class="ident">disconnected</span>, <span class="ident">msg</span>).<span class="kw">await</span>
             },
-            <span class="ident">new_connection_res</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">incoming_connections</span>.<span class="ident">recv</span>() =&gt; {
-                <span class="kw">let</span> <span class="ident">new_connection</span> <span class="op">=</span> <span class="ident">new_connection_res</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener task died&quot;</span>);
+            <span class="ident">new_connection_res</span> = <span class="self">self</span>.<span class="ident">incoming_connections</span>.<span class="ident">recv</span>() =&gt; {
+                <span class="kw">let</span> <span class="ident">new_connection</span> = <span class="ident">new_connection_res</span>.<span class="ident">expect</span>(<span class="string">&quot;Listener task died&quot;</span>);
                 <span class="self">self</span>.<span class="ident">receive_connection</span>(<span class="ident">disconnected</span>, <span class="ident">new_connection</span>).<span class="kw">await</span>
             },
-            () <span class="op">=</span> <span class="ident">tokio::time::sleep_until</span>(<span class="ident">disconnected</span>.<span class="ident">reconnect_at</span>) =&gt; {
+            () = <span class="ident">tokio::time::sleep_until</span>(<span class="ident">disconnected</span>.<span class="ident">reconnect_at</span>) =&gt; {
                 <span class="self">self</span>.<span class="ident">reconnect</span>(<span class="ident">disconnected</span>).<span class="kw">await</span>
             }
         }
@@ -1125,17 +1125,17 @@
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">disconnected</span>: <span class="ident">DisconnectedPeerConnectionState</span>,
         <span class="ident">msg</span>: <span class="ident">M</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">umsg</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">push</span>(<span class="ident">msg</span>);
-        <span class="macro">trace!</span>(<span class="ident">id</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">umsg</span>.<span class="ident">id</span>, <span class="string">&quot;Queueing outgoing message&quot;</span>);
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="kw">let</span> <span class="ident">umsg</span> = <span class="self">self</span>.<span class="ident">resend_queue</span>.<span class="ident">push</span>(<span class="ident">msg</span>);
+        <span class="macro">trace!</span>(<span class="ident">id</span> = <span class="question-mark">?</span><span class="ident">umsg</span>.<span class="ident">id</span>, <span class="string">&quot;Queueing outgoing message&quot;</span>);
         <span class="ident">PeerConnectionState::Disconnected</span>(<span class="ident">disconnected</span>)
     }
 
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">receive_connection</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">disconnect</span>: <span class="ident">DisconnectedPeerConnectionState</span>,
-        <span class="ident">new_connection</span>: <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+        <span class="ident">new_connection</span>: <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
         <span class="self">self</span>.<span class="ident">connect</span>(<span class="ident">new_connection</span>, <span class="ident">disconnect</span>.<span class="ident">failed_reconnect_counter</span>)
             .<span class="kw">await</span>
     }
@@ -1143,7 +1143,7 @@
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">reconnect</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">disconnected</span>: <span class="ident">DisconnectedPeerConnectionState</span>,
-    ) -&gt; <span class="ident">PeerConnectionState</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="ident">PeerConnectionState</span>&lt;<span class="ident">M</span>&gt; {
         <span class="kw">match</span> <span class="self">self</span>.<span class="ident">try_reconnect</span>().<span class="kw">await</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">conn</span>) =&gt; {
                 <span class="self">self</span>.<span class="ident">connect</span>(<span class="ident">conn</span>, <span class="ident">disconnected</span>.<span class="ident">failed_reconnect_counter</span>)
@@ -1153,12 +1153,12 @@
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">try_reconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span> {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">try_reconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;, <span class="ident">anyhow::Error</span>&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Trying to reconnect&quot;</span>);
-        <span class="kw">let</span> <span class="ident">addr</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">addr</span>;
-        <span class="kw">let</span> (<span class="ident">connected_peer</span>, <span class="ident">conn</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">connect</span>.<span class="ident">connect_framed</span>(<span class="ident">addr</span>.<span class="ident">clone</span>(), <span class="self">self</span>.<span class="ident">peer</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">addr</span> = <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">addr</span>;
+        <span class="kw">let</span> (<span class="ident">connected_peer</span>, <span class="ident">conn</span>) = <span class="self">self</span>.<span class="ident">connect</span>.<span class="ident">connect_framed</span>(<span class="ident">addr</span>.<span class="ident">clone</span>(), <span class="self">self</span>.<span class="ident">peer</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">connected_peer</span> <span class="op">==</span> <span class="self">self</span>.<span class="ident">peer</span> {
+        <span class="kw">if</span> <span class="ident">connected_peer</span> == <span class="self">self</span>.<span class="ident">peer</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">conn</span>)
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
@@ -1169,20 +1169,20 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="ident">PeerConnection</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">PeerConnection</span>&lt;<span class="ident">M</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+    <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">Clone</span> + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="lifetime">&#39;static</span>,
 {
     <span class="kw">fn</span> <span class="ident">new</span>(
         <span class="ident">id</span>: <span class="ident">PeerId</span>,
         <span class="ident">cfg</span>: <span class="ident">ConnectionConfig</span>,
-        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="ident">PeerConnection</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> (<span class="ident">outgoing_sender</span>, <span class="ident">outgoing_receiver</span>) <span class="op">=</span> <span class="ident">tokio::sync::mpsc::channel</span>::<span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>(<span class="number">1024</span>);
-        <span class="kw">let</span> (<span class="ident">incoming_sender</span>, <span class="ident">incoming_receiver</span>) <span class="op">=</span> <span class="ident">tokio::sync::mpsc::channel</span>::<span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>(<span class="number">1024</span>);
+        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
+        <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span>&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;&gt;,
+    ) -&gt; <span class="ident">PeerConnection</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="kw">let</span> (<span class="ident">outgoing_sender</span>, <span class="ident">outgoing_receiver</span>) = <span class="ident">tokio::sync::mpsc::channel</span>::&lt;<span class="ident">M</span>&gt;(<span class="number">1024</span>);
+        <span class="kw">let</span> (<span class="ident">incoming_sender</span>, <span class="ident">incoming_receiver</span>) = <span class="ident">tokio::sync::mpsc::channel</span>::&lt;<span class="ident">M</span>&gt;(<span class="number">1024</span>);
 
-        <span class="kw">let</span> <span class="ident">io_thread</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident"><span class="self">Self</span>::run_io_thread</span>(
+        <span class="kw">let</span> <span class="ident">io_thread</span> = <span class="ident">tokio::spawn</span>(<span class="ident"><span class="self">Self</span>::run_io_thread</span>(
             <span class="ident">incoming_sender</span>,
             <span class="ident">outgoing_receiver</span>,
             <span class="ident">id</span>,
@@ -1208,14 +1208,14 @@
 
     <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="ident">peer</span>))]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_io_thread</span>(
-        <span class="ident">incoming</span>: <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
-        <span class="ident">outgoing</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>,
+        <span class="ident">incoming</span>: <span class="ident">Sender</span>&lt;<span class="ident">M</span>&gt;,
+        <span class="ident">outgoing</span>: <span class="ident">Receiver</span>&lt;<span class="ident">M</span>&gt;,
         <span class="ident">peer</span>: <span class="ident">PeerId</span>,
         <span class="ident">cfg</span>: <span class="ident">ConnectionConfig</span>,
-        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-        <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span><span class="op">&lt;</span><span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">PeerMessage</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">connect</span>: <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;,
+        <span class="ident">incoming_connections</span>: <span class="ident">Receiver</span>&lt;<span class="ident">AnyFramedTransport</span>&lt;<span class="ident">PeerMessage</span>&lt;<span class="ident">M</span>&gt;&gt;&gt;,
     ) {
-        <span class="kw">let</span> <span class="ident">common</span> <span class="op">=</span> <span class="ident">CommonPeerConnectionState</span> {
+        <span class="kw">let</span> <span class="ident">common</span> = <span class="ident">CommonPeerConnectionState</span> {
             <span class="ident">resend_queue</span>: <span class="ident">Default::default</span>(),
             <span class="ident">incoming</span>,
             <span class="ident">outgoing</span>,
@@ -1225,9 +1225,9 @@
             <span class="ident">incoming_connections</span>,
             <span class="ident">last_received</span>: <span class="prelude-val">None</span>,
         };
-        <span class="kw">let</span> <span class="ident">initial_state</span> <span class="op">=</span> <span class="ident">common</span>.<span class="ident">disconnect</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="ident">initial_state</span> = <span class="ident">common</span>.<span class="ident">disconnect</span>(<span class="number">0</span>);
 
-        <span class="kw">let</span> <span class="ident">state_machine</span> <span class="op">=</span> <span class="ident">PeerConnectionStateMachine</span> {
+        <span class="kw">let</span> <span class="ident">state_machine</span> = <span class="ident">PeerConnectionStateMachine</span> {
             <span class="ident">common</span>,
             <span class="ident">state</span>: <span class="ident">initial_state</span>,
         };
@@ -1251,9 +1251,9 @@
     <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
     <span class="kw">use</span> <span class="ident">tracing_subscriber::EnvFilter</span>;
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span><span class="op">&lt;</span><span class="ident">F</span>, <span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span>&lt;<span class="ident">F</span>, <span class="ident">T</span>&gt;(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">T</span>&gt;
     <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span>,
+        <span class="ident">F</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = <span class="ident">T</span>&gt;,
     {
         <span class="ident">tokio::time::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">100</span>), <span class="ident">f</span>).<span class="kw">await</span>.<span class="ident">ok</span>()
     }
@@ -1263,42 +1263,42 @@
         <span class="ident">tracing_subscriber::fmt</span>()
             .<span class="ident">with_env_filter</span>(
                 <span class="ident">EnvFilter::try_from_default_env</span>()
-                    .<span class="ident">unwrap_or_else</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">EnvFilter::new</span>(<span class="string">&quot;info,minimint::net=trace&quot;</span>)),
+                    .<span class="ident">unwrap_or_else</span>(|<span class="kw">_</span>| <span class="ident">EnvFilter::new</span>(<span class="string">&quot;info,minimint::net=trace&quot;</span>)),
             )
             .<span class="ident">init</span>();
 
-        <span class="kw">let</span> <span class="ident">net</span> <span class="op">=</span> <span class="ident">MockNetwork::new</span>();
+        <span class="kw">let</span> <span class="ident">net</span> = <span class="ident">MockNetwork::new</span>();
 
-        <span class="kw">let</span> <span class="ident">peers</span> <span class="op">=</span> [<span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>]
+        <span class="kw">let</span> <span class="ident">peers</span> = [<span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>, <span class="string">&quot;c&quot;</span>]
             .<span class="ident">iter</span>()
             .<span class="ident">enumerate</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">idx</span>, <span class="kw-2">&amp;</span><span class="ident">peer</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">cfg</span> <span class="op">=</span> <span class="ident">ConnectionConfig</span> {
+            .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw-2">&amp;</span><span class="ident">peer</span>)| {
+                <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">ConnectionConfig</span> {
                     <span class="ident">addr</span>: <span class="ident">peer</span>.<span class="ident">to_string</span>(),
                 };
-                (<span class="ident">PeerId::from</span>(<span class="ident">idx</span> <span class="kw">as</span> <span class="ident">u16</span> <span class="op">+</span> <span class="number">1</span>), <span class="ident">cfg</span>)
+                (<span class="ident">PeerId::from</span>(<span class="ident">idx</span> <span class="kw">as</span> <span class="ident">u16</span> + <span class="number">1</span>), <span class="ident">cfg</span>)
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">HashMap</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">peers_ref</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">peers</span>;
-        <span class="kw">let</span> <span class="ident">net_ref</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">net</span>;
-        <span class="kw">let</span> <span class="ident">build_peers</span> <span class="op">=</span> <span class="op">|</span><span class="ident">bind</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="ident">id</span>: <span class="ident">u16</span><span class="op">|</span> <span class="kw">async</span> <span class="kw">move</span> {
-            <span class="kw">let</span> <span class="ident">cfg</span> <span class="op">=</span> <span class="ident">NetworkConfig</span> {
+        <span class="kw">let</span> <span class="ident">peers_ref</span> = <span class="kw-2">&amp;</span><span class="ident">peers</span>;
+        <span class="kw">let</span> <span class="ident">net_ref</span> = <span class="kw-2">&amp;</span><span class="ident">net</span>;
+        <span class="kw">let</span> <span class="ident">build_peers</span> = |<span class="ident">bind</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="ident">id</span>: <span class="ident">u16</span>| <span class="kw">async</span> <span class="kw">move</span> {
+            <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">NetworkConfig</span> {
                 <span class="ident">identity</span>: <span class="ident">PeerId::from</span>(<span class="ident">id</span>),
                 <span class="ident">bind_addr</span>: <span class="ident">bind</span>.<span class="ident">to_string</span>(),
                 <span class="ident">peers</span>: <span class="ident">peers_ref</span>.<span class="ident">clone</span>(),
             };
-            <span class="kw">let</span> <span class="ident">connect</span> <span class="op">=</span> <span class="ident">net_ref</span>.<span class="ident">connector</span>(<span class="ident">cfg</span>.<span class="ident">identity</span>).<span class="ident">to_any</span>();
-            <span class="ident">ReconnectPeerConnections</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="ident">cfg</span>, <span class="ident">connect</span>).<span class="kw">await</span>
+            <span class="kw">let</span> <span class="ident">connect</span> = <span class="ident">net_ref</span>.<span class="ident">connector</span>(<span class="ident">cfg</span>.<span class="ident">identity</span>).<span class="ident">to_any</span>();
+            <span class="ident">ReconnectPeerConnections</span>::&lt;<span class="ident">u64</span>&gt;<span class="ident">::new</span>(<span class="ident">cfg</span>, <span class="ident">connect</span>).<span class="kw">await</span>
         };
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_a</span> <span class="op">=</span> <span class="ident">build_peers</span>(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_b</span> <span class="op">=</span> <span class="ident">build_peers</span>(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>).<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_a</span> = <span class="ident">build_peers</span>(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_b</span> = <span class="ident">build_peers</span>(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>).<span class="kw">await</span>;
 
         <span class="ident">peers_a</span>
             .<span class="ident">send</span>(<span class="ident">Target::Nodes</span>(<span class="ident">BTreeSet::from_iter</span>([<span class="ident">PeerId::from</span>(<span class="number">2</span>)])), <span class="number">42</span>)
             .<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="ident">recv</span> <span class="op">=</span> <span class="ident">timeout</span>(<span class="ident">peers_b</span>.<span class="ident">receive</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">recv</span> = <span class="ident">timeout</span>(<span class="ident">peers_b</span>.<span class="ident">receive</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">recv</span>.<span class="number">0</span>, <span class="ident">PeerId::from</span>(<span class="number">1</span>));
         <span class="macro">assert_eq!</span>(<span class="ident">recv</span>.<span class="number">1</span>, <span class="number">42</span>);
 
@@ -1306,11 +1306,11 @@
             .<span class="ident">send</span>(<span class="ident">Target::Nodes</span>(<span class="ident">BTreeSet::from_iter</span>([<span class="ident">PeerId::from</span>(<span class="number">3</span>)])), <span class="number">21</span>)
             .<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_c</span> <span class="op">=</span> <span class="ident">build_peers</span>(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>).<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="ident">recv</span> <span class="op">=</span> <span class="ident">timeout</span>(<span class="ident">peers_c</span>.<span class="ident">receive</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peers_c</span> = <span class="ident">build_peers</span>(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>).<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">recv</span> = <span class="ident">timeout</span>(<span class="ident">peers_c</span>.<span class="ident">receive</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">recv</span>.<span class="number">0</span>, <span class="ident">PeerId::from</span>(<span class="number">1</span>));
         <span class="macro">assert_eq!</span>(<span class="ident">recv</span>.<span class="number">1</span>, <span class="number">21</span>);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

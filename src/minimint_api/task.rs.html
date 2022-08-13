@@ -99,20 +99,20 @@
 <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;deadline has elapsed&quot;</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Elapsed</span>;
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">target_family</span> <span class="op">=</span> <span class="string">&quot;wasm&quot;</span>))]</span>
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>))]</span>
 <span class="kw">mod</span> <span class="ident">imp</span> {
     <span class="kw">use</span> <span class="kw">super</span>::<span class="kw-2">*</span>;
 
     <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tokio::sync</span>::{<span class="ident">RwLock</span>, <span class="ident">RwLockReadGuard</span>, <span class="ident">RwLockWriteGuard</span>};
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spawn</span><span class="op">&lt;</span><span class="ident">F</span><span class="op">&gt;</span>(<span class="ident">future</span>: <span class="ident">F</span>)
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spawn</span>&lt;<span class="ident">F</span>&gt;(<span class="ident">future</span>: <span class="ident">F</span>)
     <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> ()<span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="ident">F</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = ()&gt; + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
     {
         <span class="ident">tokio::spawn</span>(<span class="ident">future</span>);
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">block_in_place</span><span class="op">&lt;</span><span class="ident">F</span>, <span class="ident">R</span><span class="op">&gt;</span>(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="ident">R</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">block_in_place</span>&lt;<span class="ident">F</span>, <span class="ident">R</span>&gt;(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="ident">R</span>
     <span class="kw">where</span>
         <span class="ident">F</span>: <span class="ident">FnOnce</span>() -&gt; <span class="ident">R</span>,
     {
@@ -127,17 +127,17 @@
         <span class="ident">tokio::time::sleep_until</span>(<span class="ident">deadline</span>.<span class="ident">into</span>()).<span class="kw">await</span>
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">duration</span>: <span class="ident">Duration</span>, <span class="ident">future</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T::Output</span>, <span class="ident">Elapsed</span><span class="op">&gt;</span>
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span>&lt;<span class="ident">T</span>&gt;(<span class="ident">duration</span>: <span class="ident">Duration</span>, <span class="ident">future</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">T::Output</span>, <span class="ident">Elapsed</span>&gt;
     <span class="kw">where</span>
         <span class="ident">T</span>: <span class="ident">Future</span>,
     {
         <span class="ident">tokio::time::timeout</span>(<span class="ident">duration</span>, <span class="ident">future</span>)
             .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">Elapsed</span>)
+            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">Elapsed</span>)
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">target_family</span> <span class="op">=</span> <span class="string">&quot;wasm&quot;</span>)]</span>
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>)]</span>
 <span class="kw">mod</span> <span class="ident">imp</span> {
     <span class="kw">use</span> <span class="ident">futures::FutureExt</span>;
 
@@ -145,15 +145,15 @@
 
     <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">async_lock</span>::{<span class="ident">RwLock</span>, <span class="ident">RwLockReadGuard</span>, <span class="ident">RwLockWriteGuard</span>};
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spawn</span><span class="op">&lt;</span><span class="ident">F</span><span class="op">&gt;</span>(<span class="ident">future</span>: <span class="ident">F</span>)
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spawn</span>&lt;<span class="ident">F</span>&gt;(<span class="ident">future</span>: <span class="ident">F</span>)
     <span class="kw">where</span>
         <span class="comment">// No Send needed on wasm</span>
-        <span class="ident">F</span>: <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> ()<span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="ident">F</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = ()&gt; + <span class="lifetime">&#39;static</span>,
     {
         <span class="ident">wasm_bindgen_futures::spawn_local</span>(<span class="ident">future</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">block_in_place</span><span class="op">&lt;</span><span class="ident">F</span>, <span class="ident">R</span><span class="op">&gt;</span>(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="ident">R</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">block_in_place</span>&lt;<span class="ident">F</span>, <span class="ident">R</span>&gt;(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="ident">R</span>
     <span class="kw">where</span>
         <span class="ident">F</span>: <span class="ident">FnOnce</span>() -&gt; <span class="ident">R</span>,
     {
@@ -169,18 +169,18 @@
         <span class="ident">gloo_timers::future::sleep</span>(<span class="ident">deadline</span>.<span class="ident">saturating_duration_since</span>(<span class="ident">Instant::now</span>())).<span class="kw">await</span>
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">duration</span>: <span class="ident">Duration</span>, <span class="ident">future</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T::Output</span>, <span class="ident">Elapsed</span><span class="op">&gt;</span>
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span>&lt;<span class="ident">T</span>&gt;(<span class="ident">duration</span>: <span class="ident">Duration</span>, <span class="ident">future</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">T::Output</span>, <span class="ident">Elapsed</span>&gt;
     <span class="kw">where</span>
         <span class="ident">T</span>: <span class="ident">Future</span>,
     {
         <span class="macro">futures::pin_mut!</span>(<span class="ident">future</span>);
         <span class="macro">futures::select_biased!</span> {
-            <span class="ident">value</span> <span class="op">=</span> <span class="ident">future</span>.<span class="ident">fuse</span>() =&gt; <span class="prelude-val">Ok</span>(<span class="ident">value</span>),
-            <span class="kw">_</span> <span class="op">=</span> <span class="ident">sleep</span>(<span class="ident">duration</span>).<span class="ident">fuse</span>() =&gt; <span class="prelude-val">Err</span>(<span class="ident">Elapsed</span>),
+            <span class="ident">value</span> = <span class="ident">future</span>.<span class="ident">fuse</span>() =&gt; <span class="prelude-val">Ok</span>(<span class="ident">value</span>),
+            <span class="kw">_</span> = <span class="ident">sleep</span>(<span class="ident">duration</span>).<span class="ident">fuse</span>() =&gt; <span class="prelude-val">Err</span>(<span class="ident">Elapsed</span>),
         }
     }
 }
 
 <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">imp</span>::<span class="kw-2">*</span>;
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

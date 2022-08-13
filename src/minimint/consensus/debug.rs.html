@@ -100,12 +100,12 @@
 
 <span class="doccomment">/// outputs a useful debug message for epochs indicating what happened</span>
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">epoch_message</span>(<span class="ident">consensus</span>: <span class="kw-2">&amp;</span><span class="ident">ConsensusOutcome</span>) -&gt; <span class="ident">String</span> {
-    <span class="kw">let</span> <span class="ident">peers</span> <span class="op">=</span> <span class="ident">consensus</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>();
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">debug</span> <span class="op">=</span> <span class="macro">format!</span>(<span class="string">&quot;\n- Epoch: {} {:?} -&quot;</span>, <span class="ident">consensus</span>.<span class="ident">epoch</span>, <span class="ident">peers</span>);
+    <span class="kw">let</span> <span class="ident">peers</span> = <span class="ident">consensus</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>();
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">debug</span> = <span class="macro">format!</span>(<span class="string">&quot;\n- Epoch: {} {:?} -&quot;</span>, <span class="ident">consensus</span>.<span class="ident">epoch</span>, <span class="ident">peers</span>);
 
     <span class="kw">for</span> (<span class="ident">peer</span>, <span class="ident">items</span>) <span class="kw">in</span> <span class="ident">consensus</span>.<span class="ident">contributions</span>.<span class="ident">iter</span>() {
         <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="ident">items</span> {
-            <span class="kw">let</span> <span class="ident">item_debug</span> <span class="op">=</span> <span class="ident">item_message</span>(<span class="ident">item</span>);
+            <span class="kw">let</span> <span class="ident">item_debug</span> = <span class="ident">item_message</span>(<span class="ident">item</span>);
             <span class="macro">write!</span>(<span class="ident">debug</span>, <span class="string">&quot;\n  Peer {}: {}&quot;</span>, <span class="ident">peer</span>, <span class="ident">item_debug</span>).<span class="ident">unwrap</span>();
         }
     }
@@ -139,9 +139,9 @@
         <span class="ident">ConsensusItem::Transaction</span>(<span class="ident">Transaction</span> {
             <span class="ident">inputs</span>, <span class="ident">outputs</span>, ..
         }) =&gt; {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_debug</span> <span class="op">=</span> <span class="string">&quot;Transaction&quot;</span>.<span class="ident">to_string</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_debug</span> = <span class="string">&quot;Transaction&quot;</span>.<span class="ident">to_string</span>();
             <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="ident">inputs</span>.<span class="ident">iter</span>() {
-                <span class="kw">let</span> <span class="ident">input_debug</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">input</span> {
+                <span class="kw">let</span> <span class="ident">input_debug</span> = <span class="kw">match</span> <span class="ident">input</span> {
                     <span class="ident">Input::Mint</span>(<span class="ident">t</span>) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Mint Coins {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>()),
                     <span class="ident">Input::Wallet</span>(<span class="ident">t</span>) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;Wallet PegIn with TxId {}&quot;</span>, <span class="ident">t</span>.<span class="ident">outpoint</span>().<span class="ident">txid</span>)
@@ -153,7 +153,7 @@
                 <span class="macro">write!</span>(<span class="ident">tx_debug</span>, <span class="string">&quot;\n    Input: {}&quot;</span>, <span class="ident">input_debug</span>).<span class="ident">unwrap</span>();
             }
             <span class="kw">for</span> <span class="ident">output</span> <span class="kw">in</span> <span class="ident">outputs</span>.<span class="ident">iter</span>() {
-                <span class="kw">let</span> <span class="ident">output_debug</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">output</span> {
+                <span class="kw">let</span> <span class="ident">output_debug</span> = <span class="kw">match</span> <span class="ident">output</span> {
                     <span class="ident">Output::Mint</span>(<span class="ident">t</span>) =&gt; <span class="macro">format!</span>(<span class="string">&quot;Mint Coins {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>()),
                     <span class="ident">Output::Wallet</span>(<span class="ident">t</span>) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;Wallet PegOut {} to address {}&quot;</span>, <span class="ident">t</span>.<span class="ident">amount</span>, <span class="ident">t</span>.<span class="ident">recipient</span>)
@@ -183,4 +183,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

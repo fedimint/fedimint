@@ -394,7 +394,7 @@
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">instrument</span>, <span class="ident">warn</span>};
 <span class="kw">use</span> <span class="ident">webserver::run_webserver</span>;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">LnGatewayError</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt; = <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">LnGatewayError</span>&gt;;
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BalancePayload</span>;
@@ -405,42 +405,42 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DepositPayload</span>(
     <span class="ident">TxOutProof</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">deserialize_with</span> <span class="op">=</span> <span class="string">&quot;serde_hex_deserialize&quot;</span>)]</span> <span class="ident">Transaction</span>,
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">deserialize_with</span> = <span class="string">&quot;serde_hex_deserialize&quot;</span>)]</span> <span class="ident">Transaction</span>,
 );
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Deserialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">WithdrawPayload</span>(
     <span class="ident">Address</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span> <span class="ident">bitcoin::Amount</span>,
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span> <span class="ident">bitcoin::Amount</span>,
 );
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">GatewayRequest</span> {
-    <span class="ident">HtlcAccepted</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">HtlcAccepted</span><span class="op">&gt;</span>),
-    <span class="ident">PayInvoice</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">ContractId</span><span class="op">&gt;</span>),
-    <span class="ident">Balance</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">BalancePayload</span><span class="op">&gt;</span>),
-    <span class="ident">DepositAddress</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">DepositAddressPayload</span><span class="op">&gt;</span>),
-    <span class="ident">Deposit</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">DepositPayload</span><span class="op">&gt;</span>),
-    <span class="ident">Withdraw</span>(<span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">WithdrawPayload</span><span class="op">&gt;</span>),
+    <span class="ident">HtlcAccepted</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">HtlcAccepted</span>&gt;),
+    <span class="ident">PayInvoice</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">ContractId</span>&gt;),
+    <span class="ident">Balance</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">BalancePayload</span>&gt;),
+    <span class="ident">DepositAddress</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">DepositAddressPayload</span>&gt;),
+    <span class="ident">Deposit</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">DepositPayload</span>&gt;),
+    <span class="ident">Withdraw</span>(<span class="ident">GatewayRequestInner</span>&lt;<span class="ident">WithdrawPayload</span>&gt;),
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">GatewayRequestTrait</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GatewayRequestInner</span>&lt;<span class="ident">R</span>: <span class="ident">GatewayRequestTrait</span>&gt; {
     <span class="ident">request</span>: <span class="ident">R</span>,
-    <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">R::Response</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">R::Response</span>&gt;&gt;,
 }
 
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">GatewayRequestTrait</span> {
     <span class="kw">type</span> <span class="ident">Response</span>;
 
-    <span class="kw">fn</span> <span class="ident">to_enum</span>(<span class="self">self</span>, <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Response</span><span class="op">&gt;</span><span class="op">&gt;</span>) -&gt; <span class="ident">GatewayRequest</span>;
+    <span class="kw">fn</span> <span class="ident">to_enum</span>(<span class="self">self</span>, <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident"><span class="self">Self</span>::Response</span>&gt;&gt;) -&gt; <span class="ident">GatewayRequest</span>;
 }
 
 <span class="macro">macro_rules!</span> <span class="ident">impl_gateway_request_trait</span> {
     (<span class="macro-nonterminal">$</span><span class="macro-nonterminal">req</span>:<span class="ident">ty</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">res</span>:<span class="ident">ty</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">variant</span>:<span class="ident">expr</span>) =&gt; {
         <span class="kw">impl</span> <span class="ident">GatewayRequestTrait</span> <span class="kw">for</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">req</span> {
-            <span class="kw">type</span> <span class="ident">Response</span> <span class="op">=</span> <span class="macro-nonterminal">$</span><span class="macro-nonterminal">res</span>;
-            <span class="kw">fn</span> <span class="ident">to_enum</span>(<span class="self">self</span>, <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span><span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::Response</span><span class="op">&gt;</span><span class="op">&gt;</span>) -&gt; <span class="ident">GatewayRequest</span> {
+            <span class="kw">type</span> <span class="ident">Response</span> = <span class="macro-nonterminal">$</span><span class="macro-nonterminal">res</span>;
+            <span class="kw">fn</span> <span class="ident">to_enum</span>(<span class="self">self</span>, <span class="ident">sender</span>: <span class="ident">oneshot::Sender</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident"><span class="self">Self</span>::Response</span>&gt;&gt;) -&gt; <span class="ident">GatewayRequest</span> {
                 <span class="macro-nonterminal">$</span><span class="macro-nonterminal">variant</span>(<span class="ident">GatewayRequestInner</span> {
                     <span class="ident">request</span>: <span class="self">self</span>,
                     <span class="ident">sender</span>,
@@ -460,13 +460,13 @@
 <span class="macro">impl_gateway_request_trait!</span>(<span class="ident">DepositPayload</span>, <span class="ident">TransactionId</span>, <span class="ident">GatewayRequest::Deposit</span>);
 <span class="macro">impl_gateway_request_trait!</span>(<span class="ident">WithdrawPayload</span>, <span class="ident">TransactionId</span>, <span class="ident">GatewayRequest::Withdraw</span>);
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="ident">GatewayRequestInner</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">GatewayRequestInner</span>&lt;<span class="ident">T</span>&gt;
 <span class="kw">where</span>
     <span class="ident">T</span>: <span class="ident">GatewayRequestTrait</span>,
     <span class="ident">T::Response</span>: <span class="ident">std::fmt::Debug</span>,
 {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle</span><span class="op">&lt;</span><span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">T</span>) -&gt; <span class="ident">FF</span>, <span class="ident">FF</span>: <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T::Response</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>(<span class="self">self</span>, <span class="ident">handler</span>: <span class="ident">F</span>) {
-        <span class="kw">let</span> <span class="ident">result</span> <span class="op">=</span> <span class="ident">handler</span>(<span class="self">self</span>.<span class="ident">request</span>).<span class="kw">await</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle</span>&lt;<span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">T</span>) -&gt; <span class="ident">FF</span>, <span class="ident">FF</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = <span class="prelude-ty">Result</span>&lt;<span class="ident">T::Response</span>&gt;&gt;&gt;(<span class="self">self</span>, <span class="ident">handler</span>: <span class="ident">F</span>) {
+        <span class="kw">let</span> <span class="ident">result</span> = <span class="ident">handler</span>(<span class="self">self</span>.<span class="ident">request</span>).<span class="kw">await</span>;
         <span class="self">self</span>.<span class="ident">sender</span>
             .<span class="ident">send</span>(<span class="ident">result</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;couldn&#39;t send over channel&quot;</span>);
@@ -474,27 +474,27 @@
 }
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LnGateway</span> {
-    <span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>,
-    <span class="ident">ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>,
-    <span class="ident">webserver</span>: <span class="ident">tokio::task::JoinHandle</span><span class="op">&lt;</span><span class="ident">axum::response::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
+    <span class="ident">federation_client</span>: <span class="ident">Arc</span>&lt;<span class="ident">GatewayClient</span>&gt;,
+    <span class="ident">ln_client</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">LnRpc</span>&gt;,
+    <span class="ident">webserver</span>: <span class="ident">tokio::task::JoinHandle</span>&lt;<span class="ident">axum::response::Result</span>&lt;()&gt;&gt;,
+    <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span>&lt;<span class="ident">GatewayRequest</span>&gt;,
 }
 
 <span class="kw">impl</span> <span class="ident">LnGateway</span> {
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(
-        <span class="ident">federation_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">GatewayClient</span><span class="op">&gt;</span>,
-        <span class="ident">ln_client</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span>,
-        <span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
-        <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">ln_client</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">LnRpc</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">ln_client</span>.<span class="ident">into</span>();
+        <span class="ident">federation_client</span>: <span class="ident">Arc</span>&lt;<span class="ident">GatewayClient</span>&gt;,
+        <span class="ident">ln_client</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">LnRpc</span>&gt;,
+        <span class="ident">sender</span>: <span class="ident">mpsc::Sender</span>&lt;<span class="ident">GatewayRequest</span>&gt;,
+        <span class="ident">receiver</span>: <span class="ident">mpsc::Receiver</span>&lt;<span class="ident">GatewayRequest</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let</span> <span class="ident">ln_client</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">LnRpc</span>&gt; = <span class="ident">ln_client</span>.<span class="ident">into</span>();
         <span class="comment">// Regster gateway with federation</span>
         <span class="ident">federation_client</span>
             .<span class="ident">register_with_federation</span>(<span class="ident">federation_client</span>.<span class="ident">config</span>().<span class="ident">into</span>())
             .<span class="kw">await</span>
             .<span class="ident">expect</span>(<span class="string">&quot;Failed to register with federation&quot;</span>);
         <span class="comment">// Run webserver asynchronously in tokio</span>
-        <span class="kw">let</span> <span class="ident">webserver</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="ident">run_webserver</span>(<span class="ident">sender</span>));
+        <span class="kw">let</span> <span class="ident">webserver</span> = <span class="ident">tokio::spawn</span>(<span class="ident">run_webserver</span>(<span class="ident">sender</span>));
         <span class="prelude-val">Ok</span>(<span class="self">Self</span> {
             <span class="ident">federation_client</span>,
             <span class="ident">ln_client</span>,
@@ -507,49 +507,49 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">payment_hash</span>: <span class="kw-2">&amp;</span><span class="ident">Hash</span>,
         <span class="ident">amount</span>: <span class="kw-2">&amp;</span><span class="ident">Amount</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">ContractId</span>)<span class="op">&gt;</span> {
-        <span class="kw">let</span> (<span class="ident">outpoint</span>, <span class="ident">contract_id</span>) <span class="op">=</span> <span class="self">self</span>
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">OutPoint</span>, <span class="ident">ContractId</span>)&gt; {
+        <span class="kw">let</span> (<span class="ident">outpoint</span>, <span class="ident">contract_id</span>) = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">buy_preimage_offer</span>(<span class="ident">payment_hash</span>, <span class="ident">amount</span>, <span class="ident">rng</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((<span class="ident">outpoint</span>, <span class="ident">contract_id</span>))
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_preimage_decryption</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Preimage</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="self">self</span>
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_preimage_decryption</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Preimage</span>&gt; {
+        <span class="kw">let</span> <span class="ident">preimage</span> = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">await_preimage_decryption</span>(<span class="ident">outpoint</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>)
     }
 
-    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="op">%</span><span class="ident">contract_id</span>))]</span>
+    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(%<span class="ident">contract_id</span>))]</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">OutPoint</span><span class="op">&gt;</span> {
+        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Fetching contract&quot;</span>);
-        <span class="kw">let</span> <span class="ident">contract_account</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">contract_account</span> = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">fetch_outgoing_contract</span>(<span class="ident">contract_id</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">payment_params</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">payment_params</span> = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">validate_outgoing_account</span>(<span class="kw-2">&amp;</span><span class="ident">contract_account</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
-            <span class="ident">account</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">contract_account</span>,
+            <span class="ident">account</span> = <span class="question-mark">?</span><span class="ident">contract_account</span>,
             <span class="string">&quot;Fetched and validated contract account&quot;</span>
         );
 
         <span class="self">self</span>.<span class="ident">federation_client</span>
             .<span class="ident">save_outgoing_payment</span>(<span class="ident">contract_account</span>.<span class="ident">clone</span>());
 
-        <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">preimage</span> = <span class="kw">match</span> <span class="self">self</span>
             .<span class="ident">ln_client</span>
             .<span class="ident">pay</span>(
                 <span class="kw-2">&amp;</span><span class="ident">contract_account</span>.<span class="ident">contract</span>.<span class="ident">invoice</span>,
@@ -571,7 +571,7 @@
 
         <span class="comment">// FIXME: figure out how to treat RNGs (maybe include in context?)</span>
         <span class="macro">debug!</span>(<span class="string">&quot;Claiming outgoing contract&quot;</span>);
-        <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">claim_outgoing_contract</span>(<span class="ident">contract_id</span>, <span class="ident">preimage</span>, <span class="ident">rng</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -583,58 +583,58 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
         <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">await_outgoing_contract_claimed</span>(<span class="ident">contract_id</span>, <span class="ident">outpoint</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_pay_invoice_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">pay_invoice</span>(<span class="ident">contract_id</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_pay_invoice_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="self">self</span>.<span class="ident">pay_invoice</span>(<span class="ident">contract_id</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.<span class="ident">await_outgoing_contract_claimed</span>(<span class="ident">contract_id</span>, <span class="ident">outpoint</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_htlc_incoming_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">htlc_accepted</span>: <span class="ident">HtlcAccepted</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Preimage</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="ident">htlc_accepted</span>.<span class="ident">htlc</span>.<span class="ident">amount</span>;
-        <span class="kw">let</span> <span class="ident">payment_hash</span> <span class="op">=</span> <span class="ident">htlc_accepted</span>.<span class="ident">htlc</span>.<span class="ident">payment_hash</span>;
-        <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_htlc_incoming_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">htlc_accepted</span>: <span class="ident">HtlcAccepted</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Preimage</span>&gt; {
+        <span class="kw">let</span> <span class="ident">amount</span> = <span class="ident">htlc_accepted</span>.<span class="ident">htlc</span>.<span class="ident">amount</span>;
+        <span class="kw">let</span> <span class="ident">payment_hash</span> = <span class="ident">htlc_accepted</span>.<span class="ident">htlc</span>.<span class="ident">payment_hash</span>;
+        <span class="kw">let</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
 
         <span class="macro">tracing::debug!</span>(<span class="string">&quot;Incoming htlc for payment hash {}&quot;</span>, <span class="ident">payment_hash</span>);
-        <span class="kw">let</span> (<span class="ident">outpoint</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">buy_preimage_offer</span>(<span class="kw-2">&amp;</span><span class="ident">payment_hash</span>, <span class="kw-2">&amp;</span><span class="ident">amount</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> (<span class="ident">outpoint</span>, <span class="kw">_</span>) = <span class="self">self</span>.<span class="ident">buy_preimage_offer</span>(<span class="kw-2">&amp;</span><span class="ident">payment_hash</span>, <span class="kw-2">&amp;</span><span class="ident">amount</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">tracing::debug!</span>(<span class="string">&quot;Decrypting preimage {}&quot;</span>, <span class="ident">payment_hash</span>);
-        <span class="kw">let</span> <span class="ident">preimage</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">await_preimage_decryption</span>(<span class="ident">outpoint</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">preimage</span> = <span class="self">self</span>.<span class="ident">await_preimage_decryption</span>(<span class="ident">outpoint</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">tracing::debug!</span>(<span class="string">&quot;Decrypted preimage {:?}&quot;</span>, <span class="ident">payment_hash</span>);
 
         <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_balance_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">fetch_results</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_balance_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>&gt; {
+        <span class="kw">let</span> <span class="ident">fetch_results</span> = <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span>;
         <span class="ident">fetch_results</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+            .<span class="ident">collect</span>::&lt;<span class="ident">std::result::Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">coins</span>().<span class="ident">amount</span>())
     }
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_address_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Address</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_address_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Address</span>&gt; {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">get_new_pegin_address</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>))
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_deposit_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">deposit</span>: <span class="ident">DepositPayload</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_deposit_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">deposit</span>: <span class="ident">DepositPayload</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
+        <span class="kw">let</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
         <span class="self">self</span>.<span class="ident">federation_client</span>
             .<span class="ident">peg_in</span>(<span class="ident">deposit</span>.<span class="number">0</span>, <span class="ident">deposit</span>.<span class="number">1</span>, <span class="ident">rng</span>)
             .<span class="kw">await</span>
             .<span class="ident">map_err</span>(<span class="ident">LnGatewayError::ClientError</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_withdraw_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">withdraw</span>: <span class="ident">WithdrawPayload</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">TransactionId</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">peg_out</span> <span class="op">=</span> <span class="self">self</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_withdraw_msg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">withdraw</span>: <span class="ident">WithdrawPayload</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
+        <span class="kw">let</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">peg_out</span> = <span class="self">self</span>
             .<span class="ident">federation_client</span>
             .<span class="ident">new_peg_out_with_fees</span>(<span class="ident">withdraw</span>.<span class="number">1</span>, <span class="ident">withdraw</span>.<span class="number">0</span>)
             .<span class="kw">await</span>
@@ -645,44 +645,44 @@
             .<span class="ident">map_err</span>(<span class="ident">LnGatewayError::ClientError</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted</span>
         <span class="kw">loop</span> {
-            <span class="kw">let</span> <span class="ident">least_wait_until</span> <span class="op">=</span> <span class="ident">Instant::now</span>() <span class="op">+</span> <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
+            <span class="kw">let</span> <span class="ident">least_wait_until</span> = <span class="ident">Instant::now</span>() + <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
             <span class="kw">for</span> <span class="ident">fetch_result</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">federation_client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span> {
-                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="op">=</span> <span class="ident">fetch_result</span> {
-                    <span class="macro">debug!</span>(<span class="ident">error</span> <span class="op">=</span> <span class="op">%</span><span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>)
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>) = <span class="ident">fetch_result</span> {
+                    <span class="macro">debug!</span>(<span class="ident">error</span> = %<span class="ident">e</span>, <span class="string">&quot;Fetching coins failed&quot;</span>)
                 };
             }
 
             <span class="comment">// Handle messages from webserver and plugin</span>
-            <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">msg</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">try_recv</span>() {
+            <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">msg</span>) = <span class="self">self</span>.<span class="ident">receiver</span>.<span class="ident">try_recv</span>() {
                 <span class="macro">tracing::trace!</span>(<span class="string">&quot;Gateway received message {:?}&quot;</span>, <span class="ident">msg</span>);
                 <span class="kw">match</span> <span class="ident">msg</span> {
                     <span class="ident">GatewayRequest::HtlcAccepted</span>(<span class="ident">inner</span>) =&gt; {
                         <span class="ident">inner</span>
-                            .<span class="ident">handle</span>(<span class="op">|</span><span class="ident">htlc_accepted</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_htlc_incoming_msg</span>(<span class="ident">htlc_accepted</span>))
+                            .<span class="ident">handle</span>(|<span class="ident">htlc_accepted</span>| <span class="self">self</span>.<span class="ident">handle_htlc_incoming_msg</span>(<span class="ident">htlc_accepted</span>))
                             .<span class="kw">await</span>;
                     }
                     <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">inner</span>) =&gt; {
                         <span class="ident">inner</span>
-                            .<span class="ident">handle</span>(<span class="op">|</span><span class="ident">contract_id</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_pay_invoice_msg</span>(<span class="ident">contract_id</span>))
+                            .<span class="ident">handle</span>(|<span class="ident">contract_id</span>| <span class="self">self</span>.<span class="ident">handle_pay_invoice_msg</span>(<span class="ident">contract_id</span>))
                             .<span class="kw">await</span>;
                     }
                     <span class="ident">GatewayRequest::Balance</span>(<span class="ident">inner</span>) =&gt; {
-                        <span class="ident">inner</span>.<span class="ident">handle</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_balance_msg</span>()).<span class="kw">await</span>;
+                        <span class="ident">inner</span>.<span class="ident">handle</span>(|<span class="kw">_</span>| <span class="self">self</span>.<span class="ident">handle_balance_msg</span>()).<span class="kw">await</span>;
                     }
                     <span class="ident">GatewayRequest::DepositAddress</span>(<span class="ident">inner</span>) =&gt; {
-                        <span class="ident">inner</span>.<span class="ident">handle</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_address_msg</span>()).<span class="kw">await</span>;
+                        <span class="ident">inner</span>.<span class="ident">handle</span>(|<span class="kw">_</span>| <span class="self">self</span>.<span class="ident">handle_address_msg</span>()).<span class="kw">await</span>;
                     }
                     <span class="ident">GatewayRequest::Deposit</span>(<span class="ident">inner</span>) =&gt; {
                         <span class="ident">inner</span>
-                            .<span class="ident">handle</span>(<span class="op">|</span><span class="ident">deposit</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_deposit_msg</span>(<span class="ident">deposit</span>))
+                            .<span class="ident">handle</span>(|<span class="ident">deposit</span>| <span class="self">self</span>.<span class="ident">handle_deposit_msg</span>(<span class="ident">deposit</span>))
                             .<span class="kw">await</span>;
                     }
                     <span class="ident">GatewayRequest::Withdraw</span>(<span class="ident">inner</span>) =&gt; {
                         <span class="ident">inner</span>
-                            .<span class="ident">handle</span>(<span class="op">|</span><span class="ident">withdraw</span><span class="op">|</span> <span class="self">self</span>.<span class="ident">handle_withdraw_msg</span>(<span class="ident">withdraw</span>))
+                            .<span class="ident">handle</span>(|<span class="ident">withdraw</span>| <span class="self">self</span>.<span class="ident">handle_withdraw_msg</span>(<span class="ident">withdraw</span>))
                             .<span class="kw">await</span>;
                     }
                 }
@@ -696,7 +696,7 @@
 <span class="kw">impl</span> <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">LnGateway</span> {
     <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
         <span class="self">self</span>.<span class="ident">webserver</span>.<span class="ident">abort</span>();
-        <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">futures::executor::block_on</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">webserver</span>);
+        <span class="kw">let</span> <span class="kw">_</span> = <span class="ident">futures::executor::block_on</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">webserver</span>);
     }
 }
 
@@ -710,27 +710,27 @@
     <span class="ident">MintClientE</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">MintClientError</span>),
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serde_hex_deserialize</span><span class="op">&lt;</span><span class="lifetime">&#39;d</span>, <span class="ident">T</span>: <span class="ident">bitcoin::consensus::Decodable</span>, <span class="ident">D</span>: <span class="ident">Deserializer</span><span class="op">&lt;</span><span class="lifetime">&#39;d</span><span class="op">&gt;</span><span class="op">&gt;</span>(
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serde_hex_deserialize</span>&lt;<span class="lifetime">&#39;d</span>, <span class="ident">T</span>: <span class="ident">bitcoin::consensus::Decodable</span>, <span class="ident">D</span>: <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(
     <span class="ident">d</span>: <span class="ident">D</span>,
-) -&gt; <span class="ident">std::result::Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">D::Error</span><span class="op">&gt;</span> {
+) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">D::Error</span>&gt; {
     <span class="kw">if</span> <span class="ident">d</span>.<span class="ident">is_human_readable</span>() {
-        <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="ident">hex::decode</span>::<span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span>(<span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
+        <span class="kw">let</span> <span class="ident">bytes</span> = <span class="ident">hex::decode</span>::&lt;<span class="ident">String</span>&gt;(<span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
             .<span class="ident">map_err</span>(<span class="ident">serde::de::Error::custom</span>)<span class="question-mark">?</span>;
         <span class="ident">T::consensus_decode</span>(<span class="ident">Cursor::new</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>))
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">serde::de::Error::custom</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>)))
+            .<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">serde::de::Error::custom</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>)))
     } <span class="kw">else</span> {
-        <span class="kw">let</span> <span class="ident">bytes</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">bytes</span>: <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; = <span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
         <span class="ident">T::consensus_decode</span>(<span class="ident">Cursor::new</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>))
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="ident">e</span><span class="op">|</span> <span class="ident">serde::de::Error::custom</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>)))
+            .<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">serde::de::Error::custom</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">e</span>)))
     }
 }
 
 <span class="kw">impl</span> <span class="ident">IntoResponse</span> <span class="kw">for</span> <span class="ident">LnGatewayError</span> {
     <span class="kw">fn</span> <span class="ident">into_response</span>(<span class="self">self</span>) -&gt; <span class="ident">Response</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err</span> <span class="op">=</span> <span class="ident">Cow</span>::<span class="op">&lt;</span><span class="lifetime">&#39;static</span>, <span class="ident">str</span><span class="op">&gt;</span><span class="ident">::Owned</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)).<span class="ident">into_response</span>();
-        <span class="kw-2">*</span><span class="ident">err</span>.<span class="ident">status_mut</span>() <span class="op">=</span> <span class="ident">StatusCode::INTERNAL_SERVER_ERROR</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err</span> = <span class="ident">Cow</span>::&lt;<span class="lifetime">&#39;static</span>, <span class="ident">str</span>&gt;<span class="ident">::Owned</span>(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>)).<span class="ident">into_response</span>();
+        <span class="kw-2">*</span><span class="ident">err</span>.<span class="ident">status_mut</span>() = <span class="ident">StatusCode::INTERNAL_SERVER_ERROR</span>;
         <span class="ident">err</span>
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

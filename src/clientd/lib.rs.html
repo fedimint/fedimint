@@ -103,27 +103,27 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">RpcResult</span> {
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> <span class="op">=</span> <span class="string">&quot;success&quot;</span>)]</span>
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> = <span class="string">&quot;success&quot;</span>)]</span>
     <span class="ident">Success</span>(<span class="ident">serde_json::Value</span>),
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> <span class="op">=</span> <span class="string">&quot;failure&quot;</span>)]</span>
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> = <span class="string">&quot;failure&quot;</span>)]</span>
     <span class="ident">Failure</span>(<span class="ident">serde_json::Value</span>),
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InfoResponse</span> {
-    <span class="ident">coins</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">CoinsByTier</span><span class="op">&gt;</span>,
+    <span class="ident">coins</span>: <span class="ident">Vec</span>&lt;<span class="ident">CoinsByTier</span>&gt;,
     <span class="ident">pending</span>: <span class="ident">PendingResponse</span>,
 }
 
 <span class="kw">impl</span> <span class="ident">InfoResponse</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
-        <span class="ident">coins</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span>,
-        <span class="ident">active_issuances</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)<span class="op">&gt;</span>,
+        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
+        <span class="ident">active_issuances</span>: <span class="ident">Vec</span>&lt;(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)&gt;,
     ) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="ident">info_coins</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">CoinsByTier</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">coins</span>
+        <span class="kw">let</span> <span class="ident">info_coins</span>: <span class="ident">Vec</span>&lt;<span class="ident">CoinsByTier</span>&gt; = <span class="ident">coins</span>
             .<span class="ident">coins</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">tier</span>, <span class="ident">c</span>)<span class="op">|</span> <span class="ident">CoinsByTier</span> {
+            .<span class="ident">map</span>(|(<span class="ident">tier</span>, <span class="ident">c</span>)| <span class="ident">CoinsByTier</span> {
                 <span class="ident">quantity</span>: <span class="ident">c</span>.<span class="ident">len</span>(),
                 <span class="ident">tier</span>: <span class="ident">tier</span>.<span class="ident">milli_sat</span>,
             })
@@ -137,14 +137,14 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingResponse</span> {
-    <span class="ident">transactions</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PendingTransaction</span><span class="op">&gt;</span>,
+    <span class="ident">transactions</span>: <span class="ident">Vec</span>&lt;<span class="ident">PendingTransaction</span>&gt;,
 }
 
 <span class="kw">impl</span> <span class="ident">PendingResponse</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">active_issuances</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)<span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="ident">transactions</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PendingTransaction</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">active_issuances</span>
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">active_issuances</span>: <span class="ident">Vec</span>&lt;(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)&gt;) -&gt; <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="ident">transactions</span>: <span class="ident">Vec</span>&lt;<span class="ident">PendingTransaction</span>&gt; = <span class="ident">active_issuances</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">out_point</span>, <span class="ident">cfd</span>)<span class="op">|</span> <span class="ident">PendingTransaction</span> {
+            .<span class="ident">map</span>(|(<span class="ident">out_point</span>, <span class="ident">cfd</span>)| <span class="ident">PendingTransaction</span> {
                 <span class="ident">txid</span>: <span class="ident">out_point</span>.<span class="ident">txid</span>.<span class="ident">to_hex</span>(),
                 <span class="ident">qty</span>: <span class="ident">cfd</span>.<span class="ident">coin_count</span>(),
                 <span class="ident">value</span>: <span class="ident">cfd</span>.<span class="ident">coin_amount</span>(),
@@ -179,10 +179,10 @@
     <span class="ident">value</span>: <span class="ident">Amount</span>,
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span><span class="op">&lt;</span><span class="ident">P</span>: <span class="ident">Serialize</span> <span class="op">+</span> <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span>(<span class="ident">params</span>: <span class="kw-2">&amp;</span><span class="ident">P</span>, <span class="ident">enpoint</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">RpcResult</span><span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">client</span> <span class="op">=</span> <span class="ident">reqwest::Client::new</span>();
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span>&lt;<span class="ident">P</span>: <span class="ident">Serialize</span> + <span class="question-mark">?</span><span class="ident">Sized</span>&gt;(<span class="ident">params</span>: <span class="kw-2">&amp;</span><span class="ident">P</span>, <span class="ident">enpoint</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">RpcResult</span>&gt; {
+    <span class="kw">let</span> <span class="ident">client</span> = <span class="ident">reqwest::Client::new</span>();
 
-    <span class="kw">let</span> <span class="ident">response</span> <span class="op">=</span> <span class="ident">client</span>
+    <span class="kw">let</span> <span class="ident">response</span> = <span class="ident">client</span>
         .<span class="ident">post</span>(<span class="macro">format!</span>(<span class="string">&quot;http://127.0.0.1:8081{}&quot;</span>, <span class="ident">enpoint</span>))
         .<span class="ident">json</span>(<span class="ident">params</span>)
         .<span class="ident">send</span>()
@@ -191,4 +191,4 @@
     <span class="prelude-val">Ok</span>(<span class="ident">response</span>.<span class="ident">json</span>().<span class="kw">await</span><span class="question-mark">?</span>)
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

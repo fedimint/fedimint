@@ -175,16 +175,16 @@
     <span class="doccomment">/// The transaction was accepted and is now being processed</span>
     <span class="ident">Accepted</span> {
         <span class="ident">epoch</span>: <span class="ident">u64</span>,
-        <span class="ident">outputs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">OutputOutcome</span><span class="op">&gt;</span>,
+        <span class="ident">outputs</span>: <span class="ident">Vec</span>&lt;<span class="ident">OutputOutcome</span>&gt;,
     },
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">OutputOutcome</span> {
-    <span class="ident">Mint</span>(<span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">SigResponse</span><span class="op">&gt;</span>),
+    <span class="ident">Mint</span>(<span class="prelude-ty">Option</span>&lt;<span class="ident">SigResponse</span>&gt;),
     <span class="comment">// TODO: maybe include the transaction id eventually. But unclear how to propagate it cleanly right now.</span>
     <span class="ident">Wallet</span>(()),
-    <span class="ident">LN</span>(<span class="op">&lt;</span><span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxOutputOutcome</span>),
+    <span class="ident">LN</span>(&lt;<span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxOutputOutcome</span>),
 }
 
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Final</span> {
@@ -192,11 +192,11 @@
 }
 
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">TryIntoOutcome</span>: <span class="ident">Sized</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt;;
 }
 
 <span class="kw">impl</span> <span class="ident">OutputOutcome</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">try_into_variant</span><span class="op">&lt;</span><span class="ident">T</span>: <span class="ident">TryIntoOutcome</span><span class="op">&gt;</span>(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">T</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">try_into_variant</span>&lt;<span class="ident">T</span>: <span class="ident">TryIntoOutcome</span>&gt;(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>, <span class="ident">CoreError</span>&gt; {
         <span class="ident">T::try_into_outcome</span>(<span class="self">self</span>)
     }
 }
@@ -226,13 +226,13 @@
     <span class="kw">fn</span> <span class="ident">is_final</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
         <span class="kw">match</span> <span class="self">self</span> {
             <span class="ident">TransactionStatus::Rejected</span>(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            <span class="ident">TransactionStatus::Accepted</span> { <span class="ident">outputs</span>, .. } =&gt; <span class="ident">outputs</span>.<span class="ident">iter</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">out</span><span class="op">|</span> <span class="ident">out</span>.<span class="ident">is_final</span>()),
+            <span class="ident">TransactionStatus::Accepted</span> { <span class="ident">outputs</span>, .. } =&gt; <span class="ident">outputs</span>.<span class="ident">iter</span>().<span class="ident">all</span>(|<span class="ident">out</span>| <span class="ident">out</span>.<span class="ident">is_final</span>()),
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">SigResponse</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+<span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="prelude-ty">Option</span>&lt;<span class="ident">SigResponse</span>&gt; {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
             <span class="ident">OutputOutcome::Mint</span>(<span class="ident">outcome</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">outcome</span>),
             <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;mint&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
@@ -242,7 +242,7 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> () {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
             <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
             <span class="ident">OutputOutcome::Wallet</span>(<span class="ident">outcome</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">outcome</span>),
@@ -252,7 +252,7 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">minimint_ln::OutputOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">match</span> <span class="ident">common_outcome</span> {
             <span class="ident">OutputOutcome::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;mint&quot;</span>)),
             <span class="ident">OutputOutcome::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln&quot;</span>, <span class="string">&quot;wallet&quot;</span>)),
@@ -262,11 +262,11 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">Preimage</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
             <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">decrypted_preimage</span>),
             ..
-        }) <span class="op">=</span> <span class="ident">common_outcome</span>
+        }) = <span class="ident">common_outcome</span>
         {
             <span class="kw">match</span> <span class="ident">decrypted_preimage</span> {
                 <span class="ident">DecryptedPreimage::Some</span>(<span class="ident">preimage</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>),
@@ -280,8 +280,8 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">OfferId</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Offer</span> { <span class="ident">id</span> }) <span class="op">=</span> <span class="ident">common_outcome</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Offer</span> { <span class="ident">id</span> }) = <span class="ident">common_outcome</span> {
             <span class="prelude-val">Ok</span>(<span class="ident">id</span>)
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">CoreError::MismatchingVariant</span>(<span class="string">&quot;ln::incoming&quot;</span>, <span class="string">&quot;other&quot;</span>))
@@ -290,11 +290,11 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">AccountContractOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
             <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Account</span>(<span class="ident">o</span>),
             ..
-        }) <span class="op">=</span> <span class="ident">common_outcome</span>
+        }) = <span class="ident">common_outcome</span>
         {
             <span class="prelude-val">Ok</span>(<span class="ident">o</span>)
         } <span class="kw">else</span> {
@@ -304,11 +304,11 @@
 }
 
 <span class="kw">impl</span> <span class="ident">TryIntoOutcome</span> <span class="kw">for</span> <span class="ident">OutgoingContractOutcome</span> {
-    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">CoreError</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">try_into_outcome</span>(<span class="ident">common_outcome</span>: <span class="ident">OutputOutcome</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">CoreError</span>&gt; {
         <span class="kw">if</span> <span class="kw">let</span> <span class="ident">OutputOutcome::LN</span>(<span class="ident">minimint_ln::OutputOutcome::Contract</span> {
             <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Outgoing</span>(<span class="ident">o</span>),
             ..
-        }) <span class="op">=</span> <span class="ident">common_outcome</span>
+        }) = <span class="ident">common_outcome</span>
         {
             <span class="prelude-val">Ok</span>(<span class="ident">o</span>)
         } <span class="kw">else</span> {
@@ -317,4 +317,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

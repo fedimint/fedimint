@@ -57,14 +57,14 @@
 
 <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
 <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(
-    <span class="ident">Extension</span>(<span class="ident">gw_sender</span>): <span class="ident">Extension</span><span class="op">&lt;</span><span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">Json</span>(<span class="ident">contract_id</span>): <span class="ident">Json</span><span class="op">&lt;</span><span class="ident">ContractId</span><span class="op">&gt;</span>,
-) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span> {
-    <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
+    <span class="ident">Extension</span>(<span class="ident">gw_sender</span>): <span class="ident">Extension</span>&lt;<span class="ident">mpsc::Sender</span>&lt;<span class="ident">GatewayRequest</span>&gt;&gt;,
+    <span class="ident">Json</span>(<span class="ident">contract_id</span>): <span class="ident">Json</span>&lt;<span class="ident">ContractId</span>&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">LnGatewayError</span>&gt; {
+    <span class="macro">debug!</span>(%<span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
-    <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) <span class="op">=</span> <span class="ident">oneshot::channel</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">LnGatewayError</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+    <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) = <span class="ident">oneshot::channel</span>::&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="ident">LnGatewayError</span>&gt;&gt;();
 
-    <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">GatewayRequestInner</span> {
+    <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">GatewayRequestInner</span> {
         <span class="ident">request</span>: <span class="ident">contract_id</span>,
         <span class="ident">sender</span>,
     });
@@ -77,8 +77,8 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span><span class="op">&lt;</span><span class="ident">GatewayRequest</span><span class="op">&gt;</span>) -&gt; <span class="ident">axum::response::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
-    <span class="kw">let</span> <span class="ident">app</span> <span class="op">=</span> <span class="ident">Router::new</span>()
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span>&lt;<span class="ident">GatewayRequest</span>&gt;) -&gt; <span class="ident">axum::response::Result</span>&lt;()&gt; {
+    <span class="kw">let</span> <span class="ident">app</span> = <span class="ident">Router::new</span>()
         .<span class="ident">route</span>(<span class="string">&quot;/pay_invoice&quot;</span>, <span class="ident">post</span>(<span class="ident">pay_invoice</span>))
         .<span class="ident">layer</span>(<span class="ident">Extension</span>(<span class="ident">sender</span>))
         .<span class="ident">layer</span>(<span class="ident">CorsLayer::permissive</span>());
@@ -91,4 +91,4 @@
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

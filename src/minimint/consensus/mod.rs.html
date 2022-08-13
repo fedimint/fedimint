@@ -703,20 +703,20 @@
 <span class="kw">use</span> <span class="ident">tokio::sync::Notify</span>;
 <span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">info_span</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConsensusOutcome</span> <span class="op">=</span> <span class="ident">Batch</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>, <span class="ident">PeerId</span><span class="op">&gt;</span>;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">HoneyBadgerMessage</span> <span class="op">=</span> <span class="ident">hbbft::honey_badger::Message</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConsensusOutcome</span> = <span class="ident">Batch</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;, <span class="ident">PeerId</span>&gt;;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">HoneyBadgerMessage</span> = <span class="ident">hbbft::honey_badger::Message</span>&lt;<span class="ident">PeerId</span>&gt;;
 
 <span class="comment">// TODO remove HBBFT `Batch` from `ConsensusOutcome`</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConsensusOutcomeConversion</span>(<span class="kw">pub</span> <span class="ident">ConsensusOutcome</span>);
 
-<span class="kw">impl</span> <span class="ident">PartialEq</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
+<span class="kw">impl</span> <span class="ident">PartialEq</span>&lt;<span class="self">Self</span>&gt; <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
     <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">epoch</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">epoch</span>) <span class="op">&amp;&amp;</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">contributions</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">contributions</span>)
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">epoch</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">epoch</span>) &amp;&amp; <span class="self">self</span>.<span class="number">0</span>.<span class="ident">contributions</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">contributions</span>)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">From</span><span class="op">&lt;</span><span class="ident">OutcomeHistory</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
+<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">OutcomeHistory</span>&gt; <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
     <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">history</span>: <span class="ident">OutcomeHistory</span>) -&gt; <span class="self">Self</span> {
         <span class="ident">ConsensusOutcomeConversion</span>(<span class="ident">Batch</span> {
             <span class="ident">epoch</span>: <span class="ident">history</span>.<span class="ident">epoch</span>,
@@ -728,16 +728,16 @@
 <span class="doccomment">/// Proposed HBBFT consensus changes including removing peers</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConsensusProposal</span> {
-    <span class="kw">pub</span> <span class="ident">items</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span>,
-    <span class="kw">pub</span> <span class="ident">drop_peers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">items</span>: <span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;,
+    <span class="kw">pub</span> <span class="ident">drop_peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;,
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
+    <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
 {
     <span class="doccomment">/// Cryptographic random number generator used for everything</span>
-    <span class="kw">pub</span> <span class="ident">rng_gen</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">RngGenerator</span><span class="op">&lt;</span><span class="ident">Rng</span> <span class="op">=</span> <span class="ident">R</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">rng_gen</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">RngGenerator</span>&lt;<span class="ident">Rng</span> = <span class="ident">R</span>&gt;&gt;,
     <span class="doccomment">/// Configuration describing the federation and containing our secrets</span>
     <span class="kw">pub</span> <span class="ident">cfg</span>: <span class="ident">ServerConfig</span>,
 
@@ -747,10 +747,10 @@
     <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">LightningModule</span>,
 
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash</span>
-    <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
 
     <span class="comment">// Notifies tasks when there is a new transaction</span>
-    <span class="kw">pub</span> <span class="ident">transaction_notify</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Notify</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">transaction_notify</span>: <span class="ident">Arc</span>&lt;<span class="ident">Notify</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -761,35 +761,35 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
 <span class="kw">struct</span> <span class="ident">VerificationCaches</span> {
-    <span class="ident">mint</span>: <span class="op">&lt;</span><span class="ident">Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::VerificationCache</span>,
-    <span class="ident">wallet</span>: <span class="op">&lt;</span><span class="ident">Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::VerificationCache</span>,
-    <span class="ident">ln</span>: <span class="op">&lt;</span><span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::VerificationCache</span>,
+    <span class="ident">mint</span>: &lt;<span class="ident">Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
+    <span class="ident">wallet</span>: &lt;<span class="ident">Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
+    <span class="ident">ln</span>: &lt;<span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">R</span>&gt; <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span>,
+    <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
 {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">TransactionSubmissionError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
-        <span class="macro">debug!</span>(<span class="op">%</span><span class="ident">tx_hash</span>, <span class="string">&quot;Received mint transaction&quot;</span>);
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionSubmissionError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
+        <span class="macro">debug!</span>(%<span class="ident">tx_hash</span>, <span class="string">&quot;Received mint transaction&quot;</span>);
 
         <span class="ident">transaction</span>.<span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">fee_consensus</span>())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> <span class="op">=</span> <span class="ident">Vec::new</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> = <span class="ident">Vec::new</span>();
         <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">inputs</span> {
-            <span class="kw">let</span> <span class="ident">meta</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">input</span> {
+            <span class="kw">let</span> <span class="ident">meta</span> = <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">coins</span>));
+                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">coins</span>));
                     <span class="self">self</span>.<span class="ident">mint</span>
                         .<span class="ident">validate_input</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(), <span class="kw-2">&amp;</span><span class="ident">cache</span>, <span class="ident">coins</span>)
                         .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputCoinError</span>)<span class="question-mark">?</span>
                 }
                 <span class="ident">Input::Wallet</span>(<span class="ident">peg_in</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> <span class="op">=</span> <span class="self">self</span>
+                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>
                         .<span class="ident">wallet</span>
                         .<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">peg_in</span>));
                     <span class="self">self</span>.<span class="ident">wallet</span>
@@ -797,7 +797,7 @@
                         .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputPegIn</span>)<span class="question-mark">?</span>
                 }
                 <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">input</span>));
+                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">input</span>));
                     <span class="self">self</span>.<span class="ident">ln</span>
                         .<span class="ident">validate_input</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(), <span class="kw-2">&amp;</span><span class="ident">cache</span>, <span class="ident">input</span>)
                         .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::ContractInputError</span>)<span class="question-mark">?</span>
@@ -827,7 +827,7 @@
             }
         }
 
-        <span class="kw">let</span> <span class="ident">new</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">new</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedTransactionKey</span>(<span class="ident">tx_hash</span>), <span class="kw-2">&amp;</span><span class="ident">transaction</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
@@ -840,13 +840,13 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="ident">epoch</span> <span class="op">=</span> <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>))]</span>
+    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="ident">epoch</span> = <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>))]</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_consensus_outcome</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">consensus_outcome</span>: <span class="ident">ConsensusOutcome</span>) {
         <span class="macro">info!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">debug::epoch_message</span>(<span class="kw-2">&amp;</span><span class="ident">consensus_outcome</span>));
-        <span class="kw">let</span> <span class="ident">epoch</span> <span class="op">=</span> <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>;
-        <span class="kw">let</span> <span class="ident">epoch_peers</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">epoch</span> = <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>;
+        <span class="kw">let</span> <span class="ident">epoch_peers</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; =
             <span class="ident">consensus_outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">copied</span>().<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="ident">consensus_outcome</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">outcome</span> = <span class="ident">consensus_outcome</span>.<span class="ident">clone</span>();
 
         <span class="kw">let</span> <span class="ident">UnzipConsensusItem</span> {
             <span class="ident">epoch_info</span>: <span class="ident">epoch_info_cis</span>,
@@ -854,15 +854,15 @@
             <span class="ident">wallet</span>: <span class="ident">wallet_cis</span>,
             <span class="ident">mint</span>: <span class="ident">mint_cis</span>,
             <span class="ident">ln</span>: <span class="ident">ln_cis</span>,
-        } <span class="op">=</span> <span class="ident">consensus_outcome</span>
+        } = <span class="ident">consensus_outcome</span>
             .<span class="ident">contributions</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">flat_map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">cis</span>)<span class="op">|</span> <span class="ident">cis</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">ci</span><span class="op">|</span> (<span class="ident">peer</span>, <span class="ident">ci</span>)))
+            .<span class="ident">flat_map</span>(|(<span class="ident">peer</span>, <span class="ident">cis</span>)| <span class="ident">cis</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="kw">move</span> |<span class="ident">ci</span>| (<span class="ident">peer</span>, <span class="ident">ci</span>)))
             .<span class="ident">unzip_consensus_item</span>();
 
         <span class="comment">// Begin consensus epoch</span>
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
             <span class="self">self</span>.<span class="ident">wallet</span>
                 .<span class="ident">begin_consensus_epoch</span>(<span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="ident">wallet_cis</span>, <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
                 .<span class="kw">await</span>;
@@ -884,13 +884,13 @@
             <span class="comment">//  * peg-ins that each peg-in tx is only used to issue coins once</span>
             <span class="comment">//  * coin spends to avoid double spends in one batch</span>
             <span class="comment">//  * only one peg-out allowed per epoch</span>
-            <span class="kw">let</span> (<span class="ident">ok_tx</span>, <span class="ident">err_tx</span>) <span class="op">=</span> <span class="ident">transaction_cis</span>
+            <span class="kw">let</span> (<span class="ident">ok_tx</span>, <span class="ident">err_tx</span>) = <span class="ident">transaction_cis</span>
                 .<span class="ident">into_iter</span>()
-                .<span class="ident">filter_conflicts</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">tx</span>)<span class="op">|</span> <span class="ident">tx</span>)
+                .<span class="ident">filter_conflicts</span>(|(<span class="kw">_</span>, <span class="ident">tx</span>)| <span class="ident">tx</span>)
                 .<span class="ident">partitioned</span>();
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
 
             <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">err_tx</span> {
                 <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(
@@ -899,11 +899,11 @@
                 );
             }
 
-            <span class="kw">let</span> <span class="ident">caches</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">build_verification_caches</span>(<span class="ident">ok_tx</span>.<span class="ident">iter</span>());
+            <span class="kw">let</span> <span class="ident">caches</span> = <span class="self">self</span>.<span class="ident">build_verification_caches</span>(<span class="ident">ok_tx</span>.<span class="ident">iter</span>());
             <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">ok_tx</span> {
-                <span class="kw">let</span> <span class="ident">span</span> <span class="op">=</span> <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
+                <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
                 <span class="comment">// in_scope to make sure that no await is in the middle of the span</span>
-                <span class="kw">let</span> <span class="ident">_enter</span> <span class="op">=</span> <span class="ident">span</span>.<span class="ident">in_scope</span>(<span class="op">|</span><span class="op">|</span> {
+                <span class="kw">let</span> <span class="ident">_enter</span> = <span class="ident">span</span>.<span class="ident">in_scope</span>(|| {
                     <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">transaction</span>);
                     <span class="ident">batch_tx</span>.<span class="ident">append_maybe_delete</span>(<span class="ident">ProposedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()));
 
@@ -920,7 +920,7 @@
                             );
                         }
                         <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                            <span class="macro">warn!</span>(<span class="op">%</span><span class="ident">error</span>, <span class="string">&quot;Transaction failed&quot;</span>);
+                            <span class="macro">warn!</span>(%<span class="ident">error</span>, <span class="string">&quot;Transaction failed&quot;</span>);
                             <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(
                                 <span class="ident">RejectedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()),
                                 <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">error</span>),
@@ -935,8 +935,8 @@
 
         <span class="comment">// End consensus epoch</span>
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> <span class="op">=</span> <span class="ident">DbBatch::new</span>();
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
 
             <span class="self">self</span>.<span class="ident">save_epoch_history</span>(
                 <span class="ident">outcome</span>,
@@ -945,17 +945,17 @@
                 <span class="kw-2">&amp;mut</span> <span class="ident">drop_peers</span>,
             );
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_wallet</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_wallet</span> = <span class="self">self</span>
                 .<span class="ident">wallet</span>
                 .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
                 .<span class="kw">await</span>;
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_mint</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_mint</span> = <span class="self">self</span>
                 .<span class="ident">mint</span>
                 .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
                 .<span class="kw">await</span>;
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_ln</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_ln</span> = <span class="self">self</span>
                 .<span class="ident">ln</span>
                 .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
                 .<span class="kw">await</span>;
@@ -964,7 +964,7 @@
             <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_mint</span>);
             <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_ln</span>);
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> <span class="op">=</span> <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
             <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">drop_peers</span> {
                 <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(<span class="ident">DropPeerKey</span>(<span class="ident">peer</span>), ());
             }
@@ -973,8 +973,8 @@
             <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
         }
 
-        <span class="kw">let</span> <span class="ident">audit</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">audit</span>();
-        <span class="kw">if</span> <span class="ident">audit</span>.<span class="ident">sum</span>().<span class="ident">milli_sat</span> <span class="op">&lt;</span> <span class="number">0</span> {
+        <span class="kw">let</span> <span class="ident">audit</span> = <span class="self">self</span>.<span class="ident">audit</span>();
+        <span class="kw">if</span> <span class="ident">audit</span>.<span class="ident">sum</span>().<span class="ident">milli_sat</span> &lt; <span class="number">0</span> {
             <span class="macro">panic!</span>(
                 <span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {}&quot;</span>,
                 <span class="ident">audit</span>
@@ -982,57 +982,57 @@
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">EpochHistory</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">EpochHistory</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">EpochHistoryKey</span>(<span class="ident">epoch</span>)).<span class="ident">unwrap</span>()
     }
 
     <span class="kw">fn</span> <span class="ident">save_epoch_history</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">outcome</span>: <span class="ident">ConsensusOutcome</span>,
-        <span class="ident">signatures</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">EpochSignatureShare</span>)<span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">transaction</span>: <span class="ident">AccumulatorTx</span><span class="op">&lt;</span><span class="ident">BatchItem</span><span class="op">&gt;</span>,
-        <span class="ident">drop_peers</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
+        <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">EpochSignatureShare</span>)&gt;,
+        <span class="kw-2">mut</span> <span class="ident">transaction</span>: <span class="ident">AccumulatorTx</span>&lt;<span class="ident">BatchItem</span>&gt;,
+        <span class="ident">drop_peers</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;,
     ) {
-        <span class="kw">let</span> <span class="ident">prev_epoch_key</span> <span class="op">=</span> <span class="ident">EpochHistoryKey</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>.<span class="ident">saturating_sub</span>(<span class="number">1</span>));
-        <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">maybe_prev_epoch</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">prev_epoch_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let</span> <span class="ident">prev_epoch_key</span> = <span class="ident">EpochHistoryKey</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>.<span class="ident">saturating_sub</span>(<span class="number">1</span>));
+        <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">maybe_prev_epoch</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">prev_epoch_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
 
         <span class="comment">// save current epoch</span>
-        <span class="kw">let</span> <span class="ident">current</span> <span class="op">=</span> <span class="ident">EpochHistory::new</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>, <span class="ident">outcome</span>.<span class="ident">contributions</span>, <span class="kw-2">&amp;</span><span class="ident">maybe_prev_epoch</span>);
+        <span class="kw">let</span> <span class="ident">current</span> = <span class="ident">EpochHistory::new</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>, <span class="ident">outcome</span>.<span class="ident">contributions</span>, <span class="kw-2">&amp;</span><span class="ident">maybe_prev_epoch</span>);
         <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">LastEpochKey</span>, <span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>));
         <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>), <span class="ident">current</span>);
 
         <span class="comment">// validate and update sigs on last epoch</span>
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="kw-2">mut</span> <span class="ident">prev_epoch</span>) <span class="op">=</span> <span class="ident">maybe_prev_epoch</span> {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">valid_sigs</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">HashSet::new</span>();
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="kw-2">mut</span> <span class="ident">prev_epoch</span>) = <span class="ident">maybe_prev_epoch</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">valid_sigs</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">HashSet::new</span>();
 
-            <span class="kw">let</span> <span class="ident">filtered</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">signatures</span>
+            <span class="kw">let</span> <span class="ident">filtered</span>: <span class="ident">BTreeMap</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="ident">signatures</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">filter</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sig</span>)<span class="op">|</span> {
-                    <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">public_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
+                .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">sig</span>)| {
+                    <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">public_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
                     <span class="ident">pub_key</span>.<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>)
                 })
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sig</span>)<span class="op">|</span> {
+                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">sig</span>)| {
                     <span class="ident">valid_sigs</span>.<span class="ident">insert</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
                     (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>)
                 })
                 .<span class="ident">collect</span>();
 
             <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">peers</span> {
-                <span class="kw">if</span> <span class="op">!</span><span class="ident">valid_sigs</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>) {
+                <span class="kw">if</span> !<span class="ident">valid_sigs</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>) {
                     <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, <span class="ident">peer</span>);
                     <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
                 }
             }
 
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">final_sig</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">combine_signatures</span>(<span class="ident">filtered</span>) {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">final_sig</span>) = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">combine_signatures</span>(<span class="ident">filtered</span>) {
                 <span class="macro">assert!</span>(<span class="self">self</span>
                     .<span class="ident">cfg</span>
                     .<span class="ident">epoch_pk_set</span>
                     .<span class="ident">public_key</span>()
                     .<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">final_sig</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>));
 
-                <span class="ident">prev_epoch</span>.<span class="ident">signature</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">EpochSignature</span>(<span class="ident">final_sig</span>));
+                <span class="ident">prev_epoch</span>.<span class="ident">signature</span> = <span class="prelude-val">Some</span>(<span class="ident">EpochSignature</span>(<span class="ident">final_sig</span>));
                 <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">prev_epoch_key</span>, <span class="ident">prev_epoch</span>);
             } <span class="kw">else</span> {
                 <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, <span class="ident">prev_epoch</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>);
@@ -1052,20 +1052,20 @@
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ConsensusProposal</span> {
-        <span class="kw">let</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">drop_peers</span> = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">DropPeerKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">key</span> <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> <span class="ident">key</span> = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
                 <span class="ident">key</span>.<span class="number">0</span>
             })
             .<span class="ident">collect</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">items</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">ConsensusItem</span><span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">items</span>: <span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt; = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedTransactionKeyPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">_key</span>, <span class="ident">value</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">_key</span>, <span class="ident">value</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 <span class="ident">ConsensusItem::Transaction</span>(<span class="ident">value</span>)
             })
             .<span class="ident">chain</span>(
@@ -1091,10 +1091,10 @@
             )
             .<span class="ident">collect</span>();
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">epoch</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">LastEpochKey</span>).<span class="ident">unwrap</span>() {
-            <span class="kw">let</span> <span class="ident">last_epoch</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">epoch</span>).<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-            <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_sks</span>.<span class="number">0</span>.<span class="ident">sign</span>(<span class="ident">last_epoch</span>.<span class="ident">hash</span>);
-            <span class="kw">let</span> <span class="ident">item</span> <span class="op">=</span> <span class="ident">ConsensusItem::EpochInfo</span>(<span class="ident">EpochSignatureShare</span>(<span class="ident">sig</span>));
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">epoch</span>) = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">LastEpochKey</span>).<span class="ident">unwrap</span>() {
+            <span class="kw">let</span> <span class="ident">last_epoch</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">epoch</span>).<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">sig</span> = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_sks</span>.<span class="number">0</span>.<span class="ident">sign</span>(<span class="ident">last_epoch</span>.<span class="ident">hash</span>);
+            <span class="kw">let</span> <span class="ident">item</span> = <span class="ident">ConsensusItem::EpochInfo</span>(<span class="ident">EpochSignatureShare</span>(<span class="ident">sig</span>));
             <span class="ident">items</span>.<span class="ident">push</span>(<span class="ident">item</span>);
         };
 
@@ -1106,14 +1106,14 @@
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
         <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
         <span class="ident">caches</span>: <span class="kw-2">&amp;</span><span class="ident">VerificationCaches</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">TransactionSubmissionError</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionSubmissionError</span>&gt; {
         <span class="ident">transaction</span>.<span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">fee_consensus</span>())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
+        <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> <span class="op">=</span> <span class="ident">Vec::new</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> = <span class="ident">Vec::new</span>();
         <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="ident">transaction</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>() {
-            <span class="kw">let</span> <span class="ident">meta</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">input</span> {
+            <span class="kw">let</span> <span class="ident">meta</span> = <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="self">self</span>
                     .<span class="ident">mint</span>
                     .<span class="ident">apply_input</span>(
@@ -1147,7 +1147,7 @@
         <span class="ident">transaction</span>.<span class="ident">validate_signature</span>(<span class="ident">pub_keys</span>.<span class="ident">into_iter</span>().<span class="ident">flatten</span>())<span class="question-mark">?</span>;
 
         <span class="kw">for</span> (<span class="ident">idx</span>, <span class="ident">output</span>) <span class="kw">in</span> <span class="ident">transaction</span>.<span class="ident">outputs</span>.<span class="ident">into_iter</span>().<span class="ident">enumerate</span>() {
-            <span class="kw">let</span> <span class="ident">out_point</span> <span class="op">=</span> <span class="ident">OutPoint</span> {
+            <span class="kw">let</span> <span class="ident">out_point</span> = <span class="ident">OutPoint</span> {
                 <span class="ident">txid</span>: <span class="ident">tx_hash</span>,
                 <span class="ident">out_idx</span>: <span class="ident">idx</span> <span class="kw">as</span> <span class="ident">u64</span>,
             };
@@ -1177,40 +1177,40 @@
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">transaction_status</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">txid</span>: <span class="ident">TransactionId</span>,
-    ) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="kw">crate</span>::outcome::TransactionStatus</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">accepted</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">AcceptedTransaction</span><span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="kw">crate</span>::outcome::TransactionStatus</span>&gt; {
+        <span class="kw">let</span> <span class="ident">accepted</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">AcceptedTransaction</span>&gt; = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">AcceptedTransactionKey</span>(<span class="ident">txid</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">accepted_tx</span>) <span class="op">=</span> <span class="ident">accepted</span> {
-            <span class="kw">let</span> <span class="ident">outputs</span> <span class="op">=</span> <span class="ident">accepted_tx</span>
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">accepted_tx</span>) = <span class="ident">accepted</span> {
+            <span class="kw">let</span> <span class="ident">outputs</span> = <span class="ident">accepted_tx</span>
                 .<span class="ident">transaction</span>
                 .<span class="ident">outputs</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">enumerate</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">out_idx</span>, <span class="ident">output</span>)<span class="op">|</span> {
-                    <span class="kw">let</span> <span class="ident">outpoint</span> <span class="op">=</span> <span class="ident">OutPoint</span> {
+                .<span class="ident">map</span>(|(<span class="ident">out_idx</span>, <span class="ident">output</span>)| {
+                    <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">OutPoint</span> {
                         <span class="ident">txid</span>,
                         <span class="ident">out_idx</span>: <span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">u64</span>,
                     };
                     <span class="kw">match</span> <span class="ident">output</span> {
                         <span class="ident">Output::Mint</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="self">self</span>
+                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
                                 .<span class="ident">mint</span>
                                 .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
                                 .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
                             <span class="ident">OutputOutcome::Mint</span>(<span class="ident">outcome</span>)
                         }
                         <span class="ident">Output::Wallet</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="self">self</span>
+                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
                                 .<span class="ident">wallet</span>
                                 .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
                                 .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
                             <span class="ident">OutputOutcome::Wallet</span>(<span class="ident">outcome</span>)
                         }
                         <span class="ident">Output::LN</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> <span class="op">=</span> <span class="self">self</span>
+                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
                                 .<span class="ident">ln</span>
                                 .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
                                 .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
@@ -1226,50 +1226,50 @@
             });
         }
 
-        <span class="kw">let</span> <span class="ident">rejected</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">rejected</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">String</span>&gt; = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">RejectedTransactionKey</span>(<span class="ident">txid</span>))
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">message</span>) <span class="op">=</span> <span class="ident">rejected</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">message</span>) = <span class="ident">rejected</span> {
             <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident">TransactionStatus::Rejected</span>(<span class="ident">message</span>));
         }
 
         <span class="prelude-val">None</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_caches</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">build_verification_caches</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">transactions</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Transaction</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Clone</span> <span class="op">+</span> <span class="ident">Send</span>,
+        <span class="ident">transactions</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Transaction</span>&gt; + <span class="ident">Clone</span> + <span class="ident">Send</span>,
     ) -&gt; <span class="ident">VerificationCaches</span> {
-        <span class="kw">let</span> <span class="ident">mint_input_iter</span> <span class="op">=</span> <span class="ident">transactions</span>
+        <span class="kw">let</span> <span class="ident">mint_input_iter</span> = <span class="ident">transactions</span>
             .<span class="ident">clone</span>()
-            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">tx</span><span class="op">|</span> <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">input</span> {
+            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
+            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
                 <span class="ident">Input::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 <span class="ident">Input::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
             });
-        <span class="kw">let</span> <span class="ident">mint_cache</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">mint_input_iter</span>);
+        <span class="kw">let</span> <span class="ident">mint_cache</span> = <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">mint_input_iter</span>);
 
-        <span class="kw">let</span> <span class="ident">wallet_input_iter</span> <span class="op">=</span> <span class="ident">transactions</span>
+        <span class="kw">let</span> <span class="ident">wallet_input_iter</span> = <span class="ident">transactions</span>
             .<span class="ident">clone</span>()
-            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">tx</span><span class="op">|</span> <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">input</span> {
+            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
+            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 <span class="ident">Input::Wallet</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
                 <span class="ident">Input::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
             });
-        <span class="kw">let</span> <span class="ident">wallet_cache</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">build_verification_cache</span>(<span class="ident">wallet_input_iter</span>);
+        <span class="kw">let</span> <span class="ident">wallet_cache</span> = <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">build_verification_cache</span>(<span class="ident">wallet_input_iter</span>);
 
-        <span class="kw">let</span> <span class="ident">ln_input_iter</span> <span class="op">=</span> <span class="ident">transactions</span>
-            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">tx</span><span class="op">|</span> <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="kw">match</span> <span class="ident">input</span> {
+        <span class="kw">let</span> <span class="ident">ln_input_iter</span> = <span class="ident">transactions</span>
+            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
+            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 <span class="ident">Input::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
             });
-        <span class="kw">let</span> <span class="ident">ln_cache</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">ln_input_iter</span>);
+        <span class="kw">let</span> <span class="ident">ln_cache</span> = <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">ln_input_iter</span>);
 
         <span class="ident">VerificationCaches</span> {
             <span class="ident">mint</span>: <span class="ident">mint_cache</span>,
@@ -1279,38 +1279,38 @@
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Audit</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">audit</span> <span class="op">=</span> <span class="ident">Audit::default</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">audit</span> = <span class="ident">Audit::default</span>();
         <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
         <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
         <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
         <span class="ident">audit</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">build_interconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MinimintInterconnect</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">build_interconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MinimintInterconnect</span>&lt;<span class="ident">R</span>&gt; {
         <span class="ident">MinimintInterconnect</span> { <span class="ident">minimint</span>: <span class="self">self</span> }
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Wallet</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">Wallet</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
     <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Wallet</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">wallet</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">Mint</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">Mint</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
     <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Mint</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">mint</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">LightningModule</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">LightningModule</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
     <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">LightningModule</span> {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">ln</span>
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span> <span class="ident">AsRef</span><span class="op">&lt;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span><span class="op">&lt;</span><span class="ident">R</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
+    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
         <span class="self">self</span>
     }
 }
@@ -1335,4 +1335,4 @@
     <span class="ident">TransactionConflictError</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

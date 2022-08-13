@@ -268,26 +268,26 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Transaction</span> {
-    <span class="kw">pub</span> <span class="ident">inputs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Input</span><span class="op">&gt;</span>,
-    <span class="kw">pub</span> <span class="ident">outputs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Output</span><span class="op">&gt;</span>,
-    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">schnorr::Signature</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">inputs</span>: <span class="ident">Vec</span>&lt;<span class="ident">Input</span>&gt;,
+    <span class="kw">pub</span> <span class="ident">outputs</span>: <span class="ident">Vec</span>&lt;<span class="ident">Output</span>&gt;,
+    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">schnorr::Signature</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Input</span> {
     <span class="comment">// TODO: maybe treat every coin as a seperate input?</span>
-    <span class="ident">Mint</span>(<span class="op">&lt;</span><span class="ident">minimint_mint::Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxInput</span>),
-    <span class="ident">Wallet</span>(<span class="op">&lt;</span><span class="ident">minimint_wallet::Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxInput</span>),
-    <span class="ident">LN</span>(<span class="op">&lt;</span><span class="ident">minimint_ln::LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxInput</span>),
+    <span class="ident">Mint</span>(&lt;<span class="ident">minimint_mint::Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxInput</span>),
+    <span class="ident">Wallet</span>(&lt;<span class="ident">minimint_wallet::Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxInput</span>),
+    <span class="ident">LN</span>(&lt;<span class="ident">minimint_ln::LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxInput</span>),
 }
 
 <span class="comment">// TODO: check if clippy is right</span>
 <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy::large_enum_variant</span>)]</span>
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">Output</span> {
-    <span class="ident">Mint</span>(<span class="op">&lt;</span><span class="ident">minimint_mint::Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxOutput</span>),
-    <span class="ident">Wallet</span>(<span class="op">&lt;</span><span class="ident">minimint_wallet::Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxOutput</span>),
-    <span class="ident">LN</span>(<span class="op">&lt;</span><span class="ident">minimint_ln::LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span><span class="op">&gt;</span><span class="ident">::TxOutput</span>),
+    <span class="ident">Mint</span>(&lt;<span class="ident">minimint_mint::Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxOutput</span>),
+    <span class="ident">Wallet</span>(&lt;<span class="ident">minimint_wallet::Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxOutput</span>),
+    <span class="ident">LN</span>(&lt;<span class="ident">minimint_ln::LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::TxOutput</span>),
 }
 
 <span class="doccomment">/// Common properties of transaction in- and outputs</span>
@@ -310,7 +310,7 @@
 
     <span class="kw">fn</span> <span class="ident">fee</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fee_consensus</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="ident">Amount</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">mint</span>.<span class="ident">coin_spend_abs</span> <span class="op">*</span> (<span class="ident">coins</span>.<span class="ident">coins</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span>),
+            <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">mint</span>.<span class="ident">coin_spend_abs</span> * (<span class="ident">coins</span>.<span class="ident">coins</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span>),
             <span class="ident">Input::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">wallet</span>.<span class="ident">peg_in_abs</span>,
             <span class="ident">Input::LN</span>(<span class="kw">_</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">ln</span>.<span class="ident">contract_input</span>,
         }
@@ -321,7 +321,7 @@
     <span class="kw">fn</span> <span class="ident">amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
         <span class="kw">match</span> <span class="self">self</span> {
             <span class="ident">Output::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">coins</span>.<span class="ident">amount</span>(),
-            <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; (<span class="ident">peg_out</span>.<span class="ident">amount</span> <span class="op">+</span> <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>(),
+            <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; (<span class="ident">peg_out</span>.<span class="ident">amount</span> + <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>(),
             <span class="ident">Output::LN</span>(<span class="ident">minimint_ln::ContractOrOfferOutput::Contract</span>(<span class="ident">output</span>)) =&gt; <span class="ident">output</span>.<span class="ident">amount</span>,
             <span class="ident">Output::LN</span>(<span class="ident">minimint_ln::ContractOrOfferOutput::Offer</span>(<span class="kw">_</span>)) =&gt; <span class="ident">Amount::ZERO</span>,
         }
@@ -329,7 +329,7 @@
 
     <span class="kw">fn</span> <span class="ident">fee</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fee_consensus</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="ident">Amount</span> {
         <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">Output::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">mint</span>.<span class="ident">coin_spend_abs</span> <span class="op">*</span> (<span class="ident">coins</span>.<span class="ident">coins</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span>),
+            <span class="ident">Output::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">mint</span>.<span class="ident">coin_spend_abs</span> * (<span class="ident">coins</span>.<span class="ident">coins</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span>),
             <span class="ident">Output::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="ident">fee_consensus</span>.<span class="ident">wallet</span>.<span class="ident">peg_out_abs</span>,
             <span class="ident">Output::LN</span>(<span class="ident">minimint_ln::ContractOrOfferOutput::Contract</span>(<span class="kw">_</span>)) =&gt; {
                 <span class="ident">fee_consensus</span>.<span class="ident">ln</span>.<span class="ident">contract_output</span>
@@ -345,34 +345,34 @@
         <span class="self">self</span>.<span class="ident">inputs</span>
             .<span class="ident">iter</span>()
             .<span class="ident">map</span>(<span class="ident">TransactionItem::amount</span>)
-            .<span class="ident">sum</span>::<span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span>()
+            .<span class="ident">sum</span>::&lt;<span class="ident">Amount</span>&gt;()
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">out_amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
         <span class="self">self</span>.<span class="ident">outputs</span>
             .<span class="ident">iter</span>()
             .<span class="ident">map</span>(<span class="ident">TransactionItem::amount</span>)
-            .<span class="ident">sum</span>::<span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span>()
+            .<span class="ident">sum</span>::&lt;<span class="ident">Amount</span>&gt;()
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">fee_amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fee_consensus</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="ident">Amount</span> {
         <span class="self">self</span>.<span class="ident">inputs</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="ident">input</span>.<span class="ident">fee</span>(<span class="ident">fee_consensus</span>))
-            .<span class="ident">sum</span>::<span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span>()
-            <span class="op">+</span> <span class="self">self</span>
+            .<span class="ident">map</span>(|<span class="ident">input</span>| <span class="ident">input</span>.<span class="ident">fee</span>(<span class="ident">fee_consensus</span>))
+            .<span class="ident">sum</span>::&lt;<span class="ident">Amount</span>&gt;()
+            + <span class="self">self</span>
                 .<span class="ident">outputs</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">output</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">fee</span>(<span class="ident">fee_consensus</span>))
-                .<span class="ident">sum</span>::<span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span>()
+                .<span class="ident">map</span>(|<span class="ident">output</span>| <span class="ident">output</span>.<span class="ident">fee</span>(<span class="ident">fee_consensus</span>))
+                .<span class="ident">sum</span>::&lt;<span class="ident">Amount</span>&gt;()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fee_consensus</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">TransactionError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">in_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">in_amount</span>();
-        <span class="kw">let</span> <span class="ident">out_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">out_amount</span>();
-        <span class="kw">let</span> <span class="ident">fee_amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">fee_amount</span>(<span class="ident">fee_consensus</span>);
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fee_consensus</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">in_amount</span> = <span class="self">self</span>.<span class="ident">in_amount</span>();
+        <span class="kw">let</span> <span class="ident">out_amount</span> = <span class="self">self</span>.<span class="ident">out_amount</span>();
+        <span class="kw">let</span> <span class="ident">fee_amount</span> = <span class="self">self</span>.<span class="ident">fee_amount</span>(<span class="ident">fee_consensus</span>);
 
-        <span class="kw">if</span> <span class="ident">in_amount</span> <span class="op">==</span> (<span class="ident">out_amount</span> <span class="op">+</span> <span class="ident">fee_amount</span>) {
+        <span class="kw">if</span> <span class="ident">in_amount</span> == (<span class="ident">out_amount</span> + <span class="ident">fee_amount</span>) {
             <span class="prelude-val">Ok</span>(())
         } <span class="kw">else</span> {
             <span class="prelude-val">Err</span>(<span class="ident">TransactionError::UnbalancedTransaction</span> {
@@ -392,7 +392,7 @@
     <span class="doccomment">/// Generates the transaction hash without constructing the transaction (which would require a</span>
     <span class="doccomment">/// signature).</span>
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">tx_hash_from_parts</span>(<span class="ident">inputs</span>: <span class="kw-2">&amp;</span>[<span class="ident">Input</span>], <span class="ident">outputs</span>: <span class="kw-2">&amp;</span>[<span class="ident">Output</span>]) -&gt; <span class="ident">TransactionId</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> <span class="op">=</span> <span class="ident">TransactionId::engine</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> = <span class="ident">TransactionId::engine</span>();
         <span class="ident">inputs</span>
             .<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">engine</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;write to hash engine can&#39;t fail&quot;</span>);
@@ -404,9 +404,9 @@
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">validate_signature</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">keys</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">XOnlyPublicKey</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">TransactionError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">keys</span> <span class="op">=</span> <span class="ident">keys</span>.<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+        <span class="ident">keys</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">XOnlyPublicKey</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">keys</span> = <span class="ident">keys</span>.<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="comment">// If there are no keys from inputs there are no inputs to protect from re-binding. This</span>
         <span class="comment">// behavior is useful for non-monetary transactions that just announce something, like LN</span>
@@ -416,13 +416,13 @@
         }
 
         <span class="comment">// Unless keys were empty we require a signature</span>
-        <span class="kw">let</span> <span class="ident">signature</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">signature</span> = <span class="self">self</span>
             .<span class="ident">signature</span>
             .<span class="ident">as_ref</span>()
             .<span class="ident">ok_or</span>(<span class="ident">TransactionError::MissingSignature</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">agg_pub_key</span> <span class="op">=</span> <span class="ident">agg_keys</span>(<span class="kw-2">&amp;</span><span class="ident">keys</span>);
-        <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">agg_pub_key</span> = <span class="ident">agg_keys</span>(<span class="kw-2">&amp;</span><span class="ident">keys</span>);
+        <span class="kw">let</span> <span class="ident">msg</span> =
             <span class="ident">secp256k1_zkp::Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">tx_hash</span>()[..]).<span class="ident">expect</span>(<span class="string">&quot;hash has right length&quot;</span>);
 
         <span class="kw">if</span> <span class="ident">secp256k1_zkp::global::SECP256K1</span>
@@ -445,38 +445,38 @@
     <span class="ident">new_pre_session</span>(<span class="ident">keys</span>, <span class="ident">secp256k1_zkp::SECP256K1</span>).<span class="ident">agg_pk</span>()
 }
 
-<span class="kw">fn</span> <span class="ident">new_pre_session</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span>(
+<span class="kw">fn</span> <span class="ident">new_pre_session</span>&lt;<span class="ident">C</span>&gt;(
     <span class="ident">keys</span>: <span class="kw-2">&amp;</span>[<span class="ident">XOnlyPublicKey</span>],
-    <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span>,
+    <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">C</span>&gt;,
 ) -&gt; <span class="ident">secp256k1_zkp::MusigKeyAggCache</span>
 <span class="kw">where</span>
-    <span class="ident">C</span>: <span class="ident">Signing</span> <span class="op">+</span> <span class="ident">Verification</span>,
+    <span class="ident">C</span>: <span class="ident">Signing</span> + <span class="ident">Verification</span>,
 {
     <span class="macro">assert!</span>(
-        <span class="op">!</span><span class="ident">keys</span>.<span class="ident">is_empty</span>(),
+        !<span class="ident">keys</span>.<span class="ident">is_empty</span>(),
         <span class="string">&quot;Must supply more than 0 keys for aggregation&quot;</span>
     );
     <span class="ident">secp256k1_zkp::MusigKeyAggCache::new</span>(<span class="ident">ctx</span>, <span class="ident">keys</span>)
 }
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">agg_sign</span><span class="op">&lt;</span><span class="ident">R</span>, <span class="ident">C</span>, <span class="ident">M</span><span class="op">&gt;</span>(
+<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">agg_sign</span>&lt;<span class="ident">R</span>, <span class="ident">C</span>, <span class="ident">M</span>&gt;(
     <span class="ident">keys</span>: <span class="kw-2">&amp;</span>[<span class="ident">bitcoin::KeyPair</span>],
     <span class="ident">msg</span>: <span class="ident">M</span>,
-    <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">C</span><span class="op">&gt;</span>,
+    <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">C</span>&gt;,
     <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
 ) -&gt; <span class="ident">schnorr::Signature</span>
 <span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">rand::RngCore</span> <span class="op">+</span> <span class="ident">rand::CryptoRng</span>,
-    <span class="ident">C</span>: <span class="ident">Signing</span> <span class="op">+</span> <span class="ident">Verification</span>,
-    <span class="ident">M</span>: <span class="ident">Into</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::Message</span><span class="op">&gt;</span>,
+    <span class="ident">R</span>: <span class="ident">rand::RngCore</span> + <span class="ident">rand::CryptoRng</span>,
+    <span class="ident">C</span>: <span class="ident">Signing</span> + <span class="ident">Verification</span>,
+    <span class="ident">M</span>: <span class="ident">Into</span>&lt;<span class="ident">secp256k1_zkp::Message</span>&gt;,
 {
-    <span class="kw">let</span> <span class="ident">msg</span> <span class="op">=</span> <span class="ident">msg</span>.<span class="ident">into</span>();
-    <span class="kw">let</span> <span class="ident">pub_keys</span> <span class="op">=</span> <span class="ident">keys</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">key</span><span class="op">|</span> <span class="ident">key</span>.<span class="ident">public_key</span>()).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-    <span class="kw">let</span> <span class="ident">pre_session</span> <span class="op">=</span> <span class="ident">new_pre_session</span>(<span class="kw-2">&amp;</span><span class="ident">pub_keys</span>, <span class="ident">ctx</span>);
+    <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">msg</span>.<span class="ident">into</span>();
+    <span class="kw">let</span> <span class="ident">pub_keys</span> = <span class="ident">keys</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|<span class="ident">key</span>| <span class="ident">key</span>.<span class="ident">public_key</span>()).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let</span> <span class="ident">pre_session</span> = <span class="ident">new_pre_session</span>(<span class="kw-2">&amp;</span><span class="ident">pub_keys</span>, <span class="ident">ctx</span>);
 
-    <span class="kw">let</span> <span class="ident">session_id</span>: [<span class="ident">u8</span>; <span class="number">32</span>] <span class="op">=</span> <span class="ident">rng</span>.<span class="ident">gen</span>();
-    <span class="kw">let</span> (<span class="ident">sec_nonces</span>, <span class="ident">pub_nonces</span>): (<span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">keys</span>
+    <span class="kw">let</span> <span class="ident">session_id</span>: [<span class="ident">u8</span>; <span class="number">32</span>] = <span class="ident">rng</span>.<span class="ident">gen</span>();
+    <span class="kw">let</span> (<span class="ident">sec_nonces</span>, <span class="ident">pub_nonces</span>): (<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;) = <span class="ident">keys</span>
         .<span class="ident">iter</span>()
-        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">key</span><span class="op">|</span> {
+        .<span class="ident">map</span>(|<span class="ident">key</span>| {
             <span class="comment">// FIXME: upstream</span>
             <span class="ident">pre_session</span>
                 .<span class="ident">nonce_gen</span>(<span class="ident">ctx</span>, <span class="ident">session_id</span>, <span class="ident">key</span>.<span class="ident">into</span>(), <span class="ident">msg</span>, <span class="prelude-val">None</span>)
@@ -484,19 +484,19 @@
         })
         .<span class="ident">unzip</span>();
 
-    <span class="kw">let</span> <span class="ident">agg_nonce</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::MusigAggNonce::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">pub_nonces</span>);
+    <span class="kw">let</span> <span class="ident">agg_nonce</span> = <span class="ident">secp256k1_zkp::MusigAggNonce::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">pub_nonces</span>);
 
-    <span class="kw">let</span> <span class="ident">session</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::MusigSession::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">pre_session</span>, <span class="ident">agg_nonce</span>, <span class="ident">msg</span>, <span class="prelude-val">None</span>);
+    <span class="kw">let</span> <span class="ident">session</span> = <span class="ident">secp256k1_zkp::MusigSession::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;</span><span class="ident">pre_session</span>, <span class="ident">agg_nonce</span>, <span class="ident">msg</span>, <span class="prelude-val">None</span>);
 
-    <span class="kw">let</span> <span class="ident">partial_sigs</span> <span class="op">=</span> <span class="ident">sec_nonces</span>
+    <span class="kw">let</span> <span class="ident">partial_sigs</span> = <span class="ident">sec_nonces</span>
         .<span class="ident">into_iter</span>()
         .<span class="ident">zip</span>(<span class="ident">keys</span>.<span class="ident">iter</span>())
-        .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw-2">mut</span> <span class="ident">nonce</span>, <span class="ident">key</span>)<span class="op">|</span> {
+        .<span class="ident">map</span>(|(<span class="kw-2">mut</span> <span class="ident">nonce</span>, <span class="ident">key</span>)| {
             <span class="ident">session</span>
                 .<span class="ident">partial_sign</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">nonce</span>, <span class="ident">key</span>, <span class="kw-2">&amp;</span><span class="ident">pre_session</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;Should not fail for cooperative protocol runs&quot;</span>)
         })
-        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+        .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
     <span class="ident">session</span>.<span class="ident">partial_sig_agg</span>(<span class="kw-2">&amp;</span><span class="ident">partial_sigs</span>)
 }
@@ -515,4 +515,4 @@
     <span class="ident">MissingSignature</span>,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

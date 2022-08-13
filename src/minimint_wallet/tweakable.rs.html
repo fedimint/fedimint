@@ -58,22 +58,22 @@
 <span class="doccomment">/// An object that can be used as a ricardian contract to tweak a key</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Contract</span> {
     <span class="doccomment">/// Serialize the contract in a deterministic way to be used as a tweak</span>
-    <span class="kw">fn</span> <span class="ident">encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span>;
+    <span class="kw">fn</span> <span class="ident">encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span>&lt;()&gt;;
 }
 
 <span class="doccomment">/// A key or object containing keys that may be tweaked for pay-to-contract constructions</span>
 <span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Tweakable</span> {
     <span class="doccomment">/// Tweak the key with a `tweak` contract</span>
-    <span class="kw">fn</span> <span class="ident">tweak</span><span class="op">&lt;</span><span class="ident">Ctx</span>: <span class="ident">Verification</span>, <span class="ident">Ctr</span>: <span class="ident">Contract</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span><span class="ident">Ctr</span>, <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">Ctx</span><span class="op">&gt;</span>) -&gt; <span class="self">Self</span>;
+    <span class="kw">fn</span> <span class="ident">tweak</span>&lt;<span class="ident">Ctx</span>: <span class="ident">Verification</span>, <span class="ident">Ctr</span>: <span class="ident">Contract</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span><span class="ident">Ctr</span>, <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">Ctx</span>&gt;) -&gt; <span class="self">Self</span>;
 }
 
 <span class="kw">impl</span> <span class="ident">Tweakable</span> <span class="kw">for</span> <span class="ident">secp256k1::PublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">tweak</span><span class="op">&lt;</span><span class="ident">Ctx</span>: <span class="ident">Verification</span>, <span class="ident">Ctr</span>: <span class="ident">Contract</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span><span class="ident">Ctr</span>, <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">Ctx</span><span class="op">&gt;</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> <span class="op">=</span> <span class="ident">HmacEngine</span>::<span class="op">&lt;</span><span class="ident">sha256::Hash</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">serialize</span>()[..]);
+    <span class="kw">fn</span> <span class="ident">tweak</span>&lt;<span class="ident">Ctx</span>: <span class="ident">Verification</span>, <span class="ident">Ctr</span>: <span class="ident">Contract</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span><span class="ident">Ctr</span>, <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">Ctx</span>&gt;) -&gt; <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> = <span class="ident">HmacEngine</span>::&lt;<span class="ident">sha256::Hash</span>&gt;<span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">serialize</span>()[..]);
         <span class="ident">tweak</span>.<span class="ident">encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">hasher</span>).<span class="ident">expect</span>(<span class="string">&quot;hashing is infallible&quot;</span>);
-        <span class="kw">let</span> <span class="ident">tweak</span> <span class="op">=</span> <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>();
+        <span class="kw">let</span> <span class="ident">tweak</span> = <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">key</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">key</span> = <span class="kw-2">*</span><span class="self">self</span>;
         <span class="ident">key</span>.<span class="ident">add_exp_assign</span>(<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">tweak</span>[..])
             .<span class="ident">expect</span>(<span class="string">&quot;tweak is always 32 bytes, other failure modes are negligible&quot;</span>);
 
@@ -82,27 +82,27 @@
 }
 
 <span class="kw">impl</span> <span class="ident">Contract</span> <span class="kw">for</span> <span class="ident">secp256k1::PublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span>&lt;()&gt; {
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">serialize</span>())
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Contract</span> <span class="kw">for</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span> {
-    <span class="kw">fn</span> <span class="ident">encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+<span class="kw">impl</span> <span class="ident">Contract</span> <span class="kw">for</span> <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; {
+    <span class="kw">fn</span> <span class="ident">encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span>&lt;()&gt; {
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="self">self</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Contract</span> <span class="kw">for</span> [<span class="ident">u8</span>; <span class="number">32</span>] {
-    <span class="kw">fn</span> <span class="ident">encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">encode</span>&lt;<span class="ident">W</span>: <span class="ident">Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span>&lt;()&gt; {
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="self">self</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Contract</span> <span class="kw">for</span> <span class="ident">secp256k1::XOnlyPublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="kw-2">&amp;mut</span> <span class="ident">W</span>) -&gt; <span class="ident">std::io::Result</span>&lt;()&gt; {
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">serialize</span>()[..])
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

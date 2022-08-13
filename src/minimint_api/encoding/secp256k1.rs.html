@@ -116,50 +116,50 @@
 <span class="kw">use</span> <span class="ident">std::io</span>::{<span class="ident">Error</span>, <span class="ident">Read</span>, <span class="ident">Write</span>};
 
 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::ecdsa::Signature</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">serialize_compact</span>();
+    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">bytes</span> = <span class="self">self</span>.<span class="ident">serialize_compact</span>();
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">bytes</span>.<span class="ident">len</span>())
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::ecdsa::Signature</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">DecodeError</span><span class="op">&gt;</span> {
-        <span class="ident">Signature::from_compact</span>(<span class="kw-2">&amp;</span><span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">64</span>]<span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>).<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
+    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
+        <span class="ident">Signature::from_compact</span>(<span class="kw-2">&amp;</span>&lt;[<span class="ident">u8</span>; <span class="number">64</span>]&gt;<span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>).<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">serialize</span>();
+    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">bytes</span> = <span class="self">self</span>.<span class="ident">serialize</span>();
         <span class="ident">writer</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>[..])<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">bytes</span>.<span class="ident">len</span>())
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">DecodeError</span><span class="op">&gt;</span> {
-        <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_slice</span>(<span class="kw-2">&amp;</span><span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">32</span>]<span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
+    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
+        <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_slice</span>(<span class="kw-2">&amp;</span>&lt;[<span class="ident">u8</span>; <span class="number">32</span>]&gt;<span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
             .<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::PublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
         <span class="self">self</span>.<span class="ident">serialize</span>().<span class="ident">consensus_encode</span>(<span class="ident">writer</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::PublicKey</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">DecodeError</span><span class="op">&gt;</span> {
-        <span class="ident">secp256k1_zkp::PublicKey::from_slice</span>(<span class="kw-2">&amp;</span><span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">33</span>]<span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
+    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
+        <span class="ident">secp256k1_zkp::PublicKey::from_slice</span>(<span class="kw-2">&amp;</span>&lt;[<span class="ident">u8</span>; <span class="number">33</span>]&gt;<span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>)
             .<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::schnorr::Signature</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">std::io::Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">std::io::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="self">self</span>[..];
+    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">bytes</span> = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
         <span class="macro">assert_eq!</span>(
             <span class="ident">bytes</span>.<span class="ident">len</span>(),
             <span class="ident">secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE</span>
@@ -170,21 +170,21 @@
 }
 
 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">secp256k1_zkp::schnorr::Signature</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">std::io::Read</span><span class="op">&gt;</span>(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">DecodeError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">bytes</span> <span class="op">=</span> <span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="ident">secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE</span>]<span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">bytes</span> = &lt;[<span class="ident">u8</span>; <span class="ident">secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE</span>]&gt;<span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
         <span class="ident">secp256k1_zkp::schnorr::Signature::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>).<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">bitcoin::KeyPair</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span><span class="op">&lt;</span><span class="ident">W</span>: <span class="ident">Write</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">Error</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">Error</span>&gt; {
         <span class="self">self</span>.<span class="ident">secret_bytes</span>().<span class="ident">consensus_encode</span>(<span class="ident">writer</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">bitcoin::KeyPair</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span><span class="op">&lt;</span><span class="ident">D</span>: <span class="ident">Read</span><span class="op">&gt;</span>(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">DecodeError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">sec_bytes</span> <span class="op">=</span> <span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">32</span>]<span class="op">&gt;</span><span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">Read</span>&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">sec_bytes</span> = &lt;[<span class="ident">u8</span>; <span class="number">32</span>]&gt;<span class="ident">::consensus_decode</span>(<span class="ident">d</span>)<span class="question-mark">?</span>;
         <span class="ident"><span class="self">Self</span>::from_seckey_slice</span>(<span class="ident">secp256k1_zkp::global::SECP256K1</span>, <span class="kw-2">&amp;</span><span class="ident">sec_bytes</span>) <span class="comment">// FIXME: evaluate security risk of global ctx</span>
             .<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)
     }
@@ -198,10 +198,10 @@
 
     <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_ecdsa_sig</span>() {
-        <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::Secp256k1::new</span>();
-        <span class="kw">let</span> (<span class="ident">sk</span>, <span class="ident">_pk</span>) <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">generate_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rand::thread_rng</span>());
-        <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">sign_ecdsa</span>(
-            <span class="kw-2">&amp;</span><span class="ident">Message::from_hashed_data</span>::<span class="op">&lt;</span><span class="ident">secp256k1_zkp::hashes::sha256::Hash</span><span class="op">&gt;</span>(<span class="string">b&quot;Hello World!&quot;</span>),
+        <span class="kw">let</span> <span class="ident">ctx</span> = <span class="ident">secp256k1_zkp::Secp256k1::new</span>();
+        <span class="kw">let</span> (<span class="ident">sk</span>, <span class="ident">_pk</span>) = <span class="ident">ctx</span>.<span class="ident">generate_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rand::thread_rng</span>());
+        <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">ctx</span>.<span class="ident">sign_ecdsa</span>(
+            <span class="kw-2">&amp;</span><span class="ident">Message::from_hashed_data</span>::&lt;<span class="ident">secp256k1_zkp::hashes::sha256::Hash</span>&gt;(<span class="string">b&quot;Hello World!&quot;</span>),
             <span class="kw-2">&amp;</span><span class="ident">sk</span>,
         );
 
@@ -210,13 +210,13 @@
 
     <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
     <span class="kw">fn</span> <span class="ident">test_schnorr_pub_key</span>() {
-        <span class="kw">let</span> <span class="ident">ctx</span> <span class="op">=</span> <span class="ident">secp256k1_zkp::global::SECP256K1</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">sec_key</span> <span class="op">=</span> <span class="ident">bitcoin::KeyPair::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="ident">sec_key</span>.<span class="ident">public_key</span>();
+        <span class="kw">let</span> <span class="ident">ctx</span> = <span class="ident">secp256k1_zkp::global::SECP256K1</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">sec_key</span> = <span class="ident">bitcoin::KeyPair::new</span>(<span class="ident">ctx</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+        <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="ident">sec_key</span>.<span class="ident">public_key</span>();
         <span class="ident">test_roundtrip</span>(<span class="ident">pub_key</span>);
 
-        <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">sign_schnorr</span>(
+        <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">ctx</span>.<span class="ident">sign_schnorr</span>(
             <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::hashes::sha256::Hash::hash</span>(<span class="string">b&quot;Hello World!&quot;</span>).<span class="ident">into</span>(),
             <span class="kw-2">&amp;</span><span class="ident">sec_key</span>,
         );
@@ -225,4 +225,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

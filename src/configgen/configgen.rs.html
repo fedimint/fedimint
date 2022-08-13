@@ -70,7 +70,7 @@
     <span class="ident">nodes</span>: <span class="ident">u16</span>,
     <span class="ident">hbbft_base_port</span>: <span class="ident">u16</span>,
     <span class="ident">api_base_port</span>: <span class="ident">u16</span>,
-    <span class="ident">amount_tiers</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Amount</span><span class="op">&gt;</span>,
+    <span class="ident">amount_tiers</span>: <span class="ident">Vec</span>&lt;<span class="ident">Amount</span>&gt;,
 }
 
 <span class="kw">fn</span> <span class="ident">main</span>() {
@@ -80,41 +80,41 @@
         <span class="ident">hbbft_base_port</span>,
         <span class="ident">api_base_port</span>,
         <span class="ident">amount_tiers</span>,
-    } <span class="op">=</span> <span class="ident">Options::parse</span>();
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> <span class="op">=</span> <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>();
+    } = <span class="ident">Options::parse</span>();
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> = <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>();
 
     <span class="comment">// Recursively create config directory if it doesn&#39;t exist</span>
     <span class="ident">std::fs::create_dir_all</span>(<span class="kw-2">&amp;</span><span class="ident">cfg_path</span>).<span class="ident">expect</span>(<span class="string">&quot;Failed to create config directory&quot;</span>);
 
-    <span class="kw">let</span> <span class="ident">peers</span> <span class="op">=</span> (<span class="number">0</span>..<span class="ident">nodes</span>).<span class="ident">map</span>(<span class="ident">PeerId::from</span>).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
-    <span class="kw">let</span> <span class="ident">max_evil</span> <span class="op">=</span> <span class="ident">hbbft::util::max_faulty</span>(<span class="ident">peers</span>.<span class="ident">len</span>());
+    <span class="kw">let</span> <span class="ident">peers</span> = (<span class="number">0</span>..<span class="ident">nodes</span>).<span class="ident">map</span>(<span class="ident">PeerId::from</span>).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let</span> <span class="ident">max_evil</span> = <span class="ident">hbbft::util::max_faulty</span>(<span class="ident">peers</span>.<span class="ident">len</span>());
     <span class="macro">println!</span>(
         <span class="string">&quot;Generating keys such that up to {} peers may fail/be evil&quot;</span>,
         <span class="ident">max_evil</span>
     );
-    <span class="kw">let</span> <span class="ident">params</span> <span class="op">=</span> <span class="ident">ServerConfigParams</span> {
+    <span class="kw">let</span> <span class="ident">params</span> = <span class="ident">ServerConfigParams</span> {
         <span class="ident">hbbft_base_port</span>,
         <span class="ident">api_base_port</span>,
         <span class="ident">amount_tiers</span>,
     };
 
-    <span class="kw">let</span> (<span class="ident">server_cfg</span>, <span class="ident">client_cfg</span>) <span class="op">=</span>
+    <span class="kw">let</span> (<span class="ident">server_cfg</span>, <span class="ident">client_cfg</span>) =
         <span class="ident">ServerConfig::trusted_dealer_gen</span>(<span class="kw-2">&amp;</span><span class="ident">peers</span>, <span class="ident">max_evil</span>, <span class="kw-2">&amp;</span><span class="ident">params</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
 
     <span class="kw">for</span> (<span class="ident">id</span>, <span class="ident">cfg</span>) <span class="kw">in</span> <span class="ident">server_cfg</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">path</span>: <span class="ident">PathBuf</span> <span class="op">=</span> <span class="ident">cfg_path</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">path</span>: <span class="ident">PathBuf</span> = <span class="ident">cfg_path</span>.<span class="ident">clone</span>();
         <span class="ident">path</span>.<span class="ident">push</span>(<span class="macro">format!</span>(<span class="string">&quot;server-{}.json&quot;</span>, <span class="ident">id</span>));
 
-        <span class="kw">let</span> <span class="ident">file</span> <span class="op">=</span> <span class="ident">std::fs::File::create</span>(<span class="ident">path</span>).<span class="ident">expect</span>(<span class="string">&quot;Could not create cfg file&quot;</span>);
+        <span class="kw">let</span> <span class="ident">file</span> = <span class="ident">std::fs::File::create</span>(<span class="ident">path</span>).<span class="ident">expect</span>(<span class="string">&quot;Could not create cfg file&quot;</span>);
         <span class="ident">serde_json::to_writer_pretty</span>(<span class="ident">file</span>, <span class="kw-2">&amp;</span><span class="ident">cfg</span>).<span class="ident">unwrap</span>();
     }
 
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">client_cfg_file_path</span>: <span class="ident">PathBuf</span> <span class="op">=</span> <span class="ident">cfg_path</span>;
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">client_cfg_file_path</span>: <span class="ident">PathBuf</span> = <span class="ident">cfg_path</span>;
     <span class="ident">client_cfg_file_path</span>.<span class="ident">push</span>(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let</span> <span class="ident">client_cfg_file</span> <span class="op">=</span>
+    <span class="kw">let</span> <span class="ident">client_cfg_file</span> =
         <span class="ident">std::fs::File::create</span>(<span class="ident">client_cfg_file_path</span>).<span class="ident">expect</span>(<span class="string">&quot;Could not create cfg file&quot;</span>);
 
     <span class="ident">serde_json::to_writer_pretty</span>(<span class="ident">client_cfg_file</span>, <span class="kw-2">&amp;</span><span class="ident">client_cfg</span>).<span class="ident">unwrap</span>();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

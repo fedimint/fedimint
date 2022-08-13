@@ -67,15 +67,15 @@
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Default</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Audit</span> {
-    <span class="ident">items</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">AuditItem</span><span class="op">&gt;</span>,
+    <span class="ident">items</span>: <span class="ident">Vec</span>&lt;<span class="ident">AuditItem</span>&gt;,
 }
 
 <span class="kw">impl</span> <span class="ident">Audit</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">sum</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">AuditItem</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">sum</span> <span class="op">=</span> <span class="number">0</span>;
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">sum</span> = <span class="number">0</span>;
 
         <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">items</span> {
-            <span class="ident">sum</span> <span class="op">+</span><span class="op">=</span> <span class="ident">item</span>.<span class="ident">milli_sat</span>;
+            <span class="ident">sum</span> += <span class="ident">item</span>.<span class="ident">milli_sat</span>;
         }
         <span class="ident">AuditItem</span> {
             <span class="ident">name</span>: <span class="string">&quot;Total sats&quot;</span>.<span class="ident">to_string</span>(),
@@ -83,17 +83,17 @@
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_items</span><span class="op">&lt;</span><span class="ident">KP</span>, <span class="ident">F</span><span class="op">&gt;</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span><span class="ident">KP</span>, <span class="ident">to_milli_sat</span>: <span class="ident">F</span>)
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">add_items</span>&lt;<span class="ident">KP</span>, <span class="ident">F</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span><span class="ident">KP</span>, <span class="ident">to_milli_sat</span>: <span class="ident">F</span>)
     <span class="kw">where</span>
-        <span class="ident">KP</span>: <span class="ident">DatabaseKeyPrefix</span> <span class="op">+</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="ident">KP</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">DatabaseKeyPrefixConst</span> + <span class="lifetime">&#39;static</span>,
         <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">KP::Key</span>, <span class="ident">KP::Value</span>) -&gt; <span class="ident">i64</span>,
     {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_items</span> <span class="op">=</span> <span class="ident">db</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_items</span> = <span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="ident">key_prefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">value</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">let</span> <span class="ident">name</span> <span class="op">=</span> <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">key</span>);
-                <span class="kw">let</span> <span class="ident">milli_sat</span> <span class="op">=</span> <span class="ident">to_milli_sat</span>(<span class="ident">key</span>, <span class="ident">value</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">value</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">let</span> <span class="ident">name</span> = <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">key</span>);
+                <span class="kw">let</span> <span class="ident">milli_sat</span> = <span class="ident">to_milli_sat</span>(<span class="ident">key</span>, <span class="ident">value</span>);
                 <span class="ident">AuditItem</span> { <span class="ident">name</span>, <span class="ident">milli_sat</span> }
             })
             .<span class="ident">collect</span>();
@@ -118,9 +118,9 @@
 
 <span class="kw">impl</span> <span class="ident">Display</span> <span class="kw">for</span> <span class="ident">AuditItem</span> {
     <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">formatter</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Formatter</span>) -&gt; <span class="ident">std::fmt::Result</span> {
-        <span class="kw">let</span> <span class="ident">sats</span> <span class="op">=</span> (<span class="self">self</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">f64</span>) <span class="op">/</span> <span class="number">1000.0</span>;
+        <span class="kw">let</span> <span class="ident">sats</span> = (<span class="self">self</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">f64</span>) / <span class="number">1000.0</span>;
         <span class="ident">formatter</span>.<span class="ident">write_fmt</span>(<span class="macro">format_args!</span>(<span class="string">&quot;{:&gt;+15.3}|{}&quot;</span>, <span class="ident">sats</span>, <span class="self">self</span>.<span class="ident">name</span>))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

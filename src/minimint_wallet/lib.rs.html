@@ -1288,14 +1288,14 @@
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">tweakable</span>;
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">txoproof</span>;
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> <span class="op">=</span> <span class="string">&quot;native&quot;</span>)]</span>
+<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;native&quot;</span>)]</span>
 <span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">bitcoincore_rpc</span>;
 
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">CONFIRMATION_TARGET</span>: <span class="ident">u16</span> <span class="op">=</span> <span class="number">10</span>;
+<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">CONFIRMATION_TARGET</span>: <span class="ident">u16</span> = <span class="number">10</span>;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PartialSig</span> <span class="op">=</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PartialSig</span> = <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PegInDescriptor</span> <span class="op">=</span> <span class="ident">Descriptor</span><span class="op">&lt;</span><span class="ident">CompressedPublicKey</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PegInDescriptor</span> = <span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt;;
 
 <span class="attribute">#[<span class="ident">derive</span>(
     <span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">UnzipConsensus</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>,
@@ -1315,7 +1315,7 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutSignatureItem</span> {
     <span class="kw">pub</span> <span class="ident">txid</span>: <span class="ident">Txid</span>,
-    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">secp256k1::ecdsa::Signature</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span>&lt;<span class="ident">secp256k1::ecdsa::Signature</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
@@ -1327,15 +1327,15 @@
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Wallet</span> {
     <span class="ident">cfg</span>: <span class="ident">WalletConfig</span>,
-    <span class="ident">secp</span>: <span class="ident">Secp256k1</span><span class="op">&lt;</span><span class="ident">All</span><span class="op">&gt;</span>,
-    <span class="ident">btc_rpc</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span>,
-    <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
+    <span class="ident">secp</span>: <span class="ident">Secp256k1</span>&lt;<span class="ident">All</span>&gt;,
+    <span class="ident">btc_rpc</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;,
+    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SpendableUTXO</span> {
     <span class="kw">pub</span> <span class="ident">tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
 }
 
@@ -1351,15 +1351,15 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransaction</span> {
     <span class="kw">pub</span> <span class="ident">psbt</span>: <span class="ident">PartiallySignedTransaction</span>,
-    <span class="kw">pub</span> <span class="ident">signatures</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)<span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)&gt;,
     <span class="kw">pub</span> <span class="ident">change</span>: <span class="ident">bitcoin::Amount</span>,
     <span class="kw">pub</span> <span class="ident">fees</span>: <span class="ident">PegOutFees</span>,
 }
 
-<span class="kw">struct</span> <span class="ident">StatelessWallet</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
-    <span class="ident">descriptor</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Descriptor</span><span class="op">&lt;</span><span class="ident">CompressedPublicKey</span><span class="op">&gt;</span>,
+<span class="kw">struct</span> <span class="ident">StatelessWallet</span>&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="ident">descriptor</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt;,
     <span class="ident">secret_key</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1::SecretKey</span>,
-    <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1::All</span><span class="op">&gt;</span>,
+    <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1::Secp256k1</span>&lt;<span class="ident">secp256k1::All</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(
@@ -1395,45 +1395,45 @@
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOut</span> {
     <span class="kw">pub</span> <span class="ident">recipient</span>: <span class="ident">bitcoin::Address</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> <span class="op">=</span> <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
+    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
     <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
     <span class="kw">pub</span> <span class="ident">fees</span>: <span class="ident">PegOutFees</span>,
 }
 
 <span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
 <span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">Wallet</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> <span class="op">=</span> <span class="ident">WalletError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> <span class="op">=</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="ident">PegInProof</span><span class="op">&gt;</span>;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> <span class="op">=</span> <span class="ident">PegOut</span>;
+    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">WalletError</span>;
+    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">Box</span>&lt;<span class="ident">PegInProof</span>&gt;;
+    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">PegOut</span>;
     <span class="comment">// TODO: implement outcome</span>
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> <span class="op">=</span> ();
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> <span class="op">=</span> <span class="ident">WalletConsensusItem</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> <span class="op">=</span> ();
+    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = ();
+    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">WalletConsensusItem</span>;
+    <span class="kw">type</span> <span class="ident">VerificationCache</span> = ();
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">our_target_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="ident">last_consensus_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">last_consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
 
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">len</span>() <span class="op">==</span> <span class="number">1</span> {
-            <span class="kw">while</span> <span class="ident">our_target_height</span> <span class="op">&lt;</span><span class="op">=</span> <span class="ident">last_consensus_height</span> {
-                <span class="ident">our_target_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">len</span>() == <span class="number">1</span> {
+            <span class="kw">while</span> <span class="ident">our_target_height</span> &lt;= <span class="ident">last_consensus_height</span> {
+                <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
                 <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">1000</span>)).<span class="kw">await</span>;
             }
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::ConsensusItem</span><span class="op">&gt;</span> {
+        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
         <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable</span>
-        <span class="kw">let</span> <span class="ident">our_target_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
 
         <span class="comment">// In case the wallet just got created the height is not committed to the DB yet but will</span>
         <span class="comment">// be set to 0 first, so we can assume that here.</span>
-        <span class="kw">let</span> <span class="ident">last_consensus_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="ident">last_consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
 
-        <span class="kw">let</span> <span class="ident">proposed_height</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">our_target_height</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">last_consensus_height</span> {
+        <span class="kw">let</span> <span class="ident">proposed_height</span> = <span class="kw">if</span> <span class="ident">our_target_height</span> &gt;= <span class="ident">last_consensus_height</span> {
             <span class="ident">our_target_height</span>
         } <span class="kw">else</span> {
             <span class="macro">warn!</span>(
@@ -1444,13 +1444,13 @@
             <span class="ident">last_consensus_height</span>
         };
 
-        <span class="kw">let</span> <span class="ident">fee_rate</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">fee_rate</span> = <span class="self">self</span>
             .<span class="ident">btc_rpc</span>
             .<span class="ident">get_fee_rate</span>(<span class="ident">CONFIRMATION_TARGET</span>)
             .<span class="kw">await</span>
             .<span class="ident">unwrap_or</span>(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">default_fee</span>);
 
-        <span class="kw">let</span> <span class="ident">round_ci</span> <span class="op">=</span> <span class="ident">WalletConsensusItem::RoundConsensus</span>(<span class="ident">RoundConsensusItem</span> {
+        <span class="kw">let</span> <span class="ident">round_ci</span> = <span class="ident">WalletConsensusItem::RoundConsensus</span>(<span class="ident">RoundConsensusItem</span> {
             <span class="ident">block_height</span>: <span class="ident">proposed_height</span>,
             <span class="ident">fee_rate</span>,
             <span class="ident">randomness</span>: <span class="ident">rng</span>.<span class="ident">gen</span>(),
@@ -1458,8 +1458,8 @@
 
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PegOutTxSignatureCIPrefix</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;FB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;FB error&quot;</span>);
                 <span class="ident">WalletConsensusItem::PegOutSignature</span>(<span class="ident">PegOutSignatureItem</span> {
                     <span class="ident">txid</span>: <span class="ident">key</span>.<span class="number">0</span>,
                     <span class="ident">signature</span>: <span class="ident">val</span>,
@@ -1469,11 +1469,11 @@
             .<span class="ident">collect</span>()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)<span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
     ) {
         <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">consensus_items</span>, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
@@ -1482,7 +1482,7 @@
         <span class="kw">let</span> <span class="ident">UnzipWalletConsensusItem</span> {
             <span class="ident">peg_out_signature</span>: <span class="ident">peg_out_signatures</span>,
             <span class="ident">round_consensus</span>,
-        } <span class="op">=</span> <span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">unzip_wallet_consensus_item</span>();
+        } = <span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">unzip_wallet_consensus_item</span>();
 
         <span class="comment">// Save signatures to the database</span>
         <span class="self">self</span>.<span class="ident">save_peg_out_signatures</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">peg_out_signatures</span>);
@@ -1493,24 +1493,24 @@
             <span class="macro">panic!</span>(<span class="string">&quot;No proposals were submitted this round&quot;</span>);
         }
 
-        <span class="kw">let</span> <span class="ident">fee_proposals</span> <span class="op">=</span> <span class="ident">round_consensus</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">rc</span>)<span class="op">|</span> <span class="ident">rc</span>.<span class="ident">fee_rate</span>).<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">fee_rate</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">process_fee_proposals</span>(<span class="ident">fee_proposals</span>).<span class="kw">await</span>;
+        <span class="kw">let</span> <span class="ident">fee_proposals</span> = <span class="ident">round_consensus</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">fee_rate</span>).<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">fee_rate</span> = <span class="self">self</span>.<span class="ident">process_fee_proposals</span>(<span class="ident">fee_proposals</span>).<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">height_proposals</span> <span class="op">=</span> <span class="ident">round_consensus</span>
+        <span class="kw">let</span> <span class="ident">height_proposals</span> = <span class="ident">round_consensus</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">rc</span>)<span class="op">|</span> <span class="ident">rc</span>.<span class="ident">block_height</span>)
+            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">block_height</span>)
             .<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">block_height</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">block_height</span> = <span class="self">self</span>
             .<span class="ident">process_block_height_proposals</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">height_proposals</span>)
             .<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">randomness_contributions</span> <span class="op">=</span> <span class="ident">round_consensus</span>
+        <span class="kw">let</span> <span class="ident">randomness_contributions</span> = <span class="ident">round_consensus</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">rc</span>)<span class="op">|</span> <span class="ident">rc</span>.<span class="ident">randomness</span>)
+            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">randomness</span>)
             .<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">randomness_beacon</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">process_randomness_contributions</span>(<span class="ident">randomness_contributions</span>);
+        <span class="kw">let</span> <span class="ident">randomness_beacon</span> = <span class="self">self</span>.<span class="ident">process_randomness_contributions</span>(<span class="ident">randomness_contributions</span>);
 
-        <span class="kw">let</span> <span class="ident">round_consensus</span> <span class="op">=</span> <span class="ident">RoundConsensus</span> {
+        <span class="kw">let</span> <span class="ident">round_consensus</span> = <span class="ident">RoundConsensus</span> {
             <span class="ident">block_height</span>,
             <span class="ident">fee_rate</span>,
             <span class="ident">randomness_beacon</span>,
@@ -1520,19 +1520,19 @@
         <span class="ident">batch</span>.<span class="ident">commit</span>();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span><span class="op">&gt;</span>,
+        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt;,
     ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">_interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
         <span class="ident">_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">block_is_known</span>(<span class="ident">input</span>.<span class="ident">proof_block</span>()) {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">block_is_known</span>(<span class="ident">input</span>.<span class="ident">proof_block</span>()) {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::UnknownPegInProofBlock</span>(<span class="ident">input</span>.<span class="ident">proof_block</span>()));
         }
 
@@ -1553,15 +1553,15 @@
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
         <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
         <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">InputMeta</span><span class="op">&lt;</span><span class="lifetime">&#39;b</span><span class="op">&gt;</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">meta</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="ident">outpoint</span> <span class="op">=</span> <span class="op">%</span><span class="ident">input</span>.<span class="ident">outpoint</span>(), <span class="ident">amount</span> <span class="op">=</span> <span class="op">%</span><span class="ident">meta</span>.<span class="ident">amount</span>, <span class="string">&quot;Claiming peg-in&quot;</span>);
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(<span class="ident">outpoint</span> = %<span class="ident">input</span>.<span class="ident">outpoint</span>(), <span class="ident">amount</span> = %<span class="ident">meta</span>.<span class="ident">amount</span>, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
         <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
             <span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">outpoint</span>()),
@@ -1578,15 +1578,15 @@
     <span class="kw">fn</span> <span class="ident">validate_output</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">if</span> <span class="op">!</span><span class="ident">is_address_valid_for_network</span>(<span class="kw-2">&amp;</span><span class="ident">output</span>.<span class="ident">recipient</span>, <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">network</span>) {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">if</span> !<span class="ident">is_address_valid_for_network</span>(<span class="kw-2">&amp;</span><span class="ident">output</span>.<span class="ident">recipient</span>, <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">network</span>) {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::WrongNetwork</span>(
                 <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">network</span>,
                 <span class="ident">output</span>.<span class="ident">recipient</span>.<span class="ident">network</span>,
             ));
         }
-        <span class="kw">let</span> <span class="ident">consensus_fee_rate</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">fee_rate</span>;
-        <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span> <span class="op">&lt;</span> <span class="ident">consensus_fee_rate</span> {
+        <span class="kw">let</span> <span class="ident">consensus_fee_rate</span> = <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">fee_rate</span>;
+        <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span> &lt; <span class="ident">consensus_fee_rate</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::PegOutFeeRate</span>(
                 <span class="ident">output</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span>,
                 <span class="ident">consensus_fee_rate</span>,
@@ -1598,33 +1598,33 @@
         <span class="prelude-val">Ok</span>(<span class="ident">output</span>.<span class="ident">amount</span>.<span class="ident">into</span>())
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
         <span class="ident">_out_point</span>: <span class="ident">minimint_api::OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">amount</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">amount</span> = <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
-            <span class="ident">amount</span> <span class="op">=</span> <span class="op">%</span><span class="ident">output</span>.<span class="ident">amount</span>, <span class="ident">recipient</span> <span class="op">=</span> <span class="op">%</span><span class="ident">output</span>.<span class="ident">recipient</span>,
+            <span class="ident">amount</span> = %<span class="ident">output</span>.<span class="ident">amount</span>, <span class="ident">recipient</span> = %<span class="ident">output</span>.<span class="ident">recipient</span>,
             <span class="string">&quot;Queuing peg-out&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="self">self</span>
             .<span class="ident">create_peg_out_tx</span>(<span class="ident">output</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;Should have been validated&quot;</span>);
         <span class="self">self</span>.<span class="ident">offline_wallet</span>().<span class="ident">sign_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">tx</span>.<span class="ident">psbt</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
+        <span class="kw">let</span> <span class="ident">txid</span> = <span class="ident">tx</span>.<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
         <span class="macro">info!</span>(
-            <span class="op">%</span><span class="ident">txid</span>,
+            %<span class="ident">txid</span>,
             <span class="string">&quot;Signing peg out&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="ident">sigs</span> <span class="op">=</span> <span class="ident">tx</span>
+        <span class="kw">let</span> <span class="ident">sigs</span> = <span class="ident">tx</span>
             .<span class="ident">psbt</span>
             .<span class="ident">inputs</span>
             .<span class="ident">iter_mut</span>()
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> {
+            .<span class="ident">map</span>(|<span class="ident">input</span>| {
                 <span class="macro">assert_eq!</span>(
                     <span class="ident">input</span>.<span class="ident">partial_sigs</span>.<span class="ident">len</span>(),
                     <span class="number">1</span>,
@@ -1634,17 +1634,17 @@
                 <span class="comment">// TODO: don&#39;t put sig into PSBT in the first place</span>
                 <span class="comment">// We actually take out our own signature so everyone finalizes the tx in the</span>
                 <span class="comment">// same epoch.</span>
-                <span class="kw">let</span> <span class="ident">sig</span> <span class="op">=</span> <span class="ident">std::mem::take</span>(<span class="kw-2">&amp;mut</span> <span class="ident">input</span>.<span class="ident">partial_sigs</span>)
+                <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">std::mem::take</span>(<span class="kw-2">&amp;mut</span> <span class="ident">input</span>.<span class="ident">partial_sigs</span>)
                     .<span class="ident">into_values</span>()
                     .<span class="ident">next</span>()
                     .<span class="ident">expect</span>(<span class="string">&quot;asserted previously&quot;</span>);
 
                 <span class="comment">// We drop SIGHASH_ALL, because we always use that and it is only present in the</span>
                 <span class="comment">// PSBT for compatibility with other tools.</span>
-                <span class="ident">secp256k1::ecdsa::Signature::from_der</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="ident">to_vec</span>()[..<span class="ident">sig</span>.<span class="ident">to_vec</span>().<span class="ident">len</span>() <span class="op">-</span> <span class="number">1</span>])
+                <span class="ident">secp256k1::ecdsa::Signature::from_der</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="ident">to_vec</span>()[..<span class="ident">sig</span>.<span class="ident">to_vec</span>().<span class="ident">len</span>() - <span class="number">1</span>])
                     .<span class="ident">expect</span>(<span class="string">&quot;we serialized it ourselves that way&quot;</span>)
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="comment">// Delete used UTXOs</span>
         <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(
@@ -1652,7 +1652,7 @@
                 .<span class="ident">unsigned_tx</span>
                 .<span class="ident">input</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">input</span><span class="op">|</span> <span class="ident">BatchItem::delete</span>(<span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">previous_output</span>))),
+                .<span class="ident">map</span>(|<span class="ident">input</span>| <span class="ident">BatchItem::delete</span>(<span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">previous_output</span>))),
         );
 
         <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">UnsignedTransactionKey</span>(<span class="ident">txid</span>), <span class="ident">tx</span>);
@@ -1661,33 +1661,33 @@
         <span class="prelude-val">Ok</span>(<span class="ident">amount</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span> <span class="op">+</span> <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
+        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
+        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
+        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
         <span class="comment">// Sign and finalize any unsigned transactions that have signatures</span>
-        <span class="kw">let</span> <span class="ident">unsigned_txs</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UnsignedTransactionKey</span>, <span class="ident">UnsignedTransaction</span>)<span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">unsigned_txs</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UnsignedTransactionKey</span>, <span class="ident">UnsignedTransaction</span>)&gt; = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>))
-            .<span class="ident">filter</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">unsigned</span>)<span class="op">|</span> <span class="op">!</span><span class="ident">unsigned</span>.<span class="ident">signatures</span>.<span class="ident">is_empty</span>())
+            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>))
+            .<span class="ident">filter</span>(|(<span class="kw">_</span>, <span class="ident">unsigned</span>)| !<span class="ident">unsigned</span>.<span class="ident">signatures</span>.<span class="ident">is_empty</span>())
             .<span class="ident">collect</span>();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> <span class="op">=</span> <span class="ident">Vec</span>::<span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span><span class="ident">::new</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
         <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">unsigned</span>) <span class="kw">in</span> <span class="ident">unsigned_txs</span> {
             <span class="kw">let</span> <span class="ident">UnsignedTransaction</span> {
                 <span class="kw-2">mut</span> <span class="ident">psbt</span>,
                 <span class="ident">signatures</span>,
                 <span class="ident">change</span>,
                 ..
-            } <span class="op">=</span> <span class="ident">unsigned</span>;
+            } = <span class="ident">unsigned</span>;
 
-            <span class="kw">let</span> <span class="ident">signers</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">signatures</span>
+            <span class="kw">let</span> <span class="ident">signers</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">signatures</span>
                 .<span class="ident">iter</span>()
                 .<span class="ident">filter_map</span>(
-                    <span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">sig</span>)<span class="op">|</span> <span class="kw">match</span> <span class="self">self</span>.<span class="ident">sign_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="ident">peer</span>, <span class="ident">sig</span>) {
+                    |(<span class="ident">peer</span>, <span class="ident">sig</span>)| <span class="kw">match</span> <span class="self">self</span>.<span class="ident">sign_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="ident">peer</span>, <span class="ident">sig</span>) {
                         <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">peer</span>),
                         <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
                             <span class="macro">warn!</span>(<span class="string">&quot;Error with {} partial sig {:?}&quot;</span>, <span class="ident">peer</span>, <span class="ident">error</span>);
@@ -1720,20 +1720,20 @@
         <span class="ident">drop_peers</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident"><span class="self">Self</span>::TxOutputOutcome</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
         <span class="comment">// TODO: return BTC tx id once included in peg-out tx</span>
         <span class="prelude-val">Some</span>(())
     }
 
     <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
-            <span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
+            <span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
         });
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
-            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
+            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
         });
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>, <span class="op">|</span><span class="kw">_</span>, <span class="ident">v</span><span class="op">|</span> {
-            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> <span class="op">*</span> <span class="number">1000</span>
+        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
+            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
         });
     }
 
@@ -1741,20 +1741,20 @@
         <span class="string">&quot;wallet&quot;</span>
     }
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>] {
-        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span><span class="op">&lt;</span><span class="ident">Wallet</span><span class="op">&gt;</span>] <span class="op">=</span> <span class="kw-2">&amp;</span>[
+    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
+        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span>&lt;<span class="ident">Wallet</span>&gt;] = <span class="kw-2">&amp;</span>[
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/block_height&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">_params</span>: ()<span class="op">|</span> -&gt; <span class="ident">u32</span> {
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">_params</span>: ()| -&gt; <span class="ident">u32</span> {
                     <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>))
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/peg_out_fees&quot;</span>,
-                <span class="kw">async</span> <span class="op">|</span><span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">params</span>: (<span class="ident">Address</span>, <span class="ident">u64</span>)<span class="op">|</span> -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PegOutFees</span><span class="op">&gt;</span> {
-                    <span class="kw">let</span> (<span class="ident">address</span>, <span class="ident">sats</span>) <span class="op">=</span> <span class="ident">params</span>;
-                    <span class="kw">let</span> <span class="ident">consensus</span> <span class="op">=</span> <span class="ident">module</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">module</span>.<span class="ident">offline_wallet</span>().<span class="ident">create_tx</span>(
+                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">params</span>: (<span class="ident">Address</span>, <span class="ident">u64</span>)| -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">PegOutFees</span>&gt; {
+                    <span class="kw">let</span> (<span class="ident">address</span>, <span class="ident">sats</span>) = <span class="ident">params</span>;
+                    <span class="kw">let</span> <span class="ident">consensus</span> = <span class="ident">module</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>();
+                    <span class="kw">let</span> <span class="ident">tx</span> = <span class="ident">module</span>.<span class="ident">offline_wallet</span>().<span class="ident">create_tx</span>(
                         <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sats</span>),
                         <span class="ident">address</span>.<span class="ident">script_pubkey</span>(),
                         <span class="ident">module</span>.<span class="ident">available_utxos</span>(),
@@ -1762,7 +1762,7 @@
                         <span class="kw-2">&amp;</span><span class="ident">consensus</span>.<span class="ident">randomness_beacon</span>
                     );
 
-                    <span class="prelude-val">Ok</span>(<span class="ident">tx</span>.<span class="ident">map</span>(<span class="op">|</span><span class="ident">tx</span><span class="op">|</span> <span class="ident">tx</span>.<span class="ident">fees</span>))
+                    <span class="prelude-val">Ok</span>(<span class="ident">tx</span>.<span class="ident">map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">fees</span>))
                 }
             },
         ];
@@ -1774,23 +1774,23 @@
     <span class="comment">// TODO: work around bitcoind_gen being a closure, maybe make clonable?</span>
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_with_bitcoind</span>(
         <span class="ident">cfg</span>: <span class="ident">WalletConfig</span>,
-        <span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>,
-        <span class="ident">bitcoind_gen</span>: <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Wallet</span>, <span class="ident">WalletError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">broadcaster_bitcoind_rpc</span> <span class="op">=</span> <span class="ident">bitcoind_gen</span>();
-        <span class="kw">let</span> <span class="ident">broadcaster_db</span> <span class="op">=</span> <span class="ident">db</span>.<span class="ident">clone</span>();
+        <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
+        <span class="ident">bitcoind_gen</span>: <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Wallet</span>, <span class="ident">WalletError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">broadcaster_bitcoind_rpc</span> = <span class="ident">bitcoind_gen</span>();
+        <span class="kw">let</span> <span class="ident">broadcaster_db</span> = <span class="ident">db</span>.<span class="ident">clone</span>();
         <span class="ident">minimint_api::task::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
             <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">broadcaster_db</span>, <span class="ident">broadcaster_bitcoind_rpc</span>).<span class="kw">await</span>;
         });
 
-        <span class="kw">let</span> <span class="ident">bitcoind_rpc</span> <span class="op">=</span> <span class="ident">bitcoind_gen</span>();
+        <span class="kw">let</span> <span class="ident">bitcoind_rpc</span> = <span class="ident">bitcoind_gen</span>();
 
-        <span class="kw">let</span> <span class="ident">bitcoind_net</span> <span class="op">=</span> <span class="ident">bitcoind_rpc</span>.<span class="ident">get_network</span>().<span class="kw">await</span>;
-        <span class="kw">if</span> <span class="ident">bitcoind_net</span> <span class="op">!</span><span class="op">=</span> <span class="ident">cfg</span>.<span class="ident">network</span> {
+        <span class="kw">let</span> <span class="ident">bitcoind_net</span> = <span class="ident">bitcoind_rpc</span>.<span class="ident">get_network</span>().<span class="kw">await</span>;
+        <span class="kw">if</span> <span class="ident">bitcoind_net</span> != <span class="ident">cfg</span>.<span class="ident">network</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::WrongNetwork</span>(<span class="ident">cfg</span>.<span class="ident">network</span>, <span class="ident">bitcoind_net</span>));
         }
 
-        <span class="kw">let</span> <span class="ident">wallet</span> <span class="op">=</span> <span class="ident">Wallet</span> {
+        <span class="kw">let</span> <span class="ident">wallet</span> = <span class="ident">Wallet</span> {
             <span class="ident">cfg</span>,
             <span class="ident">secp</span>: <span class="ident">Default::default</span>(),
             <span class="ident">btc_rpc</span>: <span class="ident">bitcoind_rpc</span>,
@@ -1800,9 +1800,9 @@
         <span class="prelude-val">Ok</span>(<span class="ident">wallet</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">process_randomness_contributions</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">randomness</span>: <span class="ident">Vec</span><span class="op">&lt;</span>[<span class="ident">u8</span>; <span class="number">32</span>]<span class="op">&gt;</span>) -&gt; [<span class="ident">u8</span>; <span class="number">32</span>] {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">process_randomness_contributions</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">randomness</span>: <span class="ident">Vec</span>&lt;[<span class="ident">u8</span>; <span class="number">32</span>]&gt;) -&gt; [<span class="ident">u8</span>; <span class="number">32</span>] {
         <span class="kw">fn</span> <span class="ident">xor</span>(<span class="kw-2">mut</span> <span class="ident">lhs</span>: [<span class="ident">u8</span>; <span class="number">32</span>], <span class="ident">rhs</span>: [<span class="ident">u8</span>; <span class="number">32</span>]) -&gt; [<span class="ident">u8</span>; <span class="number">32</span>] {
-            <span class="ident">lhs</span>.<span class="ident">iter_mut</span>().<span class="ident">zip</span>(<span class="ident">rhs</span>).<span class="ident">for_each</span>(<span class="op">|</span>(<span class="ident">lhs</span>, <span class="ident">rhs</span>)<span class="op">|</span> <span class="kw-2">*</span><span class="ident">lhs</span> <span class="op">^</span><span class="op">=</span> <span class="ident">rhs</span>);
+            <span class="ident">lhs</span>.<span class="ident">iter_mut</span>().<span class="ident">zip</span>(<span class="ident">rhs</span>).<span class="ident">for_each</span>(|(<span class="ident">lhs</span>, <span class="ident">rhs</span>)| <span class="kw-2">*</span><span class="ident">lhs</span> ^= <span class="ident">rhs</span>);
             <span class="ident">lhs</span>
         }
 
@@ -1812,13 +1812,13 @@
     <span class="kw">fn</span> <span class="ident">save_peg_out_signatures</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
-        <span class="ident">signatures</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)<span class="op">&gt;</span>,
+        <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)&gt;,
     ) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cache</span>: <span class="ident">BTreeMap</span><span class="op">&lt;</span><span class="ident">Txid</span>, <span class="ident">UnsignedTransaction</span><span class="op">&gt;</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cache</span>: <span class="ident">BTreeMap</span>&lt;<span class="ident">Txid</span>, <span class="ident">UnsignedTransaction</span>&gt; = <span class="self">self</span>
             .<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                 (<span class="ident">key</span>.<span class="number">0</span>, <span class="ident">val</span>)
             })
             .<span class="ident">collect</span>();
@@ -1845,28 +1845,28 @@
         <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>,
         <span class="ident">peer</span>: <span class="kw-2">&amp;</span><span class="ident">PeerId</span>,
         <span class="ident">signature</span>: <span class="kw-2">&amp;</span><span class="ident">PegOutSignatureItem</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">ProcessPegOutSigError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">peer_key</span> <span class="op">=</span> <span class="self">self</span>
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">ProcessPegOutSigError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">peer_key</span> = <span class="self">self</span>
             .<span class="ident">cfg</span>
             .<span class="ident">peer_peg_in_keys</span>
             .<span class="ident">get</span>(<span class="ident">peer</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;always called with valid peer id&quot;</span>);
 
-        <span class="kw">if</span> <span class="ident">psbt</span>.<span class="ident">inputs</span>.<span class="ident">len</span>() <span class="op">!</span><span class="op">=</span> <span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">len</span>() {
+        <span class="kw">if</span> <span class="ident">psbt</span>.<span class="ident">inputs</span>.<span class="ident">len</span>() != <span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">len</span>() {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::WrongSignatureCount</span>(
                 <span class="ident">psbt</span>.<span class="ident">inputs</span>.<span class="ident">len</span>(),
                 <span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">len</span>(),
             ));
         }
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> = <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
         <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">input</span>, <span class="ident">signature</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
             .<span class="ident">inputs</span>
             .<span class="ident">iter_mut</span>()
             .<span class="ident">zip</span>(<span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">iter</span>())
             .<span class="ident">enumerate</span>()
         {
-            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>
+            <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">tx_hasher</span>
                 .<span class="ident">segwit_signature_hash</span>(
                     <span class="ident">idx</span>,
                     <span class="ident">input</span>
@@ -1876,21 +1876,21 @@
                     <span class="ident">input</span>.<span class="ident">witness_utxo</span>.<span class="ident">as_ref</span>().<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>).<span class="ident">value</span>,
                     <span class="ident">EcdsaSighashType::All</span>,
                 )
-                .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::SighashError</span>)<span class="question-mark">?</span>;
+                .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::SighashError</span>)<span class="question-mark">?</span>;
 
-            <span class="kw">let</span> <span class="ident">tweak</span> <span class="op">=</span> <span class="ident">input</span>
+            <span class="kw">let</span> <span class="ident">tweak</span> = <span class="ident">input</span>
                 .<span class="ident">proprietary</span>
                 .<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>())
                 .<span class="ident">expect</span>(<span class="string">&quot;we saved it with a tweak&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">tweaked_peer_key</span> <span class="op">=</span> <span class="ident">peer_key</span>.<span class="ident">tweak</span>(<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>);
+            <span class="kw">let</span> <span class="ident">tweaked_peer_key</span> = <span class="ident">peer_key</span>.<span class="ident">tweak</span>(<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>);
             <span class="self">self</span>.<span class="ident">secp</span>
                 .<span class="ident">verify_ecdsa</span>(
                     <span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(),
                     <span class="ident">signature</span>,
                     <span class="kw-2">&amp;</span><span class="ident">tweaked_peer_key</span>.<span class="ident">key</span>,
                 )
-                .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::InvalidSignature</span>)<span class="question-mark">?</span>;
+                .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::InvalidSignature</span>)<span class="question-mark">?</span>;
 
             <span class="kw">if</span> <span class="ident">input</span>
                 .<span class="ident">partial_sigs</span>
@@ -1908,24 +1908,24 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>,
         <span class="ident">change</span>: <span class="ident">Amount</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PendingTransaction</span>, <span class="ident">ProcessPegOutSigError</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PendingTransaction</span>, <span class="ident">ProcessPegOutSigError</span>&gt; {
         <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds later on.</span>
         <span class="comment">// The tweak is extracted here because the psbt is moved next and not available anymore</span>
         <span class="comment">// when the tweak is actually needed in the end to be put into the batch on success.</span>
-        <span class="kw">let</span> <span class="ident">change_tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>] <span class="op">=</span> <span class="ident">psbt</span>
+        <span class="kw">let</span> <span class="ident">change_tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>] = <span class="ident">psbt</span>
             .<span class="ident">outputs</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">output</span><span class="op">|</span> <span class="ident">output</span>.<span class="ident">proprietary</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>()).<span class="ident">cloned</span>())
+            .<span class="ident">flat_map</span>(|<span class="ident">output</span>| <span class="ident">output</span>.<span class="ident">proprietary</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>()).<span class="ident">cloned</span>())
             .<span class="ident">next</span>()
             .<span class="ident">ok_or</span>(<span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>
             .<span class="ident">try_into</span>()
-            .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>;
+            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">finalize_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>) {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) = <span class="ident">psbt</span>.<span class="ident">finalize_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>) {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::ErrorFinalizingPsbt</span>(<span class="ident">error</span>));
         }
 
-        <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> <span class="ident">psbt</span>.<span class="ident">clone</span>().<span class="ident">extract_tx</span>();
+        <span class="kw">let</span> <span class="ident">tx</span> = <span class="ident">psbt</span>.<span class="ident">clone</span>().<span class="ident">extract_tx</span>();
 
         <span class="prelude-val">Ok</span>(<span class="ident">PendingTransaction</span> {
             <span class="ident">tx</span>,
@@ -1936,13 +1936,13 @@
 
     <span class="doccomment">/// # Panics</span>
     <span class="doccomment">/// * If proposals is empty</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_fee_proposals</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Feerate</span><span class="op">&gt;</span>) -&gt; <span class="ident">Feerate</span> {
-        <span class="macro">assert!</span>(<span class="op">!</span><span class="ident">proposals</span>.<span class="ident">is_empty</span>());
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_fee_proposals</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span>&lt;<span class="ident">Feerate</span>&gt;) -&gt; <span class="ident">Feerate</span> {
+        <span class="macro">assert!</span>(!<span class="ident">proposals</span>.<span class="ident">is_empty</span>());
 
         <span class="ident">proposals</span>.<span class="ident">sort</span>();
 
         <span class="kw-2">*</span><span class="ident">proposals</span>
-            .<span class="ident">get</span>(<span class="ident">proposals</span>.<span class="ident">len</span>() <span class="op">/</span> <span class="number">2</span>)
+            .<span class="ident">get</span>(<span class="ident">proposals</span>.<span class="ident">len</span>() / <span class="number">2</span>)
             .<span class="ident">expect</span>(<span class="string">&quot;We checked before that proposals aren&#39;t empty&quot;</span>)
     }
 
@@ -1950,17 +1950,17 @@
     <span class="doccomment">/// * If proposals is empty</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_block_height_proposals</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
-        <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span>,
+        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;_</span>&gt;,
+        <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span>&lt;<span class="ident">u32</span>&gt;,
     ) -&gt; <span class="ident">u32</span> {
-        <span class="macro">assert!</span>(<span class="op">!</span><span class="ident">proposals</span>.<span class="ident">is_empty</span>());
+        <span class="macro">assert!</span>(!<span class="ident">proposals</span>.<span class="ident">is_empty</span>());
 
         <span class="ident">proposals</span>.<span class="ident">sort_unstable</span>();
-        <span class="kw">let</span> <span class="ident">median_proposal</span> <span class="op">=</span> <span class="ident">proposals</span>[<span class="ident">proposals</span>.<span class="ident">len</span>() <span class="op">/</span> <span class="number">2</span>];
+        <span class="kw">let</span> <span class="ident">median_proposal</span> = <span class="ident">proposals</span>[<span class="ident">proposals</span>.<span class="ident">len</span>() / <span class="number">2</span>];
 
-        <span class="kw">let</span> <span class="ident">consensus_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="ident">consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
 
-        <span class="kw">if</span> <span class="ident">median_proposal</span> <span class="op">&gt;</span><span class="op">=</span> <span class="ident">consensus_height</span> {
+        <span class="kw">if</span> <span class="ident">median_proposal</span> &gt;= <span class="ident">consensus_height</span> {
             <span class="macro">debug!</span>(<span class="string">&quot;Setting consensus block height to {}&quot;</span>, <span class="ident">median_proposal</span>);
             <span class="self">self</span>.<span class="ident">sync_up_to_consensus_height</span>(<span class="ident">batch</span>, <span class="ident">median_proposal</span>)
                 .<span class="kw">await</span>;
@@ -1974,22 +1974,22 @@
         <span class="ident">median_proposal</span>
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">current_round_consensus</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">RoundConsensus</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">current_round_consensus</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">RoundConsensus</span>&gt; {
         <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">RoundConsensusKey</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">target_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">u32</span> {
-        <span class="kw">let</span> <span class="ident">our_network_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_height</span>().<span class="kw">await</span> <span class="kw">as</span> <span class="ident">u32</span>;
+        <span class="kw">let</span> <span class="ident">our_network_height</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_height</span>().<span class="kw">await</span> <span class="kw">as</span> <span class="ident">u32</span>;
         <span class="ident">our_network_height</span>.<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">finality_delay</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">u32</span><span class="op">&gt;</span> {
-        <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">rc</span><span class="op">|</span> <span class="ident">rc</span>.<span class="ident">block_height</span>)
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">u32</span>&gt; {
+        <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">map</span>(|<span class="ident">rc</span>| <span class="ident">rc</span>.<span class="ident">block_height</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">sync_up_to_consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>, <span class="ident">new_height</span>: <span class="ident">u32</span>) {
-        <span class="kw">let</span> <span class="ident">old_height</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
-        <span class="kw">if</span> <span class="ident">new_height</span> <span class="op">&lt;</span> <span class="ident">old_height</span> {
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">sync_up_to_consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;_</span>&gt;, <span class="ident">new_height</span>: <span class="ident">u32</span>) {
+        <span class="kw">let</span> <span class="ident">old_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+        <span class="kw">if</span> <span class="ident">new_height</span> &lt; <span class="ident">old_height</span> {
             <span class="macro">info!</span>(
                 <span class="ident">new_height</span>,
                 <span class="ident">old_height</span>, <span class="string">&quot;Nothing to sync, new height is lower than old height, doing nothing.&quot;</span>
@@ -1997,40 +1997,40 @@
             <span class="kw">return</span>;
         }
 
-        <span class="kw">if</span> <span class="ident">new_height</span> <span class="op">==</span> <span class="ident">old_height</span> {
-            <span class="macro">debug!</span>(<span class="ident">height</span> <span class="op">=</span> <span class="ident">old_height</span>, <span class="string">&quot;Height didn&#39;t change&quot;</span>);
+        <span class="kw">if</span> <span class="ident">new_height</span> == <span class="ident">old_height</span> {
+            <span class="macro">debug!</span>(<span class="ident">height</span> = <span class="ident">old_height</span>, <span class="string">&quot;Height didn&#39;t change&quot;</span>);
             <span class="kw">return</span>;
         }
 
         <span class="macro">info!</span>(
             <span class="ident">new_height</span>,
-            <span class="ident">block_to_go</span> <span class="op">=</span> <span class="ident">new_height</span> <span class="op">-</span> <span class="ident">old_height</span>,
+            <span class="ident">block_to_go</span> = <span class="ident">new_height</span> - <span class="ident">old_height</span>,
             <span class="string">&quot;New consensus height, syncing up&quot;</span>,
         );
 
-        <span class="ident">batch</span>.<span class="ident">reserve</span>((<span class="ident">new_height</span> <span class="op">-</span> <span class="ident">old_height</span>) <span class="kw">as</span> <span class="ident">usize</span> <span class="op">+</span> <span class="number">1</span>);
-        <span class="kw">for</span> <span class="ident">height</span> <span class="kw">in</span> (<span class="ident">old_height</span> <span class="op">+</span> <span class="number">1</span>)..<span class="op">=</span>(<span class="ident">new_height</span>) {
-            <span class="kw">if</span> <span class="ident">height</span> <span class="op">%</span> <span class="number">100</span> <span class="op">==</span> <span class="number">0</span> {
+        <span class="ident">batch</span>.<span class="ident">reserve</span>((<span class="ident">new_height</span> - <span class="ident">old_height</span>) <span class="kw">as</span> <span class="ident">usize</span> + <span class="number">1</span>);
+        <span class="kw">for</span> <span class="ident">height</span> <span class="kw">in</span> (<span class="ident">old_height</span> + <span class="number">1</span>)..=(<span class="ident">new_height</span>) {
+            <span class="kw">if</span> <span class="ident">height</span> % <span class="number">100</span> == <span class="number">0</span> {
                 <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {}&quot;</span>, <span class="ident">height</span>);
             }
 
             <span class="comment">// TODO: use batching for mainnet syncing</span>
-            <span class="macro">trace!</span>(<span class="ident">block</span> <span class="op">=</span> <span class="ident">height</span>, <span class="string">&quot;Fetching block hash&quot;</span>);
-            <span class="kw">let</span> <span class="ident">block_hash</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_hash</span>(<span class="ident">height</span> <span class="kw">as</span> <span class="ident">u64</span>).<span class="kw">await</span>; <span class="comment">// TODO: use u64 for height everywhere</span>
+            <span class="macro">trace!</span>(<span class="ident">block</span> = <span class="ident">height</span>, <span class="string">&quot;Fetching block hash&quot;</span>);
+            <span class="kw">let</span> <span class="ident">block_hash</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_hash</span>(<span class="ident">height</span> <span class="kw">as</span> <span class="ident">u64</span>).<span class="kw">await</span>; <span class="comment">// TODO: use u64 for height everywhere</span>
 
-            <span class="kw">let</span> <span class="ident">pending_transactions</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">pending_transactions</span> = <span class="self">self</span>
                 .<span class="ident">db</span>
                 .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
-                .<span class="ident">map</span>(<span class="op">|</span><span class="ident">res</span><span class="op">|</span> {
-                    <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">transaction</span>) <span class="op">=</span> <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+                .<span class="ident">map</span>(|<span class="ident">res</span>| {
+                    <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">transaction</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
                     (<span class="ident">key</span>.<span class="number">0</span>, <span class="ident">transaction</span>)
                 })
-                .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+                .<span class="ident">collect</span>::&lt;<span class="ident">HashMap</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-            <span class="kw">if</span> <span class="op">!</span><span class="ident">pending_transactions</span>.<span class="ident">is_empty</span>() {
-                <span class="kw">let</span> <span class="ident">block</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block</span>(<span class="kw-2">&amp;</span><span class="ident">block_hash</span>).<span class="kw">await</span>;
+            <span class="kw">if</span> !<span class="ident">pending_transactions</span>.<span class="ident">is_empty</span>() {
+                <span class="kw">let</span> <span class="ident">block</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block</span>(<span class="kw-2">&amp;</span><span class="ident">block_hash</span>).<span class="kw">await</span>;
                 <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">block</span>.<span class="ident">txdata</span> {
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">pending_tx</span>) <span class="op">=</span> <span class="ident">pending_transactions</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">txid</span>()) {
+                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">pending_tx</span>) = <span class="ident">pending_transactions</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">txid</span>()) {
                         <span class="self">self</span>.<span class="ident">recognize_change_utxo</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">pending_tx</span>);
                     }
                 }
@@ -2047,13 +2047,13 @@
     <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we</span>
     <span class="doccomment">/// got consensus on.</span>
     <span class="kw">fn</span> <span class="ident">recognize_change_utxo</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>, <span class="ident">pending_tx</span>: <span class="kw-2">&amp;</span><span class="ident">PendingTransaction</span>) {
-        <span class="kw">let</span> <span class="ident">script_pk</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">script_pk</span> = <span class="self">self</span>
             .<span class="ident">cfg</span>
             .<span class="ident">peg_in_descriptor</span>
             .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">pending_tx</span>.<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>)
             .<span class="ident">script_pubkey</span>();
         <span class="kw">for</span> (<span class="ident">idx</span>, <span class="ident">output</span>) <span class="kw">in</span> <span class="ident">pending_tx</span>.<span class="ident">tx</span>.<span class="ident">output</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>() {
-            <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">script_pubkey</span> <span class="op">==</span> <span class="ident">script_pk</span> {
+            <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">script_pubkey</span> == <span class="ident">script_pk</span> {
                 <span class="ident">batch</span>.<span class="ident">append_insert</span>(
                     <span class="ident">UTXOKey</span>(<span class="ident">bitcoin::OutPoint</span> {
                         <span class="ident">txid</span>: <span class="ident">pending_tx</span>.<span class="ident">tx</span>.<span class="ident">txid</span>(),
@@ -2076,8 +2076,8 @@
             .<span class="ident">is_some</span>()
     }
 
-    <span class="kw">fn</span> <span class="ident">create_peg_out_tx</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">peg_out</span>: <span class="kw-2">&amp;</span><span class="ident">PegOut</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">UnsignedTransaction</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">change_tweak</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">randomness_beacon</span>;
+    <span class="kw">fn</span> <span class="ident">create_peg_out_tx</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">peg_out</span>: <span class="kw-2">&amp;</span><span class="ident">PegOut</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">UnsignedTransaction</span>&gt; {
+        <span class="kw">let</span> <span class="ident">change_tweak</span> = <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">randomness_beacon</span>;
         <span class="self">self</span>.<span class="ident">offline_wallet</span>().<span class="ident">create_tx</span>(
             <span class="ident">peg_out</span>.<span class="ident">amount</span>,
             <span class="ident">peg_out</span>.<span class="ident">recipient</span>.<span class="ident">script_pubkey</span>(),
@@ -2087,18 +2087,18 @@
         )
     }
 
-    <span class="kw">fn</span> <span class="ident">available_utxos</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)<span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">available_utxos</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt; {
         <span class="self">self</span>.<span class="ident">db</span>
             .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>)
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="kw">_</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+            .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
             .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_wallet_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bitcoin::Amount</span> {
-        <span class="kw">let</span> <span class="ident">sat_sum</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">sat_sum</span> = <span class="self">self</span>
             .<span class="ident">available_utxos</span>()
             .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">utxo</span>)<span class="op">|</span> <span class="ident">utxo</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>())
+            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">utxo</span>)| <span class="ident">utxo</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>())
             .<span class="ident">sum</span>();
         <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sat_sum</span>)
     }
@@ -2112,54 +2112,54 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="ident">StatelessWallet</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="ident">StatelessWallet</span>&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="doccomment">/// Attempts to create a tx ready to be signed from available UTXOs.</span>
     <span class="doccomment">/// Returns `None` if there are not enough `SpendableUTXO`</span>
     <span class="kw">fn</span> <span class="ident">create_tx</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">peg_out_amount</span>: <span class="ident">bitcoin::Amount</span>,
         <span class="ident">destination</span>: <span class="ident">Script</span>,
-        <span class="kw-2">mut</span> <span class="ident">utxos</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)<span class="op">&gt;</span>,
+        <span class="kw-2">mut</span> <span class="ident">utxos</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt;,
         <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
         <span class="ident">change_tweak</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>],
-    ) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">UnsignedTransaction</span><span class="op">&gt;</span> {
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">UnsignedTransaction</span>&gt; {
         <span class="comment">// When building a transaction we need to take care of two things:</span>
         <span class="comment">//  * We need enough input amount to fund all outputs</span>
         <span class="comment">//  * We need to keep an eye on the tx weight so we can factor the fees into out calculation</span>
         <span class="comment">// We then go on to calculate the base size of the transaction `total_weight` and the</span>
         <span class="comment">// maximum weight per added input which we will add every time we select an input.</span>
-        <span class="kw">let</span> <span class="ident">change_script</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">derive_script</span>(<span class="ident">change_tweak</span>);
-        <span class="kw">let</span> <span class="ident">out_weight</span> <span class="op">=</span> (<span class="ident">destination</span>.<span class="ident">len</span>() <span class="op">*</span> <span class="number">4</span> <span class="op">+</span> <span class="number">1</span> <span class="op">+</span> <span class="number">32</span>
+        <span class="kw">let</span> <span class="ident">change_script</span> = <span class="self">self</span>.<span class="ident">derive_script</span>(<span class="ident">change_tweak</span>);
+        <span class="kw">let</span> <span class="ident">out_weight</span> = (<span class="ident">destination</span>.<span class="ident">len</span>() * <span class="number">4</span> + <span class="number">1</span> + <span class="number">32</span>
             <span class="comment">// Add change script weight, it&#39;s very likely to be needed if not we just overpay in fees</span>
-            <span class="op">+</span> <span class="number">1</span> <span class="comment">// script len varint, 1 byte for all addresses we accept</span>
-            <span class="op">+</span> <span class="ident">change_script</span>.<span class="ident">len</span>() <span class="op">*</span> <span class="number">4</span> <span class="comment">// script len</span>
-            <span class="op">+</span> <span class="number">32</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// value</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_weight</span> <span class="op">=</span> (<span class="number">16</span> <span class="op">+</span> <span class="comment">// version</span>
-            <span class="number">12</span> <span class="op">+</span> <span class="comment">// up to 2**16-1 inputs</span>
-            <span class="number">12</span> <span class="op">+</span> <span class="comment">// up to 2**16-1 outputs</span>
-            <span class="ident">out_weight</span> <span class="op">+</span> <span class="comment">// weight of all outputs</span>
+            + <span class="number">1</span> <span class="comment">// script len varint, 1 byte for all addresses we accept</span>
+            + <span class="ident">change_script</span>.<span class="ident">len</span>() * <span class="number">4</span> <span class="comment">// script len</span>
+            + <span class="number">32</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// value</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_weight</span> = (<span class="number">16</span> + <span class="comment">// version</span>
+            <span class="number">12</span> + <span class="comment">// up to 2**16-1 inputs</span>
+            <span class="number">12</span> + <span class="comment">// up to 2**16-1 outputs</span>
+            <span class="ident">out_weight</span> + <span class="comment">// weight of all outputs</span>
             <span class="number">16</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// lock time</span>
-        <span class="kw">let</span> <span class="ident">max_input_weight</span> <span class="op">=</span> (<span class="self">self</span>
+        <span class="kw">let</span> <span class="ident">max_input_weight</span> = (<span class="self">self</span>
             .<span class="ident">descriptor</span>
             .<span class="ident">max_satisfaction_weight</span>()
-            .<span class="ident">expect</span>(<span class="string">&quot;is satisfyable&quot;</span>) <span class="op">+</span>
-            <span class="number">128</span> <span class="op">+</span> <span class="comment">// TxOutHash</span>
-            <span class="number">16</span> <span class="op">+</span> <span class="comment">// TxOutIndex</span>
+            .<span class="ident">expect</span>(<span class="string">&quot;is satisfyable&quot;</span>) +
+            <span class="number">128</span> + <span class="comment">// TxOutHash</span>
+            <span class="number">16</span> + <span class="comment">// TxOutIndex</span>
             <span class="number">16</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// sequence</span>
 
         <span class="comment">// Finally we initialize our accumulator for selected input amounts</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_selected_value</span> <span class="op">=</span> <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">selected_utxos</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)<span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec!</span>[];
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">fees</span> <span class="op">=</span> <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_selected_value</span> = <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">selected_utxos</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">fees</span> = <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
 
         <span class="comment">// When selecting UTXOs we select from largest to smallest amounts</span>
-        <span class="ident">utxos</span>.<span class="ident">sort_by_key</span>(<span class="op">|</span>(<span class="kw">_</span>, <span class="ident">utxo</span>)<span class="op">|</span> <span class="ident">utxo</span>.<span class="ident">amount</span>);
-        <span class="kw">while</span> <span class="ident">total_selected_value</span> <span class="op">&lt;</span> <span class="ident">peg_out_amount</span> <span class="op">+</span> <span class="ident">change_script</span>.<span class="ident">dust_value</span>() <span class="op">+</span> <span class="ident">fees</span> {
+        <span class="ident">utxos</span>.<span class="ident">sort_by_key</span>(|(<span class="kw">_</span>, <span class="ident">utxo</span>)| <span class="ident">utxo</span>.<span class="ident">amount</span>);
+        <span class="kw">while</span> <span class="ident">total_selected_value</span> &lt; <span class="ident">peg_out_amount</span> + <span class="ident">change_script</span>.<span class="ident">dust_value</span>() + <span class="ident">fees</span> {
             <span class="kw">match</span> <span class="ident">utxos</span>.<span class="ident">pop</span>() {
                 <span class="prelude-val">Some</span>((<span class="ident">utxo_key</span>, <span class="ident">utxo</span>)) =&gt; {
-                    <span class="ident">total_selected_value</span> <span class="op">+</span><span class="op">=</span> <span class="ident">utxo</span>.<span class="ident">amount</span>;
-                    <span class="ident">total_weight</span> <span class="op">+</span><span class="op">=</span> <span class="ident">max_input_weight</span>;
-                    <span class="ident">fees</span> <span class="op">=</span> <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
+                    <span class="ident">total_selected_value</span> += <span class="ident">utxo</span>.<span class="ident">amount</span>;
+                    <span class="ident">total_weight</span> += <span class="ident">max_input_weight</span>;
+                    <span class="ident">fees</span> = <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
                     <span class="ident">selected_utxos</span>.<span class="ident">push</span>((<span class="ident">utxo_key</span>, <span class="ident">utxo</span>));
                 }
                 <span class="kw">_</span> =&gt; <span class="kw">return</span> <span class="prelude-val">None</span>, <span class="comment">// Not enough UTXOs</span>
@@ -2167,8 +2167,8 @@
         }
 
         <span class="comment">// We always pay ourselves change back to ensure that we don&#39;t lose anything due to dust</span>
-        <span class="kw">let</span> <span class="ident">change</span> <span class="op">=</span> <span class="ident">total_selected_value</span> <span class="op">-</span> <span class="ident">fees</span> <span class="op">-</span> <span class="ident">peg_out_amount</span>;
-        <span class="kw">let</span> <span class="ident">output</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TxOut</span><span class="op">&gt;</span> <span class="op">=</span> <span class="macro">vec!</span>[
+        <span class="kw">let</span> <span class="ident">change</span> = <span class="ident">total_selected_value</span> - <span class="ident">fees</span> - <span class="ident">peg_out_amount</span>;
+        <span class="kw">let</span> <span class="ident">output</span>: <span class="ident">Vec</span>&lt;<span class="ident">TxOut</span>&gt; = <span class="macro">vec!</span>[
             <span class="ident">TxOut</span> {
                 <span class="ident">value</span>: <span class="ident">peg_out_amount</span>.<span class="ident">as_sat</span>(),
                 <span class="ident">script_pubkey</span>: <span class="ident">destination</span>,
@@ -2178,27 +2178,27 @@
                 <span class="ident">script_pubkey</span>: <span class="ident">change_script</span>,
             },
         ];
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">change_out</span> <span class="op">=</span> <span class="ident">bitcoin::util::psbt::Output::default</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">change_out</span> = <span class="ident">bitcoin::util::psbt::Output::default</span>();
         <span class="ident">change_out</span>
             .<span class="ident">proprietary</span>
             .<span class="ident">insert</span>(<span class="ident">proprietary_tweak_key</span>(), <span class="ident">change_tweak</span>.<span class="ident">to_vec</span>());
 
         <span class="macro">info!</span>(
-            <span class="ident">inputs</span> <span class="op">=</span> <span class="ident">selected_utxos</span>.<span class="ident">len</span>(),
-            <span class="ident">input_sats</span> <span class="op">=</span> <span class="ident">total_selected_value</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">peg_out_sats</span> <span class="op">=</span> <span class="ident">peg_out_amount</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">fees_sats</span> <span class="op">=</span> <span class="ident">fees</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">fee_rate</span> <span class="op">=</span> <span class="ident">fee_rate</span>.<span class="ident">sats_per_kvb</span>,
-            <span class="ident">change_sats</span> <span class="op">=</span> <span class="ident">change</span>.<span class="ident">as_sat</span>(),
+            <span class="ident">inputs</span> = <span class="ident">selected_utxos</span>.<span class="ident">len</span>(),
+            <span class="ident">input_sats</span> = <span class="ident">total_selected_value</span>.<span class="ident">as_sat</span>(),
+            <span class="ident">peg_out_sats</span> = <span class="ident">peg_out_amount</span>.<span class="ident">as_sat</span>(),
+            <span class="ident">fees_sats</span> = <span class="ident">fees</span>.<span class="ident">as_sat</span>(),
+            <span class="ident">fee_rate</span> = <span class="ident">fee_rate</span>.<span class="ident">sats_per_kvb</span>,
+            <span class="ident">change_sats</span> = <span class="ident">change</span>.<span class="ident">as_sat</span>(),
             <span class="string">&quot;Creating peg-out tx&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="ident">transaction</span> <span class="op">=</span> <span class="ident">Transaction</span> {
+        <span class="kw">let</span> <span class="ident">transaction</span> = <span class="ident">Transaction</span> {
             <span class="ident">version</span>: <span class="number">2</span>,
             <span class="ident">lock_time</span>: <span class="number">0</span>,
             <span class="ident">input</span>: <span class="ident">selected_utxos</span>
                 .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">utxo_key</span>, <span class="ident">_utxo</span>)<span class="op">|</span> <span class="ident">TxIn</span> {
+                .<span class="ident">map</span>(|(<span class="ident">utxo_key</span>, <span class="ident">_utxo</span>)| <span class="ident">TxIn</span> {
                     <span class="ident">previous_output</span>: <span class="ident">utxo_key</span>.<span class="number">0</span>,
                     <span class="ident">script_sig</span>: <span class="ident">Default::default</span>(),
                     <span class="ident">sequence</span>: <span class="number">0xFFFFFFFF</span>,
@@ -2207,10 +2207,10 @@
                 .<span class="ident">collect</span>(),
             <span class="ident">output</span>,
         };
-        <span class="macro">info!</span>(<span class="ident">txid</span> <span class="op">=</span> <span class="op">%</span><span class="ident">transaction</span>.<span class="ident">txid</span>(), <span class="string">&quot;Creating peg-out tx&quot;</span>);
+        <span class="macro">info!</span>(<span class="ident">txid</span> = %<span class="ident">transaction</span>.<span class="ident">txid</span>(), <span class="string">&quot;Creating peg-out tx&quot;</span>);
 
         <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization</span>
-        <span class="kw">let</span> <span class="ident">psbt</span> <span class="op">=</span> <span class="ident">PartiallySignedTransaction</span> {
+        <span class="kw">let</span> <span class="ident">psbt</span> = <span class="ident">PartiallySignedTransaction</span> {
             <span class="ident">unsigned_tx</span>: <span class="ident">transaction</span>,
             <span class="ident">version</span>: <span class="number">0</span>,
             <span class="ident">xpub</span>: <span class="ident">Default::default</span>(),
@@ -2218,8 +2218,8 @@
             <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
             <span class="ident">inputs</span>: <span class="ident">selected_utxos</span>
                 .<span class="ident">into_iter</span>()
-                .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">_utxo_key</span>, <span class="ident">utxo</span>)<span class="op">|</span> {
-                    <span class="kw">let</span> <span class="ident">script_pubkey</span> <span class="op">=</span> <span class="self">self</span>
+                .<span class="ident">map</span>(|(<span class="ident">_utxo_key</span>, <span class="ident">utxo</span>)| {
+                    <span class="kw">let</span> <span class="ident">script_pubkey</span> = <span class="self">self</span>
                         .<span class="ident">descriptor</span>
                         .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">utxo</span>.<span class="ident">tweak</span>, <span class="self">self</span>.<span class="ident">secp</span>)
                         .<span class="ident">script_pubkey</span>();
@@ -2273,7 +2273,7 @@
     }
 
     <span class="kw">fn</span> <span class="ident">sign_psbt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> <span class="op">=</span> <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> = <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
 
         <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">psbt_input</span>, <span class="ident">_tx_input</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
             .<span class="ident">inputs</span>
@@ -2281,17 +2281,17 @@
             .<span class="ident">zip</span>(<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">input</span>.<span class="ident">iter</span>())
             .<span class="ident">enumerate</span>()
         {
-            <span class="kw">let</span> <span class="ident">tweaked_secret</span> <span class="op">=</span> {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">secret_key</span> <span class="op">=</span> <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">secret_key</span>;
+            <span class="kw">let</span> <span class="ident">tweaked_secret</span> = {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">secret_key</span> = <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">secret_key</span>;
 
-                <span class="kw">let</span> <span class="ident">tweak_pk_bytes</span> <span class="op">=</span> <span class="ident">psbt_input</span>
+                <span class="kw">let</span> <span class="ident">tweak_pk_bytes</span> = <span class="ident">psbt_input</span>
                     .<span class="ident">proprietary</span>
                     .<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>())
                     .<span class="ident">expect</span>(<span class="string">&quot;Malformed PSBT: expected tweak&quot;</span>);
-                <span class="kw">let</span> <span class="ident">pub_key</span> <span class="op">=</span> <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">secret_key</span>);
+                <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">secret_key</span>);
 
-                <span class="kw">let</span> <span class="ident">tweak</span> <span class="op">=</span> {
-                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> <span class="op">=</span> <span class="ident">HmacEngine</span>::<span class="op">&lt;</span><span class="ident">sha256::Hash</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">serialize</span>()[..]);
+                <span class="kw">let</span> <span class="ident">tweak</span> = {
+                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> = <span class="ident">HmacEngine</span>::&lt;<span class="ident">sha256::Hash</span>&gt;<span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">serialize</span>()[..]);
                     <span class="ident">hasher</span>.<span class="ident">input</span>(<span class="kw-2">&amp;</span><span class="ident">tweak_pk_bytes</span>[..]);
                     <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>()
                 };
@@ -2302,7 +2302,7 @@
                 <span class="ident">secret_key</span>
             };
 
-            <span class="kw">let</span> <span class="ident">tx_hash</span> <span class="op">=</span> <span class="ident">tx_hasher</span>
+            <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">tx_hasher</span>
                 .<span class="ident">segwit_signature_hash</span>(
                     <span class="ident">idx</span>,
                     <span class="ident">psbt_input</span>
@@ -2318,7 +2318,7 @@
                 )
                 .<span class="ident">expect</span>(<span class="string">&quot;Failed to create segwit sighash&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">signature</span> <span class="op">=</span> <span class="self">self</span>
+            <span class="kw">let</span> <span class="ident">signature</span> = <span class="self">self</span>
                 .<span class="ident">secp</span>
                 .<span class="ident">sign_ecdsa</span>(<span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(), <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>);
 
@@ -2333,14 +2333,14 @@
     }
 
     <span class="kw">fn</span> <span class="ident">derive_script</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">Script</span> {
-        <span class="kw">let</span> <span class="ident">descriptor</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">descriptor</span>.<span class="ident">translate_pk2_infallible</span>(<span class="op">|</span><span class="ident">pub_key</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">hashed_tweak</span> <span class="op">=</span> {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> <span class="op">=</span> <span class="ident">HmacEngine</span>::<span class="op">&lt;</span><span class="ident">sha256::Hash</span><span class="op">&gt;</span><span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">key</span>.<span class="ident">serialize</span>()[..]);
+        <span class="kw">let</span> <span class="ident">descriptor</span> = <span class="self">self</span>.<span class="ident">descriptor</span>.<span class="ident">translate_pk2_infallible</span>(|<span class="ident">pub_key</span>| {
+            <span class="kw">let</span> <span class="ident">hashed_tweak</span> = {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> = <span class="ident">HmacEngine</span>::&lt;<span class="ident">sha256::Hash</span>&gt;<span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">key</span>.<span class="ident">serialize</span>()[..]);
                 <span class="ident">hasher</span>.<span class="ident">input</span>(<span class="ident">tweak</span>);
                 <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>()
             };
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tweak_key</span> <span class="op">=</span> <span class="ident">pub_key</span>.<span class="ident">key</span>;
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tweak_key</span> = <span class="ident">pub_key</span>.<span class="ident">key</span>;
             <span class="ident">tweak_key</span>
                 .<span class="ident">add_exp_assign</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">hashed_tweak</span>)
                 .<span class="ident">expect</span>(<span class="string">&quot;tweaking failed&quot;</span>);
@@ -2363,48 +2363,48 @@
 <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_address_valid_for_network</span>(<span class="ident">address</span>: <span class="kw-2">&amp;</span><span class="ident">Address</span>, <span class="ident">network</span>: <span class="ident">Network</span>) -&gt; <span class="ident">bool</span> {
     <span class="kw">match</span> (<span class="ident">address</span>.<span class="ident">network</span>, <span class="ident">address</span>.<span class="ident">address_type</span>()) {
         (<span class="ident">Network::Testnet</span>, <span class="prelude-val">Some</span>(<span class="ident">AddressType::P2pkh</span>))
-        <span class="op">|</span> (<span class="ident">Network::Testnet</span>, <span class="prelude-val">Some</span>(<span class="ident">AddressType::P2sh</span>)) =&gt; {
+        | (<span class="ident">Network::Testnet</span>, <span class="prelude-val">Some</span>(<span class="ident">AddressType::P2sh</span>)) =&gt; {
             [<span class="ident">Network::Testnet</span>, <span class="ident">Network::Regtest</span>, <span class="ident">Network::Signet</span>].<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">network</span>)
         }
         (<span class="ident">Network::Testnet</span>, <span class="kw">_</span>) =&gt; [<span class="ident">Network::Testnet</span>, <span class="ident">Network::Signet</span>].<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">network</span>),
-        (<span class="ident">addr_net</span>, <span class="kw">_</span>) =&gt; <span class="ident">addr_net</span> <span class="op">==</span> <span class="ident">network</span>,
+        (<span class="ident">addr_net</span>, <span class="kw">_</span>) =&gt; <span class="ident">addr_net</span> == <span class="ident">network</span>,
     }
 }
 
-<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">level</span> <span class="op">=</span> <span class="string">&quot;debug&quot;</span>, <span class="ident">skip_all</span>)]</span>
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">rpc</span>: <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span><span class="op">&gt;</span>) {
+<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">level</span> = <span class="string">&quot;debug&quot;</span>, <span class="ident">skip_all</span>)]</span>
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">rpc</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;) {
     <span class="kw">loop</span> {
         <span class="ident">broadcast_pending_tx</span>(<span class="kw-2">&amp;</span><span class="ident">db</span>, <span class="ident">rpc</span>.<span class="ident">as_ref</span>()).<span class="kw">await</span>;
         <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">10</span>)).<span class="kw">await</span>;
     }
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Database</span><span class="op">&gt;</span>, <span class="ident">rpc</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>) {
-    <span class="kw">let</span> <span class="ident">pending_tx</span> <span class="op">=</span> <span class="ident">db</span>
+<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">rpc</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>) {
+    <span class="kw">let</span> <span class="ident">pending_tx</span> = <span class="ident">db</span>
         .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
-        .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>()
+        .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
         .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
 
     <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">PendingTransaction</span> { <span class="ident">tx</span>, .. }) <span class="kw">in</span> <span class="ident">pending_tx</span> {
         <span class="macro">debug!</span>(
-            <span class="ident">tx</span> <span class="op">=</span> <span class="op">%</span><span class="ident">tx</span>.<span class="ident">txid</span>(),
-            <span class="ident">weight</span> <span class="op">=</span> <span class="ident">tx</span>.<span class="ident">weight</span>(),
+            <span class="ident">tx</span> = %<span class="ident">tx</span>.<span class="ident">txid</span>(),
+            <span class="ident">weight</span> = <span class="ident">tx</span>.<span class="ident">weight</span>(),
             <span class="string">&quot;Broadcasting peg-out&quot;</span>,
         );
-        <span class="macro">trace!</span>(<span class="ident">transaction</span> <span class="op">=</span> <span class="question-mark">?</span><span class="ident">tx</span>);
+        <span class="macro">trace!</span>(<span class="ident">transaction</span> = <span class="question-mark">?</span><span class="ident">tx</span>);
         <span class="ident">rpc</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span>;
     }
 }
 
 <span class="kw">impl</span> <span class="ident">Feerate</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">calculate_fee</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">weight</span>: <span class="ident">u64</span>) -&gt; <span class="ident">bitcoin::Amount</span> {
-        <span class="kw">let</span> <span class="ident">sats</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">sats_per_kvb</span> <span class="op">*</span> <span class="ident">weight</span> <span class="op">/</span> <span class="number">1000</span>;
+        <span class="kw">let</span> <span class="ident">sats</span> = <span class="self">self</span>.<span class="ident">sats_per_kvb</span> * <span class="ident">weight</span> / <span class="number">1000</span>;
         <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sats</span>)
     }
 }
 
 <span class="kw">impl</span> <span class="ident">std::hash::Hash</span> <span class="kw">for</span> <span class="ident">PegOutSignatureItem</span> {
-    <span class="kw">fn</span> <span class="ident">hash</span><span class="op">&lt;</span><span class="ident">H</span>: <span class="ident">Hasher</span><span class="op">&gt;</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">state</span>: <span class="kw-2">&amp;mut</span> <span class="ident">H</span>) {
+    <span class="kw">fn</span> <span class="ident">hash</span>&lt;<span class="ident">H</span>: <span class="ident">Hasher</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">state</span>: <span class="kw-2">&amp;mut</span> <span class="ident">H</span>) {
         <span class="self">self</span>.<span class="ident">txid</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
         <span class="kw">for</span> <span class="ident">sig</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">signature</span>.<span class="ident">iter</span>() {
             <span class="ident">sig</span>.<span class="ident">serialize_der</span>().<span class="ident">hash</span>(<span class="ident">state</span>);
@@ -2414,7 +2414,7 @@
 
 <span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">PegOutSignatureItem</span> {
     <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="ident">PegOutSignatureItem</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">txid</span> <span class="op">==</span> <span class="ident">other</span>.<span class="ident">txid</span> <span class="op">&amp;&amp;</span> <span class="self">self</span>.<span class="ident">signature</span> <span class="op">==</span> <span class="ident">other</span>.<span class="ident">signature</span>
+        <span class="self">self</span>.<span class="ident">txid</span> == <span class="ident">other</span>.<span class="ident">txid</span> &amp;&amp; <span class="self">self</span>.<span class="ident">signature</span> == <span class="ident">other</span>.<span class="ident">signature</span>
     }
 }
 
@@ -2457,18 +2457,18 @@
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Missing change tweak&quot;</span>)]</span>
     <span class="ident">MissingOrMalformedChangeTweak</span>,
     <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]</span>
-    <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">miniscript::psbt::Error</span><span class="op">&gt;</span>),
+    <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">Vec</span>&lt;<span class="ident">miniscript::psbt::Error</span>&gt;),
 }
 
 <span class="comment">// FIXME: make FakeFed not require Eq</span>
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing</span>
 <span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">WalletError</span> {
     <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>) <span class="op">==</span> <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">other</span>)
+        <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>) == <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">other</span>)
     }
 }
 
 <span class="doccomment">/// **WARNING**: this is only intended to be used for testing</span>
 <span class="kw">impl</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">WalletError</span> {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

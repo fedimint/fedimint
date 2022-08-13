@@ -179,9 +179,9 @@
 <span class="kw">use</span> <span class="ident">tbs::AggregatePublicKey</span>;
 
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TransactionBuilder</span> {
-    <span class="ident">input_coins</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span>,
-    <span class="ident">output_coins</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">u64</span>, <span class="ident">CoinFinalizationData</span>)<span class="op">&gt;</span>,
-    <span class="ident">keys</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">KeyPair</span><span class="op">&gt;</span>,
+    <span class="ident">input_coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
+    <span class="ident">output_coins</span>: <span class="ident">Vec</span>&lt;(<span class="ident">u64</span>, <span class="ident">CoinFinalizationData</span>)&gt;,
+    <span class="ident">keys</span>: <span class="ident">Vec</span>&lt;<span class="ident">KeyPair</span>&gt;,
     <span class="ident">tx</span>: <span class="ident">Transaction</span>,
 }
 
@@ -203,40 +203,40 @@
 <span class="kw">impl</span> <span class="ident">TransactionBuilder</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">input_coins</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">coins</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(), <span class="ident">MintClientError</span><span class="op">&gt;</span> {
+        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
+        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">MintClientError</span>&gt; {
         <span class="self">self</span>.<span class="ident">input_coins</span>.<span class="ident">extend</span>(<span class="ident">coins</span>.<span class="ident">clone</span>());
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">create_input_from_coins</span>(<span class="ident">coins</span>, <span class="ident">secp</span>)<span class="question-mark">?</span>;
+        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">coin_keys</span>, <span class="ident">coin_input</span>) = <span class="self">self</span>.<span class="ident">create_input_from_coins</span>(<span class="ident">coins</span>, <span class="ident">secp</span>)<span class="question-mark">?</span>;
         <span class="self">self</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="ident">coin_keys</span>, <span class="ident">Input::Mint</span>(<span class="ident">coin_input</span>));
         <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">create_input_from_coins</span>(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">coins</span>: <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">SpendableCoin</span><span class="op">&gt;</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">KeyPair</span><span class="op">&gt;</span>, <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">Coin</span><span class="op">&gt;</span>), <span class="ident">MintClientError</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">coin_key_pairs</span> <span class="op">=</span> <span class="ident">coins</span>
+        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
+        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">Vec</span>&lt;<span class="ident">KeyPair</span>&gt;, <span class="ident">Coins</span>&lt;<span class="ident">Coin</span>&gt;), <span class="ident">MintClientError</span>&gt; {
+        <span class="kw">let</span> <span class="ident">coin_key_pairs</span> = <span class="ident">coins</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amt</span>, <span class="ident">coin</span>)<span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">spend_key</span> <span class="op">=</span> <span class="ident">bitcoin::KeyPair::from_seckey_slice</span>(<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">coin</span>.<span class="ident">spend_key</span>)
-                    .<span class="ident">map_err</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> <span class="ident">MintClientError::ReceivedUspendableCoin</span>)<span class="question-mark">?</span>;
+            .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">coin</span>)| {
+                <span class="kw">let</span> <span class="ident">spend_key</span> = <span class="ident">bitcoin::KeyPair::from_seckey_slice</span>(<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">coin</span>.<span class="ident">spend_key</span>)
+                    .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">MintClientError::ReceivedUspendableCoin</span>)<span class="question-mark">?</span>;
 
                 <span class="comment">// We check for coin validity in case we got it from an untrusted third party. We</span>
                 <span class="comment">// don&#39;t want to needlessly create invalid tx and bother the federation with them.</span>
-                <span class="kw">let</span> <span class="ident">spend_pub_key</span> <span class="op">=</span> <span class="ident">spend_key</span>.<span class="ident">public_key</span>();
-                <span class="kw">if</span> <span class="kw-2">&amp;</span><span class="ident">spend_pub_key</span> <span class="op">==</span> <span class="ident">coin</span>.<span class="ident">coin</span>.<span class="ident">spend_key</span>() {
+                <span class="kw">let</span> <span class="ident">spend_pub_key</span> = <span class="ident">spend_key</span>.<span class="ident">public_key</span>();
+                <span class="kw">if</span> <span class="kw-2">&amp;</span><span class="ident">spend_pub_key</span> == <span class="ident">coin</span>.<span class="ident">coin</span>.<span class="ident">spend_key</span>() {
                     <span class="prelude-val">Ok</span>((<span class="ident">spend_key</span>, (<span class="ident">amt</span>, <span class="ident">coin</span>.<span class="ident">coin</span>)))
                 } <span class="kw">else</span> {
                     <span class="prelude-val">Err</span>(<span class="ident">MintClientError::ReceivedUspendableCoin</span>)
                 }
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span>, <span class="ident">MintClientError</span><span class="op">&gt;</span><span class="op">&gt;</span>()<span class="question-mark">?</span>;
+            .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">MintClientError</span>&gt;&gt;()<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">coin_key_pairs</span>.<span class="ident">into_iter</span>().<span class="ident">unzip</span>())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">KeyPair</span><span class="op">&gt;</span>, <span class="ident">input</span>: <span class="ident">Input</span>) {
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span>&lt;<span class="ident">KeyPair</span>&gt;, <span class="ident">input</span>: <span class="ident">Input</span>) {
         <span class="self">self</span>.<span class="ident">keys</span>.<span class="ident">append</span>(<span class="ident">key</span>);
         <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">push</span>(<span class="ident">input</span>);
     }
@@ -246,67 +246,67 @@
     }
 
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">change_required</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">fees</span>: <span class="kw-2">&amp;</span><span class="ident">FeeConsensus</span>) -&gt; <span class="ident">Amount</span> {
-        <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">in_amount</span>() <span class="op">-</span> <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">out_amount</span>() <span class="op">-</span> <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">fee_amount</span>(<span class="ident">fees</span>)
+        <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">in_amount</span>() - <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">out_amount</span>() - <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">fee_amount</span>(<span class="ident">fees</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">output_coins</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">output_coins</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">amount</span>: <span class="ident">Amount</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
-        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">AggregatePublicKey</span><span class="op">&gt;</span>,
+        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span>&lt;<span class="ident">AggregatePublicKey</span>&gt;,
         <span class="ident">rng</span>: <span class="ident">R</span>,
     ) {
-        <span class="kw">let</span> (<span class="ident">coin_finalization_data</span>, <span class="ident">coin_output</span>) <span class="op">=</span>
+        <span class="kw">let</span> (<span class="ident">coin_finalization_data</span>, <span class="ident">coin_output</span>) =
             <span class="self">self</span>.<span class="ident">create_output_coins</span>(<span class="ident">amount</span>, <span class="ident">secp</span>, <span class="ident">tbs_pks</span>, <span class="ident">rng</span>);
 
-        <span class="kw">if</span> <span class="op">!</span><span class="ident">coin_output</span>.<span class="ident">coins</span>.<span class="ident">is_empty</span>() {
-            <span class="kw">let</span> <span class="ident">out_idx</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">outputs</span>.<span class="ident">len</span>();
+        <span class="kw">if</span> !<span class="ident">coin_output</span>.<span class="ident">coins</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">let</span> <span class="ident">out_idx</span> = <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">outputs</span>.<span class="ident">len</span>();
             <span class="self">self</span>.<span class="ident">output</span>(<span class="ident">Output::Mint</span>(<span class="ident">coin_output</span>));
             <span class="self">self</span>.<span class="ident">output_coins</span>
                 .<span class="ident">push</span>((<span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">u64</span>, <span class="ident">coin_finalization_data</span>));
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">create_output_coins</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">create_output_coins</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
         <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
         <span class="ident">amount</span>: <span class="ident">Amount</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
-        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">AggregatePublicKey</span><span class="op">&gt;</span>,
+        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span>&lt;<span class="ident">AggregatePublicKey</span>&gt;,
         <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; (<span class="ident">CoinFinalizationData</span>, <span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">BlindToken</span><span class="op">&gt;</span>) {
-        <span class="kw">let</span> (<span class="ident">coin_finalization_data</span>, <span class="ident">sig_req</span>) <span class="op">=</span>
+    ) -&gt; (<span class="ident">CoinFinalizationData</span>, <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;) {
+        <span class="kw">let</span> (<span class="ident">coin_finalization_data</span>, <span class="ident">sig_req</span>) =
             <span class="ident">CoinFinalizationData::new</span>(<span class="ident">amount</span>, <span class="ident">tbs_pks</span>, <span class="ident">secp</span>, <span class="ident">rng</span>);
 
-        <span class="kw">let</span> <span class="ident">coin_output</span> <span class="op">=</span> <span class="ident">sig_req</span>
+        <span class="kw">let</span> <span class="ident">coin_output</span> = <span class="ident">sig_req</span>
             .<span class="number">0</span>
             .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amt</span>, <span class="ident">token</span>)<span class="op">|</span> (<span class="ident">amt</span>, <span class="ident">BlindToken</span>(<span class="ident">token</span>)))
+            .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">token</span>)| (<span class="ident">amt</span>, <span class="ident">BlindToken</span>(<span class="ident">token</span>)))
             .<span class="ident">collect</span>();
 
         (<span class="ident">coin_finalization_data</span>, <span class="ident">coin_output</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">build</span><span class="op">&lt;</span><span class="ident">R</span>: <span class="ident">RngCore</span> <span class="op">+</span> <span class="ident">CryptoRng</span><span class="op">&gt;</span>(
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">build</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
         <span class="kw-2">mut</span> <span class="self">self</span>,
         <span class="ident">change_required</span>: <span class="ident">Amount</span>,
         <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span><span class="op">&lt;</span><span class="ident">secp256k1_zkp::All</span><span class="op">&gt;</span>,
-        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span><span class="op">&lt;</span><span class="ident">AggregatePublicKey</span><span class="op">&gt;</span>,
+        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+        <span class="ident">tbs_pks</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span>&lt;<span class="ident">AggregatePublicKey</span>&gt;,
         <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
     ) -&gt; <span class="ident">Transaction</span> {
         <span class="comment">// add change</span>
         <span class="self">self</span>.<span class="ident">output_coins</span>(<span class="ident">change_required</span>, <span class="ident">secp</span>, <span class="ident">tbs_pks</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
 
-        <span class="kw">let</span> <span class="ident">txid</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">tx_hash</span>();
-        <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">keys</span>.<span class="ident">is_empty</span>() {
-            <span class="kw">let</span> <span class="ident">signature</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">tx_hash</span>();
+        <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">keys</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">let</span> <span class="ident">signature</span> =
                 <span class="ident">minimint_core::transaction::agg_sign</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">keys</span>, <span class="ident">txid</span>.<span class="ident">as_hash</span>(), <span class="ident">secp</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-            <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">signature</span> <span class="op">=</span> <span class="prelude-val">Some</span>(<span class="ident">signature</span>);
+            <span class="self">self</span>.<span class="ident">tx</span>.<span class="ident">signature</span> = <span class="prelude-val">Some</span>(<span class="ident">signature</span>);
         }
 
         <span class="comment">// move input coins to pending state, awaiting a transaction</span>
-        <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">input_coins</span>.<span class="ident">coins</span>.<span class="ident">is_empty</span>() {
-            <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="self">self</span>.<span class="ident">input_coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">amount</span>, <span class="ident">coin</span>)<span class="op">|</span> {
+        <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">input_coins</span>.<span class="ident">coins</span>.<span class="ident">is_empty</span>() {
+            <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="self">self</span>.<span class="ident">input_coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
                 <span class="ident">BatchItem::delete</span>(<span class="ident">CoinKey</span> {
                     <span class="ident">amount</span>,
                     <span class="ident">nonce</span>: <span class="ident">coin</span>.<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>(),
@@ -316,7 +316,7 @@
         }
 
         <span class="comment">// write coin output to db to await for tx success to be fetched later</span>
-        <span class="self">self</span>.<span class="ident">output_coins</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="op">|</span>(<span class="ident">out_idx</span>, <span class="ident">coins</span>)<span class="op">|</span> {
+        <span class="self">self</span>.<span class="ident">output_coins</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="ident">out_idx</span>, <span class="ident">coins</span>)| {
             <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
                 <span class="ident">OutputFinalizationKey</span>(<span class="ident">OutPoint</span> {
                     <span class="ident">txid</span>,
@@ -331,4 +331,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

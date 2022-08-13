@@ -121,11 +121,11 @@
 <span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof::PegInProof</span>;
 <span class="kw">use</span> <span class="ident">std::collections::HashSet</span>;
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">ConflictFilterable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">ConflictFilterable</span>&lt;<span class="ident">T</span>&gt;
 <span class="kw">where</span>
-    <span class="self">Self</span>: <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Sized</span>,
+    <span class="self">Self</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">T</span>&gt; + <span class="ident">Sized</span>,
 {
-    <span class="kw">fn</span> <span class="ident">filter_conflicts</span><span class="op">&lt;</span><span class="ident">F</span><span class="op">&gt;</span>(<span class="self">self</span>, <span class="ident">map</span>: <span class="ident">F</span>) -&gt; <span class="ident">ConflictFilter</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">filter_conflicts</span>&lt;<span class="ident">F</span>&gt;(<span class="self">self</span>, <span class="ident">map</span>: <span class="ident">F</span>) -&gt; <span class="ident">ConflictFilter</span>&lt;<span class="self">Self</span>, <span class="ident">T</span>, <span class="ident">F</span>&gt;
     <span class="kw">where</span>
         <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="ident">T</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Transaction</span>;
 }
@@ -134,24 +134,24 @@
 <span class="doccomment">/// loop. If the processing happened sequentially this wouldn&#39;t be a problem, but currently it is</span>
 <span class="doccomment">/// done in parallel due to computation intensive operations. This means any conflict could lead to</span>
 <span class="doccomment">/// inconsistent outcomes depending on task scheduling.</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConflictFilter</span><span class="op">&lt;</span><span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span>
+<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConflictFilter</span>&lt;<span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">I</span>: <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span>,
+    <span class="ident">I</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">T</span>&gt;,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="ident">T</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Transaction</span>,
 {
     <span class="ident">inner_iter</span>: <span class="ident">I</span>,
     <span class="ident">tx_accessor</span>: <span class="ident">F</span>,
-    <span class="ident">coin_set</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">Coins</span><span class="op">&lt;</span><span class="ident">Coin</span><span class="op">&gt;</span><span class="op">&gt;</span>,
-    <span class="ident">peg_in_set</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">PegInProof</span><span class="op">&gt;</span>,
-    <span class="ident">contract_set</span>: <span class="ident">HashSet</span><span class="op">&lt;</span><span class="ident">ContractId</span><span class="op">&gt;</span>,
+    <span class="ident">coin_set</span>: <span class="ident">HashSet</span>&lt;<span class="ident">Coins</span>&lt;<span class="ident">Coin</span>&gt;&gt;,
+    <span class="ident">peg_in_set</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PegInProof</span>&gt;,
+    <span class="ident">contract_set</span>: <span class="ident">HashSet</span>&lt;<span class="ident">ContractId</span>&gt;,
     <span class="ident">pegged_out</span>: <span class="ident">bool</span>,
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">I</span>, <span class="ident">T</span><span class="op">&gt;</span> <span class="ident">ConflictFilterable</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">I</span>
+<span class="kw">impl</span>&lt;<span class="ident">I</span>, <span class="ident">T</span>&gt; <span class="ident">ConflictFilterable</span>&lt;<span class="ident">T</span>&gt; <span class="kw">for</span> <span class="ident">I</span>
 <span class="kw">where</span>
-    <span class="ident">I</span>: <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span>,
+    <span class="ident">I</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">T</span>&gt;,
 {
-    <span class="kw">fn</span> <span class="ident">filter_conflicts</span><span class="op">&lt;</span><span class="ident">F</span><span class="op">&gt;</span>(<span class="self">self</span>, <span class="ident">tx_accessor</span>: <span class="ident">F</span>) -&gt; <span class="ident">ConflictFilter</span><span class="op">&lt;</span><span class="self">Self</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">filter_conflicts</span>&lt;<span class="ident">F</span>&gt;(<span class="self">self</span>, <span class="ident">tx_accessor</span>: <span class="ident">F</span>) -&gt; <span class="ident">ConflictFilter</span>&lt;<span class="self">Self</span>, <span class="ident">T</span>, <span class="ident">F</span>&gt;
     <span class="kw">where</span>
         <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="ident">T</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Transaction</span>,
     {
@@ -166,60 +166,60 @@
     }
 }
 
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span> <span class="ident">ConflictFilter</span><span class="op">&lt;</span><span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span><span class="op">&gt;</span>
+<span class="kw">impl</span>&lt;<span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span>&gt; <span class="ident">ConflictFilter</span>&lt;<span class="ident">I</span>, <span class="ident">T</span>, <span class="ident">F</span>&gt;
 <span class="kw">where</span>
-    <span class="ident">I</span>: <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span>,
+    <span class="ident">I</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">T</span>&gt;,
     <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="kw-2">&amp;</span><span class="ident">T</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Transaction</span>,
 {
-    <span class="kw">fn</span> <span class="ident">partition</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">tx</span>: <span class="kw-2">&amp;</span><span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Transaction</span>, <span class="ident">Transaction</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">partition</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">tx</span>: <span class="kw-2">&amp;</span><span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Transaction</span>, <span class="ident">Transaction</span>&gt; {
         <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">tx</span>.<span class="ident">inputs</span> {
             <span class="kw">match</span> <span class="ident">input</span> {
                 <span class="ident">Input::Mint</span>(<span class="kw-2">ref</span> <span class="ident">coins</span>) =&gt; {
                     <span class="comment">// TODO: can this be done without cloning? E.g. hashing?</span>
-                    <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">coin_set</span>.<span class="ident">insert</span>(<span class="ident">coins</span>.<span class="ident">clone</span>()) {
+                    <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">coin_set</span>.<span class="ident">insert</span>(<span class="ident">coins</span>.<span class="ident">clone</span>()) {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">tx</span>.<span class="ident">clone</span>());
                     }
                 }
                 <span class="ident">Input::Wallet</span>(<span class="kw-2">ref</span> <span class="ident">peg_in</span>) =&gt; {
-                    <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">peg_in_set</span>.<span class="ident">insert</span>(<span class="ident">peg_in</span>.<span class="ident">as_ref</span>().<span class="ident">clone</span>()) {
+                    <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">peg_in_set</span>.<span class="ident">insert</span>(<span class="ident">peg_in</span>.<span class="ident">as_ref</span>().<span class="ident">clone</span>()) {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">tx</span>.<span class="ident">clone</span>());
                     }
                 }
                 <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; {
-                    <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>.<span class="ident">contract_set</span>.<span class="ident">insert</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>) {
+                    <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">contract_set</span>.<span class="ident">insert</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>) {
                         <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">tx</span>.<span class="ident">clone</span>());
                     }
                 }
             }
         }
         <span class="kw">for</span> <span class="ident">output</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">tx</span>.<span class="ident">outputs</span> {
-            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Output::LN</span>(<span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract_output</span>)) <span class="op">=</span> <span class="ident">output</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Output::LN</span>(<span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract_output</span>)) = <span class="ident">output</span> {
                 <span class="comment">// For contracts we need to avoid any parallel updating, so outputs need to</span>
                 <span class="comment">// be tracked too. Once the main loop gets refactored such that only computation</span>
                 <span class="comment">// intensive operations are parallelized, this restriction can be lifted.</span>
-                <span class="kw">if</span> <span class="op">!</span><span class="self">self</span>
+                <span class="kw">if</span> !<span class="self">self</span>
                     .<span class="ident">contract_set</span>
                     .<span class="ident">insert</span>(<span class="ident">contract_output</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>())
                 {
                     <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">tx</span>.<span class="ident">clone</span>());
                 }
             }
-            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Output::Wallet</span>(<span class="kw">_</span>) <span class="op">=</span> <span class="ident">output</span> {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Output::Wallet</span>(<span class="kw">_</span>) = <span class="ident">output</span> {
                 <span class="kw">match</span> <span class="self">self</span>.<span class="ident">pegged_out</span> {
                     <span class="bool-val">true</span> =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">tx</span>.<span class="ident">clone</span>()),
-                    <span class="bool-val">false</span> =&gt; <span class="self">self</span>.<span class="ident">pegged_out</span> <span class="op">=</span> <span class="bool-val">true</span>,
+                    <span class="bool-val">false</span> =&gt; <span class="self">self</span>.<span class="ident">pegged_out</span> = <span class="bool-val">true</span>,
                 }
             }
         }
         <span class="prelude-val">Ok</span>(<span class="ident">tx</span>.<span class="ident">clone</span>())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">partitioned</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Transaction</span><span class="op">&gt;</span>, <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Transaction</span><span class="op">&gt;</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ok</span> <span class="op">=</span> <span class="macro">vec!</span>[];
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err</span> <span class="op">=</span> <span class="macro">vec!</span>[];
+    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">partitioned</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="ident">Vec</span>&lt;<span class="ident">Transaction</span>&gt;, <span class="ident">Vec</span>&lt;<span class="ident">Transaction</span>&gt;) {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ok</span> = <span class="macro">vec!</span>[];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">err</span> = <span class="macro">vec!</span>[];
 
-        <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">next</span>) <span class="op">=</span> <span class="self">self</span>.<span class="ident">inner_iter</span>.<span class="ident">next</span>() {
-            <span class="kw">let</span> <span class="ident">tx</span> <span class="op">=</span> (<span class="self">self</span>.<span class="ident">tx_accessor</span>)(<span class="kw-2">&amp;</span><span class="ident">next</span>);
+        <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">next</span>) = <span class="self">self</span>.<span class="ident">inner_iter</span>.<span class="ident">next</span>() {
+            <span class="kw">let</span> <span class="ident">tx</span> = (<span class="self">self</span>.<span class="ident">tx_accessor</span>)(<span class="kw-2">&amp;</span><span class="ident">next</span>);
             <span class="kw">match</span> <span class="self">self</span>.<span class="ident">partition</span>(<span class="ident">tx</span>) {
                 <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="ident">ok</span>.<span class="ident">push</span>(<span class="ident">t</span>),
                 <span class="prelude-val">Err</span>(<span class="ident">t</span>) =&gt; <span class="ident">err</span>.<span class="ident">push</span>(<span class="ident">t</span>),
@@ -229,4 +229,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>

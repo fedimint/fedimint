@@ -578,7 +578,13 @@
 <span id="578">578</span>
 <span id="579">579</span>
 <span id="580">580</span>
-</pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations</span>
+<span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
+<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+
+<span class="doccomment">//! Provides an abstract network connection interface and multiple implementations</span>
 
 <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">AnyFramedTransport</span>, <span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
 <span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
@@ -596,34 +602,34 @@
 <span class="kw">use</span> <span class="ident">tokio_rustls</span>::{<span class="ident">rustls</span>, <span class="ident">TlsAcceptor</span>, <span class="ident">TlsConnector</span>, <span class="ident">TlsStream</span>};
 
 <span class="doccomment">/// Shared [`Connector`] trait object</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">SharedAnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Arc</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
 
 <span class="doccomment">/// Owned [`Connector`] trait object</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyConnector</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
 
 <span class="doccomment">/// Result of a connection opening future</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span> <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>), <span class="ident">anyhow::Error</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; = <span class="prelude-ty">Result</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">M</span>&gt;), <span class="ident">anyhow::Error</span>&gt;;
 
 <span class="doccomment">/// Owned trait object type for incoming connection listeners</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="op">=</span>
-    <span class="ident">Pin</span><span class="op">&lt;</span><span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span><span class="op">&gt;</span>;
+<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt; =
+    <span class="ident">Pin</span>&lt;<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;&gt;;
 
 <span class="doccomment">/// Allows to connect to peers and to listen for incoming connections</span>
 <span class="doccomment">///</span>
 <span class="doccomment">/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted</span>
 <span class="doccomment">/// for production deployments.</span>
 <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
+<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; {
     <span class="doccomment">/// Connect to a `destination`</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;;
 
     <span class="doccomment">/// Listen for incoming connections on `bind_addr`</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>;
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt;;
 
     <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself</span>
-    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyConnector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>
+    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyConnector</span>&lt;<span class="ident">M</span>&gt;
     <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Sync</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="self">Self</span>: <span class="ident">Sized</span> + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
     {
         <span class="ident">Box::new</span>(<span class="self">self</span>)
     }
@@ -634,7 +640,7 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TlsTcpConnector</span> {
     <span class="ident">our_certificate</span>: <span class="ident">rustls::Certificate</span>,
     <span class="ident">our_private_key</span>: <span class="ident">rustls::PrivateKey</span>,
-    <span class="ident">peer_certs</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">PeerCertStore</span><span class="op">&gt;</span>,
+    <span class="ident">peer_certs</span>: <span class="ident">Arc</span>&lt;<span class="ident">PeerCertStore</span>&gt;,
     <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands</span>
     <span class="ident">cert_store</span>: <span class="ident">RootCertStore</span>,
 }
@@ -643,17 +649,17 @@
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TlsConfig</span> {
     <span class="kw">pub</span> <span class="ident">our_certificate</span>: <span class="ident">rustls::Certificate</span>,
     <span class="kw">pub</span> <span class="ident">our_private_key</span>: <span class="ident">rustls::PrivateKey</span>,
-    <span class="kw">pub</span> <span class="ident">peer_certs</span>: <span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span> <span class="ident">peer_certs</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>&gt;,
 }
 
 <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
 <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PeerCertStore</span> {
-    <span class="ident">peer_certificates</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)<span class="op">&gt;</span>,
+    <span class="ident">peer_certificates</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)&gt;,
 }
 
 <span class="kw">impl</span> <span class="ident">TlsTcpConnector</span> {
     <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">TlsConfig</span>) -&gt; <span class="ident">TlsTcpConnector</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cert_store</span> <span class="op">=</span> <span class="ident">RootCertStore::empty</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cert_store</span> = <span class="ident">RootCertStore::empty</span>();
         <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">cert</span>) <span class="kw">in</span> <span class="ident">cfg</span>.<span class="ident">peer_certs</span>.<span class="ident">iter</span>() {
             <span class="ident">cert_store</span>
                 .<span class="ident">add</span>(<span class="ident">cert</span>)
@@ -670,54 +676,54 @@
 }
 
 <span class="kw">impl</span> <span class="ident">PeerCertStore</span> {
-    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">certs</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> (<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)<span class="op">&gt;</span>) -&gt; <span class="ident">PeerCertStore</span> {
+    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">certs</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)&gt;) -&gt; <span class="ident">PeerCertStore</span> {
         <span class="ident">PeerCertStore</span> {
             <span class="ident">peer_certificates</span>: <span class="ident">certs</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">get_peer_by_cert</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cert</span>: <span class="kw-2">&amp;</span><span class="ident">rustls::Certificate</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">PeerId</span><span class="op">&gt;</span> {
+    <span class="kw">fn</span> <span class="ident">get_peer_by_cert</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cert</span>: <span class="kw-2">&amp;</span><span class="ident">rustls::Certificate</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">PeerId</span>&gt; {
         <span class="self">self</span>.<span class="ident">peer_certificates</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">find_map</span>(<span class="op">|</span>(<span class="ident">peer</span>, <span class="ident">peer_cert</span>)<span class="op">|</span> <span class="kw">if</span> <span class="ident">peer_cert</span> <span class="op">==</span> <span class="ident">cert</span> { <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">peer</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
+            .<span class="ident">find_map</span>(|(<span class="ident">peer</span>, <span class="ident">peer_cert</span>)| <span class="kw">if</span> <span class="ident">peer_cert</span> == <span class="ident">cert</span> { <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">peer</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
     }
 
     <span class="kw">fn</span> <span class="ident">authenticate_peer</span>(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">received</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span>[<span class="ident">rustls::Certificate</span>]<span class="op">&gt;</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">cert_chain</span> <span class="op">=</span>
-            <span class="ident">received</span>.<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Peer did not authenticate itself&quot;</span>))<span class="question-mark">?</span>;
+        <span class="ident">received</span>: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[<span class="ident">rustls::Certificate</span>]&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">cert_chain</span> =
+            <span class="ident">received</span>.<span class="ident">ok_or_else</span>(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Peer did not authenticate itself&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">cert_chain</span>.<span class="ident">len</span>() <span class="op">!</span><span class="op">=</span> <span class="number">1</span> {
+        <span class="kw">if</span> <span class="ident">cert_chain</span>.<span class="ident">len</span>() != <span class="number">1</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">&quot;Received certificate chain of len={}, expected=1&quot;</span>,
                 <span class="ident">cert_chain</span>.<span class="ident">len</span>()
             ));
         }
 
-        <span class="kw">let</span> <span class="ident">received_cert</span> <span class="op">=</span> <span class="ident">cert_chain</span>.<span class="ident">first</span>().<span class="ident">expect</span>(<span class="string">&quot;Checked above&quot;</span>);
+        <span class="kw">let</span> <span class="ident">received_cert</span> = <span class="ident">cert_chain</span>.<span class="ident">first</span>().<span class="ident">expect</span>(<span class="string">&quot;Checked above&quot;</span>);
 
         <span class="self">self</span>.<span class="ident">get_peer_by_cert</span>(<span class="ident">received_cert</span>)
-            .<span class="ident">ok_or_else</span>(<span class="op">|</span><span class="op">|</span> <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown certificate&quot;</span>))
+            .<span class="ident">ok_or_else</span>(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown certificate&quot;</span>))
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">accept_connection</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>(
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">accept_connection</span>&lt;<span class="ident">M</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         <span class="ident">listener</span>: <span class="kw-2">&amp;mut</span> <span class="ident">TcpListener</span>,
         <span class="ident">acceptor</span>: <span class="kw-2">&amp;</span><span class="ident">TlsAcceptor</span>,
-    ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span>(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>), <span class="ident">anyhow::Error</span><span class="op">&gt;</span>
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">M</span>&gt;), <span class="ident">anyhow::Error</span>&gt;
     <span class="kw">where</span>
-        <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">let</span> (<span class="ident">connection</span>, <span class="kw">_</span>) <span class="op">=</span> <span class="ident">listener</span>.<span class="ident">accept</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">tls_conn</span> <span class="op">=</span> <span class="ident">acceptor</span>.<span class="ident">accept</span>(<span class="ident">connection</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> (<span class="ident">connection</span>, <span class="kw">_</span>) = <span class="ident">listener</span>.<span class="ident">accept</span>().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">tls_conn</span> = <span class="ident">acceptor</span>.<span class="ident">accept</span>(<span class="ident">connection</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) <span class="op">=</span> <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
-        <span class="kw">let</span> <span class="ident">auth_peer</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">authenticate_peer</span>(<span class="ident">tls_session</span>.<span class="ident">peer_certificates</span>())<span class="question-mark">?</span>;
+        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) = <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
+        <span class="kw">let</span> <span class="ident">auth_peer</span> = <span class="self">self</span>.<span class="ident">authenticate_peer</span>(<span class="ident">tls_session</span>.<span class="ident">peer_certificates</span>())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">framed</span> <span class="op">=</span>
-            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">TlsStream</span><span class="op">&lt;</span><span class="ident">TcpStream</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">TlsStream</span><span class="op">&lt;</span><span class="ident">TcpStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+        <span class="kw">let</span> <span class="ident">framed</span> =
+            <span class="ident">BidiFramed</span>::&lt;<span class="kw">_</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;&gt;<span class="ident">::new</span>(
                 <span class="ident">tls_conn</span>,
             )
             .<span class="ident">to_any</span>();
@@ -726,12 +732,12 @@
 }
 
 <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">TlsTcpConnector</span>
+<span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; <span class="kw">for</span> <span class="ident">TlsTcpConnector</span>
 <span class="kw">where</span>
-    <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+    <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">cfg</span> <span class="op">=</span> <span class="ident">rustls::ClientConfig::builder</span>()
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; {
+        <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">rustls::ClientConfig::builder</span>()
             .<span class="ident">with_safe_defaults</span>()
             .<span class="ident">with_root_certificates</span>(<span class="self">self</span>.<span class="ident">cert_store</span>.<span class="ident">clone</span>())
             .<span class="ident">with_single_cert</span>(
@@ -740,26 +746,26 @@
             )
             .<span class="ident">expect</span>(<span class="string">&quot;Failed to create TLS config&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">fake_domain</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="ident">fake_domain</span> =
             <span class="ident">rustls::ServerName::try_from</span>(<span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>()).<span class="ident">as_str</span>())
                 .<span class="ident">expect</span>(<span class="string">&quot;Always a valid DNS name&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">connector</span> <span class="op">=</span> <span class="ident">TlsConnector::from</span>(<span class="ident">Arc::new</span>(<span class="ident">cfg</span>));
-        <span class="kw">let</span> <span class="ident">tls_conn</span> <span class="op">=</span> <span class="ident">connector</span>
+        <span class="kw">let</span> <span class="ident">connector</span> = <span class="ident">TlsConnector::from</span>(<span class="ident">Arc::new</span>(<span class="ident">cfg</span>));
+        <span class="kw">let</span> <span class="ident">tls_conn</span> = <span class="ident">connector</span>
             .<span class="ident">connect</span>(<span class="ident">fake_domain</span>, <span class="ident">TcpStream::connect</span>(<span class="ident">destination</span>).<span class="kw">await</span><span class="question-mark">?</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) <span class="op">=</span> <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
-        <span class="kw">let</span> <span class="ident">auth_peer</span> <span class="op">=</span> <span class="self">self</span>
+        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) = <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
+        <span class="kw">let</span> <span class="ident">auth_peer</span> = <span class="self">self</span>
             .<span class="ident">peer_certs</span>
             .<span class="ident">authenticate_peer</span>(<span class="ident">tls_session</span>.<span class="ident">peer_certificates</span>())<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">auth_peer</span> <span class="op">!</span><span class="op">=</span> <span class="ident">peer</span> {
+        <span class="kw">if</span> <span class="ident">auth_peer</span> != <span class="ident">peer</span> {
             <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Connected to unexpected peer&quot;</span>));
         }
 
-        <span class="kw">let</span> <span class="ident">framed</span> <span class="op">=</span>
-            <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">TlsStream</span><span class="op">&lt;</span><span class="ident">TcpStream</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">TlsStream</span><span class="op">&lt;</span><span class="ident">TcpStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+        <span class="kw">let</span> <span class="ident">framed</span> =
+            <span class="ident">BidiFramed</span>::&lt;<span class="kw">_</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;&gt;<span class="ident">::new</span>(
                 <span class="ident">tls_conn</span>,
             )
             .<span class="ident">to_any</span>();
@@ -767,9 +773,9 @@
         <span class="prelude-val">Ok</span>((<span class="ident">peer</span>, <span class="ident">framed</span>))
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">verifier</span> <span class="op">=</span> <span class="ident">AllowAnyAuthenticatedClient::new</span>(<span class="self">self</span>.<span class="ident">cert_store</span>.<span class="ident">clone</span>());
-        <span class="kw">let</span> <span class="ident">config</span> <span class="op">=</span> <span class="ident">rustls::ServerConfig::builder</span>()
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt; {
+        <span class="kw">let</span> <span class="ident">verifier</span> = <span class="ident">AllowAnyAuthenticatedClient::new</span>(<span class="self">self</span>.<span class="ident">cert_store</span>.<span class="ident">clone</span>());
+        <span class="kw">let</span> <span class="ident">config</span> = <span class="ident">rustls::ServerConfig::builder</span>()
             .<span class="ident">with_safe_defaults</span>()
             .<span class="ident">with_client_cert_verifier</span>(<span class="ident">verifier</span>)
             .<span class="ident">with_single_cert</span>(
@@ -777,15 +783,15 @@
                 <span class="self">self</span>.<span class="ident">our_private_key</span>.<span class="ident">clone</span>(),
             )
             .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">TcpListener::bind</span>(<span class="ident">bind_addr</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">peer_certs</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">peer_certs</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">listener</span> = <span class="ident">TcpListener::bind</span>(<span class="ident">bind_addr</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let</span> <span class="ident">peer_certs</span> = <span class="self">self</span>.<span class="ident">peer_certs</span>.<span class="ident">clone</span>();
 
-        <span class="kw">let</span> <span class="ident">stream</span> <span class="op">=</span> <span class="ident">futures::stream::unfold</span>(<span class="ident">listener</span>, <span class="kw">move</span> <span class="op">|</span><span class="kw-2">mut</span> <span class="ident">listener</span><span class="op">|</span> {
-            <span class="kw">let</span> <span class="ident">acceptor</span> <span class="op">=</span> <span class="ident">TlsAcceptor::from</span>(<span class="ident">Arc::new</span>(<span class="ident">config</span>.<span class="ident">clone</span>()));
-            <span class="kw">let</span> <span class="ident">peer_certs</span> <span class="op">=</span> <span class="ident">peer_certs</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">stream</span> = <span class="ident">futures::stream::unfold</span>(<span class="ident">listener</span>, <span class="kw">move</span> |<span class="kw-2">mut</span> <span class="ident">listener</span>| {
+            <span class="kw">let</span> <span class="ident">acceptor</span> = <span class="ident">TlsAcceptor::from</span>(<span class="ident">Arc::new</span>(<span class="ident">config</span>.<span class="ident">clone</span>()));
+            <span class="kw">let</span> <span class="ident">peer_certs</span> = <span class="ident">peer_certs</span>.<span class="ident">clone</span>();
 
             <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">res</span> <span class="op">=</span> <span class="ident">peer_certs</span>.<span class="ident">accept_connection</span>(<span class="kw-2">&amp;mut</span> <span class="ident">listener</span>, <span class="kw-2">&amp;</span><span class="ident">acceptor</span>).<span class="kw">await</span>;
+                <span class="kw">let</span> <span class="ident">res</span> = <span class="ident">peer_certs</span>.<span class="ident">accept_connection</span>(<span class="kw-2">&amp;mut</span> <span class="ident">listener</span>, <span class="kw-2">&amp;</span><span class="ident">acceptor</span>).<span class="kw">await</span>;
                 <span class="prelude-val">Some</span>((<span class="ident">res</span>, <span class="ident">listener</span>))
             })
         });
@@ -814,12 +820,12 @@
     <span class="kw">use</span> <span class="ident">tokio::sync::Mutex</span>;
 
     <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MockNetwork</span> {
-        <span class="ident">clients</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">clients</span>: <span class="ident">Arc</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">HashMap</span>&lt;<span class="ident">String</span>, <span class="ident">Sender</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;&gt;&gt;,
     }
 
     <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MockConnector</span> {
         <span class="ident">id</span>: <span class="ident">PeerId</span>,
-        <span class="ident">clients</span>: <span class="ident">Arc</span><span class="op">&lt;</span><span class="ident">Mutex</span><span class="op">&lt;</span><span class="ident">HashMap</span><span class="op">&lt;</span><span class="ident">String</span>, <span class="ident">Sender</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="op">&gt;</span>,
+        <span class="ident">clients</span>: <span class="ident">Arc</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">HashMap</span>&lt;<span class="ident">String</span>, <span class="ident">Sender</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;&gt;&gt;,
     }
 
     <span class="kw">impl</span> <span class="ident">MockNetwork</span> {
@@ -839,17 +845,17 @@
     }
 
     <span class="attribute">#[<span class="ident">async_trait::async_trait</span>]</span>
-    <span class="kw">impl</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="ident">Connector</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">MockConnector</span>
+    <span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; <span class="kw">for</span> <span class="ident">MockConnector</span>
     <span class="kw">where</span>
-        <span class="ident">M</span>: <span class="ident">Debug</span> <span class="op">+</span> <span class="ident">serde::Serialize</span> <span class="op">+</span> <span class="ident">serde::de::DeserializeOwned</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span>,
+        <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">_peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span> {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">clients_lock</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">lock</span>().<span class="kw">await</span>;
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">client</span>) <span class="op">=</span> <span class="ident">clients_lock</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">destination</span>) {
-                <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">stream_our</span>, <span class="ident">stream_theirs</span>) <span class="op">=</span> <span class="ident">tokio::io::duplex</span>(<span class="number">43_689</span>);
+        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">_peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">clients_lock</span> = <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">lock</span>().<span class="kw">await</span>;
+            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">client</span>) = <span class="ident">clients_lock</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">destination</span>) {
+                <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">stream_our</span>, <span class="ident">stream_theirs</span>) = <span class="ident">tokio::io::duplex</span>(<span class="number">43_689</span>);
                 <span class="ident">client</span>.<span class="ident">send</span>(<span class="ident">stream_theirs</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                <span class="kw">let</span> <span class="ident">peer</span> <span class="op">=</span> <span class="ident">do_handshake</span>(<span class="self">self</span>.<span class="ident">id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">stream_our</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                <span class="kw">let</span> <span class="ident">framed</span> <span class="op">=</span> <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">M</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+                <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">do_handshake</span>(<span class="self">self</span>.<span class="ident">id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">stream_our</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+                <span class="kw">let</span> <span class="ident">framed</span> = <span class="ident">BidiFramed</span>::&lt;<span class="ident">M</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
                     <span class="ident">stream_our</span>,
                 )
                 .<span class="ident">to_any</span>();
@@ -862,21 +868,21 @@
         <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             <span class="ident">bind_addr</span>: <span class="ident">String</span>,
-        ) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">Pin</span><span class="op">&lt;</span><span class="ident">Box</span><span class="op">&lt;</span><span class="kw">dyn</span> <span class="ident">Stream</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">ConnectResult</span><span class="op">&lt;</span><span class="ident">M</span><span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Send</span> <span class="op">+</span> <span class="ident">Unpin</span> <span class="op">+</span> <span class="lifetime">&#39;static</span><span class="op">&gt;</span><span class="op">&gt;</span>, <span class="ident">Error</span><span class="op">&gt;</span>
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Pin</span>&lt;<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;&gt;, <span class="ident">Error</span>&gt;
         {
-            <span class="kw">let</span> (<span class="ident">send</span>, <span class="ident">receive</span>) <span class="op">=</span> <span class="ident">tokio::sync::mpsc::channel</span>(<span class="number">16</span>);
+            <span class="kw">let</span> (<span class="ident">send</span>, <span class="ident">receive</span>) = <span class="ident">tokio::sync::mpsc::channel</span>(<span class="number">16</span>);
 
             <span class="kw">if</span> <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">insert</span>(<span class="ident">bind_addr</span>, <span class="ident">send</span>).<span class="ident">is_some</span>() {
                 <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Address already bound&quot;</span>));
             }
 
-            <span class="kw">let</span> <span class="ident">our_id</span> <span class="op">=</span> <span class="self">self</span>.<span class="ident">id</span>;
-            <span class="kw">let</span> <span class="ident">stream</span> <span class="op">=</span> <span class="ident">futures::stream::unfold</span>(<span class="ident">receive</span>, <span class="kw">move</span> <span class="op">|</span><span class="kw-2">mut</span> <span class="ident">receive</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">our_id</span> = <span class="self">self</span>.<span class="ident">id</span>;
+            <span class="kw">let</span> <span class="ident">stream</span> = <span class="ident">futures::stream::unfold</span>(<span class="ident">receive</span>, <span class="kw">move</span> |<span class="kw-2">mut</span> <span class="ident">receive</span>| {
                 <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">connection</span> <span class="op">=</span> <span class="ident">receive</span>.<span class="ident">recv</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">peer</span> <span class="op">=</span> <span class="ident">do_handshake</span>(<span class="ident">our_id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">connection</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">framed</span> <span class="op">=</span>
-                        <span class="ident">BidiFramed</span>::<span class="op">&lt;</span><span class="ident">M</span>, <span class="ident">WriteHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span>, <span class="ident">ReadHalf</span><span class="op">&lt;</span><span class="ident">DuplexStream</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::new</span>(
+                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">connection</span> = <span class="ident">receive</span>.<span class="ident">recv</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+                    <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">do_handshake</span>(<span class="ident">our_id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">connection</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+                    <span class="kw">let</span> <span class="ident">framed</span> =
+                        <span class="ident">BidiFramed</span>::&lt;<span class="ident">M</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
                             <span class="ident">connection</span>,
                         )
                         .<span class="ident">to_any</span>();
@@ -888,37 +894,37 @@
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">do_handshake</span><span class="op">&lt;</span><span class="ident">S</span><span class="op">&gt;</span>(<span class="ident">our_id</span>: <span class="ident">PeerId</span>, <span class="ident">stream</span>: <span class="kw-2">&amp;mut</span> <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span><span class="op">&lt;</span><span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">do_handshake</span>&lt;<span class="ident">S</span>&gt;(<span class="ident">our_id</span>: <span class="ident">PeerId</span>, <span class="ident">stream</span>: <span class="kw-2">&amp;mut</span> <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span>&gt;
     <span class="kw">where</span>
-        <span class="ident">S</span>: <span class="ident">AsyncRead</span> <span class="op">+</span> <span class="ident">AsyncWrite</span> <span class="op">+</span> <span class="ident">Unpin</span>,
+        <span class="ident">S</span>: <span class="ident">AsyncRead</span> + <span class="ident">AsyncWrite</span> + <span class="ident">Unpin</span>,
     {
         <span class="comment">// Send our id</span>
-        <span class="kw">let</span> <span class="ident">our_id</span> <span class="op">=</span> <span class="ident">our_id</span>.<span class="ident">to_usize</span>() <span class="kw">as</span> <span class="ident">u16</span>;
+        <span class="kw">let</span> <span class="ident">our_id</span> = <span class="ident">our_id</span>.<span class="ident">to_usize</span>() <span class="kw">as</span> <span class="ident">u16</span>;
         <span class="ident">stream</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">our_id</span>.<span class="ident">to_le_bytes</span>()[..]).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// Receive peer id</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_id</span> <span class="op">=</span> [<span class="number">0u8</span>; <span class="number">2</span>];
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_id</span> = [<span class="number">0u8</span>; <span class="number">2</span>];
         <span class="ident">stream</span>.<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> <span class="ident">peer_id</span>[..]).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="ident">PeerId::from</span>(<span class="ident">u16::from_le_bytes</span>(<span class="ident">peer_id</span>)))
     }
 
     <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_mock_network</span>() {
-        <span class="kw">let</span> <span class="ident">peer_a</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="number">1</span>);
-        <span class="kw">let</span> <span class="ident">peer_b</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="number">2</span>);
+        <span class="kw">let</span> <span class="ident">peer_a</span> = <span class="ident">PeerId::from</span>(<span class="number">1</span>);
+        <span class="kw">let</span> <span class="ident">peer_b</span> = <span class="ident">PeerId::from</span>(<span class="number">2</span>);
 
-        <span class="kw">let</span> <span class="ident">net</span> <span class="op">=</span> <span class="ident">MockNetwork::new</span>();
-        <span class="kw">let</span> <span class="ident">conn_a</span> <span class="op">=</span> <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
-        <span class="kw">let</span> <span class="ident">conn_b</span> <span class="op">=</span> <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
+        <span class="kw">let</span> <span class="ident">net</span> = <span class="ident">MockNetwork::new</span>();
+        <span class="kw">let</span> <span class="ident">conn_a</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
+        <span class="kw">let</span> <span class="ident">conn_b</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">Connector</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span><span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">conn_a_fut</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> = <span class="ident">Connector</span>::&lt;<span class="ident">u64</span>&gt;<span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">conn_a_fut</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
 
-        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) <span class="op">=</span>
-            <span class="ident">Connector</span>::<span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span><span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
+        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) =
+            <span class="ident">Connector</span>::&lt;<span class="ident">u64</span>&gt;<span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
                 .<span class="kw">await</span>
                 .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) <span class="op">=</span> <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) = <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
 
         <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_a</span>, <span class="ident">peer_b</span>);
         <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_b</span>, <span class="ident">peer_a</span>);
@@ -931,41 +937,41 @@
     }
 
     <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">dead_code</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span><span class="op">&lt;</span><span class="ident">F</span>, <span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>
+    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span>&lt;<span class="ident">F</span>, <span class="ident">T</span>&gt;(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">T</span>&gt;
     <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">Future</span><span class="op">&lt;</span><span class="ident">Output</span> <span class="op">=</span> <span class="ident">T</span><span class="op">&gt;</span>,
+        <span class="ident">F</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = <span class="ident">T</span>&gt;,
     {
         <span class="ident">tokio::time::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>), <span class="ident">f</span>).<span class="kw">await</span>.<span class="ident">ok</span>()
     }
 
     <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_large_messages</span>() {
-        <span class="kw">let</span> <span class="ident">peer_a</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="number">1</span>);
-        <span class="kw">let</span> <span class="ident">peer_b</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="number">2</span>);
+        <span class="kw">let</span> <span class="ident">peer_a</span> = <span class="ident">PeerId::from</span>(<span class="number">1</span>);
+        <span class="kw">let</span> <span class="ident">peer_b</span> = <span class="ident">PeerId::from</span>(<span class="number">2</span>);
 
-        <span class="kw">let</span> <span class="ident">net</span> <span class="op">=</span> <span class="ident">MockNetwork::new</span>();
-        <span class="kw">let</span> <span class="ident">conn_a</span> <span class="op">=</span> <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
-        <span class="kw">let</span> <span class="ident">conn_b</span> <span class="op">=</span> <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
+        <span class="kw">let</span> <span class="ident">net</span> = <span class="ident">MockNetwork::new</span>();
+        <span class="kw">let</span> <span class="ident">conn_a</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
+        <span class="kw">let</span> <span class="ident">conn_b</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> <span class="op">=</span> <span class="ident">Connector</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>())
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> = <span class="ident">Connector</span>::&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;<span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>())
             .<span class="kw">await</span>
             .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">conn_a_fut</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
+        <span class="kw">let</span> <span class="ident">conn_a_fut</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
 
-        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) <span class="op">=</span>
-            <span class="ident">Connector</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">u8</span><span class="op">&gt;</span><span class="op">&gt;</span><span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
+        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) =
+            <span class="ident">Connector</span>::&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;<span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
                 .<span class="kw">await</span>
                 .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) <span class="op">=</span> <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) = <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
 
         <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_a</span>, <span class="ident">peer_b</span>);
         <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_b</span>, <span class="ident">peer_a</span>);
 
-        <span class="kw">let</span> <span class="ident">send_future</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> {
+        <span class="kw">let</span> <span class="ident">send_future</span> = <span class="kw">async</span> <span class="kw">move</span> {
             <span class="ident">conn_a</span>.<span class="ident">send</span>(<span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
         }
         .<span class="ident">boxed</span>();
-        <span class="kw">let</span> <span class="ident">receive_future</span> <span class="op">=</span> <span class="kw">async</span> <span class="kw">move</span> {
+        <span class="kw">let</span> <span class="ident">receive_future</span> = <span class="kw">async</span> <span class="kw">move</span> {
             <span class="macro">assert_eq!</span>(
                 <span class="ident">timeout</span>(<span class="ident">conn_b</span>.<span class="ident">next</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>().<span class="ident">unwrap</span>(),
                 <span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]
@@ -986,23 +992,23 @@
     <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">SinkExt</span>, <span class="ident">StreamExt</span>};
     <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
 
-    <span class="kw">fn</span> <span class="ident">gen_connector_config</span>(<span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">TlsConfig</span><span class="op">&gt;</span> {
-        <span class="kw">let</span> <span class="ident">peer_keys</span> <span class="op">=</span> (<span class="number">0</span>..<span class="ident">count</span>)
-            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">id</span><span class="op">|</span> {
-                <span class="kw">let</span> <span class="ident">peer</span> <span class="op">=</span> <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>);
+    <span class="kw">fn</span> <span class="ident">gen_connector_config</span>(<span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">TlsConfig</span>&gt; {
+        <span class="kw">let</span> <span class="ident">peer_keys</span> = (<span class="number">0</span>..<span class="ident">count</span>)
+            .<span class="ident">map</span>(|<span class="ident">id</span>| {
+                <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>);
                 <span class="ident">gen_cert_and_key</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>())).<span class="ident">unwrap</span>()
             })
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="ident">peer_keys</span>
             .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">cert</span>, <span class="ident">key</span>)<span class="op">|</span> <span class="ident">TlsConfig</span> {
+            .<span class="ident">map</span>(|(<span class="ident">cert</span>, <span class="ident">key</span>)| <span class="ident">TlsConfig</span> {
                 <span class="ident">our_certificate</span>: <span class="ident">cert</span>.<span class="ident">clone</span>(),
                 <span class="ident">our_private_key</span>: <span class="ident">key</span>.<span class="ident">clone</span>(),
                 <span class="ident">peer_certs</span>: <span class="ident">peer_keys</span>
                     .<span class="ident">iter</span>()
                     .<span class="ident">enumerate</span>()
-                    .<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">peer</span>, (<span class="ident">cert</span>, <span class="kw">_</span>))<span class="op">|</span> (<span class="ident">PeerId::from</span>(<span class="ident">peer</span> <span class="kw">as</span> <span class="ident">u16</span>), <span class="ident">cert</span>.<span class="ident">clone</span>()))
+                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, (<span class="ident">cert</span>, <span class="kw">_</span>))| (<span class="ident">PeerId::from</span>(<span class="ident">peer</span> <span class="kw">as</span> <span class="ident">u16</span>), <span class="ident">cert</span>.<span class="ident">clone</span>()))
                     .<span class="ident">collect</span>(),
             })
             .<span class="ident">collect</span>()
@@ -1011,31 +1017,31 @@
     <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_success</span>() {
         <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(</span>
-        <span class="kw">let</span> <span class="ident">bind_addr</span> <span class="op">=</span> <span class="string">&quot;127.0.0.1:7000&quot;</span>.<span class="ident">to_owned</span>();
-        <span class="kw">let</span> <span class="ident">connectors</span> <span class="op">=</span> <span class="ident">gen_connector_config</span>(<span class="number">5</span>)
+        <span class="kw">let</span> <span class="ident">bind_addr</span> = <span class="string">&quot;127.0.0.1:7000&quot;</span>.<span class="ident">to_owned</span>();
+        <span class="kw">let</span> <span class="ident">connectors</span> = <span class="ident">gen_connector_config</span>(<span class="number">5</span>)
             .<span class="ident">into_iter</span>()
             .<span class="ident">map</span>(<span class="ident">TlsTcpConnector::new</span>)
-            .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
             <span class="ident">connectors</span>[<span class="number">0</span>].<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
 
-        <span class="kw">let</span> <span class="ident">server_task</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-            <span class="kw">let</span> (<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>) <span class="op">=</span> <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
+            <span class="kw">let</span> (<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>) = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
             <span class="macro">assert_eq!</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="number">2</span>);
-            <span class="kw">let</span> <span class="ident">received</span> <span class="op">=</span> <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
             <span class="macro">assert_eq!</span>(<span class="ident">received</span>, <span class="number">42</span>);
             <span class="ident">conn</span>.<span class="ident">send</span>(<span class="number">21</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
             <span class="macro">assert!</span>(<span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">is_err</span>());
         });
 
-        <span class="kw">let</span> (<span class="ident">peer_of_a</span>, <span class="kw-2">mut</span> <span class="ident">client_a</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">connectors</span>[<span class="number">2</span>]
+        <span class="kw">let</span> (<span class="ident">peer_of_a</span>, <span class="kw-2">mut</span> <span class="ident">client_a</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">connectors</span>[<span class="number">2</span>]
             .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
             .<span class="kw">await</span>
             .<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">peer_of_a</span>.<span class="ident">to_usize</span>(), <span class="number">0</span>);
         <span class="ident">client_a</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">received</span> <span class="op">=</span> <span class="ident">client_a</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
+        <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">client_a</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
         <span class="macro">assert_eq!</span>(<span class="ident">received</span>, <span class="number">21</span>);
         <span class="ident">drop</span>(<span class="ident">client_a</span>);
 
@@ -1044,30 +1050,30 @@
 
     <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
     <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_reject</span>() {
-        <span class="kw">let</span> <span class="ident">bind_addr</span> <span class="op">=</span> <span class="string">&quot;127.0.0.1:7001&quot;</span>.<span class="ident">to_owned</span>();
-        <span class="kw">let</span> <span class="ident">cfg</span> <span class="op">=</span> <span class="ident">gen_connector_config</span>(<span class="number">5</span>);
+        <span class="kw">let</span> <span class="ident">bind_addr</span> = <span class="string">&quot;127.0.0.1:7001&quot;</span>.<span class="ident">to_owned</span>();
+        <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">gen_connector_config</span>(<span class="number">5</span>);
 
-        <span class="kw">let</span> <span class="ident">honest</span> <span class="op">=</span> <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">0</span>].<span class="ident">clone</span>());
+        <span class="kw">let</span> <span class="ident">honest</span> = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">0</span>].<span class="ident">clone</span>());
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">malicious_wrong_key_cfg</span> <span class="op">=</span> <span class="ident">cfg</span>[<span class="number">1</span>].<span class="ident">clone</span>();
-        <span class="ident">malicious_wrong_key_cfg</span>.<span class="ident">our_private_key</span> <span class="op">=</span> <span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">our_private_key</span>.<span class="ident">clone</span>();
-        <span class="kw">let</span> <span class="ident">malicious_wrong_key</span> <span class="op">=</span> <span class="ident">TlsTcpConnector::new</span>(<span class="ident">malicious_wrong_key_cfg</span>);
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">malicious_wrong_key_cfg</span> = <span class="ident">cfg</span>[<span class="number">1</span>].<span class="ident">clone</span>();
+        <span class="ident">malicious_wrong_key_cfg</span>.<span class="ident">our_private_key</span> = <span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">our_private_key</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">malicious_wrong_key</span> = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">malicious_wrong_key_cfg</span>);
 
         <span class="comment">// Honest server, malicious client with wrong private key</span>
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
                 <span class="ident">honest</span>.<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
                 <span class="macro">assert_eq!</span>(
                     <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                     <span class="string">&quot;invalid peer certificate signature&quot;</span>
                 );
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> <span class="op">=</span> <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">malicious_wrong_key</span>
+            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
+                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">malicious_wrong_key</span>
                     .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1075,10 +1081,10 @@
                 <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::<span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                 <span class="string">&quot;received fatal alert: AccessDenied&quot;</span>
@@ -1089,19 +1095,19 @@
 
         <span class="comment">// Malicious server with wrong key, honest client</span>
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span>
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
                 <span class="ident">malicious_wrong_key</span>.<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
                 <span class="macro">assert_eq!</span>(
                     <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                     <span class="string">&quot;received fatal alert: BadCertificate&quot;</span>
                 );
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> <span class="op">=</span> <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">honest</span>
+            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
+                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">honest</span>
                     .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">1</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1109,10 +1115,10 @@
                 <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::<span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                 <span class="string">&quot;invalid peer certificate signature&quot;</span>
@@ -1123,21 +1129,21 @@
 
         <span class="comment">// Server with wrong certificate, honest client</span>
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">clone</span>())
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">clone</span>())
                 .<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>())
                 .<span class="kw">await</span>
                 .<span class="ident">unwrap</span>();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> <span class="op">=</span> <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
+                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
                 <span class="macro">assert_eq!</span>(
                     <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                     <span class="string">&quot;received fatal alert: BadCertificate&quot;</span>
                 );
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> <span class="op">=</span> <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span><span class="op">&lt;</span><span class="ident">u64</span><span class="op">&gt;</span>) <span class="op">=</span> <span class="ident">honest</span>
+            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
+                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">honest</span>
                     .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1145,10 +1151,10 @@
                 <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::<span class="op">&lt;</span><span class="kw">_</span>, <span class="ident">anyhow::Error</span><span class="op">&gt;</span><span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> <span class="op">=</span> <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
                 <span class="string">&quot;invalid peer certificate contents: invalid peer certificate: CertNotValidForName&quot;</span>
@@ -1159,4 +1165,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (20ffea693 2022-08-11)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
