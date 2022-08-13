@@ -76,8 +76,49 @@
             inherit src;
           };
 
+        # Filter only files needed to build project dependencies
+        #
+        # To get good build times it's vitally important to not have to
+        # rebuild derivation needlessly. The way Nix caches things
+        # is very simple: if any input file changed, derivation needs to
+        # be rebuild.
+        #
+        # For this reason this filter function strips the `src` from
+        # any files that are not relevant to the build.
+        #
+        # Lile `filterWorkspaceFiles` but doesn't even need *.rs files
+        # (because they are not used for building dependencies)
+        filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ] src;
+
+        # Filter only files relevant to building the workspace
+        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ".*\.rs" ] src;
+
+        # Like `filterWorkspaceFiles` but with `./scripts/` included
+        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ".*\.rs" "scripts/.*" ] src;
+
+        filterSrcWithRegexes = regexes: src:
+          let
+            basePath = toString src + "/";
+          in
+          lib.cleanSourceWith {
+            filter = (path: type:
+              let
+                relPath = lib.removePrefix basePath (toString path);
+                includePath =
+                  (type == "directory") ||
+                  lib.any
+                    (re: builtins.match re relPath != null)
+                    regexes;
+              in
+              # uncomment to debug:
+                # builtins.trace "${relPath}: ${lib.boolToString includePath}"
+              includePath
+            );
+            inherit src;
+          };
+
         commonArgs = {
-          src = ./.;
+          src = filterWorkspaceFiles ./.;
 
           buildInputs = with pkgs; [
             clang
@@ -102,6 +143,7 @@
         };
 
         commonCliTestArgs = commonArgs // {
+          src = filterWorkspaceCliTestFiles ./.;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
           # there's no point saving the `./target/` dir
           doInstallCargoArtifacts = false;
@@ -110,6 +152,7 @@
         };
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
+          src = filterWorkspaceDepsBuildFiles ./.;
           pname = "minimint-dependencies";
           doCheck = false;
         });
