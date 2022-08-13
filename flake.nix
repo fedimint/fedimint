@@ -28,8 +28,19 @@
           NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
         });
 
-        fenix-pkgs = fenix.packages.${system};
-        fenix-channel = fenix-pkgs.stable;
+        fenix-toolchain = (fenix.packages.${system}.complete.withComponents [
+          "rustc"
+          "cargo"
+          "clippy"
+          "rust-analysis"
+          "rust-src"
+          "rustfmt"
+          "llvm-tools-preview"
+        ]);
+
+        fenix-channel = fenix.packages.${system}.complete;
+
+        craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
 
         # utilities that cli-tests require
         testPkgs = with pkgs; [
@@ -40,13 +51,8 @@
           netcat
           perl
           procps
+          bash
         ];
-
-        craneLib = (crane.mkLib pkgs).overrideScope' (final: prev: {
-          cargo = fenix-channel.cargo;
-          rustc = fenix-channel.rustc;
-          clippy = fenix-channel.clippy;
-        });
 
         # filter source code at path `src` to include only the list of `modules`
         filterModules = modules: src:
@@ -88,9 +94,6 @@
 
           nativeBuildInputs = with pkgs; [
             pkg-config
-            # for test scripts
-            bash
-            coreutils
           ];
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
@@ -171,6 +174,24 @@
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
           doCheck = false;
+        });
+
+        cargo-llvm-cov = craneLib.buildPackage (commonTestArgs // rec {
+          pname = "cargo-llvm-cov";
+          version = "0.4.14";
+
+          src = pkgs.fetchCrate {
+            inherit pname version;
+            sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
+          };
+          doCheck = false;
+        });
+
+        llvmCovWorkspace = craneLib.cargoBuild (commonTestArgs // {
+          cargoArtifacts = workspaceDeps;
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --all-features --workspace --lcov --output-path $out/lcov.info";
+          doCheck = false;
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
         minimint = pkg {
@@ -272,6 +293,7 @@
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
+          workspaceCov = llvmCovWorkspace;
 
           cli-test = {
             latency = cliTestLatency;
@@ -296,10 +318,8 @@
             default = pkgs.mkShell {
               buildInputs = workspaceDeps.buildInputs;
               nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
-                fenix-pkgs.rust-analyzer
-                fenix-channel.rustfmt
-                fenix-channel.rustc
-                fenix-channel.cargo
+                fenix-toolchain
+                cargo-llvm-cov
 
                 tmux
                 tmuxinator
