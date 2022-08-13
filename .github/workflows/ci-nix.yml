@@ -18,6 +18,7 @@ jobs:
   lint:
     name: "Lint"
     runs-on: buildjet-2vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v15
@@ -35,6 +36,7 @@ jobs:
   build:
     name: "Build"
     runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v15
@@ -79,6 +81,7 @@ jobs:
   ccov:
     name: "Code coverage"
     runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v3
       - uses: cachix/install-nix-action@v15
