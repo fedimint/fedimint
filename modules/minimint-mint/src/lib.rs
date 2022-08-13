@@ -1,3 +1,6 @@
+// TODO: unclear if people prefer this
+#![allow(clippy::assertions_on_result_states)]
+
 use crate::config::MintConfig;
 use crate::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,

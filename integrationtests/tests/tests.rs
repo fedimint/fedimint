@@ -1,3 +1,6 @@
+// TODO: unclear if people prefer this
+#![allow(clippy::assertions_on_result_states)]
+
 mod fixtures;
 
 use std::time::Duration;

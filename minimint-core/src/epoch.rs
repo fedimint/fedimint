@@ -103,7 +103,7 @@ impl EpochHistory {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum EpochVerifyError {
     MissingSignature,
     InvalidSignature,

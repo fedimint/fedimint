@@ -21,7 +21,9 @@ impl MemDatabase {
     }
 
     pub fn dump_db(&self) {
-        for (key, value) in self.data.lock().unwrap().iter() {
+        let data = self.data.lock().unwrap();
+        let data_iter = data.iter();
+        for (key, value) in data_iter {
             eprintln!("{}: {}", hex::encode(key), hex::encode(value));
         }
     }

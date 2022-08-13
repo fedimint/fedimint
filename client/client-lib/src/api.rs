@@ -1,3 +1,6 @@
+// TODO: unclear if people prefer this
+#![allow(clippy::assertions_on_result_states)]
+
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use jsonrpsee_core::client::ClientT;
