@@ -42,8 +42,8 @@
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
 
-        # utilities that cli-tests require
-        testPkgs = with pkgs; [
+        # some extra utilities that cli-tests require
+        cliTestsDeps = with pkgs; [
           bc
           bitcoind
           clightning-dev
@@ -101,8 +101,12 @@
           HOME = "/tmp";
         };
 
-        commonTestArgs = commonArgs // {
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ testPkgs;
+        commonCliTestArgs = commonArgs // {
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
+          # there's no point saving the `./target/` dir
+          doInstallCargoArtifacts = false;
+          # the command is a test, no need to run any other tests
+          doCheck = false;
         };
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
@@ -145,38 +149,32 @@
           cargoArtifacts = workspaceBuild;
 
           cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
+          doInstallCargoArtifacts = false;
           doCheck = false;
         });
 
-        workspaceCoverage = craneLib.cargoTarpaulin (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-        });
-
-        cliTestLatency = craneLib.cargoBuild (commonTestArgs // {
+        cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
-          doCheck = false;
+          doInstallCargoArtifacts = false;
         });
 
-        cliTestCli = craneLib.cargoBuild (commonTestArgs // {
+        cliTestCli = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
-          doCheck = false;
         });
 
-        cliTestClientd = craneLib.cargoBuild (commonTestArgs // {
+        cliTestClientd = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
-          doCheck = false;
         });
 
-        cliRustTests = craneLib.cargoBuild (commonTestArgs // {
+        cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
-          doCheck = false;
         });
 
-        cargo-llvm-cov = craneLib.buildPackage (commonTestArgs // rec {
+        cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
           version = "0.4.14";
 
@@ -185,12 +183,12 @@
             sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
           };
           doCheck = false;
-        });
+        };
 
-        llvmCovWorkspace = craneLib.cargoBuild (commonTestArgs // {
+        llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
           cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --all-features --workspace --lcov --output-path $out/lcov.info";
-          doCheck = false;
+          doCheck = true;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
@@ -306,8 +304,7 @@
         checks = {
           inherit
             workspaceBuild
-            workspaceClippy
-            workspaceCoverage;
+            workspaceClippy;
         };
 
         devShells =
@@ -329,7 +326,7 @@
                 pkgs.shellcheck
                 pkgs.rnix-lsp
                 pkgs.nodePackages.bash-language-server
-              ] ++ testPkgs;
+              ] ++ cliTestsDeps;
               RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
 
