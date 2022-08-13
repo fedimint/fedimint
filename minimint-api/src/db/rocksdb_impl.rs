@@ -25,7 +25,7 @@ impl Database for rocksdb::OptimisticTransactionDB {
         let prefix = key_prefix.to_vec();
         Box::new(
             self.prefix_iterator(prefix.clone())
-                .map_while(move |res| res.0.starts_with(&prefix).then(|| res))
+                .map_while(move |res| res.0.starts_with(&prefix).then_some(res))
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map(Ok),
         )

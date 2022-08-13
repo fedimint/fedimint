@@ -1,3 +1,6 @@
+// TODO: unclear if people prefer this
+#![allow(clippy::assertions_on_result_states)]
+
 pub mod db;
 
 use crate::api::ApiError;

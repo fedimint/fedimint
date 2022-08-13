@@ -1,3 +1,6 @@
+// TODO: unclear if people prefer this
+#![allow(clippy::assertions_on_result_states)]
+
 //! Provides an abstract network connection interface and multiple implementations
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};

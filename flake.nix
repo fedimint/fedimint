@@ -28,11 +28,22 @@
           NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
         });
 
-        fenix-pkgs = fenix.packages.${system};
-        fenix-channel = fenix-pkgs.stable;
+        fenix-toolchain = (fenix.packages.${system}.complete.withComponents [
+          "rustc"
+          "cargo"
+          "clippy"
+          "rust-analysis"
+          "rust-src"
+          "rustfmt"
+          "llvm-tools-preview"
+        ]);
 
-        # utilities that cli-tests require
-        testPkgs = with pkgs; [
+        fenix-channel = fenix.packages.${system}.complete;
+
+        craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
+
+        # some extra utilities that cli-tests require
+        cliTestsDeps = with pkgs; [
           bc
           bitcoind
           clightning-dev
@@ -40,13 +51,8 @@
           netcat
           perl
           procps
+          bash
         ];
-
-        craneLib = (crane.mkLib pkgs).overrideScope' (final: prev: {
-          cargo = fenix-channel.cargo;
-          rustc = fenix-channel.rustc;
-          clippy = fenix-channel.clippy;
-        });
 
         # filter source code at path `src` to include only the list of `modules`
         filterModules = modules: src:
@@ -88,9 +94,6 @@
 
           nativeBuildInputs = with pkgs; [
             pkg-config
-            # for test scripts
-            bash
-            coreutils
           ];
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
@@ -98,8 +101,12 @@
           HOME = "/tmp";
         };
 
-        commonTestArgs = commonArgs // {
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ testPkgs;
+        commonCliTestArgs = commonArgs // {
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ cliTestsDeps;
+          # there's no point saving the `./target/` dir
+          doInstallCargoArtifacts = false;
+          # the command is a test, no need to run any other tests
+          doCheck = false;
         };
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
@@ -142,35 +149,47 @@
           cargoArtifacts = workspaceBuild;
 
           cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
+          doInstallCargoArtifacts = false;
           doCheck = false;
         });
 
-        workspaceCoverage = craneLib.cargoTarpaulin (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-        });
-
-        cliTestLatency = craneLib.cargoBuild (commonTestArgs // {
+        cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
-          doCheck = false;
+          doInstallCargoArtifacts = false;
         });
 
-        cliTestCli = craneLib.cargoBuild (commonTestArgs // {
+        cliTestCli = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
-          doCheck = false;
         });
 
-        cliTestClientd = craneLib.cargoBuild (commonTestArgs // {
+        cliTestClientd = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
-          doCheck = false;
         });
 
-        cliRustTests = craneLib.cargoBuild (commonTestArgs // {
+        cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
+        });
+
+        cargo-llvm-cov = craneLib.buildPackage rec {
+          pname = "cargo-llvm-cov";
+          version = "0.4.14";
+
+          src = pkgs.fetchCrate {
+            inherit pname version;
+            sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
+          };
           doCheck = false;
+        };
+
+        llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceDeps;
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --all-features --workspace --lcov --output-path $out/lcov.info";
+          doCheck = true;
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
         minimint = pkg {
@@ -272,6 +291,7 @@
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
+          workspaceCov = llvmCovWorkspace;
 
           cli-test = {
             latency = cliTestLatency;
@@ -284,8 +304,7 @@
         checks = {
           inherit
             workspaceBuild
-            workspaceClippy
-            workspaceCoverage;
+            workspaceClippy;
         };
 
         devShells =
@@ -296,10 +315,8 @@
             default = pkgs.mkShell {
               buildInputs = workspaceDeps.buildInputs;
               nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
-                fenix-pkgs.rust-analyzer
-                fenix-channel.rustfmt
-                fenix-channel.rustc
-                fenix-channel.cargo
+                fenix-toolchain
+                cargo-llvm-cov
 
                 tmux
                 tmuxinator
@@ -309,7 +326,7 @@
                 pkgs.shellcheck
                 pkgs.rnix-lsp
                 pkgs.nodePackages.bash-language-server
-              ] ++ testPkgs;
+              ] ++ cliTestsDeps;
               RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
 
