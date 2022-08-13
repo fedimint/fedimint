@@ -174,6 +174,12 @@
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
         });
 
+        cargoUdeps = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "${pkgs.cargo-udeps}/bin/cargo-udeps udeps --workspace --all-targets --release";
+          doInstallCargoArtifacts = false;
+        });
+
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
           version = "0.4.14";
@@ -292,6 +298,7 @@
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
           workspaceCov = llvmCovWorkspace;
+          cargoUdeps = cargoUdeps;
 
           cli-test = {
             latency = cliTestLatency;
@@ -317,6 +324,7 @@
               nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
                 fenix-toolchain
                 cargo-llvm-cov
+                cargo-udeps
 
                 tmux
                 tmuxinator
