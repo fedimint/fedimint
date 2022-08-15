@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use clientd::call;
+use clientd::{call, WaitBlockHeightPayload};
 use minimint_api::module::__reexports::serde_json;
 use serde::Serialize;
 
@@ -22,6 +22,9 @@ enum Commands {
     Pending,
     /// rpc-method: pegin_address()
     NewPegInAddress,
+    /// rpc-method: wait_block_height()
+    #[clap(arg_required_else_help = true)]
+    WaitBlockHeight { height: u64 },
 }
 #[tokio::main]
 async fn main() {
@@ -36,6 +39,10 @@ async fn main() {
         }
         Commands::NewPegInAddress => {
             print_json(call("", "/get_new_peg_in_address").await, args.raw_json);
+        }
+        Commands::WaitBlockHeight { height } => {
+            let params = WaitBlockHeightPayload { height };
+            print_json(call(&params, "/wait_block_height").await, args.raw_json);
         }
     }
 }
