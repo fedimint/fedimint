@@ -1,7 +1,9 @@
 use anyhow::Result;
 use bitcoin::hashes::hex::ToHex;
-use fedimint_api::{Amount, OutPoint};
+use bitcoin::Transaction;
+use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::{CoinFinalizationData, SpendableCoin};
 use serde::{Deserialize, Serialize};
 
@@ -16,6 +18,13 @@ pub enum RpcResult {
 #[derive(Deserialize, Serialize)]
 pub struct WaitBlockHeightPayload {
     pub height: u64,
+}
+
+/// Struct used with the axum json-extractor to proccess the peg_in request payload
+#[derive(Deserialize, Serialize, Clone, Debug)]
+pub struct PegInPayload {
+    pub txout_proof: TxOutProof,
+    pub transaction: Transaction,
 }
 
 #[derive(Serialize)]
@@ -66,6 +75,11 @@ impl PendingResponse {
 #[derive(Serialize)]
 pub struct PegInAddressResponse {
     pub peg_in_address: bitcoin::Address,
+}
+
+#[derive(Serialize)]
+pub struct PegInOutResponse {
+    pub txid: TransactionId,
 }
 
 /// Holds a e-cash tier (msat by convention) and a quantity of coins

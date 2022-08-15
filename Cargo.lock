@@ -397,6 +397,7 @@ dependencies = [
  "anyhow",
  "axum",
  "bitcoin",
+ "bitcoin_hashes",
  "clap",
  "fedimint-api",
  "fedimint-core",

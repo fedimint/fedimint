@@ -2,9 +2,11 @@ use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Json, Router, Server};
 use bitcoin::secp256k1::rand;
+use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use clientd::{
-    InfoResponse, PegInAddressResponse, PendingResponse, RpcResult, WaitBlockHeightPayload,
+    InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload, PendingResponse, RpcResult,
+    WaitBlockHeightPayload,
 };
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
@@ -14,7 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -49,6 +51,7 @@ async fn main() {
         .route("/get_pending", post(pending))
         .route("/get_new_peg_in_address", post(new_peg_in_address))
         .route("/wait_block_height", post(wait_block_height))
+        .route("/peg_in", post(peg_in))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -98,4 +101,20 @@ async fn wait_block_height(
     let client = &state.client;
     client.await_consensus_block_height(payload.height).await;
     Json(RpcResult::Success(json!("")))
+}
+
+async fn peg_in(
+    Extension(state): Extension<Arc<State>>,
+    payload: Json<PegInPayload>,
+) -> impl IntoResponse {
+    let client = &state.client;
+    let mut rng = state.rng.clone();
+    let txout_proof = payload.0.txout_proof;
+    let transaction = payload.0.transaction;
+    let txid = client
+        .peg_in(txout_proof, transaction, &mut rng)
+        .await
+        .unwrap(); //TODO: handle unwrap()
+    info!("Started peg-in {}, result will be fetched", txid.to_hex());
+    Json(RpcResult::Success(json!(PegInOutResponse { txid })))
 }
