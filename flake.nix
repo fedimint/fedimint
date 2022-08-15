@@ -180,9 +180,11 @@
           doCheck = false;
         });
 
-        workspaceTest = craneLib.cargoBuild (commonArgs // {
+        workspaceTestandCov = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
           doCheck = true;
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
         # Note: can't use `cargoClippy` because it implies `--all-targets`, while
@@ -227,13 +229,6 @@
           };
           doCheck = false;
         };
-
-        llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
-          doCheck = true;
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
-        });
 
         minimint = pkg {
           name = "minimint";
@@ -333,8 +328,8 @@
           deps = workspaceDeps;
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
-          workspaceTest = workspaceTest;
-          workspaceCov = llvmCovWorkspace;
+          workspaceTestandCov = workspaceTestandCov;
+          cargoUdeps = cargoUdeps;
 
           cli-test = {
             latency = cliTestLatency;
