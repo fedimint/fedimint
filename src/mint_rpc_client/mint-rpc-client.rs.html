@@ -19,26 +19,26 @@
 <span id="19">19</span>
 <span id="20">20</span>
 <span id="21">21</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">clap::Parser</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
-<span class="kw">use</span> <span class="ident">mint_client::api::WsFederationApi</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>minimint_api::PeerId;
+<span class="kw">use </span>mint_client::api::WsFederationApi;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
-<span class="kw">struct</span> <span class="ident">ApiCall</span> {
-    <span class="ident">url</span>: <span class="ident">String</span>,
-    <span class="ident">method</span>: <span class="ident">String</span>,
-    <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">default_value</span> = <span class="string">&quot;null&quot;</span>)]</span>
-    <span class="ident">arg</span>: <span class="ident">String</span>,
+<span class="attribute">#[derive(Parser)]</span>
+<span class="kw">struct </span>ApiCall {
+    url: String,
+    method: String,
+    <span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]</span>
+    arg: String,
 }
 
-<span class="attribute">#[<span class="ident">tokio::main</span>]</span>
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">main</span>() {
-    <span class="kw">let</span> <span class="ident">call</span> = <span class="ident">ApiCall::parse</span>();
-    <span class="kw">let</span> <span class="ident">arg</span>: <span class="ident">serde_json::Value</span> = <span class="ident">serde_json::from_str</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">arg</span>).<span class="ident">unwrap</span>();
-    <span class="kw">let</span> <span class="ident">api</span> = <span class="ident">WsFederationApi::new</span>(<span class="number">0</span>, <span class="macro">vec!</span>[(<span class="ident">PeerId::from</span>(<span class="number">0</span>), <span class="ident">call</span>.<span class="ident">url</span>)]);
-    <span class="kw">let</span> <span class="ident">response</span>: <span class="ident">serde_json::Value</span> = <span class="ident">api</span>.<span class="ident">request</span>(<span class="kw-2">&amp;</span><span class="ident">call</span>.<span class="ident">method</span>, <span class="ident">arg</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-    <span class="kw">let</span> <span class="ident">formatted</span> = <span class="ident">serde_json::to_string_pretty</span>(<span class="kw-2">&amp;</span><span class="ident">response</span>).<span class="ident">unwrap</span>();
-    <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">formatted</span>);
+<span class="attribute">#[tokio::main]</span>
+<span class="kw">async fn </span>main() {
+    <span class="kw">let </span>call = ApiCall::parse();
+    <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>call.arg).unwrap();
+    <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), call.url)]);
+    <span class="kw">let </span>response: serde_json::Value = api.request(<span class="kw-2">&amp;</span>call.method, arg).<span class="kw">await</span>.unwrap();
+    <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>response).unwrap();
+    <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, formatted);
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

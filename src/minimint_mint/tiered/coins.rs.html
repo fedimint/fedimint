@@ -299,306 +299,306 @@
 <span id="299">299</span>
 <span id="300">300</span>
 <span id="301">301</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Amount</span>, <span class="ident">InvalidAmountTierError</span>, <span class="ident">Keys</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">DecodeError</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
-<span class="kw">use</span> <span class="ident">std::iter::FromIterator</span>;
-<span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
+</pre><pre class="rust"><code><span class="kw">use crate</span>::{Amount, InvalidAmountTierError, Keys};
+<span class="kw">use </span>minimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>std::marker::PhantomData;
 
-<span class="doccomment">/// Represents coins of different denominations.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// **Attention:** care has to be taken when constructing this to avoid overflow when calculating</span>
-<span class="doccomment">/// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum</span>
-<span class="doccomment">/// coin count per transaction this shouldn&#39;t be a problem in practice though.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">pub</span> <span class="ident">coins</span>: <span class="ident">BTreeMap</span>&lt;<span class="ident">Amount</span>, <span class="ident">Vec</span>&lt;<span class="ident">C</span>&gt;&gt;,
+<span class="doccomment">/// Represents coins of different denominations.
+///
+/// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
+/// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
+/// coin count per transaction this shouldn&#39;t be a problem in practice though.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]</span>
+<span class="kw">pub struct </span>Coins&lt;C&gt; {
+    <span class="kw">pub </span>coins: BTreeMap&lt;Amount, Vec&lt;C&gt;&gt;,
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TieredMultiZip</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">I</span>, <span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">I</span>: <span class="lifetime">&#39;a</span>,
+<span class="kw">pub struct </span>TieredMultiZip&lt;<span class="lifetime">&#39;a</span>, I, C&gt;
+<span class="kw">where
+    </span>I: <span class="lifetime">&#39;a</span>,
 {
-    <span class="ident">iters</span>: <span class="ident">Vec</span>&lt;<span class="ident">I</span>&gt;,
-    <span class="ident">_pd</span>: <span class="ident">PhantomData</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">C</span>&gt;,
+    iters: Vec&lt;I&gt;,
+    _pd: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>C&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
-        <span class="kw">let</span> <span class="ident">milli_sat</span> = <span class="self">self</span>
-            .<span class="ident">coins</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">tier</span>, <span class="ident">coins</span>)| <span class="ident">tier</span>.<span class="ident">milli_sat</span> * (<span class="ident">coins</span>.<span class="ident">len</span>() <span class="kw">as</span> <span class="ident">u64</span>))
-            .<span class="ident">sum</span>();
-        <span class="ident">Amount</span> { <span class="ident">milli_sat</span> }
+<span class="kw">impl</span>&lt;C&gt; Coins&lt;C&gt; {
+    <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="kw">let </span>milli_sat = <span class="self">self
+            </span>.coins
+            .iter()
+            .map(|(tier, coins)| tier.milli_sat * (coins.len() <span class="kw">as </span>u64))
+            .sum();
+        Amount { milli_sat }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coin_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">usize</span> {
-        <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">coins</span>)| <span class="ident">coins</span>.<span class="ident">len</span>()).<span class="ident">sum</span>()
+    <span class="kw">pub fn </span>coin_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.coins.iter().map(|(<span class="kw">_</span>, coins)| coins.len()).sum()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coin_amount_tiers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="ident">Amount</span>&gt; {
-        <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">keys</span>()
+    <span class="kw">pub fn </span>coin_amount_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Amount&gt; {
+        <span class="self">self</span>.coins.keys()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">map</span>&lt;<span class="ident">F</span>, <span class="ident">N</span>, <span class="ident">E</span>&gt;(<span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Coins</span>&lt;<span class="ident">N</span>&gt;, <span class="ident">E</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">Fn</span>(<span class="ident">Amount</span>, <span class="ident">C</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">N</span>, <span class="ident">E</span>&gt;,
+    <span class="kw">pub fn </span>map&lt;F, N, E&gt;(<span class="self">self</span>, f: F) -&gt; <span class="prelude-ty">Result</span>&lt;Coins&lt;N&gt;, E&gt;
+    <span class="kw">where
+        </span>F: Fn(Amount, C) -&gt; <span class="prelude-ty">Result</span>&lt;N, E&gt;,
     {
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>
-            .<span class="ident">coins</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">coins</span>)| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="ident">E</span>&gt; {
-                <span class="kw">let</span> <span class="ident">coins</span> = <span class="ident">coins</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(|<span class="ident">coin</span>| <span class="ident">f</span>(<span class="ident">amt</span>, <span class="ident">coin</span>))
-                    .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">E</span>&gt;&gt;()<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((<span class="ident">amt</span>, <span class="ident">coins</span>))
+        <span class="kw">let </span>coins = <span class="self">self
+            </span>.coins
+            .into_iter()
+            .map(|(amt, coins)| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, E&gt; {
+                <span class="kw">let </span>coins = coins
+                    .into_iter()
+                    .map(|coin| f(amt, coin))
+                    .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, E&gt;&gt;()<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((amt, coins))
             })
-            .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">BTreeMap</span>&lt;<span class="ident">Amount</span>, <span class="ident">Vec</span>&lt;<span class="ident">N</span>&gt;&gt;, <span class="ident">E</span>&gt;&gt;()<span class="question-mark">?</span>;
+            .collect::&lt;<span class="prelude-ty">Result</span>&lt;BTreeMap&lt;Amount, Vec&lt;N&gt;&gt;, E&gt;&gt;()<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">Coins</span> { <span class="ident">coins</span> })
+        <span class="prelude-val">Ok</span>(Coins { coins })
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">structural_eq</span>&lt;<span class="ident">O</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="ident">Coins</span>&lt;<span class="ident">O</span>&gt;) -&gt; <span class="ident">bool</span> {
-        <span class="kw">let</span> <span class="ident">tier_eq</span> = <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">keys</span>().<span class="ident">eq</span>(<span class="ident">other</span>.<span class="ident">coins</span>.<span class="ident">keys</span>());
-        <span class="kw">let</span> <span class="ident">coins_per_tier_eq</span> = <span class="self">self</span>
-            .<span class="ident">coins</span>
-            .<span class="ident">values</span>()
-            .<span class="ident">zip</span>(<span class="ident">other</span>.<span class="ident">coins</span>.<span class="ident">values</span>())
-            .<span class="ident">all</span>(|(<span class="ident">c1</span>, <span class="ident">c2</span>)| <span class="ident">c1</span>.<span class="ident">len</span>() == <span class="ident">c2</span>.<span class="ident">len</span>());
+    <span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>Coins&lt;O&gt;) -&gt; bool {
+        <span class="kw">let </span>tier_eq = <span class="self">self</span>.coins.keys().eq(other.coins.keys());
+        <span class="kw">let </span>coins_per_tier_eq = <span class="self">self
+            </span>.coins
+            .values()
+            .zip(other.coins.values())
+            .all(|(c1, c2)| c1.len() == c2.len());
 
-        <span class="ident">tier_eq</span> &amp;&amp; <span class="ident">coins_per_tier_eq</span>
+        tier_eq &amp;&amp; coins_per_tier_eq
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">iter</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="kw-2">&amp;</span><span class="ident">C</span>)&gt; + <span class="ident">DoubleEndedIterator</span> {
-        <span class="self">self</span>.<span class="ident">coins</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">flat_map</span>(|(<span class="ident">amt</span>, <span class="ident">coins</span>)| <span class="ident">coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="kw">move</span> |<span class="ident">c</span>| (<span class="kw-2">*</span><span class="ident">amt</span>, <span class="ident">c</span>)))
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>C)&gt; + DoubleEndedIterator {
+        <span class="self">self</span>.coins
+            .iter()
+            .flat_map(|(amt, coins)| coins.iter().map(<span class="kw">move </span>|c| (<span class="kw-2">*</span>amt, c)))
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">check_tiers</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">keys</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span>&lt;<span class="ident">K</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">InvalidAmountTierError</span>&gt; {
-        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">keys</span>().<span class="ident">find</span>(|<span class="ident">amt</span>| !<span class="ident">keys</span>.<span class="ident">keys</span>.<span class="ident">contains_key</span>(<span class="ident">amt</span>)) {
-            <span class="prelude-val">Some</span>(<span class="ident">amt</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">InvalidAmountTierError</span>(<span class="kw-2">*</span><span class="ident">amt</span>)),
-            <span class="prelude-val">None</span> =&gt; <span class="prelude-val">Ok</span>(()),
+    <span class="kw">pub fn </span>check_tiers&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Keys&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
+        <span class="kw">match </span><span class="self">self</span>.coins.keys().find(|amt| !keys.keys.contains_key(amt)) {
+            <span class="prelude-val">Some</span>(amt) =&gt; <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(()),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">C</span>: <span class="ident">Clone</span>,
+<span class="kw">impl</span>&lt;C&gt; Coins&lt;C&gt;
+<span class="kw">where
+    </span>C: Clone,
 {
-    <span class="doccomment">/// Select coins with total amount of *at least* `amount`. If more than requested amount of coins</span>
-    <span class="doccomment">/// are returned it was because exact change couldn&#39;t be made, and the next smallest amount will be</span>
-    <span class="doccomment">/// returned.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// The caller can request change from the federation.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">select_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">amount</span>: <span class="ident">Amount</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;&gt; {
-        <span class="kw">if</span> <span class="ident">amount</span> &gt; <span class="self">self</span>.<span class="ident">amount</span>() {
-            <span class="kw">return</span> <span class="prelude-val">None</span>;
+    <span class="doccomment">/// Select coins with total amount of *at least* `amount`. If more than requested amount of coins
+    /// are returned it was because exact change couldn&#39;t be made, and the next smallest amount will be
+    /// returned.
+    ///
+    /// The caller can request change from the federation.
+    </span><span class="kw">pub fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;Coins&lt;C&gt;&gt; {
+        <span class="kw">if </span>amount &gt; <span class="self">self</span>.amount() {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
         }
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">remaining</span> = <span class="self">self</span>.<span class="ident">amount</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>remaining = <span class="self">self</span>.amount();
 
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">rev</span>()
-            .<span class="ident">filter_map</span>(|(<span class="ident">coin_amount</span>, <span class="ident">coin</span>)| {
-                <span class="kw">if</span> <span class="ident">amount</span> &lt;= <span class="ident">remaining</span> - <span class="ident">coin_amount</span> {
-                    <span class="ident">remaining</span> -= <span class="ident">coin_amount</span>;
-                    <span class="prelude-val">None</span>
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Some</span>((<span class="ident">coin_amount</span>, (<span class="kw-2">*</span><span class="ident">coin</span>).<span class="ident">clone</span>()))
+        <span class="kw">let </span>coins = <span class="self">self
+            </span>.iter()
+            .rev()
+            .filter_map(|(coin_amount, coin)| {
+                <span class="kw">if </span>amount &lt;= remaining - coin_amount {
+                    remaining -= coin_amount;
+                    <span class="prelude-val">None
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>((coin_amount, (<span class="kw-2">*</span>coin).clone()))
                 }
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;&gt;();
+            .collect::&lt;Coins&lt;C&gt;&gt;();
 
-        <span class="prelude-val">Some</span>(<span class="ident">coins</span>)
+        <span class="prelude-val">Some</span>(coins)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Coins</span>&lt;()&gt; {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">represent_amount</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">mut</span> <span class="ident">amount</span>: <span class="ident">Amount</span>, <span class="ident">tiers</span>: <span class="kw-2">&amp;</span><span class="ident">Keys</span>&lt;<span class="ident">K</span>&gt;) -&gt; <span class="ident">Coins</span>&lt;()&gt; {
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="ident">tiers</span>
-            .<span class="ident">keys</span>
-            .<span class="ident">keys</span>()
-            .<span class="ident">rev</span>()
-            .<span class="ident">map</span>(|<span class="kw-2">&amp;</span><span class="ident">amount_tier</span>| {
-                <span class="kw">let</span> <span class="ident">res</span> = <span class="ident">amount</span> / <span class="ident">amount_tier</span>;
-                <span class="ident">amount</span> %= <span class="ident">amount_tier</span>;
-                (<span class="ident">amount_tier</span>, <span class="macro">vec!</span>[(); <span class="ident">res</span> <span class="kw">as</span> <span class="ident">usize</span>])
+<span class="kw">impl </span>Coins&lt;()&gt; {
+    <span class="kw">pub fn </span>represent_amount&lt;K&gt;(<span class="kw-2">mut </span>amount: Amount, tiers: <span class="kw-2">&amp;</span>Keys&lt;K&gt;) -&gt; Coins&lt;()&gt; {
+        <span class="kw">let </span>coins = tiers
+            .keys
+            .keys()
+            .rev()
+            .map(|<span class="kw-2">&amp;</span>amount_tier| {
+                <span class="kw">let </span>res = amount / amount_tier;
+                amount %= amount_tier;
+                (amount_tier, <span class="macro">vec!</span>[(); res <span class="kw">as </span>usize])
             })
-            .<span class="ident">collect</span>();
+            .collect();
 
-        <span class="ident">Coins</span> { <span class="ident">coins</span> }
+        Coins { coins }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">FromIterator</span>&lt;(<span class="ident">Amount</span>, <span class="ident">C</span>)&gt; <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">from_iter</span>&lt;<span class="ident">T</span>: <span class="ident">IntoIterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">C</span>)&gt;&gt;(<span class="ident">iter</span>: <span class="ident">T</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">coins</span> = <span class="ident">Coins::default</span>();
-        <span class="ident">coins</span>.<span class="ident">extend</span>(<span class="ident">iter</span>);
-        <span class="ident">coins</span>
+<span class="kw">impl</span>&lt;C&gt; FromIterator&lt;(Amount, C)&gt; <span class="kw">for </span>Coins&lt;C&gt; {
+    <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (Amount, C)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>coins = Coins::default();
+        coins.extend(iter);
+        coins
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">IntoIterator</span> <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">C</span>: <span class="lifetime">&#39;static</span>,
+<span class="kw">impl</span>&lt;C&gt; IntoIterator <span class="kw">for </span>Coins&lt;C&gt;
+<span class="kw">where
+    </span>C: <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">type</span> <span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">C</span>);
-    <span class="kw">type</span> <span class="ident">IntoIter</span> = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">C</span>)&gt;&gt;;
+    <span class="kw">type </span>Item = (Amount, C);
+    <span class="kw">type </span>IntoIter = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (Amount, C)&gt;&gt;;
 
-    <span class="kw">fn</span> <span class="ident">into_iter</span>(<span class="self">self</span>) -&gt; <span class="ident"><span class="self">Self</span>::IntoIter</span> {
-        <span class="ident">Box::new</span>(
-            <span class="self">self</span>.<span class="ident">coins</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">flat_map</span>(|(<span class="ident">amt</span>, <span class="ident">coins</span>)| <span class="ident">coins</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="kw">move</span> |<span class="ident">c</span>| (<span class="ident">amt</span>, <span class="ident">c</span>))),
+    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        Box::new(
+            <span class="self">self</span>.coins
+                .into_iter()
+                .flat_map(|(amt, coins)| coins.into_iter().map(<span class="kw">move </span>|c| (amt, c))),
         )
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">default</span>() -&gt; <span class="self">Self</span> {
-        <span class="ident">Coins</span> {
-            <span class="ident">coins</span>: <span class="ident">BTreeMap::default</span>(),
+<span class="kw">impl</span>&lt;C&gt; Default <span class="kw">for </span>Coins&lt;C&gt; {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        Coins {
+            coins: BTreeMap::default(),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Extend</span>&lt;(<span class="ident">Amount</span>, <span class="ident">C</span>)&gt; <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">extend</span>&lt;<span class="ident">T</span>: <span class="ident">IntoIterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">C</span>)&gt;&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">iter</span>: <span class="ident">T</span>) {
-        <span class="kw">for</span> (<span class="ident">amount</span>, <span class="ident">coin</span>) <span class="kw">in</span> <span class="ident">iter</span> {
-            <span class="self">self</span>.<span class="ident">coins</span>.<span class="ident">entry</span>(<span class="ident">amount</span>).<span class="ident">or_default</span>().<span class="ident">push</span>(<span class="ident">coin</span>)
+<span class="kw">impl</span>&lt;C&gt; Extend&lt;(Amount, C)&gt; <span class="kw">for </span>Coins&lt;C&gt; {
+    <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, C)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span>iter {
+            <span class="self">self</span>.coins.entry(amount).or_default().push(coin)
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">C</span>: <span class="ident">Encodable</span>,
+<span class="kw">impl</span>&lt;C&gt; Encodable <span class="kw">for </span>Coins&lt;C&gt;
+<span class="kw">where
+    </span>C: Encodable,
 {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">len</span> = <span class="number">0</span>;
-        <span class="ident">len</span> += (<span class="self">self</span>.<span class="ident">iter</span>().<span class="ident">count</span>() <span class="kw">as</span> <span class="ident">u64</span>).<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
-        <span class="kw">for</span> (<span class="ident">amount</span>, <span class="ident">coin</span>) <span class="kw">in</span> <span class="self">self</span>.<span class="ident">iter</span>() {
-            <span class="ident">len</span> += <span class="ident">amount</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
-            <span class="ident">len</span> += <span class="ident">coin</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+        len += (<span class="self">self</span>.iter().count() <span class="kw">as </span>u64).consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        <span class="kw">for </span>(amount, coin) <span class="kw">in </span><span class="self">self</span>.iter() {
+            len += amount.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+            len += coin.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
         }
-        <span class="prelude-val">Ok</span>(<span class="ident">len</span>)
+        <span class="prelude-val">Ok</span>(len)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">C</span>: <span class="ident">Decodable</span>,
+<span class="kw">impl</span>&lt;C&gt; Decodable <span class="kw">for </span>Coins&lt;C&gt;
+<span class="kw">where
+    </span>C: Decodable,
 {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">coins</span> = <span class="ident">BTreeMap::new</span>();
-        <span class="kw">let</span> <span class="ident">len</span> = <span class="ident">u64::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;
-        <span class="kw">for</span> <span class="kw">_</span> <span class="kw">in</span> <span class="number">0</span>..<span class="ident">len</span> {
-            <span class="kw">let</span> <span class="ident">amt</span> = <span class="ident">Amount::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;
-            <span class="kw">let</span> <span class="ident">coin</span> = <span class="ident">C::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;
-            <span class="ident">coins</span>.<span class="ident">entry</span>(<span class="ident">amt</span>).<span class="ident">or_insert_with</span>(<span class="ident">Vec::new</span>).<span class="ident">push</span>(<span class="ident">coin</span>);
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>coins = BTreeMap::new();
+        <span class="kw">let </span>len = u64::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+        <span class="kw">for _ in </span><span class="number">0</span>..len {
+            <span class="kw">let </span>amt = Amount::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+            <span class="kw">let </span>coin = C::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+            coins.entry(amt).or_insert_with(Vec::new).push(coin);
         }
-        <span class="prelude-val">Ok</span>(<span class="ident">Coins</span> { <span class="ident">coins</span> })
+        <span class="prelude-val">Ok</span>(Coins { coins })
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">I</span>, <span class="ident">C</span>&gt; <span class="ident">TieredMultiZip</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">I</span>, <span class="ident">C</span>&gt; {
-    <span class="doccomment">/// Creates a new MultiZip Iterator from `Coins` iterators. These have to be checked for</span>
-    <span class="doccomment">/// structural equality! There also has to be at least one iterator in the `iter` vector.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">iters</span>: <span class="ident">Vec</span>&lt;<span class="ident">I</span>&gt;) -&gt; <span class="self">Self</span> {
-        <span class="macro">assert!</span>(!<span class="ident">iters</span>.<span class="ident">is_empty</span>());
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I, C&gt; TieredMultiZip&lt;<span class="lifetime">&#39;a</span>, I, C&gt; {
+    <span class="doccomment">/// Creates a new MultiZip Iterator from `Coins` iterators. These have to be checked for
+    /// structural equality! There also has to be at least one iterator in the `iter` vector.
+    </span><span class="kw">pub fn </span>new(iters: Vec&lt;I&gt;) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert!</span>(!iters.is_empty());
 
-        <span class="ident">TieredMultiZip</span> {
-            <span class="ident">iters</span>,
-            <span class="ident">_pd</span>: <span class="ident">Default::default</span>(),
+        TieredMultiZip {
+            iters,
+            _pd: Default::default(),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">I</span>, <span class="ident">C</span>&gt; <span class="ident">Iterator</span> <span class="kw">for</span> <span class="ident">TieredMultiZip</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">I</span>, <span class="ident">C</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">I</span>: <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">C</span>)&gt;,
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, I, C&gt; Iterator <span class="kw">for </span>TieredMultiZip&lt;<span class="lifetime">&#39;a</span>, I, C&gt;
+<span class="kw">where
+    </span>I: Iterator&lt;Item = (Amount, C)&gt;,
 {
-    <span class="kw">type</span> <span class="ident">Item</span> = (<span class="ident">Amount</span>, <span class="ident">Vec</span>&lt;<span class="ident">C</span>&gt;);
+    <span class="kw">type </span>Item = (Amount, Vec&lt;C&gt;);
 
-    <span class="kw">fn</span> <span class="ident">next</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::Item</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">coins</span> = <span class="ident">Vec::with_capacity</span>(<span class="self">self</span>.<span class="ident">iters</span>.<span class="ident">len</span>());
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">amount</span> = <span class="prelude-val">None</span>;
-        <span class="kw">for</span> <span class="ident">iter</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">iters</span>.<span class="ident">iter_mut</span>() {
-            <span class="kw">match</span> <span class="ident">iter</span>.<span class="ident">next</span>() {
-                <span class="prelude-val">Some</span>((<span class="ident">amt</span>, <span class="ident">coin</span>)) =&gt; {
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">amount</span>) = <span class="ident">amount</span> {
-                        <span class="comment">// This may fail if coins weren&#39;t tested for structural equality</span>
-                        <span class="macro">assert_eq!</span>(<span class="ident">amount</span>, <span class="ident">amt</span>);
-                    } <span class="kw">else</span> {
-                        <span class="ident">amount</span> = <span class="prelude-val">Some</span>(<span class="ident">amt</span>);
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>coins = Vec::with_capacity(<span class="self">self</span>.iters.len());
+        <span class="kw">let </span><span class="kw-2">mut </span>amount = <span class="prelude-val">None</span>;
+        <span class="kw">for </span>iter <span class="kw">in </span><span class="self">self</span>.iters.iter_mut() {
+            <span class="kw">match </span>iter.next() {
+                <span class="prelude-val">Some</span>((amt, coin)) =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = amount {
+                        <span class="comment">// This may fail if coins weren&#39;t tested for structural equality
+                        </span><span class="macro">assert_eq!</span>(amount, amt);
+                    } <span class="kw">else </span>{
+                        amount = <span class="prelude-val">Some</span>(amt);
                     }
-                    <span class="ident">coins</span>.<span class="ident">push</span>(<span class="ident">coin</span>);
+                    coins.push(coin);
                 }
-                <span class="prelude-val">None</span> =&gt; <span class="kw">return</span> <span class="prelude-val">None</span>,
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
             }
         }
 
-        <span class="comment">// This should always hold as long as this impl is correct</span>
-        <span class="macro">assert_eq!</span>(<span class="ident">coins</span>.<span class="ident">len</span>(), <span class="self">self</span>.<span class="ident">iters</span>.<span class="ident">len</span>());
+        <span class="comment">// This should always hold as long as this impl is correct
+        </span><span class="macro">assert_eq!</span>(coins.len(), <span class="self">self</span>.iters.len());
 
         <span class="prelude-val">Some</span>((
-            <span class="ident">amount</span>.<span class="ident">expect</span>(<span class="string">&quot;The multi zip must contain at least one iterator&quot;</span>),
-            <span class="ident">coins</span>,
+            amount.expect(<span class="string">&quot;The multi zip must contain at least one iterator&quot;</span>),
+            coins,
         ))
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">test</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::Coins</span>;
-    <span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>test {
+    <span class="kw">use </span><span class="kw">crate</span>::Coins;
+    <span class="kw">use </span>minimint_api::Amount;
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">select_coins_returns_exact_amount</span>() {
-        <span class="kw">let</span> <span class="ident">starting</span> = <span class="ident">coins</span>(<span class="macro">vec!</span>[
-            (<span class="ident">Amount::from_sat</span>(<span class="number">1</span>), <span class="number">5</span>),
-            (<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">5</span>),
-            (<span class="ident">Amount::from_sat</span>(<span class="number">20</span>), <span class="number">5</span>),
+    <span class="attribute">#[test]</span>
+    <span class="kw">fn </span>select_coins_returns_exact_amount() {
+        <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[
+            (Amount::from_sat(<span class="number">1</span>), <span class="number">5</span>),
+            (Amount::from_sat(<span class="number">5</span>), <span class="number">5</span>),
+            (Amount::from_sat(<span class="number">20</span>), <span class="number">5</span>),
         ]);
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">7</span>)),
-            <span class="prelude-val">Some</span>(<span class="ident">coins</span>(<span class="macro">vec!</span>[
-                (<span class="ident">Amount::from_sat</span>(<span class="number">1</span>), <span class="number">2</span>),
-                (<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">1</span>)
+            starting.select_coins(Amount::from_sat(<span class="number">7</span>)),
+            <span class="prelude-val">Some</span>(coins(<span class="macro">vec!</span>[
+                (Amount::from_sat(<span class="number">1</span>), <span class="number">2</span>),
+                (Amount::from_sat(<span class="number">5</span>), <span class="number">1</span>)
             ]))
         );
     }
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">select_coins_uses_smaller_denominations</span>() {
-        <span class="kw">let</span> <span class="ident">starting</span> = <span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">5</span>), (<span class="ident">Amount::from_sat</span>(<span class="number">20</span>), <span class="number">5</span>)]);
+    <span class="attribute">#[test]</span>
+    <span class="kw">fn </span>select_coins_uses_smaller_denominations() {
+        <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">5</span>), <span class="number">5</span>), (Amount::from_sat(<span class="number">20</span>), <span class="number">5</span>)]);
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">7</span>)),
-            <span class="prelude-val">Some</span>(<span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">5</span>), <span class="number">2</span>)]))
+            starting.select_coins(Amount::from_sat(<span class="number">7</span>)),
+            <span class="prelude-val">Some</span>(coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">5</span>), <span class="number">2</span>)]))
         );
     }
 
-    <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">select_coins_returns_none_if_amount_is_too_large</span>() {
-        <span class="kw">let</span> <span class="ident">starting</span> = <span class="ident">coins</span>(<span class="macro">vec!</span>[(<span class="ident">Amount::from_sat</span>(<span class="number">10</span>), <span class="number">1</span>)]);
+    <span class="attribute">#[test]</span>
+    <span class="kw">fn </span>select_coins_returns_none_if_amount_is_too_large() {
+        <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">10</span>), <span class="number">1</span>)]);
 
-        <span class="macro">assert_eq!</span>(<span class="ident">starting</span>.<span class="ident">select_coins</span>(<span class="ident">Amount::from_sat</span>(<span class="number">100</span>)), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(starting.select_coins(Amount::from_sat(<span class="number">100</span>)), <span class="prelude-val">None</span>);
     }
 
-    <span class="kw">fn</span> <span class="ident">coins</span>(<span class="ident">coins</span>: <span class="ident">Vec</span>&lt;(<span class="ident">Amount</span>, <span class="ident">usize</span>)&gt;) -&gt; <span class="ident">Coins</span>&lt;<span class="ident">usize</span>&gt; {
-        <span class="ident">coins</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">flat_map</span>(|(<span class="ident">amount</span>, <span class="ident">number</span>)| <span class="macro">vec!</span>[(<span class="ident">amount</span>, <span class="number">0_usize</span>); <span class="ident">number</span>])
-            .<span class="ident">collect</span>()
+    <span class="kw">fn </span>coins(coins: Vec&lt;(Amount, usize)&gt;) -&gt; Coins&lt;usize&gt; {
+        coins
+            .into_iter()
+            .flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="number">0_usize</span>); number])
+            .collect()
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

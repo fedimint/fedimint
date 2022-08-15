@@ -302,309 +302,309 @@
 <span id="302">302</span>
 <span id="303">303</span>
 <span id="304">304</span>
-</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
-<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
-<span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one</span>
-<span class="kw">use</span> <span class="ident">bytes</span>::{<span class="ident">Buf</span>, <span class="ident">BufMut</span>, <span class="ident">BytesMut</span>};
-<span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">Sink</span>, <span class="ident">Stream</span>};
-<span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">std::io</span>::{<span class="ident">Read</span>, <span class="ident">Write</span>};
-<span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
-<span class="kw">use</span> <span class="ident">std::pin::Pin</span>;
-<span class="kw">use</span> <span class="ident">std::task</span>::{<span class="ident">Context</span>, <span class="ident">Poll</span>};
-<span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncRead</span>, <span class="ident">AsyncWrite</span>, <span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>};
-<span class="kw">use</span> <span class="ident">tokio::net::tcp</span>::{<span class="ident">OwnedReadHalf</span>, <span class="ident">OwnedWriteHalf</span>};
-<span class="kw">use</span> <span class="ident">tokio_util::codec</span>::{<span class="ident">FramedRead</span>, <span class="ident">FramedWrite</span>};
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">trace</span>};
+<span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one
+</span><span class="kw">use </span>bytes::{Buf, BufMut, BytesMut};
+<span class="kw">use </span>futures::{Sink, Stream};
+<span class="kw">use </span>std::convert::TryInto;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::io::{Read, Write};
+<span class="kw">use </span>std::marker::PhantomData;
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::task::{Context, Poll};
+<span class="kw">use </span>tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
+<span class="kw">use </span>tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+<span class="kw">use </span>tokio_util::codec::{FramedRead, FramedWrite};
+<span class="kw">use </span>tracing::{error, trace};
 
-<span class="doccomment">/// Owned [`FramedTransport`] trait object</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">FramedTransport</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
+<span class="doccomment">/// Owned [`FramedTransport`] trait object
+</span><span class="kw">pub type </span>AnyFramedTransport&lt;M&gt; = Box&lt;<span class="kw">dyn </span>FramedTransport&lt;M&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;;
 
-<span class="doccomment">/// A bidirectional framed transport adapter that can be split into its read and write half</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">FramedTransport</span>&lt;<span class="ident">T</span>&gt;:
-    <span class="ident">Sink</span>&lt;<span class="ident">T</span>, <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>&gt; + <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>, <span class="ident">anyhow::Error</span>&gt;&gt;
+<span class="doccomment">/// A bidirectional framed transport adapter that can be split into its read and write half
+</span><span class="kw">pub trait </span>FramedTransport&lt;T&gt;:
+    Sink&lt;T, Error = anyhow::Error&gt; + Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt;
 {
-    <span class="doccomment">/// Split the framed transport into read and write half</span>
-    <span class="kw">fn</span> <span class="ident">borrow_split</span>(
-        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+    <span class="doccomment">/// Split the framed transport into read and write half
+    </span><span class="kw">fn </span>borrow_split(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
     ) -&gt; (
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Sink</span>&lt;<span class="ident">T</span>, <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span>),
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>, <span class="ident">anyhow::Error</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span>),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>Sink&lt;T, Error = anyhow::Error&gt; + Send + Unpin),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt; + Send + Unpin),
     );
 
-    <span class="doccomment">/// Transforms concrete `FramedTransport` object into an owned trait object</span>
-    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">T</span>&gt;
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
+    <span class="doccomment">/// Transforms concrete `FramedTransport` object into an owned trait object
+    </span><span class="kw">fn </span>to_any(<span class="self">self</span>) -&gt; AnyFramedTransport&lt;T&gt;
+    <span class="kw">where
+        </span><span class="self">Self</span>: Sized + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="ident">Box::new</span>(<span class="self">self</span>)
+        Box::new(<span class="self">self</span>)
     }
 }
 
-<span class="doccomment">/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based [`BidiFramed`] instances</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">TcpBidiFramed</span>&lt;<span class="ident">T</span>&gt; = <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">OwnedWriteHalf</span>, <span class="ident">OwnedReadHalf</span>&gt;;
+<span class="doccomment">/// Special case for tokio [`TcpStream`](tokio::net::TcpStream) based [`BidiFramed`] instances
+</span><span class="kw">pub type </span>TcpBidiFramed&lt;T&gt; = BidiFramed&lt;T, OwnedWriteHalf, OwnedReadHalf&gt;;
 
-<span class="doccomment">/// Sink (sending) half of [`BidiFramed`]</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">FramedSink</span>&lt;<span class="ident">S</span>, <span class="ident">T</span>&gt; = <span class="ident">FramedWrite</span>&lt;<span class="ident">S</span>, <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt;&gt;;
-<span class="doccomment">/// Stream (receiving) half of [`BidiFramed`]</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">FramedStream</span>&lt;<span class="ident">S</span>, <span class="ident">T</span>&gt; = <span class="ident">FramedRead</span>&lt;<span class="ident">S</span>, <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt;&gt;;
+<span class="doccomment">/// Sink (sending) half of [`BidiFramed`]
+</span><span class="kw">pub type </span>FramedSink&lt;S, T&gt; = FramedWrite&lt;S, BincodeCodec&lt;T&gt;&gt;;
+<span class="doccomment">/// Stream (receiving) half of [`BidiFramed`]
+</span><span class="kw">pub type </span>FramedStream&lt;S, T&gt; = FramedRead&lt;S, BincodeCodec&lt;T&gt;&gt;;
 
-<span class="doccomment">/// Framed transport codec for streams</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are</span>
-<span class="doccomment">/// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.</span>
-<span class="doccomment">/// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt; {
-    <span class="ident">sink</span>: <span class="ident">FramedSink</span>&lt;<span class="ident">WH</span>, <span class="ident">T</span>&gt;,
-    <span class="ident">stream</span>: <span class="ident">FramedStream</span>&lt;<span class="ident">RH</span>, <span class="ident">T</span>&gt;,
+<span class="doccomment">/// Framed transport codec for streams
+///
+/// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are
+/// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.
+/// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.
+</span><span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>BidiFramed&lt;T, WH, RH&gt; {
+    sink: FramedSink&lt;WH, T&gt;,
+    stream: FramedStream&lt;RH, T&gt;,
 }
 
-<span class="doccomment">/// Framed codec that uses [`bincode`] to encode structs with [`serde`] support</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="ident">_pd</span>: <span class="ident">PhantomData</span>&lt;<span class="ident">T</span>&gt;,
+<span class="doccomment">/// Framed codec that uses [`bincode`] to encode structs with [`serde`] support
+</span><span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>BincodeCodec&lt;T&gt; {
+    _pd: PhantomData&lt;T&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt; <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">WH</span>: <span class="ident">AsyncWrite</span>,
-    <span class="ident">RH</span>: <span class="ident">AsyncRead</span>,
-    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span>,
+<span class="kw">impl</span>&lt;T, WH, RH&gt; BidiFramed&lt;T, WH, RH&gt;
+<span class="kw">where
+    </span>WH: AsyncWrite,
+    RH: AsyncRead,
+    T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    <span class="doccomment">/// Builds a new `BidiFramed` codec around a stream `stream`.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case the stream is a tokio TCP stream.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>&lt;<span class="ident">S</span>&gt;(<span class="ident">stream</span>: <span class="ident">S</span>) -&gt; <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">S</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">S</span>&gt;&gt;
-    <span class="kw">where</span>
-        <span class="ident">S</span>: <span class="ident">AsyncRead</span> + <span class="ident">AsyncWrite</span>,
+    <span class="doccomment">/// Builds a new `BidiFramed` codec around a stream `stream`.
+    ///
+    /// See [`TcpBidiFramed::new_from_tcp`] for a more efficient version in case the stream is a tokio TCP stream.
+    </span><span class="kw">pub fn </span>new&lt;S&gt;(stream: S) -&gt; BidiFramed&lt;T, WriteHalf&lt;S&gt;, ReadHalf&lt;S&gt;&gt;
+    <span class="kw">where
+        </span>S: AsyncRead + AsyncWrite,
     {
-        <span class="kw">let</span> (<span class="ident">read</span>, <span class="ident">write</span>) = <span class="ident">tokio::io::split</span>(<span class="ident">stream</span>);
-        <span class="ident">BidiFramed</span> {
-            <span class="ident">sink</span>: <span class="ident">FramedSink::new</span>(<span class="ident">write</span>, <span class="ident">BincodeCodec::new</span>()),
-            <span class="ident">stream</span>: <span class="ident">FramedStream::new</span>(<span class="ident">read</span>, <span class="ident">BincodeCodec::new</span>()),
+        <span class="kw">let </span>(read, write) = tokio::io::split(stream);
+        BidiFramed {
+            sink: FramedSink::new(write, BincodeCodec::new()),
+            stream: FramedStream::new(read, BincodeCodec::new()),
         }
     }
 
-    <span class="doccomment">/// Splits the codec in its sending and receiving parts</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// This can be useful in cases where potentially simultaneous read and write operations are</span>
-    <span class="doccomment">/// required. Otherwise a we would need a mutex to guard access.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">borrow_parts</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; (<span class="kw-2">&amp;mut</span> <span class="ident">FramedSink</span>&lt;<span class="ident">WH</span>, <span class="ident">T</span>&gt;, <span class="kw-2">&amp;mut</span> <span class="ident">FramedStream</span>&lt;<span class="ident">RH</span>, <span class="ident">T</span>&gt;) {
-        (<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>, <span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">stream</span>)
+    <span class="doccomment">/// Splits the codec in its sending and receiving parts
+    ///
+    /// This can be useful in cases where potentially simultaneous read and write operations are
+    /// required. Otherwise a we would need a mutex to guard access.
+    </span><span class="kw">pub fn </span>borrow_parts(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (<span class="kw-2">&amp;mut </span>FramedSink&lt;WH, T&gt;, <span class="kw-2">&amp;mut </span>FramedStream&lt;RH, T&gt;) {
+        (<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink, <span class="kw-2">&amp;mut </span><span class="self">self</span>.stream)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">TcpBidiFramed</span>&lt;<span class="ident">T</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span>,
+<span class="kw">impl</span>&lt;T&gt; TcpBidiFramed&lt;T&gt;
+<span class="kw">where
+    </span>T: serde::Serialize + serde::de::DeserializeOwned,
 {
-    <span class="doccomment">/// Special constructor for tokio TCP connections.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient method of splitting the</span>
-    <span class="doccomment">/// stream into a read and a write half this constructor takes advantage of.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_from_tcp</span>(<span class="ident">stream</span>: <span class="ident">tokio::net::TcpStream</span>) -&gt; <span class="ident">TcpBidiFramed</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="kw">let</span> (<span class="ident">read</span>, <span class="ident">write</span>) = <span class="ident">stream</span>.<span class="ident">into_split</span>();
-        <span class="ident">BidiFramed</span> {
-            <span class="ident">sink</span>: <span class="ident">FramedSink::new</span>(<span class="ident">write</span>, <span class="ident">BincodeCodec::new</span>()),
-            <span class="ident">stream</span>: <span class="ident">FramedStream::new</span>(<span class="ident">read</span>, <span class="ident">BincodeCodec::new</span>()),
+    <span class="doccomment">/// Special constructor for tokio TCP connections.
+    ///
+    /// Tokio [`TcpStream`](tokio::net::TcpStream) implements an efficient method of splitting the
+    /// stream into a read and a write half this constructor takes advantage of.
+    </span><span class="kw">pub fn </span>new_from_tcp(stream: tokio::net::TcpStream) -&gt; TcpBidiFramed&lt;T&gt; {
+        <span class="kw">let </span>(read, write) = stream.into_split();
+        BidiFramed {
+            sink: FramedSink::new(write, BincodeCodec::new()),
+            stream: FramedStream::new(read, BincodeCodec::new()),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt; <span class="ident">Sink</span>&lt;<span class="ident">T</span>&gt; <span class="kw">for</span> <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">WH</span>: <span class="ident">tokio::io::AsyncWrite</span> + <span class="ident">Unpin</span>,
-    <span class="ident">RH</span>: <span class="ident">Unpin</span>,
-    <span class="ident">T</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span>,
+<span class="kw">impl</span>&lt;T, WH, RH&gt; Sink&lt;T&gt; <span class="kw">for </span>BidiFramed&lt;T, WH, RH&gt;
+<span class="kw">where
+    </span>WH: tokio::io::AsyncWrite + Unpin,
+    RH: Unpin,
+    T: Debug + serde::Serialize,
 {
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>;
+    <span class="kw">type </span>Error = anyhow::Error;
 
-    <span class="kw">fn</span> <span class="ident">poll_ready</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span>&lt;<span class="kw-2">&amp;mut</span> <span class="self">Self</span>&gt;, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">Poll</span>&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="ident"><span class="self">Self</span>::Error</span>&gt;&gt; {
-        <span class="ident">Sink::poll_ready</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    <span class="kw">fn </span>poll_ready(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        Sink::poll_ready(Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink), cx)
     }
 
-    <span class="kw">fn</span> <span class="ident">start_send</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span>&lt;<span class="kw-2">&amp;mut</span> <span class="self">Self</span>&gt;, <span class="ident">item</span>: <span class="ident">T</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="ident">Sink::start_send</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">item</span>)
+    <span class="kw">fn </span>start_send(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, item: T) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt; {
+        Sink::start_send(Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink), item)
     }
 
-    <span class="kw">fn</span> <span class="ident">poll_flush</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span>&lt;<span class="kw-2">&amp;mut</span> <span class="self">Self</span>&gt;, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">Poll</span>&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="ident"><span class="self">Self</span>::Error</span>&gt;&gt; {
-        <span class="ident">Sink::poll_flush</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    <span class="kw">fn </span>poll_flush(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        Sink::poll_flush(Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink), cx)
     }
 
-    <span class="kw">fn</span> <span class="ident">poll_close</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span>&lt;<span class="kw-2">&amp;mut</span> <span class="self">Self</span>&gt;, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">Poll</span>&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="ident"><span class="self">Self</span>::Error</span>&gt;&gt; {
-        <span class="ident">Sink::poll_close</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">sink</span>), <span class="ident">cx</span>)
+    <span class="kw">fn </span>poll_close(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt;&gt; {
+        Sink::poll_close(Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.sink), cx)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt; <span class="ident">Stream</span> <span class="kw">for</span> <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">serde::de::DeserializeOwned</span>,
-    <span class="ident">WH</span>: <span class="ident">Unpin</span>,
-    <span class="ident">RH</span>: <span class="ident">tokio::io::AsyncRead</span> + <span class="ident">Unpin</span>,
+<span class="kw">impl</span>&lt;T, WH, RH&gt; Stream <span class="kw">for </span>BidiFramed&lt;T, WH, RH&gt;
+<span class="kw">where
+    </span>T: serde::de::DeserializeOwned,
+    WH: Unpin,
+    RH: tokio::io::AsyncRead + Unpin,
 {
-    <span class="kw">type</span> <span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>, <span class="ident">anyhow::Error</span>&gt;;
+    <span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;;
 
-    <span class="kw">fn</span> <span class="ident">poll_next</span>(<span class="kw-2">mut</span> <span class="self">self</span>: <span class="ident">Pin</span>&lt;<span class="kw-2">&amp;mut</span> <span class="self">Self</span>&gt;, <span class="ident">cx</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Context</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">Poll</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::Item</span>&gt;&gt; {
-        <span class="ident">Stream::poll_next</span>(<span class="ident">Pin::new</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>.<span class="ident">stream</span>), <span class="ident">cx</span>)
+    <span class="kw">fn </span>poll_next(<span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;, cx: <span class="kw-2">&amp;mut </span>Context&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
+        Stream::poll_next(Pin::new(<span class="kw-2">&amp;mut </span><span class="self">self</span>.stream), cx)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt; <span class="ident">FramedTransport</span>&lt;<span class="ident">T</span>&gt; <span class="kw">for</span> <span class="ident">BidiFramed</span>&lt;<span class="ident">T</span>, <span class="ident">WH</span>, <span class="ident">RH</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span>,
-    <span class="ident">WH</span>: <span class="ident">tokio::io::AsyncWrite</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span>,
-    <span class="ident">RH</span>: <span class="ident">tokio::io::AsyncRead</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span>,
+<span class="kw">impl</span>&lt;T, WH, RH&gt; FramedTransport&lt;T&gt; <span class="kw">for </span>BidiFramed&lt;T, WH, RH&gt;
+<span class="kw">where
+    </span>T: Debug + serde::Serialize + serde::de::DeserializeOwned + Send,
+    WH: tokio::io::AsyncWrite + Send + Unpin,
+    RH: tokio::io::AsyncRead + Send + Unpin,
 {
-    <span class="kw">fn</span> <span class="ident">borrow_split</span>(
-        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
+    <span class="kw">fn </span>borrow_split(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
     ) -&gt; (
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Sink</span>&lt;<span class="ident">T</span>, <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span>),
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_</span> <span class="kw-2">mut</span> (<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>, <span class="ident">anyhow::Error</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span>),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>Sink&lt;T, Error = anyhow::Error&gt; + Send + Unpin),
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;_ </span><span class="kw-2">mut </span>(<span class="kw">dyn </span>Stream&lt;Item = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt; + Send + Unpin),
     ) {
-        <span class="kw">let</span> (<span class="ident">sink</span>, <span class="ident">stream</span>) = <span class="self">self</span>.<span class="ident">borrow_parts</span>();
-        (<span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">sink</span>, <span class="kw-2">&amp;mut</span> <span class="kw-2">*</span><span class="ident">stream</span>)
+        <span class="kw">let </span>(sink, stream) = <span class="self">self</span>.borrow_parts();
+        (<span class="kw-2">&amp;mut *</span>sink, <span class="kw-2">&amp;mut *</span>stream)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="ident">BincodeCodec</span> {
-            <span class="ident">_pd</span>: <span class="ident">Default::default</span>(),
+<span class="kw">impl</span>&lt;T&gt; BincodeCodec&lt;T&gt; {
+    <span class="kw">fn </span>new() -&gt; BincodeCodec&lt;T&gt; {
+        BincodeCodec {
+            _pd: Default::default(),
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">tokio_util::codec::Encoder</span>&lt;<span class="ident">T</span>&gt; <span class="kw">for</span> <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">serde::Serialize</span> + <span class="ident">Debug</span>,
+<span class="kw">impl</span>&lt;T&gt; tokio_util::codec::Encoder&lt;T&gt; <span class="kw">for </span>BincodeCodec&lt;T&gt;
+<span class="kw">where
+    </span>T: serde::Serialize + Debug,
 {
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>;
+    <span class="kw">type </span>Error = anyhow::Error;
 
-    <span class="kw">fn</span> <span class="ident">encode</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">item</span>: <span class="ident">T</span>, <span class="ident">dst</span>: <span class="kw-2">&amp;mut</span> <span class="ident">bytes::BytesMut</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="comment">// First, write a dummy length field and remember its position</span>
-        <span class="kw">let</span> <span class="ident">old_len</span> = <span class="ident">dst</span>.<span class="ident">len</span>();
-        <span class="ident">dst</span>.<span class="ident">writer</span>().<span class="ident">write_all</span>(<span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">8</span>]).<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">dst</span>.<span class="ident">len</span>(), <span class="ident">old_len</span> + <span class="number">8</span>);
+    <span class="kw">fn </span>encode(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: T, dst: <span class="kw-2">&amp;mut </span>bytes::BytesMut) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt; {
+        <span class="comment">// First, write a dummy length field and remember its position
+        </span><span class="kw">let </span>old_len = dst.len();
+        dst.writer().write_all(<span class="kw-2">&amp;</span>[<span class="number">0u8</span>; <span class="number">8</span>]).unwrap();
+        <span class="macro">assert_eq!</span>(dst.len(), old_len + <span class="number">8</span>);
 
-        <span class="comment">// Then we serialize the message into the buffer</span>
-        <span class="ident">bincode::serialize_into</span>(<span class="ident">dst</span>.<span class="ident">writer</span>(), <span class="kw-2">&amp;</span><span class="ident">item</span>).<span class="ident">map_err</span>(|<span class="ident">e</span>| {
-            <span class="macro">error!</span>(<span class="string">&quot;Serializing message failed: {:?}&quot;</span>, <span class="ident">item</span>);
-            <span class="ident">e</span>
+        <span class="comment">// Then we serialize the message into the buffer
+        </span>bincode::serialize_into(dst.writer(), <span class="kw-2">&amp;</span>item).map_err(|e| {
+            <span class="macro">error!</span>(<span class="string">&quot;Serializing message failed: {:?}&quot;</span>, item);
+            e
         })<span class="question-mark">?</span>;
 
-        <span class="comment">// Lastly we update the length field by counting how many bytes have been written</span>
-        <span class="kw">let</span> <span class="ident">new_len</span> = <span class="ident">dst</span>.<span class="ident">len</span>();
-        <span class="kw">let</span> <span class="ident">encoded_len</span> = <span class="ident">new_len</span> - <span class="ident">old_len</span> - <span class="number">8</span>;
-        <span class="ident">dst</span>[<span class="ident">old_len</span>..<span class="ident">old_len</span> + <span class="number">8</span>].<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">encoded_len</span>.<span class="ident">to_le_bytes</span>()[..]);
+        <span class="comment">// Lastly we update the length field by counting how many bytes have been written
+        </span><span class="kw">let </span>new_len = dst.len();
+        <span class="kw">let </span>encoded_len = new_len - old_len - <span class="number">8</span>;
+        dst[old_len..old_len + <span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>encoded_len.to_le_bytes()[..]);
 
         <span class="prelude-val">Ok</span>(())
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">tokio_util::codec::Decoder</span> <span class="kw">for</span> <span class="ident">BincodeCodec</span>&lt;<span class="ident">T</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">serde::de::DeserializeOwned</span>,
+<span class="kw">impl</span>&lt;T&gt; tokio_util::codec::Decoder <span class="kw">for </span>BincodeCodec&lt;T&gt;
+<span class="kw">where
+    </span>T: serde::de::DeserializeOwned,
 {
-    <span class="kw">type</span> <span class="ident">Item</span> = <span class="ident">T</span>;
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">anyhow::Error</span>;
+    <span class="kw">type </span>Item = T;
+    <span class="kw">type </span>Error = anyhow::Error;
 
-    <span class="kw">fn</span> <span class="ident">decode</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">src</span>: <span class="kw-2">&amp;mut</span> <span class="ident">BytesMut</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::Item</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">if</span> <span class="ident">src</span>.<span class="ident">len</span>() &lt; <span class="number">8</span> {
-            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+    <span class="kw">fn </span>decode(<span class="kw-2">&amp;mut </span><span class="self">self</span>, src: <span class="kw-2">&amp;mut </span>BytesMut) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">if </span>src.len() &lt; <span class="number">8 </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
         }
 
-        <span class="kw">let</span> <span class="ident">length</span> = <span class="ident">u64::from_le_bytes</span>(<span class="ident">src</span>[<span class="number">0</span>..<span class="number">8</span>].<span class="ident">try_into</span>().<span class="ident">expect</span>(<span class="string">&quot;correct length&quot;</span>));
-        <span class="kw">if</span> <span class="ident">src</span>.<span class="ident">len</span>() &lt; (<span class="ident">length</span> <span class="kw">as</span> <span class="ident">usize</span>) + <span class="number">8</span> {
-            <span class="macro">trace!</span>(<span class="ident">length</span>, <span class="ident">buffern_len</span> = <span class="ident">src</span>.<span class="ident">len</span>(), <span class="string">&quot;Received partial message&quot;</span>);
-            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
-        } <span class="kw">else</span> {
-            <span class="macro">trace!</span>(<span class="ident">length</span>, <span class="string">&quot;Received full message&quot;</span>);
+        <span class="kw">let </span>length = u64::from_le_bytes(src[<span class="number">0</span>..<span class="number">8</span>].try_into().expect(<span class="string">&quot;correct length&quot;</span>));
+        <span class="kw">if </span>src.len() &lt; (length <span class="kw">as </span>usize) + <span class="number">8 </span>{
+            <span class="macro">trace!</span>(length, buffern_len = src.len(), <span class="string">&quot;Received partial message&quot;</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+        } <span class="kw">else </span>{
+            <span class="macro">trace!</span>(length, <span class="string">&quot;Received full message&quot;</span>);
         }
 
-        <span class="ident">src</span>.<span class="ident">reader</span>()
-            .<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> [<span class="number">0u8</span>; <span class="number">8</span>][..])
-            .<span class="ident">expect</span>(<span class="string">&quot;minimum length checked&quot;</span>);
+        src.reader()
+            .read_exact(<span class="kw-2">&amp;mut </span>[<span class="number">0u8</span>; <span class="number">8</span>][..])
+            .expect(<span class="string">&quot;minimum length checked&quot;</span>);
 
-        <span class="prelude-val">Ok</span>(<span class="ident">bincode::deserialize_from</span>(<span class="ident">src</span>.<span class="ident">reader</span>()).<span class="ident">map</span>(<span class="ident">Option::Some</span>)<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(bincode::deserialize_from(src.reader()).map(Option::Some)<span class="question-mark">?</span>)
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed::BidiFramed</span>;
-    <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">SinkExt</span>, <span class="ident">StreamExt</span>};
-    <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-    <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
-    <span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">AsyncReadExt</span>, <span class="ident">AsyncWriteExt</span>, <span class="ident">DuplexStream</span>, <span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>};
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">crate</span>::net::framed::BidiFramed;
+    <span class="kw">use </span>futures::{SinkExt, StreamExt};
+    <span class="kw">use </span>serde::{Deserialize, Serialize};
+    <span class="kw">use </span>std::time::Duration;
+    <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_roundtrip</span>() {
-        <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">PartialEq</span>)]</span>
-        <span class="kw">enum</span> <span class="ident">TestEnum</span> {
-            <span class="ident">Foo</span>,
-            <span class="ident">Bar</span>(<span class="ident">u64</span>),
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>test_roundtrip() {
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]</span>
+        <span class="kw">enum </span>TestEnum {
+            Foo,
+            Bar(u64),
         }
 
-        <span class="kw">let</span> <span class="ident">input</span> = <span class="macro">vec!</span>[<span class="ident">TestEnum::Foo</span>, <span class="ident">TestEnum::Bar</span>(<span class="number">42</span>), <span class="ident">TestEnum::Foo</span>];
-        <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">recipient</span>) = <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
+        <span class="kw">let </span>input = <span class="macro">vec!</span>[TestEnum::Foo, TestEnum::Bar(<span class="number">42</span>), TestEnum::Foo];
+        <span class="kw">let </span>(sender, recipient) = tokio::io::duplex(<span class="number">1024</span>);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_sender</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(<span class="ident">sender</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>framed_sender =
+            BidiFramed::&lt;TestEnum, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(sender);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_recipient</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(<span class="ident">recipient</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>framed_recipient =
+            BidiFramed::&lt;TestEnum, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(recipient);
 
-        <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">input</span> {
-            <span class="ident">framed_sender</span>.<span class="ident">send</span>(<span class="ident">item</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;</span>input {
+            framed_sender.send(item.clone()).<span class="kw">await</span>.unwrap();
         }
 
-        <span class="kw">for</span> <span class="ident">item</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">input</span> {
-            <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">framed_recipient</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-            <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span><span class="ident">received</span>, <span class="ident">item</span>);
+        <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;</span>input {
+            <span class="kw">let </span>received = framed_recipient.next().<span class="kw">await</span>.unwrap().unwrap();
+            <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>received, item);
         }
-        <span class="ident">drop</span>(<span class="ident">framed_sender</span>);
+        drop(framed_sender);
 
-        <span class="macro">assert!</span>(<span class="ident">framed_recipient</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">is_none</span>());
+        <span class="macro">assert!</span>(framed_recipient.next().<span class="kw">await</span>.is_none());
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_not_try_parse_partial</span>() {
-        <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">PartialEq</span>)]</span>
-        <span class="kw">enum</span> <span class="ident">TestEnum</span> {
-            <span class="ident">Foo</span>,
-            <span class="ident">Bar</span>(<span class="ident">u64</span>),
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>test_not_try_parse_partial() {
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]</span>
+        <span class="kw">enum </span>TestEnum {
+            Foo,
+            Bar(u64),
         }
 
-        <span class="kw">let</span> (<span class="ident">sender_src</span>, <span class="kw-2">mut</span> <span class="ident">recipient_src</span>) = <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
-        <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">sender_dst</span>, <span class="ident">recipient_dst</span>) = <span class="ident">tokio::io::duplex</span>(<span class="number">1024</span>);
+        <span class="kw">let </span>(sender_src, <span class="kw-2">mut </span>recipient_src) = tokio::io::duplex(<span class="number">1024</span>);
+        <span class="kw">let </span>(<span class="kw-2">mut </span>sender_dst, recipient_dst) = tokio::io::duplex(<span class="number">1024</span>);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_sender</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
-                <span class="ident">sender_src</span>,
+        <span class="kw">let </span><span class="kw-2">mut </span>framed_sender =
+            BidiFramed::&lt;TestEnum, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
+                sender_src,
             );
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">framed_recipient</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="ident">TestEnum</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
-                <span class="ident">recipient_dst</span>,
+        <span class="kw">let </span><span class="kw-2">mut </span>framed_recipient =
+            BidiFramed::&lt;TestEnum, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
+                recipient_dst,
             );
 
-        <span class="ident">framed_sender</span>
-            .<span class="ident">send</span>(<span class="ident">TestEnum::Bar</span>(<span class="number">0x4242_4242_4242_4242</span>))
-            .<span class="kw">await</span>
-            .<span class="ident">unwrap</span>();
+        framed_sender
+            .send(TestEnum::Bar(<span class="number">0x4242_4242_4242_4242</span>))
+            .<span class="kw">await
+            </span>.unwrap();
 
-        <span class="comment">// Simulate a partial send</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">buf</span> = [<span class="number">0u8</span>; <span class="number">3</span>];
-        <span class="ident">recipient_src</span>.<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> <span class="ident">buf</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="ident">sender_dst</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">buf</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="comment">// Simulate a partial send
+        </span><span class="kw">let </span><span class="kw-2">mut </span>buf = [<span class="number">0u8</span>; <span class="number">3</span>];
+        recipient_src.read_exact(<span class="kw-2">&amp;mut </span>buf).<span class="kw">await</span>.unwrap();
+        sender_dst.write_all(<span class="kw-2">&amp;</span>buf).<span class="kw">await</span>.unwrap();
 
-        <span class="comment">// Try to read, should not return an error but block</span>
-        <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">tokio::time::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>), <span class="ident">framed_recipient</span>.<span class="ident">next</span>()).<span class="kw">await</span>;
+        <span class="comment">// Try to read, should not return an error but block
+        </span><span class="kw">let </span>received = tokio::time::timeout(Duration::from_secs(<span class="number">1</span>), framed_recipient.next()).<span class="kw">await</span>;
 
-        <span class="macro">assert!</span>(<span class="ident">received</span>.<span class="ident">is_err</span>());
+        <span class="macro">assert!</span>(received.is_err());
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

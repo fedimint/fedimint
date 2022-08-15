@@ -256,263 +256,263 @@
 <span id="256">256</span>
 <span id="257">257</span>
 <span id="258">258</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">super</span>::{<span class="ident">DatabaseKeyPrefix</span>, <span class="ident">SerializableDatabaseValue</span>};
+</pre><pre class="rust"><code><span class="kw">use super</span>::{DatabaseKeyPrefix, SerializableDatabaseValue};
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">DbBatch</span> = <span class="ident">Accumulator</span>&lt;<span class="ident">BatchItem</span>&gt;;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt; = <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">BatchItem</span>&gt;;
+<span class="kw">pub type </span>DbBatch = Accumulator&lt;BatchItem&gt;;
+<span class="kw">pub type </span>BatchTx&lt;<span class="lifetime">&#39;a</span>&gt; = AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, BatchItem&gt;;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="doccomment">/// Database key-value pair</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Element</span> {
-    <span class="kw">pub</span> <span class="ident">key</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span>&gt;,
-    <span class="kw">pub</span> <span class="ident">value</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span>&gt;,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="doccomment">/// Database key-value pair
+</span><span class="kw">pub struct </span>Element {
+    <span class="kw">pub </span>key: Box&lt;<span class="kw">dyn </span>DatabaseKeyPrefix + Send&gt;,
+    <span class="kw">pub </span>value: Box&lt;<span class="kw">dyn </span>SerializableDatabaseValue + Send&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="doccomment">/// Database operation</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">BatchItem</span> {
-    <span class="doccomment">/// Inserts element, errors if it already exists</span>
-    <span class="ident">InsertNewElement</span>(<span class="ident">Element</span>),
-    <span class="doccomment">/// Insets new element, even if it already exists</span>
-    <span class="ident">InsertElement</span>(<span class="ident">Element</span>),
-    <span class="doccomment">/// Deletes element, errors if it doesn&#39;t exist</span>
-    <span class="ident">DeleteElement</span>(<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span>&gt;),
-    <span class="doccomment">/// Deletes element, does nothing if it doesn&#39;t exist</span>
-    <span class="ident">MaybeDeleteElement</span>(<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span>&gt;),
+<span class="attribute">#[derive(Debug)]</span>
+<span class="doccomment">/// Database operation
+</span><span class="kw">pub enum </span>BatchItem {
+    <span class="doccomment">/// Inserts element, errors if it already exists
+    </span>InsertNewElement(Element),
+    <span class="doccomment">/// Insets new element, even if it already exists
+    </span>InsertElement(Element),
+    <span class="doccomment">/// Deletes element, errors if it doesn&#39;t exist
+    </span>DeleteElement(Box&lt;<span class="kw">dyn </span>DatabaseKeyPrefix + Send&gt;),
+    <span class="doccomment">/// Deletes element, does nothing if it doesn&#39;t exist
+    </span>MaybeDeleteElement(Box&lt;<span class="kw">dyn </span>DatabaseKeyPrefix + Send&gt;),
 }
 
-<span class="kw">impl</span> <span class="ident">Element</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>&lt;<span class="ident">K</span>, <span class="ident">V</span>&gt;(<span class="ident">key</span>: <span class="ident">K</span>, <span class="ident">value</span>: <span class="ident">V</span>) -&gt; <span class="ident">Element</span>
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-        <span class="ident">V</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
+<span class="kw">impl </span>Element {
+    <span class="kw">pub fn </span>new&lt;K, V&gt;(key: K, value: V) -&gt; Element
+    <span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+        V: SerializableDatabaseValue + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="ident">Element</span> {
-            <span class="ident">key</span>: <span class="ident">Box::new</span>(<span class="ident">key</span>),
-            <span class="ident">value</span>: <span class="ident">Box::new</span>(<span class="ident">value</span>),
+        Element {
+            key: Box::new(key),
+            value: Box::new(value),
         }
     }
 }
 
-<span class="doccomment">/// Collects a batch of items of type `T` over its lifetime and supports transactions to return</span>
-<span class="doccomment">/// to a previous state in case of failure.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// It is used to collect [`BatchItem`]s from all consensus modules that will be committed at the</span>
-<span class="doccomment">/// end of processing the epoch&#39;s output. Transactions are used when items should already be</span>
-<span class="doccomment">/// accumulated optimistically while it is still unclear if the consensus item is valid. In case</span>
-<span class="doccomment">/// it turns out to be invalid the accumulator can be reset to its previous state.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Resetting happens automatically when a [`AccumulatorTx`] is dropped after going out of scope.</span>
-<span class="doccomment">/// To prevent this from happening [`AccumulatorTx::commit`] should be called before.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="ident">buffer</span>: <span class="ident">Vec</span>&lt;<span class="ident">T</span>&gt;,
+<span class="doccomment">/// Collects a batch of items of type `T` over its lifetime and supports transactions to return
+/// to a previous state in case of failure.
+///
+/// It is used to collect [`BatchItem`]s from all consensus modules that will be committed at the
+/// end of processing the epoch&#39;s output. Transactions are used when items should already be
+/// accumulated optimistically while it is still unclear if the consensus item is valid. In case
+/// it turns out to be invalid the accumulator can be reset to its previous state.
+///
+/// Resetting happens automatically when a [`AccumulatorTx`] is dropped after going out of scope.
+/// To prevent this from happening [`AccumulatorTx::commit`] should be called before.
+</span><span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>Accumulator&lt;T&gt; {
+    buffer: Vec&lt;T&gt;,
 }
 
-<span class="doccomment">/// A transaction on an [`Accumulator`] that aborts by default when dropped unless `commit` is</span>
-<span class="doccomment">/// called previously.</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">T</span>&gt; {
-    <span class="ident">batch</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw-2">mut</span> <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt;,
-    <span class="ident">checkpoint</span>: <span class="ident">usize</span>,
+<span class="doccomment">/// A transaction on an [`Accumulator`] that aborts by default when dropped unless `commit` is
+/// called previously.
+</span><span class="kw">pub struct </span>AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    batch: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>Accumulator&lt;T&gt;,
+    checkpoint: usize,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="doccomment">/// Construct a new, empty `Accumulator`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="ident">Accumulator</span> { <span class="ident">buffer</span>: <span class="ident">Vec::new</span>() }
+<span class="kw">impl</span>&lt;T&gt; Accumulator&lt;T&gt; {
+    <span class="doccomment">/// Construct a new, empty `Accumulator`
+    </span><span class="kw">pub fn </span>new() -&gt; Accumulator&lt;T&gt; {
+        Accumulator { buffer: Vec::new() }
     }
 
-    <span class="doccomment">/// Start a new transaction. If the [`AccumulatorTx`] is dropped without [`AccumulatorTx::commit`]</span>
-    <span class="doccomment">/// being called the accumulator does not change (is reset to the state of the transaction start</span>
-    <span class="doccomment">/// internally).</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">transaction</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="ident">AccumulatorTx</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="kw">let</span> <span class="ident">last_commit</span> = <span class="self">self</span>.<span class="ident">buffer</span>.<span class="ident">len</span>();
-        <span class="ident">AccumulatorTx</span> {
-            <span class="ident">batch</span>: <span class="self">self</span>,
-            <span class="ident">checkpoint</span>: <span class="ident">last_commit</span>,
+    <span class="doccomment">/// Start a new transaction. If the [`AccumulatorTx`] is dropped without [`AccumulatorTx::commit`]
+    /// being called the accumulator does not change (is reset to the state of the transaction start
+    /// internally).
+    </span><span class="kw">pub fn </span>transaction(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AccumulatorTx&lt;T&gt; {
+        <span class="kw">let </span>last_commit = <span class="self">self</span>.buffer.len();
+        AccumulatorTx {
+            batch: <span class="self">self</span>,
+            checkpoint: last_commit,
         }
     }
 
-    <span class="doccomment">/// Shortcut to just append some items to the batch without the option to abort</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">autocommit</span>&lt;<span class="ident">F</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">f</span>: <span class="ident">F</span>)
-    <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">FnOnce</span>(<span class="kw-2">&amp;mut</span> <span class="ident">AccumulatorTx</span>&lt;<span class="ident">T</span>&gt;),
+    <span class="doccomment">/// Shortcut to just append some items to the batch without the option to abort
+    </span><span class="kw">pub fn </span>autocommit&lt;F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: F)
+    <span class="kw">where
+        </span>F: FnOnce(<span class="kw-2">&amp;mut </span>AccumulatorTx&lt;T&gt;),
     {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="self">self</span>.<span class="ident">transaction</span>();
-        <span class="ident">f</span>(<span class="kw-2">&amp;mut</span> <span class="ident">tx</span>);
-        <span class="ident">tx</span>.<span class="ident">commit</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self</span>.transaction();
+        f(<span class="kw-2">&amp;mut </span>tx);
+        tx.commit();
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">default</span>() -&gt; <span class="self">Self</span> {
-        <span class="ident"><span class="self">Self</span>::new</span>()
+<span class="kw">impl</span>&lt;T&gt; Default <span class="kw">for </span>Accumulator&lt;T&gt; {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new()
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">T</span>&gt; <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">T</span>&gt; {
-    <span class="doccomment">/// Commit the current accumulator state</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">commit</span>(<span class="self">self</span>) {
-        <span class="ident">std::mem::forget</span>(<span class="self">self</span>);
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="doccomment">/// Commit the current accumulator state
+    </span><span class="kw">pub fn </span>commit(<span class="self">self</span>) {
+        std::mem::forget(<span class="self">self</span>);
     }
 
-    <span class="doccomment">/// Append one `item` to the pending transaction</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">item</span>: <span class="ident">T</span>) {
-        <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">push</span>(<span class="ident">item</span>);
+    <span class="doccomment">/// Append one `item` to the pending transaction
+    </span><span class="kw">pub fn </span>append(<span class="kw-2">&amp;mut </span><span class="self">self</span>, item: T) {
+        <span class="self">self</span>.batch.buffer.push(item);
     }
 
-    <span class="doccomment">/// Append multiple items to the pending transaction</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_from_iter</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">iter</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">T</span>&gt;) {
-        <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">extend</span>(<span class="ident">iter</span>);
+    <span class="doccomment">/// Append multiple items to the pending transaction
+    </span><span class="kw">pub fn </span>append_from_iter(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: <span class="kw">impl </span>Iterator&lt;Item = T&gt;) {
+        <span class="self">self</span>.batch.buffer.extend(iter);
     }
 
-    <span class="doccomment">/// Start a sub-transaction which has the following behavior:</span>
-    <span class="doccomment">///  * Aborting the sub-transaction does not automatically abort the parent transaction but</span>
-    <span class="doccomment">///    only resets the parent transaction to the state when the sub-transaction was created.</span>
-    <span class="doccomment">///  * Committing a sub-transaction makes its changes part of the parent transaction. Note that</span>
-    <span class="doccomment">///    the parent transaction may still be aborted leading to the removal of sub-transaction</span>
-    <span class="doccomment">///    items.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">subtransaction</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;_</span>, <span class="ident">T</span>&gt; {
-        <span class="kw">let</span> <span class="ident">checkpoint</span> = <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">len</span>();
-        <span class="ident">AccumulatorTx</span> {
-            <span class="ident">batch</span>: <span class="self">self</span>.<span class="ident">batch</span>,
-            <span class="ident">checkpoint</span>,
+    <span class="doccomment">/// Start a sub-transaction which has the following behavior:
+    ///  * Aborting the sub-transaction does not automatically abort the parent transaction but
+    ///    only resets the parent transaction to the state when the sub-transaction was created.
+    ///  * Committing a sub-transaction makes its changes part of the parent transaction. Note that
+    ///    the parent transaction may still be aborted leading to the removal of sub-transaction
+    ///    items.
+    </span><span class="kw">pub fn </span>subtransaction(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; AccumulatorTx&lt;<span class="lifetime">&#39;_</span>, T&gt; {
+        <span class="kw">let </span>checkpoint = <span class="self">self</span>.batch.buffer.len();
+        AccumulatorTx {
+            batch: <span class="self">self</span>.batch,
+            checkpoint,
         }
     }
 
-    <span class="doccomment">/// Currently the accumulator and transactions are not thread safe. Therefore one has to create</span>
-    <span class="doccomment">/// at least one accumulator per thread when parallelizing. This function can be used to merge</span>
-    <span class="doccomment">/// these with a minimal amount of allocations.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_from_accumulators</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">iter</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt;&gt;) {
-        <span class="self">self</span>.<span class="ident">append_from_iter</span>(<span class="ident">iter</span>.<span class="ident">flat_map</span>(|<span class="ident">acc</span>| <span class="ident">acc</span>.<span class="ident">buffer</span>))
+    <span class="doccomment">/// Currently the accumulator and transactions are not thread safe. Therefore one has to create
+    /// at least one accumulator per thread when parallelizing. This function can be used to merge
+    /// these with a minimal amount of allocations.
+    </span><span class="kw">pub fn </span>append_from_accumulators(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: <span class="kw">impl </span>Iterator&lt;Item = Accumulator&lt;T&gt;&gt;) {
+        <span class="self">self</span>.append_from_iter(iter.flat_map(|acc| acc.buffer))
     }
 
-    <span class="doccomment">/// Allocate space for items to avoid frequent reallocation</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">reserve</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">items</span>: <span class="ident">usize</span>) {
-        <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">reserve</span>(<span class="ident">items</span>);
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">T</span>&gt; <span class="ident">Drop</span> <span class="kw">for</span> <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">T</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">drop</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) {
-        <span class="self">self</span>.<span class="ident">batch</span>.<span class="ident">buffer</span>.<span class="ident">truncate</span>(<span class="self">self</span>.<span class="ident">checkpoint</span>);
+    <span class="doccomment">/// Allocate space for items to avoid frequent reallocation
+    </span><span class="kw">pub fn </span>reserve(<span class="kw-2">&amp;mut </span><span class="self">self</span>, items: usize) {
+        <span class="self">self</span>.batch.buffer.reserve(items);
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">From</span>&lt;<span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt;&gt; <span class="kw">for</span> <span class="ident">Vec</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">acc</span>: <span class="ident">Accumulator</span>&lt;<span class="ident">T</span>&gt;) -&gt; <span class="self">Self</span> {
-        <span class="ident">acc</span>.<span class="ident">buffer</span>
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, T&gt; Drop <span class="kw">for </span>AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, T&gt; {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.batch.buffer.truncate(<span class="self">self</span>.checkpoint);
     }
 }
 
-<span class="kw">impl</span> <span class="ident">BatchItem</span> {
-    <span class="doccomment">/// Construct a DB operation to insert a new element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert_new</span>&lt;<span class="ident">K</span>, <span class="ident">V</span>&gt;(<span class="ident">key</span>: <span class="ident">K</span>, <span class="ident">value</span>: <span class="ident">V</span>) -&gt; <span class="self">Self</span>
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-        <span class="ident">V</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-    {
-        <span class="ident">BatchItem::InsertNewElement</span>(<span class="ident">Element::new</span>(<span class="ident">key</span>, <span class="ident">value</span>))
-    }
-
-    <span class="doccomment">/// Construct a DB operation to insert a potentially already existing item</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert</span>&lt;<span class="ident">K</span>, <span class="ident">V</span>&gt;(<span class="ident">key</span>: <span class="ident">K</span>, <span class="ident">value</span>: <span class="ident">V</span>) -&gt; <span class="self">Self</span>
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-        <span class="ident">V</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-    {
-        <span class="ident">BatchItem::InsertElement</span>(<span class="ident">Element::new</span>(<span class="ident">key</span>, <span class="ident">value</span>))
-    }
-
-    <span class="doccomment">/// Construct a DB operation to delete an existing element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">delete</span>&lt;<span class="ident">K</span>&gt;(<span class="ident">key</span>: <span class="ident">K</span>) -&gt; <span class="self">Self</span>
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-    {
-        <span class="ident">BatchItem::DeleteElement</span>(<span class="ident">Box::new</span>(<span class="ident">key</span>))
-    }
-
-    <span class="doccomment">/// Construct a DB operation to delete a potentially absent element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">maybe_delete</span>&lt;<span class="ident">K</span>&gt;(<span class="ident">key</span>: <span class="ident">K</span>) -&gt; <span class="self">Self</span>
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-    {
-        <span class="ident">BatchItem::MaybeDeleteElement</span>(<span class="ident">Box::new</span>(<span class="ident">key</span>))
+<span class="kw">impl</span>&lt;T&gt; From&lt;Accumulator&lt;T&gt;&gt; <span class="kw">for </span>Vec&lt;T&gt; {
+    <span class="kw">fn </span>from(acc: Accumulator&lt;T&gt;) -&gt; <span class="self">Self </span>{
+        acc.buffer
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="ident">AccumulatorTx</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">BatchItem</span>&gt; {
-    <span class="doccomment">/// Append a DB operation to insert a new element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_insert_new</span>&lt;<span class="ident">K</span>, <span class="ident">V</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="ident">K</span>, <span class="ident">value</span>: <span class="ident">V</span>)
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-        <span class="ident">V</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
+<span class="kw">impl </span>BatchItem {
+    <span class="doccomment">/// Construct a DB operation to insert a new element
+    </span><span class="kw">pub fn </span>insert_new&lt;K, V&gt;(key: K, value: V) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+        V: SerializableDatabaseValue + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="self">self</span>.<span class="ident">append</span>(<span class="ident">BatchItem::insert_new</span>(<span class="ident">key</span>, <span class="ident">value</span>))
+        BatchItem::InsertNewElement(Element::new(key, value))
     }
 
-    <span class="doccomment">/// Append a DB operation to insert a potentially already existing item</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_insert</span>&lt;<span class="ident">K</span>, <span class="ident">V</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="ident">K</span>, <span class="ident">value</span>: <span class="ident">V</span>)
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
-        <span class="ident">V</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
+    <span class="doccomment">/// Construct a DB operation to insert a potentially already existing item
+    </span><span class="kw">pub fn </span>insert&lt;K, V&gt;(key: K, value: V) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+        V: SerializableDatabaseValue + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="self">self</span>.<span class="ident">append</span>(<span class="ident">BatchItem::insert</span>(<span class="ident">key</span>, <span class="ident">value</span>))
+        BatchItem::InsertElement(Element::new(key, value))
     }
 
-    <span class="doccomment">/// Append a DB operation to delete an existing element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_delete</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="ident">K</span>)
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
+    <span class="doccomment">/// Construct a DB operation to delete an existing element
+    </span><span class="kw">pub fn </span>delete&lt;K&gt;(key: K) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="self">self</span>.<span class="ident">append</span>(<span class="ident">BatchItem::delete</span>(<span class="ident">key</span>))
+        BatchItem::DeleteElement(Box::new(key))
     }
 
-    <span class="doccomment">/// Append a DB operation to delete a potentially absent element</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">append_maybe_delete</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">key</span>: <span class="ident">K</span>)
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">Send</span> + <span class="lifetime">&#39;static</span>,
+    <span class="doccomment">/// Construct a DB operation to delete a potentially absent element
+    </span><span class="kw">pub fn </span>maybe_delete&lt;K&gt;(key: K) -&gt; <span class="self">Self
+    </span><span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
     {
-        <span class="self">self</span>.<span class="ident">append</span>(<span class="ident">BatchItem::maybe_delete</span>(<span class="ident">key</span>))
+        BatchItem::MaybeDeleteElement(Box::new(key))
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">test</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::Accumulator</span>;
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, BatchItem&gt; {
+    <span class="doccomment">/// Append a DB operation to insert a new element
+    </span><span class="kw">pub fn </span>append_insert_new&lt;K, V&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: K, value: V)
+    <span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+        V: SerializableDatabaseValue + Send + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.append(BatchItem::insert_new(key, value))
+    }
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">test_transaction</span>() {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">acc</span> = <span class="ident">Accumulator</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::new</span>();
+    <span class="doccomment">/// Append a DB operation to insert a potentially already existing item
+    </span><span class="kw">pub fn </span>append_insert&lt;K, V&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: K, value: V)
+    <span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+        V: SerializableDatabaseValue + Send + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.append(BatchItem::insert(key, value))
+    }
+
+    <span class="doccomment">/// Append a DB operation to delete an existing element
+    </span><span class="kw">pub fn </span>append_delete&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: K)
+    <span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.append(BatchItem::delete(key))
+    }
+
+    <span class="doccomment">/// Append a DB operation to delete a potentially absent element
+    </span><span class="kw">pub fn </span>append_maybe_delete&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: K)
+    <span class="kw">where
+        </span>K: DatabaseKeyPrefix + Send + <span class="lifetime">&#39;static</span>,
+    {
+        <span class="self">self</span>.append(BatchItem::maybe_delete(key))
+    }
+}
+
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>test {
+    <span class="kw">use </span><span class="kw">super</span>::Accumulator;
+
+    <span class="attribute">#[test_log::test]</span>
+    <span class="kw">fn </span>test_transaction() {
+        <span class="kw">let </span><span class="kw-2">mut </span>acc = Accumulator::&lt;u8&gt;::new();
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">acc</span>.<span class="ident">transaction</span>();
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">1</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = acc.transaction();
+            tx.append(<span class="number">1</span>);
         }
-        <span class="macro">assert!</span>(<span class="ident">Vec</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::from</span>(<span class="ident">acc</span>).<span class="ident">is_empty</span>());
+        <span class="macro">assert!</span>(Vec::&lt;u8&gt;::from(acc).is_empty());
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">acc</span> = <span class="ident">Accumulator</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::new</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>acc = Accumulator::&lt;u8&gt;::new();
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">acc</span>.<span class="ident">transaction</span>();
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">1</span>);
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">2</span>);
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">3</span>);
-            <span class="ident">tx</span>.<span class="ident">commit</span>();
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = acc.transaction();
+            tx.append(<span class="number">1</span>);
+            tx.append(<span class="number">2</span>);
+            tx.append(<span class="number">3</span>);
+            tx.commit();
         }
-        <span class="macro">assert_eq!</span>(<span class="ident">Vec</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::from</span>(<span class="ident">acc</span>), <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
+        <span class="macro">assert_eq!</span>(Vec::&lt;u8&gt;::from(acc), <span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">acc</span> = <span class="ident">Accumulator</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::new</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>acc = Accumulator::&lt;u8&gt;::new();
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">acc</span>.<span class="ident">transaction</span>();
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">1</span>);
-            <span class="ident">tx</span>.<span class="ident">commit</span>();
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = acc.transaction();
+            tx.append(<span class="number">1</span>);
+            tx.commit();
         }
         {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">acc</span>.<span class="ident">transaction</span>();
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">2</span>);
-            <span class="ident">tx</span>.<span class="ident">append</span>(<span class="number">3</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = acc.transaction();
+            tx.append(<span class="number">2</span>);
+            tx.append(<span class="number">3</span>);
         }
-        <span class="macro">assert_eq!</span>(<span class="ident">Vec</span>::&lt;<span class="ident">u8</span>&gt;<span class="ident">::from</span>(<span class="ident">acc</span>), <span class="macro">vec!</span>[<span class="number">1</span>]);
+        <span class="macro">assert_eq!</span>(Vec::&lt;u8&gt;::from(acc), <span class="macro">vec!</span>[<span class="number">1</span>]);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

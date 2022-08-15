@@ -31,38 +31,38 @@
 <span id="31">31</span>
 <span id="32">32</span>
 <span id="33">33</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bls12_381::Scalar</span>;
-<span class="kw">use</span> <span class="ident">serde::de::Error</span>;
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Deserializer</span>, <span class="ident">Serializer</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>bls12_381::Scalar;
+<span class="kw">use </span>serde::de::Error;
+<span class="kw">use </span>serde::{Deserialize, Deserializer, Serializer};
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serialize</span>&lt;<span class="ident">S</span>: <span class="ident">Serializer</span>&gt;(<span class="ident">x</span>: <span class="kw-2">&amp;</span><span class="ident">Scalar</span>, <span class="ident">s</span>: <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">S::Ok</span>, <span class="ident">S::Error</span>&gt; {
-    <span class="kw">let</span> <span class="ident">bytes</span> = <span class="ident">x</span>.<span class="ident">to_bytes</span>();
-    <span class="kw">if</span> <span class="ident">s</span>.<span class="ident">is_human_readable</span>() {
-        <span class="ident">s</span>.<span class="ident">serialize_str</span>(<span class="kw-2">&amp;</span><span class="ident">hex::encode</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>))
-    } <span class="kw">else</span> {
-        <span class="ident">s</span>.<span class="ident">serialize_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>)
+<span class="kw">pub fn </span>serialize&lt;S: Serializer&gt;(x: <span class="kw-2">&amp;</span>Scalar, s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
+    <span class="kw">let </span>bytes = x.to_bytes();
+    <span class="kw">if </span>s.is_human_readable() {
+        s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+    } <span class="kw">else </span>{
+        s.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">deserialize</span>&lt;<span class="lifetime">&#39;d</span>, <span class="ident">D</span>: <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(<span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Scalar</span>, <span class="ident">D::Error</span>&gt; {
-    <span class="kw">let</span> <span class="ident">bytes</span>: <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; = <span class="kw">if</span> <span class="ident">d</span>.<span class="ident">is_human_readable</span>() {
-        <span class="ident">hex::decode</span>::&lt;<span class="ident">String</span>&gt;(<span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>).<span class="ident">map_err</span>(<span class="ident">serde::de::Error::custom</span>)<span class="question-mark">?</span>
-    } <span class="kw">else</span> {
-        <span class="ident">Deserialize::deserialize</span>(<span class="ident">d</span>)<span class="question-mark">?</span>
-    };
-    <span class="kw">if</span> <span class="ident">bytes</span>.<span class="ident">len</span>() != <span class="number">32</span> {
-        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">D::Error::invalid_length</span>(<span class="ident">bytes</span>.<span class="ident">len</span>(), <span class="kw-2">&amp;</span><span class="string">&quot;32 bytes&quot;</span>));
+<span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;d</span>, D: Deserializer&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;Scalar, D::Error&gt; {
+    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = <span class="kw">if </span>d.is_human_readable() {
+        hex::decode::&lt;String&gt;(Deserialize::deserialize(d)<span class="question-mark">?</span>).map_err(serde::de::Error::custom)<span class="question-mark">?
+    </span>} <span class="kw">else </span>{
+        Deserialize::deserialize(d)<span class="question-mark">?
+    </span>};
+    <span class="kw">if </span>bytes.len() != <span class="number">32 </span>{
+        <span class="kw">return </span><span class="prelude-val">Err</span>(D::Error::invalid_length(bytes.len(), <span class="kw-2">&amp;</span><span class="string">&quot;32 bytes&quot;</span>));
     }
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">byte_array</span> = [<span class="number">0u8</span>; <span class="number">32</span>];
-    <span class="ident">byte_array</span>.<span class="ident">copy_from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>);
+    <span class="kw">let </span><span class="kw-2">mut </span>byte_array = [<span class="number">0u8</span>; <span class="number">32</span>];
+    byte_array.copy_from_slice(<span class="kw-2">&amp;</span>bytes);
 
-    <span class="kw">let</span> <span class="ident">scalar</span> = <span class="ident">Scalar::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">byte_array</span>);
-    <span class="comment">// FIXME: probably safe with public data, but doesn&#39;t look nice</span>
-    <span class="kw">if</span> <span class="ident">scalar</span>.<span class="ident">is_some</span>().<span class="ident">into</span>() {
-        <span class="prelude-val">Ok</span>(<span class="ident">scalar</span>.<span class="ident">unwrap</span>())
-    } <span class="kw">else</span> {
-        <span class="prelude-val">Err</span>(<span class="ident">D::Error::custom</span>(<span class="string">&quot;Could not decode compressed G1Affine&quot;</span>))
+    <span class="kw">let </span>scalar = Scalar::from_bytes(<span class="kw-2">&amp;</span>byte_array);
+    <span class="comment">// FIXME: probably safe with public data, but doesn&#39;t look nice
+    </span><span class="kw">if </span>scalar.is_some().into() {
+        <span class="prelude-val">Ok</span>(scalar.unwrap())
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>(D::Error::custom(<span class="string">&quot;Could not decode compressed G1Affine&quot;</span>))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

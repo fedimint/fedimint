@@ -83,90 +83,90 @@
 <span id="83">83</span>
 <span id="84">84</span>
 <span id="85">85</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::api::FederationApi</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::SpendableCoin</span>;
-<span class="kw">use</span> <span class="ident">bitcoin::Network</span>;
-<span class="kw">use</span> <span class="ident">lightning_invoice::Currency</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding::Decodable</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::ParseAmountError</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::mint::SpendableCoin;
+<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>lightning_invoice::Currency;
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::encoding::Decodable;
+<span class="kw">use </span>minimint_api::ParseAmountError;
+<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_coins</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt; {
-    <span class="kw">let</span> <span class="ident">bytes</span> = <span class="ident">base64::decode</span>(<span class="ident">s</span>).<span class="ident">unwrap</span>();
-    <span class="ident">bincode::deserialize</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>).<span class="ident">unwrap</span>()
+<span class="kw">pub fn </span>parse_coins(s: <span class="kw-2">&amp;</span>str) -&gt; Coins&lt;SpendableCoin&gt; {
+    <span class="kw">let </span>bytes = base64::decode(s).unwrap();
+    bincode::deserialize(<span class="kw-2">&amp;</span>bytes).unwrap()
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serialize_coins</span>(<span class="ident">c</span>: <span class="kw-2">&amp;</span><span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;) -&gt; <span class="ident">String</span> {
-    <span class="kw">let</span> <span class="ident">bytes</span> = <span class="ident">bincode::serialize</span>(<span class="kw-2">&amp;</span><span class="ident">c</span>).<span class="ident">unwrap</span>();
-    <span class="ident">base64::encode</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>)
+<span class="kw">pub fn </span>serialize_coins(c: <span class="kw-2">&amp;</span>Coins&lt;SpendableCoin&gt;) -&gt; String {
+    <span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span>c).unwrap();
+    base64::encode(<span class="kw-2">&amp;</span>bytes)
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_hex</span>&lt;<span class="ident">D</span>: <span class="ident">Decodable</span>&gt;(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">D</span>, <span class="ident">anyhow::Error</span>&gt; {
-    <span class="kw">let</span> <span class="ident">bytes</span> = <span class="ident">hex::decode</span>(<span class="ident">s</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="ident">D::consensus_decode</span>(<span class="ident">std::io::Cursor::new</span>(<span class="ident">bytes</span>))<span class="question-mark">?</span>)
+<span class="kw">pub fn </span>from_hex&lt;D: Decodable&gt;(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;D, anyhow::Error&gt; {
+    <span class="kw">let </span>bytes = hex::decode(s)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(D::consensus_decode(std::io::Cursor::new(bytes))<span class="question-mark">?</span>)
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_bitcoin_amount</span>(
-    <span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">bitcoin::Amount</span>, <span class="ident">bitcoin::util::amount::ParseAmountError</span>&gt; {
-    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">i</span>) = <span class="ident">s</span>.<span class="ident">find</span>(<span class="ident">char::is_alphabetic</span>) {
-        <span class="kw">let</span> (<span class="ident">amt</span>, <span class="ident">denom</span>) = <span class="ident">s</span>.<span class="ident">split_at</span>(<span class="ident">i</span>);
-        <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">amt</span>, <span class="ident">denom</span>.<span class="ident">parse</span>()<span class="question-mark">?</span>)
-    } <span class="kw">else</span> {
-        <span class="comment">//default to satoshi</span>
-        <span class="ident">bitcoin::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+<span class="kw">pub fn </span>parse_bitcoin_amount(
+    s: <span class="kw-2">&amp;</span>str,
+) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Amount, bitcoin::util::amount::ParseAmountError&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
+        <span class="kw">let </span>(amt, denom) = s.split_at(i);
+        bitcoin::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
+    } <span class="kw">else </span>{
+        <span class="comment">//default to satoshi
+        </span>bitcoin::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">parse_minimint_amount</span>(<span class="ident">s</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">minimint_api::Amount</span>, <span class="ident">ParseAmountError</span>&gt; {
-    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">i</span>) = <span class="ident">s</span>.<span class="ident">find</span>(<span class="ident">char::is_alphabetic</span>) {
-        <span class="kw">let</span> (<span class="ident">amt</span>, <span class="ident">denom</span>) = <span class="ident">s</span>.<span class="ident">split_at</span>(<span class="ident">i</span>);
-        <span class="ident">minimint_api::Amount::from_str_in</span>(<span class="ident">amt</span>, <span class="ident">denom</span>.<span class="ident">parse</span>()<span class="question-mark">?</span>)
-    } <span class="kw">else</span> {
-        <span class="comment">//default to satoshi</span>
-        <span class="ident">minimint_api::Amount::from_str_in</span>(<span class="ident">s</span>, <span class="ident">bitcoin::Denomination::Satoshi</span>)
+<span class="kw">pub fn </span>parse_minimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;minimint_api::Amount, ParseAmountError&gt; {
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
+        <span class="kw">let </span>(amt, denom) = s.split_at(i);
+        minimint_api::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
+    } <span class="kw">else </span>{
+        <span class="comment">//default to satoshi
+        </span>minimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BorrowedClientContext</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">C</span>&gt; {
-    <span class="kw">pub</span> <span class="ident">config</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">C</span>,
-    <span class="kw">pub</span> <span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">Database</span>,
-    <span class="kw">pub</span> <span class="ident">api</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">FederationApi</span>,
-    <span class="kw">pub</span> <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+<span class="kw">pub struct </span>BorrowedClientContext&lt;<span class="lifetime">&#39;a</span>, C&gt; {
+    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>C,
+    <span class="kw">pub </span>db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>Database,
+    <span class="kw">pub </span>api: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>FederationApi,
+    <span class="kw">pub </span>secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OwnedClientContext</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">pub</span> <span class="ident">config</span>: <span class="ident">C</span>,
-    <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
-    <span class="kw">pub</span> <span class="ident">api</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">FederationApi</span>&gt;,
-    <span class="kw">pub</span> <span class="ident">secp</span>: <span class="ident">secp256k1_zkp::Secp256k1</span>&lt;<span class="ident">secp256k1_zkp::All</span>&gt;,
+<span class="kw">pub struct </span>OwnedClientContext&lt;C&gt; {
+    <span class="kw">pub </span>config: C,
+    <span class="kw">pub </span>db: Box&lt;<span class="kw">dyn </span>Database&gt;,
+    <span class="kw">pub </span>api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
+    <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">CO</span>&gt; <span class="ident">OwnedClientContext</span>&lt;<span class="ident">CO</span>&gt; {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">borrow_with_module_config</span>&lt;<span class="lifetime">&#39;c</span>, <span class="ident">CB</span>, <span class="ident">F</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="self">self</span>,
-        <span class="ident">to_cfg</span>: <span class="ident">F</span>,
-    ) -&gt; <span class="ident">BorrowedClientContext</span>&lt;<span class="lifetime">&#39;c</span>, <span class="ident">CB</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">FnOnce</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="ident">CO</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;c</span> <span class="ident">CB</span>,
+<span class="kw">impl</span>&lt;CO&gt; OwnedClientContext&lt;CO&gt; {
+    <span class="kw">pub fn </span>borrow_with_module_config&lt;<span class="lifetime">&#39;c</span>, CB, F&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span><span class="self">self</span>,
+        to_cfg: F,
+    ) -&gt; BorrowedClientContext&lt;<span class="lifetime">&#39;c</span>, CB&gt;
+    <span class="kw">where
+        </span>F: FnOnce(<span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>CO) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>CB,
     {
-        <span class="ident">BorrowedClientContext</span> {
-            <span class="ident">config</span>: <span class="ident">to_cfg</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">config</span>),
-            <span class="ident">db</span>: <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">as_ref</span>(),
-            <span class="ident">api</span>: <span class="self">self</span>.<span class="ident">api</span>.<span class="ident">as_ref</span>(),
-            <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>,
+        BorrowedClientContext {
+            config: to_cfg(<span class="kw-2">&amp;</span><span class="self">self</span>.config),
+            db: <span class="self">self</span>.db.as_ref(),
+            api: <span class="self">self</span>.api.as_ref(),
+            secp: <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
         }
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">network_to_currency</span>(<span class="ident">network</span>: <span class="ident">Network</span>) -&gt; <span class="ident">Currency</span> {
-    <span class="kw">match</span> <span class="ident">network</span> {
-        <span class="ident">Network::Bitcoin</span> =&gt; <span class="ident">Currency::Bitcoin</span>,
-        <span class="ident">Network::Regtest</span> =&gt; <span class="ident">Currency::Regtest</span>,
-        <span class="ident">Network::Testnet</span> =&gt; <span class="ident">Currency::BitcoinTestnet</span>,
-        <span class="ident">Network::Signet</span> =&gt; <span class="ident">Currency::Signet</span>,
+<span class="kw">pub fn </span>network_to_currency(network: Network) -&gt; Currency {
+    <span class="kw">match </span>network {
+        Network::Bitcoin =&gt; Currency::Bitcoin,
+        Network::Regtest =&gt; Currency::Regtest,
+        Network::Testnet =&gt; Currency::BitcoinTestnet,
+        Network::Signet =&gt; Currency::Signet,
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

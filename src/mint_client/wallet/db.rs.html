@@ -23,30 +23,30 @@
 <span id="23">23</span>
 <span id="24">24</span>
 <span id="25">25</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin::Script</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Script;
+<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
 
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_PEG_IN</span>: <span class="ident">u8</span> = <span class="number">0x22</span>;
+<span class="kw">pub const </span>DB_PREFIX_PEG_IN: u8 = <span class="number">0x22</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegInKey</span> {
-    <span class="kw">pub</span> <span class="ident">peg_in_script</span>: <span class="ident">Script</span>,
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegInKey {
+    <span class="kw">pub </span>peg_in_script: Script,
 }
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PegInKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PEG_IN</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = [<span class="ident">u8</span>; <span class="number">32</span>]; <span class="comment">// TODO: introduce newtype</span>
-}
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegInKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_IN;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = [u8; <span class="number">32</span>]; <span class="comment">// TODO: introduce newtype
+</span>}
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegInPrefixKey</span>;
+<span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>PegInPrefixKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PegInPrefixKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PEG_IN</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">PegInKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = [<span class="ident">u8</span>; <span class="number">32</span>];
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegInPrefixKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_IN;
+    <span class="kw">type </span>Key = PegInKey;
+    <span class="kw">type </span>Value = [u8; <span class="number">32</span>];
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

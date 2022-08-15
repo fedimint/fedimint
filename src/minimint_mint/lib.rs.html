@@ -914,921 +914,921 @@
 <span id="914">914</span>
 <span id="915">915</span>
 <span id="916">916</span>
-</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
-<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::MintConfig</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
-    <span class="ident">MintAuditItemKey</span>, <span class="ident">MintAuditItemKeyPrefix</span>, <span class="ident">NonceKey</span>, <span class="ident">OutputOutcomeKey</span>,
-    <span class="ident">ProposedPartialSignatureKey</span>, <span class="ident">ProposedPartialSignaturesKeyPrefix</span>, <span class="ident">ReceivedPartialSignatureKey</span>,
-    <span class="ident">ReceivedPartialSignatureKeyOutputPrefix</span>, <span class="ident">ReceivedPartialSignaturesKeyPrefix</span>,
+<span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
+    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
 };
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">itertools::Itertools</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::interconnect::ModuleInterconect</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::ApiEndpoint</span>;
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">FederationModule</span>, <span class="ident">InputMeta</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
-<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">rayon::iter</span>::{<span class="ident">IntoParallelIterator</span>, <span class="ident">ParallelBridge</span>, <span class="ident">ParallelIterator</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>minimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::module::audit::Audit;
+<span class="kw">use </span>minimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>minimint_api::module::ApiEndpoint;
+<span class="kw">use </span>minimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 
-<span class="kw">use</span> <span class="ident">std::hash::Hash</span>;
-<span class="kw">use</span> <span class="ident">std::iter::FromIterator</span>;
-<span class="kw">use</span> <span class="ident">std::ops::Sub</span>;
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-<span class="kw">use</span> <span class="ident">tbs</span>::{
-    <span class="ident">combine_valid_shares</span>, <span class="ident">sign_blinded_msg</span>, <span class="ident">verify_blind_share</span>, <span class="ident">Aggregatable</span>, <span class="ident">AggregatePublicKey</span>,
-    <span class="ident">PublicKeyShare</span>, <span class="ident">SecretKeyShare</span>,
+<span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>std::ops::Sub;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>tbs::{
+    combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
+    PublicKeyShare, SecretKeyShare,
 };
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tiered::coins::Coins</span>;
-<span class="kw">use</span> <span class="ident">tiered::coins::TieredMultiZip</span>;
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">tiered::keys::Keys</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">warn</span>};
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tiered::coins::Coins;
+<span class="kw">use </span>tiered::coins::TieredMultiZip;
+<span class="kw">pub use </span>tiered::keys::Keys;
+<span class="kw">use </span>tracing::{debug, error, warn};
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
+<span class="kw">pub mod </span>config;
 
-<span class="kw">mod</span> <span class="ident">db</span>;
-<span class="doccomment">/// Data structures taking into account different amount tiers</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">tiered</span>;
+<span class="kw">mod </span>db;
+<span class="doccomment">/// Data structures taking into account different amount tiers
+</span><span class="kw">pub mod </span>tiered;
 
-<span class="doccomment">/// Federated mint member mint</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Mint</span> {
-    <span class="ident">sec_key</span>: <span class="ident">Keys</span>&lt;<span class="ident">SecretKeyShare</span>&gt;,
-    <span class="ident">pub_key_shares</span>: <span class="ident">BTreeMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">Keys</span>&lt;<span class="ident">PublicKeyShare</span>&gt;&gt;,
-    <span class="ident">pub_key</span>: <span class="ident">HashMap</span>&lt;<span class="ident">Amount</span>, <span class="ident">AggregatePublicKey</span>&gt;,
-    <span class="ident">threshold</span>: <span class="ident">usize</span>, <span class="comment">// TODO: move to cfg</span>
-    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
+<span class="doccomment">/// Federated mint member mint
+</span><span class="kw">pub struct </span>Mint {
+    sec_key: Keys&lt;SecretKeyShare&gt;,
+    pub_key_shares: BTreeMap&lt;PeerId, Keys&lt;PublicKeyShare&gt;&gt;,
+    pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
+    threshold: usize, <span class="comment">// TODO: move to cfg
+    </span>db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PartiallySignedRequest</span> {
-    <span class="kw">pub</span> <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    <span class="kw">pub</span> <span class="ident">partial_signature</span>: <span class="ident">PartialSigResponse</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PartiallySignedRequest {
+    <span class="kw">pub </span>out_point: OutPoint,
+    <span class="kw">pub </span>partial_signature: PartialSigResponse,
 }
 
-<span class="doccomment">/// Request to blind sign a certain amount of coins</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SignRequest</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;<span class="ident">tbs::BlindedMessage</span>&gt;);
+<span class="doccomment">/// Request to blind sign a certain amount of coins
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>Coins&lt;tbs::BlindedMessage&gt;);
 
-<span class="comment">// FIXME: optimize out blinded msg by making the mint remember it</span>
-<span class="doccomment">/// Blind signature share for a [`SignRequest`]</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PartialSigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;(<span class="ident">tbs::BlindedMessage</span>, <span class="ident">tbs::BlindedSignatureShare</span>)&gt;);
+<span class="comment">// FIXME: optimize out blinded msg by making the mint remember it
+</span><span class="doccomment">/// Blind signature share for a [`SignRequest`]
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>Coins&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
 
-<span class="doccomment">/// Blind signature for a [`SignRequest`]</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SigResponse</span>(<span class="kw">pub</span> <span class="ident">Coins</span>&lt;<span class="ident">tbs::BlindedSignature</span>&gt;);
+<span class="doccomment">/// Blind signature for a [`SignRequest`]
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>Coins&lt;tbs::BlindedSignature&gt;);
 
-<span class="doccomment">/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In</span>
-<span class="doccomment">/// this form it can oly be validated, not spent since for that the corresponding secret spend key</span>
-<span class="doccomment">/// is required.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Coin</span>(<span class="kw">pub</span> <span class="ident">CoinNonce</span>, <span class="kw">pub</span> <span class="ident">tbs::Signature</span>);
+<span class="doccomment">/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
+/// this form it can oly be validated, not spent since for that the corresponding secret spend key
+/// is required.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>Coin(<span class="kw">pub </span>CoinNonce, <span class="kw">pub </span>tbs::Signature);
 
-<span class="doccomment">/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the</span>
-<span class="doccomment">/// spent coin&#39;s spending keys to avoid mint frontrunning.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">CoinNonce</span>(<span class="kw">pub</span> <span class="ident">secp256k1_zkp::XOnlyPublicKey</span>);
+<span class="doccomment">/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
+/// spent coin&#39;s spending keys to avoid mint frontrunning.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>CoinNonce(<span class="kw">pub </span>secp256k1_zkp::XOnlyPublicKey);
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BlindToken</span>(<span class="kw">pub</span> <span class="ident">tbs::BlindedMessage</span>);
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>BlindToken(<span class="kw">pub </span>tbs::BlindedMessage);
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">VerificationCache</span> {
-    <span class="ident">valid_coins</span>: <span class="ident">HashMap</span>&lt;<span class="ident">Coin</span>, <span class="ident">Amount</span>&gt;,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>VerificationCache {
+    valid_coins: HashMap&lt;Coin, Amount&gt;,
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
-<span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">Mint</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">MintError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">Coins</span>&lt;<span class="ident">Coin</span>&gt;;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;;
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = <span class="prelude-ty">Option</span>&lt;<span class="ident">SigResponse</span>&gt;; <span class="comment">// TODO: make newtype</span>
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">PartiallySignedRequest</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> = <span class="ident">VerificationCache</span>;
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]</span>
+<span class="kw">impl </span>FederationModule <span class="kw">for </span>Mint {
+    <span class="kw">type </span>Error = MintError;
+    <span class="kw">type </span>TxInput = Coins&lt;Coin&gt;;
+    <span class="kw">type </span>TxOutput = Coins&lt;BlindToken&gt;;
+    <span class="kw">type </span>TxOutputOutcome = <span class="prelude-ty">Option</span>&lt;SigResponse&gt;; <span class="comment">// TODO: make newtype
+    </span><span class="kw">type </span>ConsensusItem = PartiallySignedRequest;
+    <span class="kw">type </span>VerificationCache = VerificationCache;
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">is_empty</span>() {
-            <span class="ident">std::future::pending</span>().<span class="kw">await</span>
-        }
+    <span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>) {
+        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(rng).<span class="kw">await</span>.is_empty() {
+            std::future::pending().<span class="kw">await
+        </span>}
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedPartialSignaturesKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_signature</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="ident">PartiallySignedRequest</span> {
-                    <span class="ident">out_point</span>: <span class="ident">key</span>.<span class="ident">request_id</span>,
-                    <span class="ident">partial_signature</span>,
+    <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>ProposedPartialSignaturesKeyPrefix)
+            .map(|res| {
+                <span class="kw">let </span>(key, partial_signature) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                PartiallySignedRequest {
+                    out_point: key.request_id,
+                    partial_signature,
                 }
             })
-            .<span class="ident">collect</span>()
+            .collect()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
-        <span class="kw">for</span> (<span class="ident">peer</span>, <span class="ident">partial_sig</span>) <span class="kw">in</span> <span class="ident">consensus_items</span> {
-            <span class="self">self</span>.<span class="ident">process_partial_signature</span>(
-                <span class="ident">batch</span>.<span class="ident">subtransaction</span>(),
-                <span class="ident">peer</span>,
-                <span class="ident">partial_sig</span>.<span class="ident">out_point</span>,
-                <span class="ident">partial_sig</span>.<span class="ident">partial_signature</span>,
+        <span class="kw">for </span>(peer, partial_sig) <span class="kw">in </span>consensus_items {
+            <span class="self">self</span>.process_partial_signature(
+                batch.subtransaction(),
+                peer,
+                partial_sig.out_point,
+                partial_sig.partial_signature,
             )
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt; + <span class="ident">Send</span>,
-    ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
-        <span class="comment">// We build a lookup table for checking the validity of all coins for certain amounts. This</span>
-        <span class="comment">// calculation can happen massively in parallel since verification is a pure function and</span>
-        <span class="comment">// thus has no side effects.</span>
-        <span class="kw">let</span> <span class="ident">valid_coins</span> = <span class="ident">inputs</span>
-            .<span class="ident">flat_map</span>(|<span class="ident">inputs</span>| <span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">par_bridge</span>()
-            .<span class="ident">filter_map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
-                <span class="kw">let</span> <span class="ident">amount_key</span> = <span class="self">self</span>.<span class="ident">pub_key</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">amount</span>)<span class="question-mark">?</span>;
-                <span class="kw">if</span> <span class="ident">coin</span>.<span class="ident">verify</span>(<span class="kw-2">*</span><span class="ident">amount_key</span>) {
-                    <span class="prelude-val">Some</span>((<span class="ident">coin</span>.<span class="ident">clone</span>(), <span class="ident">amount</span>))
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">None</span>
-                }
+    <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput&gt; + Send,
+    ) -&gt; <span class="self">Self</span>::VerificationCache {
+        <span class="comment">// We build a lookup table for checking the validity of all coins for certain amounts. This
+        // calculation can happen massively in parallel since verification is a pure function and
+        // thus has no side effects.
+        </span><span class="kw">let </span>valid_coins = inputs
+            .flat_map(|inputs| inputs.iter())
+            .par_bridge()
+            .filter_map(|(amount, coin)| {
+                <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
+                <span class="kw">if </span>coin.verify(<span class="kw-2">*</span>amount_key) {
+                    <span class="prelude-val">Some</span>((coin.clone(), amount))
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
             })
-            .<span class="ident">collect</span>();
+            .collect();
 
-        <span class="ident">VerificationCache</span> { <span class="ident">valid_coins</span> }
+        VerificationCache { valid_coins }
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">_interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">try_for_each</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
-            <span class="kw">let</span> <span class="ident">coin_valid</span> = <span class="ident">cache</span>
-                .<span class="ident">valid_coins</span>
-                .<span class="ident">get</span>(<span class="ident">coin</span>) <span class="comment">// We validated the coin</span>
-                .<span class="ident">map</span>(|<span class="ident">coint_amount</span>| <span class="kw-2">*</span><span class="ident">coint_amount</span> == <span class="ident">amount</span>) <span class="comment">// It has the right amount tier</span>
-                .<span class="ident">unwrap_or</span>(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false</span>
+        _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
+        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        input.iter().try_for_each(|(amount, coin)| {
+            <span class="kw">let </span>coin_valid = cache
+                .valid_coins
+                .get(coin) <span class="comment">// We validated the coin
+                </span>.map(|coint_amount| <span class="kw-2">*</span>coint_amount == amount) <span class="comment">// It has the right amount tier
+                </span>.unwrap_or(<span class="bool-val">false</span>); <span class="comment">// If we didn&#39;t validate the coin return false
 
-            <span class="kw">if</span> !<span class="ident">coin_valid</span> {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">MintError::InvalidSignature</span>);
+            </span><span class="kw">if </span>!coin_valid {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::InvalidSignature);
             }
 
-            <span class="kw">if</span> <span class="self">self</span>
-                .<span class="ident">db</span>
-                .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">NonceKey</span>(<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>()))
-                .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                .<span class="ident">is_some</span>()
+            <span class="kw">if </span><span class="self">self
+                </span>.db
+                .get_value(<span class="kw-2">&amp;</span>NonceKey(coin.<span class="number">0</span>.clone()))
+                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .is_some()
             {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">MintError::SpentCoin</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(MintError::SpentCoin);
             }
 
             <span class="prelude-val">Ok</span>(())
         })<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">InputMeta</span> {
-            <span class="ident">amount</span>: <span class="ident">input</span>.<span class="ident">amount</span>(),
-            <span class="ident">puk_keys</span>: <span class="ident">Box::new</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">coin</span>)| <span class="kw-2">*</span><span class="ident">coin</span>.<span class="ident">spend_key</span>())),
+        <span class="prelude-val">Ok</span>(InputMeta {
+            amount: input.amount(),
+            puk_keys: Box::new(input.iter().map(|(<span class="kw">_</span>, coin)| <span class="kw-2">*</span>coin.spend_key())),
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-        <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
+        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
 
-        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">input</span>.<span class="ident">iter</span>().<span class="ident">flat_map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
-            <span class="kw">let</span> <span class="ident">key</span> = <span class="ident">NonceKey</span>(<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>());
+        batch.append_from_iter(input.iter().flat_map(|(amount, coin)| {
+            <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>.clone());
             <span class="macro">vec!</span>[
-                <span class="ident">BatchItem::insert_new</span>(<span class="ident">key</span>.<span class="ident">clone</span>(), ()),
-                <span class="ident">BatchItem::insert_new</span>(<span class="ident">MintAuditItemKey::Redemption</span>(<span class="ident">key</span>), <span class="ident">amount</span>),
+                BatchItem::insert_new(key.clone(), ()),
+                BatchItem::insert_new(MintAuditItemKey::Redemption(key), amount),
             ]
         }));
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
 
-        <span class="prelude-val">Ok</span>(<span class="ident">meta</span>)
+        <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">amount</span>) = <span class="ident">output</span>.<span class="ident">iter</span>().<span class="ident">find_map</span>(|(<span class="ident">amount</span>, <span class="kw">_</span>)| {
-            <span class="kw">if</span> <span class="self">self</span>.<span class="ident">pub_key</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">amount</span>).<span class="ident">is_none</span>() {
-                <span class="prelude-val">Some</span>(<span class="ident">amount</span>)
-            } <span class="kw">else</span> {
-                <span class="prelude-val">None</span>
-            }
+    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter().find_map(|(amount, <span class="kw">_</span>)| {
+            <span class="kw">if </span><span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount).is_none() {
+                <span class="prelude-val">Some</span>(amount)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>}
         }) {
-            <span class="prelude-val">Err</span>(<span class="ident">MintError::InvalidAmountTier</span>(<span class="ident">amount</span>))
-        } <span class="kw">else</span> {
-            <span class="prelude-val">Ok</span>(<span class="ident">output</span>.<span class="ident">amount</span>())
+            <span class="prelude-val">Err</span>(MintError::InvalidAmountTier(amount))
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(output.amount())
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
-        <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="comment">// TODO: move actual signing to worker thread</span>
-        <span class="comment">// TODO: get rid of clone</span>
-        <span class="kw">let</span> <span class="ident">partial_sig</span> = <span class="self">self</span>.<span class="ident">blind_sign</span>(<span class="ident">output</span>.<span class="ident">clone</span>())<span class="question-mark">?</span>;
+    <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="comment">// TODO: move actual signing to worker thread
+        // TODO: get rid of clone
+        </span><span class="kw">let </span>partial_sig = <span class="self">self</span>.blind_sign(output.clone())<span class="question-mark">?</span>;
 
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-            <span class="ident">ProposedPartialSignatureKey</span> {
-                <span class="ident">request_id</span>: <span class="ident">out_point</span>,
+        batch.append_insert_new(
+            ProposedPartialSignatureKey {
+                request_id: out_point,
             },
-            <span class="ident">partial_sig</span>,
+            partial_sig,
         );
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">MintAuditItemKey::Issuance</span>(<span class="ident">out_point</span>), <span class="ident">output</span>.<span class="ident">amount</span>());
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">output</span>.<span class="ident">amount</span>())
+        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.amount());
+        batch.commit();
+        <span class="prelude-val">Ok</span>(output.amount())
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
-        <span class="comment">// Finalize partial signatures for which we now have enough shares</span>
-        <span class="kw">let</span> <span class="ident">req_psigs</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ReceivedPartialSignaturesKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">entry_res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">partial_sig</span>) = <span class="ident">entry_res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                (<span class="ident">key</span>.<span class="ident">request_id</span>, (<span class="ident">key</span>.<span class="ident">peer_id</span>, <span class="ident">partial_sig</span>))
+    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="comment">// Finalize partial signatures for which we now have enough shares
+        </span><span class="kw">let </span>req_psigs = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignaturesKeyPrefix)
+            .map(|entry_res| {
+                <span class="kw">let </span>(key, partial_sig) = entry_res.expect(<span class="string">&quot;DB error&quot;</span>);
+                (key.request_id, (key.peer_id, partial_sig))
             })
-            .<span class="ident">into_group_map</span>();
+            .into_group_map();
 
-        <span class="comment">// TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn&#39;t need consensus)</span>
-        <span class="kw">let</span> <span class="ident">par_batches</span> = <span class="ident">req_psigs</span>
-            .<span class="ident">into_par_iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">issuance_id</span>, <span class="ident">shares</span>)| {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">batch</span>.<span class="ident">transaction</span>();
-                <span class="kw">let</span> <span class="ident">proposal_key</span> = <span class="ident">ProposedPartialSignatureKey</span> {
-                    <span class="ident">request_id</span>: <span class="ident">issuance_id</span>,
+        <span class="comment">// TODO: use own par iter impl that allows efficient use of accumulators or just decouple it entirely (doesn&#39;t need consensus)
+        </span><span class="kw">let </span>par_batches = req_psigs
+            .into_par_iter()
+            .map(|(issuance_id, shares)| {
+                <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+                <span class="kw">let </span><span class="kw-2">mut </span>batch_tx = batch.transaction();
+                <span class="kw">let </span>proposal_key = ProposedPartialSignatureKey {
+                    request_id: issuance_id,
                 };
-                <span class="kw">let</span> <span class="ident">our_contribution</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">proposal_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">let</span> (<span class="ident">bsig</span>, <span class="ident">errors</span>) = <span class="self">self</span>.<span class="ident">combine</span>(<span class="ident">our_contribution</span>, <span class="ident">shares</span>.<span class="ident">clone</span>());
+                <span class="kw">let </span>our_contribution = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>proposal_key).expect(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">let </span>(bsig, errors) = <span class="self">self</span>.combine(our_contribution, shares.clone());
 
-                <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible</span>
-                <span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="ident">peer</span>, <span class="ident">error</span>)| {
-                    <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, <span class="ident">peer</span>, <span class="ident">error</span>);
-                    <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
+                <span class="comment">// FIXME: validate shares before writing to DB to make combine infallible
+                </span>errors.<span class="number">0</span>.iter().for_each(|(peer, error)| {
+                    <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for {:?}&quot;</span>, peer, error);
+                    drop_peers.push(<span class="kw-2">*</span>peer);
                 });
 
-                <span class="kw">match</span> <span class="ident">bsig</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">blind_signature</span>) =&gt; {
+                <span class="kw">match </span>bsig {
+                    <span class="prelude-val">Ok</span>(blind_signature) =&gt; {
                         <span class="macro">debug!</span>(
-                            %<span class="ident">issuance_id</span>,
+                            %issuance_id,
                             <span class="string">&quot;Successfully combined signature shares&quot;</span>,
                         );
 
-                        <span class="ident">batch_tx</span>.<span class="ident">append_from_iter</span>(<span class="ident">shares</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| {
-                            <span class="ident">BatchItem::delete</span>(<span class="ident">ReceivedPartialSignatureKey</span> {
-                                <span class="ident">request_id</span>: <span class="ident">issuance_id</span>,
-                                <span class="ident">peer_id</span>: <span class="ident">peer</span>,
+                        batch_tx.append_from_iter(shares.into_iter().map(|(peer, <span class="kw">_</span>)| {
+                            BatchItem::delete(ReceivedPartialSignatureKey {
+                                request_id: issuance_id,
+                                peer_id: peer,
                             })
                         }));
-                        <span class="ident">batch_tx</span>.<span class="ident">append_delete</span>(<span class="ident">proposal_key</span>);
+                        batch_tx.append_delete(proposal_key);
 
-                        <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(<span class="ident">OutputOutcomeKey</span>(<span class="ident">issuance_id</span>), <span class="ident">blind_signature</span>);
+                        batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
                     }
-                    <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(<span class="ident">got</span>, <span class="kw">_</span>)) =&gt; {
-                        <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">consensus_peers</span>.<span class="ident">sub</span>(<span class="kw-2">&amp;</span><span class="ident">HashSet::from_iter</span>(<span class="ident">got</span>)) {
-                            <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing shares&quot;</span>, <span class="ident">peer</span>);
-                            <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
+                    <span class="prelude-val">Err</span>(CombineError::TooFewShares(got, <span class="kw">_</span>)) =&gt; {
+                        <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>HashSet::from_iter(got)) {
+                            <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing shares&quot;</span>, peer);
+                            drop_peers.push(peer);
                         }
                     }
-                    <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                        <span class="macro">warn!</span>(%<span class="ident">error</span>, <span class="string">&quot;Could not combine shares&quot;</span>);
+                    <span class="prelude-val">Err</span>(error) =&gt; {
+                        <span class="macro">warn!</span>(%error, <span class="string">&quot;Could not combine shares&quot;</span>);
                     }
                 }
-                <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
-                (<span class="ident">batch</span>, <span class="ident">drop_peers</span>)
+                batch_tx.commit();
+                (batch, drop_peers)
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">dropped_peers</span> = <span class="ident">par_batches</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">flat_map</span>(|(<span class="kw">_</span>, <span class="ident">peers</span>)| <span class="ident">peers</span>)
-            .<span class="ident">copied</span>()
-            .<span class="ident">collect</span>();
+        <span class="kw">let </span>dropped_peers = par_batches
+            .iter()
+            .flat_map(|(<span class="kw">_</span>, peers)| peers)
+            .copied()
+            .collect();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">redemptions</span> = <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">issuances</span> = <span class="ident">Amount::from_sat</span>(<span class="number">0</span>);
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">MintAuditItemKeyPrefix</span>)
-            .<span class="ident">for_each</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">amount</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">match</span> <span class="ident">key</span> {
-                    <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; <span class="ident">issuances</span> += <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; <span class="ident">issuances</span> += <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::Redemption</span>(<span class="kw">_</span>) =&gt; <span class="ident">redemptions</span> += <span class="ident">amount</span>,
-                    <span class="ident">MintAuditItemKey::RedemptionTotal</span> =&gt; <span class="ident">redemptions</span> += <span class="ident">amount</span>,
+        <span class="kw">let </span><span class="kw-2">mut </span>redemptions = Amount::from_sat(<span class="number">0</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>issuances = Amount::from_sat(<span class="number">0</span>);
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>MintAuditItemKeyPrefix)
+            .for_each(|res| {
+                <span class="kw">let </span>(key, amount) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                <span class="kw">match </span>key {
+                    MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; issuances += amount,
+                    MintAuditItemKey::IssuanceTotal =&gt; issuances += amount,
+                    MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; redemptions += amount,
+                    MintAuditItemKey::RedemptionTotal =&gt; redemptions += amount,
                 }
-                <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">key</span>);
+                batch.append_delete(key);
             });
-        <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">MintAuditItemKey::IssuanceTotal</span>, <span class="ident">issuances</span>);
-        <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">MintAuditItemKey::RedemptionTotal</span>, <span class="ident">redemptions</span>);
+        batch.append_insert(MintAuditItemKey::IssuanceTotal, issuances);
+        batch.append_insert(MintAuditItemKey::RedemptionTotal, redemptions);
 
-        <span class="ident">batch</span>.<span class="ident">append_from_accumulators</span>(<span class="ident">par_batches</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">batch</span>, <span class="kw">_</span>)| <span class="ident">batch</span>));
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.append_from_accumulators(par_batches.into_iter().map(|(batch, <span class="kw">_</span>)| batch));
+        batch.commit();
 
-        <span class="ident">dropped_peers</span>
+        dropped_peers
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
-        <span class="kw">let</span> <span class="ident">we_proposed</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedPartialSignatureKey</span> {
-                <span class="ident">request_id</span>: <span class="ident">out_point</span>,
+    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
+        <span class="kw">let </span>we_proposed = <span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>ProposedPartialSignatureKey {
+                request_id: out_point,
             })
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-            .<span class="ident">is_some</span>();
-        <span class="kw">let</span> <span class="ident">was_consensus_outcome</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ReceivedPartialSignatureKeyOutputPrefix</span> {
-                <span class="ident">request_id</span>: <span class="ident">out_point</span>,
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .is_some();
+        <span class="kw">let </span>was_consensus_outcome = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>ReceivedPartialSignatureKeyOutputPrefix {
+                request_id: out_point,
             })
-            .<span class="ident">any</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">is_ok</span>());
+            .any(|res| res.is_ok());
 
-        <span class="kw">let</span> <span class="ident">final_sig</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OutputOutcomeKey</span>(<span class="ident">out_point</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>final_sig = <span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point))
+            .expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="ident">final_sig</span>.<span class="ident">is_some</span>() {
-            <span class="prelude-val">Some</span>(<span class="ident">final_sig</span>)
-        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">we_proposed</span> || <span class="ident">was_consensus_outcome</span> {
+        <span class="kw">if </span>final_sig.is_some() {
+            <span class="prelude-val">Some</span>(final_sig)
+        } <span class="kw">else if </span>we_proposed || was_consensus_outcome {
             <span class="prelude-val">Some</span>(<span class="prelude-val">None</span>)
-        } <span class="kw">else</span> {
-            <span class="prelude-val">None</span>
-        }
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
     }
 
-    <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">MintAuditItemKeyPrefix</span>, |<span class="ident">k</span>, <span class="ident">v</span>| <span class="kw">match</span> <span class="ident">k</span> {
-            <span class="ident">MintAuditItemKey::Issuance</span>(<span class="kw">_</span>) =&gt; -(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
-            <span class="ident">MintAuditItemKey::IssuanceTotal</span> =&gt; -(<span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>),
-            <span class="ident">MintAuditItemKey::Redemption</span>(<span class="kw">_</span>) =&gt; <span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>,
-            <span class="ident">MintAuditItemKey::RedemptionTotal</span> =&gt; <span class="ident">v</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>,
+    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit.add_items(<span class="kw-2">&amp;</span><span class="self">self</span>.db, <span class="kw-2">&amp;</span>MintAuditItemKeyPrefix, |k, v| <span class="kw">match </span>k {
+            MintAuditItemKey::Issuance(<span class="kw">_</span>) =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+            MintAuditItemKey::IssuanceTotal =&gt; -(v.milli_sat <span class="kw">as </span>i64),
+            MintAuditItemKey::Redemption(<span class="kw">_</span>) =&gt; v.milli_sat <span class="kw">as </span>i64,
+            MintAuditItemKey::RedemptionTotal =&gt; v.milli_sat <span class="kw">as </span>i64,
         });
     }
 
-    <span class="kw">fn</span> <span class="ident">api_base_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> {
-        <span class="string">&quot;mint&quot;</span>
-    }
+    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+        <span class="string">&quot;mint&quot;
+    </span>}
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
+    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;] {
         <span class="kw-2">&amp;</span>[]
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Mint</span> {
-    <span class="doccomment">/// Constructs a new mint</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// # Panics</span>
-    <span class="doccomment">/// * If there are no amount tiers</span>
-    <span class="doccomment">/// * If the amount tiers for secret and public keys are inconsistent</span>
-    <span class="doccomment">/// * If the pub key belonging to the secret key share is not in the pub key list.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">MintConfig</span>, <span class="ident">threshold</span>: <span class="ident">usize</span>, <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;) -&gt; <span class="ident">Mint</span> {
-        <span class="macro">assert!</span>(<span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">tiers</span>().<span class="ident">count</span>() &gt; <span class="number">0</span>);
+<span class="kw">impl </span>Mint {
+    <span class="doccomment">/// Constructs a new mint
+    ///
+    /// # Panics
+    /// * If there are no amount tiers
+    /// * If the amount tiers for secret and public keys are inconsistent
+    /// * If the pub key belonging to the secret key share is not in the pub key list.
+    </span><span class="kw">pub fn </span>new(cfg: MintConfig, threshold: usize, db: Arc&lt;<span class="kw">dyn </span>Database&gt;) -&gt; Mint {
+        <span class="macro">assert!</span>(cfg.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
 
-        <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally</span>
-        <span class="comment">// consistent.</span>
-        <span class="macro">assert!</span>(<span class="ident">cfg</span>
-            .<span class="ident">peer_tbs_pks</span>
-            .<span class="ident">values</span>()
-            .<span class="ident">all</span>(|<span class="ident">pk</span>| <span class="ident">pk</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">tbs_sks</span>)));
+        <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally
+        // consistent.
+        </span><span class="macro">assert!</span>(cfg
+            .peer_tbs_pks
+            .values()
+            .all(|pk| pk.structural_eq(<span class="kw-2">&amp;</span>cfg.tbs_sks)));
 
-        <span class="kw">let</span> <span class="ident">ref_pub_key</span> = <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>.<span class="ident">to_public</span>();
+        <span class="kw">let </span>ref_pub_key = cfg.tbs_sks.to_public();
 
-        <span class="comment">// Find our key index and make sure we know the private key for all our public key shares</span>
-        <span class="kw">let</span> <span class="ident">our_id</span> = <span class="ident">cfg</span> <span class="comment">// FIXME: make sure we use id instead of idx everywhere</span>
-            .<span class="ident">peer_tbs_pks</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">find_map</span>(|(<span class="kw-2">&amp;</span><span class="ident">id</span>, <span class="ident">pk</span>)| <span class="kw">if</span> <span class="ident">pk</span> == <span class="kw-2">&amp;</span><span class="ident">ref_pub_key</span> { <span class="prelude-val">Some</span>(<span class="ident">id</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
-            .<span class="ident">expect</span>(<span class="string">&quot;Own key not found among pub keys.&quot;</span>);
+        <span class="comment">// Find our key index and make sure we know the private key for all our public key shares
+        </span><span class="kw">let </span>our_id = cfg <span class="comment">// FIXME: make sure we use id instead of idx everywhere
+            </span>.peer_tbs_pks
+            .iter()
+            .find_map(|(<span class="kw-2">&amp;</span>id, pk)| <span class="kw">if </span>pk == <span class="kw-2">&amp;</span>ref_pub_key { <span class="prelude-val">Some</span>(id) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
+            .expect(<span class="string">&quot;Own key not found among pub keys.&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>[<span class="kw-2">&amp;</span><span class="ident">our_id</span>],
-            <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(|(<span class="ident">amount</span>, <span class="ident">sk</span>)| (<span class="ident">amount</span>, <span class="ident">sk</span>.<span class="ident">to_pub_key_share</span>()))
-                .<span class="ident">collect</span>()
+            cfg.peer_tbs_pks[<span class="kw-2">&amp;</span>our_id],
+            cfg.tbs_sks
+                .iter()
+                .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+                .collect()
         );
 
-        <span class="kw">let</span> <span class="ident">aggregate_pub_keys</span> = <span class="ident">TieredMultiZip::new</span>(
-            <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">keys</span>)| <span class="ident">keys</span>.<span class="ident">iter</span>())
-                .<span class="ident">collect</span>(),
+        <span class="kw">let </span>aggregate_pub_keys = TieredMultiZip::new(
+            cfg.peer_tbs_pks
+                .iter()
+                .map(|(<span class="kw">_</span>, keys)| keys.iter())
+                .collect(),
         )
-        .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">keys</span>)| {
-            <span class="comment">// TODO: avoid this through better aggregation API allowing references or</span>
-            <span class="kw">let</span> <span class="ident">keys</span> = <span class="ident">keys</span>.<span class="ident">into_iter</span>().<span class="ident">copied</span>().<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
-            (<span class="ident">amt</span>, <span class="ident">keys</span>.<span class="ident">aggregate</span>(<span class="ident">threshold</span>))
+        .map(|(amt, keys)| {
+            <span class="comment">// TODO: avoid this through better aggregation API allowing references or
+            </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            (amt, keys.aggregate(threshold))
         })
-        .<span class="ident">collect</span>();
+        .collect();
 
-        <span class="ident">Mint</span> {
-            <span class="ident">sec_key</span>: <span class="ident">cfg</span>.<span class="ident">tbs_sks</span>,
-            <span class="ident">pub_key_shares</span>: <span class="ident">cfg</span>.<span class="ident">peer_tbs_pks</span>,
-            <span class="ident">pub_key</span>: <span class="ident">aggregate_pub_keys</span>,
-            <span class="ident">threshold</span>,
-            <span class="ident">db</span>,
+        Mint {
+            sec_key: cfg.tbs_sks,
+            pub_key_shares: cfg.peer_tbs_pks,
+            pub_key: aggregate_pub_keys,
+            threshold,
+            db,
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">blind_sign</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PartialSigResponse</span>, <span class="ident">MintError</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="ident">PartialSigResponse</span>(<span class="ident">output</span>.<span class="ident">map</span>(
-            |<span class="ident">amt</span>, <span class="ident">msg</span>| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="ident">InvalidAmountTierError</span>&gt; {
-                <span class="kw">let</span> <span class="ident">sec_key</span> = <span class="self">self</span>.<span class="ident">sec_key</span>.<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>)<span class="question-mark">?</span>;
-                <span class="kw">let</span> <span class="ident">blind_signature</span> = <span class="ident">sign_blinded_msg</span>(<span class="ident">msg</span>.<span class="number">0</span>, <span class="kw-2">*</span><span class="ident">sec_key</span>);
-                <span class="prelude-val">Ok</span>((<span class="ident">msg</span>.<span class="number">0</span>, <span class="ident">blind_signature</span>))
+    <span class="kw">fn </span>blind_sign(<span class="kw-2">&amp;</span><span class="self">self</span>, output: Coins&lt;BlindToken&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;PartialSigResponse, MintError&gt; {
+        <span class="prelude-val">Ok</span>(PartialSigResponse(output.map(
+            |amt, msg| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, InvalidAmountTierError&gt; {
+                <span class="kw">let </span>sec_key = <span class="self">self</span>.sec_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>;
+                <span class="kw">let </span>blind_signature = sign_blinded_msg(msg.<span class="number">0</span>, <span class="kw-2">*</span>sec_key);
+                <span class="prelude-val">Ok</span>((msg.<span class="number">0</span>, blind_signature))
             },
         )<span class="question-mark">?</span>))
     }
 
-    <span class="kw">fn</span> <span class="ident">combine</span>(
+    <span class="kw">fn </span>combine(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">our_contribution</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">PartialSigResponse</span>&gt;,
-        <span class="ident">partial_sigs</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PartialSigResponse</span>)&gt;,
-    ) -&gt; (<span class="prelude-ty">Result</span>&lt;<span class="ident">SigResponse</span>, <span class="ident">CombineError</span>&gt;, <span class="ident">MintShareErrors</span>) {
-        <span class="comment">// Terminate early if there are not enough shares</span>
-        <span class="kw">if</span> <span class="ident">partial_sigs</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">threshold</span> {
-            <span class="kw">return</span> (
-                <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                    <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
-                    <span class="self">self</span>.<span class="ident">threshold</span>,
+        our_contribution: <span class="prelude-ty">Option</span>&lt;PartialSigResponse&gt;,
+        partial_sigs: Vec&lt;(PeerId, PartialSigResponse)&gt;,
+    ) -&gt; (<span class="prelude-ty">Result</span>&lt;SigResponse, CombineError&gt;, MintShareErrors) {
+        <span class="comment">// Terminate early if there are not enough shares
+        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.threshold {
+            <span class="kw">return </span>(
+                <span class="prelude-val">Err</span>(CombineError::TooFewShares(
+                    partial_sigs.iter().map(|(peer, <span class="kw">_</span>)| peer).cloned().collect(),
+                    <span class="self">self</span>.threshold,
                 )),
-                <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
+                MintShareErrors(<span class="macro">vec!</span>[]),
             );
         }
 
-        <span class="comment">// FIXME: decide on right boundary place for this invariant</span>
-        <span class="comment">// Filter out duplicate contributions, they make share combinations fail</span>
-        <span class="kw">let</span> <span class="ident">peer_contrib_counts</span> = <span class="ident">partial_sigs</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">idx</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">idx</span>)
-            .<span class="ident">collect</span>::&lt;<span class="ident">counter::Counter</span>&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="ident">count</span>)) = <span class="ident">peer_contrib_counts</span>.<span class="ident">into_iter</span>().<span class="ident">find</span>(|(<span class="kw">_</span>, <span class="ident">cnt</span>)| <span class="kw-2">*</span><span class="ident">cnt</span> &gt; <span class="number">1</span>) {
-            <span class="kw">return</span> (
-                <span class="prelude-val">Err</span>(<span class="ident">CombineError::MultiplePeerContributions</span>(<span class="ident">peer</span>, <span class="ident">count</span>)),
-                <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
+        <span class="comment">// FIXME: decide on right boundary place for this invariant
+        // Filter out duplicate contributions, they make share combinations fail
+        </span><span class="kw">let </span>peer_contrib_counts = partial_sigs
+            .iter()
+            .map(|(idx, <span class="kw">_</span>)| <span class="kw-2">*</span>idx)
+            .collect::&lt;counter::Counter&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>((peer, count)) = peer_contrib_counts.into_iter().find(|(<span class="kw">_</span>, cnt)| <span class="kw-2">*</span>cnt &gt; <span class="number">1</span>) {
+            <span class="kw">return </span>(
+                <span class="prelude-val">Err</span>(CombineError::MultiplePeerContributions(peer, count)),
+                MintShareErrors(<span class="macro">vec!</span>[]),
             );
         }
 
-        <span class="comment">// Determine the reference response to check against</span>
-        <span class="kw">let</span> <span class="ident">our_contribution</span> = <span class="kw">match</span> <span class="ident">our_contribution</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">psig</span>) =&gt; <span class="ident">psig</span>,
-            <span class="prelude-val">None</span> =&gt; {
-                <span class="kw">return</span> (
-                    <span class="prelude-val">Err</span>(<span class="ident">CombineError::NoOwnContribution</span>),
-                    <span class="ident">MintShareErrors</span>(<span class="macro">vec!</span>[]),
+        <span class="comment">// Determine the reference response to check against
+        </span><span class="kw">let </span>our_contribution = <span class="kw">match </span>our_contribution {
+            <span class="prelude-val">Some</span>(psig) =&gt; psig,
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">return </span>(
+                    <span class="prelude-val">Err</span>(CombineError::NoOwnContribution),
+                    MintShareErrors(<span class="macro">vec!</span>[]),
                 )
             }
         };
 
-        <span class="kw">let</span> <span class="ident">reference_msgs</span> = <span class="ident">our_contribution</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">_amt</span>, (<span class="ident">msg</span>, <span class="ident">_sig</span>))| <span class="ident">msg</span>);
+        <span class="kw">let </span>reference_msgs = our_contribution.<span class="number">0</span>.iter().map(|(_amt, (msg, _sig))| msg);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_errors</span> = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_errors = <span class="macro">vec!</span>[];
 
-        <span class="kw">let</span> <span class="ident">partial_sigs</span> = <span class="ident">partial_sigs</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">sigs</span>)| {
-                <span class="kw">if</span> !<span class="ident">sigs</span>.<span class="number">0</span>.<span class="ident">structural_eq</span>(<span class="kw-2">&amp;</span><span class="ident">our_contribution</span>.<span class="number">0</span>) {
+        <span class="kw">let </span>partial_sigs = partial_sigs
+            .iter()
+            .filter(|(peer, sigs)| {
+                <span class="kw">if </span>!sigs.<span class="number">0</span>.structural_eq(<span class="kw-2">&amp;</span>our_contribution.<span class="number">0</span>) {
                     <span class="macro">warn!</span>(
-                        %<span class="ident">peer</span>,
+                        %peer,
                         <span class="string">&quot;Peer proposed a sig share of wrong structure (different than ours)&quot;</span>,
                     );
-                    <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="kw-2">*</span><span class="ident">peer</span>, <span class="ident">PeerErrorType::DifferentStructureSigShare</span>));
-                    <span class="bool-val">false</span>
-                } <span class="kw">else</span> {
-                    <span class="bool-val">true</span>
-                }
+                    peer_errors.push((<span class="kw-2">*</span>peer, PeerErrorType::DifferentStructureSigShare));
+                    <span class="bool-val">false
+                </span>} <span class="kw">else </span>{
+                    <span class="bool-val">true
+                </span>}
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">debug!</span>(
             <span class="string">&quot;After length filtering {} sig shares are left.&quot;</span>,
-            <span class="ident">partial_sigs</span>.<span class="ident">len</span>()
+            partial_sigs.len()
         );
 
-        <span class="kw">let</span> <span class="ident">bsigs</span> = <span class="ident">TieredMultiZip::new</span>(
-            <span class="ident">partial_sigs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(|(<span class="ident">_peer</span>, <span class="ident">sig_share</span>)| <span class="ident">sig_share</span>.<span class="number">0</span>.<span class="ident">iter</span>())
-                .<span class="ident">collect</span>(),
+        <span class="kw">let </span>bsigs = TieredMultiZip::new(
+            partial_sigs
+                .iter()
+                .map(|(_peer, sig_share)| sig_share.<span class="number">0</span>.iter())
+                .collect(),
         )
-        .<span class="ident">zip</span>(<span class="ident">reference_msgs</span>)
-        .<span class="ident">map</span>(|((<span class="ident">amt</span>, <span class="ident">sig_shares</span>), <span class="ident">ref_msg</span>)| {
-            <span class="kw">let</span> <span class="ident">peer_ids</span> = <span class="ident">partial_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">peer</span>);
+        .zip(reference_msgs)
+        .map(|((amt, sig_shares), ref_msg)| {
+            <span class="kw">let </span>peer_ids = partial_sigs.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer);
 
-            <span class="comment">// Filter out invalid peer contributions</span>
-            <span class="kw">let</span> <span class="ident">valid_sigs</span> = <span class="ident">sig_shares</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">zip</span>(<span class="ident">peer_ids</span>)
-                .<span class="ident">filter_map</span>(|((<span class="ident">msg</span>, <span class="ident">sig</span>), <span class="ident">peer</span>)| {
-                    <span class="kw">let</span> <span class="ident">amount_key</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">pub_key_shares</span>[<span class="kw-2">&amp;</span><span class="ident">peer</span>].<span class="ident">tier</span>(<span class="kw-2">&amp;</span><span class="ident">amt</span>) {
-                        <span class="prelude-val">Ok</span>(<span class="ident">key</span>) =&gt; <span class="ident">key</span>,
+            <span class="comment">// Filter out invalid peer contributions
+            </span><span class="kw">let </span>valid_sigs = sig_shares
+                .into_iter()
+                .zip(peer_ids)
+                .filter_map(|((msg, sig), peer)| {
+                    <span class="kw">let </span>amount_key = <span class="kw">match </span><span class="self">self</span>.pub_key_shares[<span class="kw-2">&amp;</span>peer].tier(<span class="kw-2">&amp;</span>amt) {
+                        <span class="prelude-val">Ok</span>(key) =&gt; key,
                         <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::InvalidAmountTier</span>));
-                            <span class="kw">return</span> <span class="prelude-val">None</span>;
+                            peer_errors.push((peer, PeerErrorType::InvalidAmountTier));
+                            <span class="kw">return </span><span class="prelude-val">None</span>;
                         }
                     };
 
-                    <span class="kw">if</span> <span class="ident">msg</span> != <span class="ident">ref_msg</span> {
-                        <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::DifferentNonce</span>));
-                        <span class="prelude-val">None</span>
-                    } <span class="kw">else</span> <span class="kw">if</span> !<span class="ident">verify_blind_share</span>(<span class="kw-2">*</span><span class="ident">msg</span>, <span class="kw-2">*</span><span class="ident">sig</span>, <span class="kw-2">*</span><span class="ident">amount_key</span>) {
-                        <span class="ident">peer_errors</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">PeerErrorType::InvalidSignature</span>));
-                        <span class="prelude-val">None</span>
-                    } <span class="kw">else</span> {
-                        <span class="prelude-val">Some</span>((<span class="ident">peer</span>, <span class="kw-2">*</span><span class="ident">sig</span>))
+                    <span class="kw">if </span>msg != ref_msg {
+                        peer_errors.push((peer, PeerErrorType::DifferentNonce));
+                        <span class="prelude-val">None
+                    </span>} <span class="kw">else if </span>!verify_blind_share(<span class="kw-2">*</span>msg, <span class="kw-2">*</span>sig, <span class="kw-2">*</span>amount_key) {
+                        peer_errors.push((peer, PeerErrorType::InvalidSignature));
+                        <span class="prelude-val">None
+                    </span>} <span class="kw">else </span>{
+                        <span class="prelude-val">Some</span>((peer, <span class="kw-2">*</span>sig))
                     }
                 })
-                .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-            <span class="comment">// Check that there are still sufficient</span>
-            <span class="kw">if</span> <span class="ident">valid_sigs</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">threshold</span> {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewValidShares</span>(
-                    <span class="ident">valid_sigs</span>.<span class="ident">len</span>(),
-                    <span class="ident">partial_sigs</span>.<span class="ident">len</span>(),
-                    <span class="self">self</span>.<span class="ident">threshold</span>,
+            <span class="comment">// Check that there are still sufficient
+            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.threshold {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(CombineError::TooFewValidShares(
+                    valid_sigs.len(),
+                    partial_sigs.len(),
+                    <span class="self">self</span>.threshold,
                 ));
             }
 
-            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">combine_valid_shares</span>(
-                <span class="ident">valid_sigs</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="ident">share</span>)),
-                <span class="self">self</span>.<span class="ident">threshold</span>,
+            <span class="kw">let </span>sig = combine_valid_shares(
+                valid_sigs
+                    .into_iter()
+                    .map(|(peer, share)| (peer.to_usize(), share)),
+                <span class="self">self</span>.threshold,
             );
 
-            <span class="prelude-val">Ok</span>((<span class="ident">amt</span>, <span class="ident">sig</span>))
+            <span class="prelude-val">Ok</span>((amt, sig))
         })
-        .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Coins</span>&lt;<span class="kw">_</span>&gt;, <span class="ident">CombineError</span>&gt;&gt;();
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Coins&lt;<span class="kw">_</span>&gt;, CombineError&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">bsigs</span> = <span class="kw">match</span> <span class="ident">bsigs</span> {
-            <span class="prelude-val">Ok</span>(<span class="ident">bs</span>) =&gt; <span class="ident">bs</span>,
-            <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> (<span class="prelude-val">Err</span>(<span class="ident">e</span>), <span class="ident">MintShareErrors</span>(<span class="ident">peer_errors</span>)),
+        <span class="kw">let </span>bsigs = <span class="kw">match </span>bsigs {
+            <span class="prelude-val">Ok</span>(bs) =&gt; bs,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span>(<span class="prelude-val">Err</span>(e), MintShareErrors(peer_errors)),
         };
 
-        (<span class="prelude-val">Ok</span>(<span class="ident">SigResponse</span>(<span class="ident">bsigs</span>)), <span class="ident">MintShareErrors</span>(<span class="ident">peer_errors</span>))
+        (<span class="prelude-val">Ok</span>(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    <span class="kw">fn</span> <span class="ident">process_partial_signature</span>(
+    <span class="kw">fn </span>process_partial_signature(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
-        <span class="ident">peer</span>: <span class="ident">PeerId</span>,
-        <span class="ident">output_id</span>: <span class="ident">OutPoint</span>,
-        <span class="ident">partial_sig</span>: <span class="ident">PartialSigResponse</span>,
+        <span class="kw-2">mut </span>batch: BatchTx,
+        peer: PeerId,
+        output_id: OutPoint,
+        partial_sig: PartialSigResponse,
     ) {
-        <span class="kw">if</span> <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OutputOutcomeKey</span>(<span class="ident">output_id</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-            .<span class="ident">is_some</span>()
+        <span class="kw">if </span><span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>OutputOutcomeKey(output_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .is_some()
         {
             <span class="macro">debug!</span>(
-                <span class="ident">issuance</span> = %<span class="ident">output_id</span>,
+                issuance = %output_id,
                 <span class="string">&quot;Received sig share for finalized issuance, ignoring&quot;</span>,
             );
             <span class="kw">return</span>;
         }
 
         <span class="macro">debug!</span>(
-            %<span class="ident">peer</span>,
-            <span class="ident">issuance</span> = %<span class="ident">output_id</span>,
-            <span class="string">&quot;Received sig share&quot;</span>
-        );
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-            <span class="ident">ReceivedPartialSignatureKey</span> {
-                <span class="ident">request_id</span>: <span class="ident">output_id</span>,
-                <span class="ident">peer_id</span>: <span class="ident">peer</span>,
+            %peer,
+            issuance = %output_id,
+            <span class="string">&quot;Received sig share&quot;
+        </span>);
+        batch.append_insert_new(
+            ReceivedPartialSignatureKey {
+                request_id: output_id,
+                peer_id: peer,
             },
-            <span class="ident">partial_sig</span>,
+            partial_sig,
         );
 
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Coin</span> {
-    <span class="doccomment">/// Verify the coin&#39;s validity under a mit key `pk`</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">pk</span>: <span class="ident">tbs::AggregatePublicKey</span>) -&gt; <span class="ident">bool</span> {
-        <span class="ident">tbs::verify</span>(<span class="self">self</span>.<span class="number">0</span>.<span class="ident">to_message</span>(), <span class="self">self</span>.<span class="number">1</span>, <span class="ident">pk</span>)
+<span class="kw">impl </span>Coin {
+    <span class="doccomment">/// Verify the coin&#39;s validity under a mit key `pk`
+    </span><span class="kw">pub fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, pk: tbs::AggregatePublicKey) -&gt; bool {
+        tbs::verify(<span class="self">self</span>.<span class="number">0</span>.to_message(), <span class="self">self</span>.<span class="number">1</span>, pk)
     }
 
-    <span class="doccomment">/// Access the nonce as the public key to the spend key</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">spend_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1_zkp::XOnlyPublicKey</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span> .<span class="number">0</span>
-    }
+    <span class="doccomment">/// Access the nonce as the public key to the spend key
+    </span><span class="kw">pub fn </span>spend_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1_zkp::XOnlyPublicKey {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>.<span class="number">0
+    </span>}
 }
 
-<span class="kw">impl</span> <span class="ident">CoinNonce</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> = <span class="macro">vec!</span>[];
-        <span class="ident">bincode::serialize_into</span>(<span class="kw-2">&amp;mut</span> <span class="ident">bytes</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).<span class="ident">unwrap</span>();
-        <span class="ident">bytes</span>
+<span class="kw">impl </span>CoinNonce {
+    <span class="kw">pub fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
+        bincode::serialize_into(<span class="kw-2">&amp;mut </span>bytes, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).unwrap();
+        bytes
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">from_bytes</span>(<span class="ident">bytes</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="self">Self</span> {
-        <span class="comment">// FIXME: handle errors or the client can be crashed</span>
-        <span class="ident">bincode::deserialize</span>(<span class="ident">bytes</span>).<span class="ident">unwrap</span>()
+    <span class="kw">pub fn </span>from_bytes(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self </span>{
+        <span class="comment">// FIXME: handle errors or the client can be crashed
+        </span>bincode::deserialize(bytes).unwrap()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">to_message</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">tbs::Message</span> {
-        <span class="ident">tbs::Message::from_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.<span class="ident">serialize</span>()[..])
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">SignRequest</span>&gt; <span class="kw">for</span> <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">sig_req</span>: <span class="ident">SignRequest</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">sig_req</span>
-            .<span class="number">0</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">amt</span>, <span class="ident">token</span>)| (<span class="ident">amt</span>, <span class="ident"><span class="kw">crate</span>::BlindToken</span>(<span class="ident">token</span>)))
-            .<span class="ident">collect</span>()
+    <span class="kw">pub fn </span>to_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; tbs::Message {
+        tbs::Message::from_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.serialize()[..])
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Ord</span>, <span class="ident">PartialOrd</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">InvalidAmountTierError</span>(<span class="kw">pub</span> <span class="ident">Amount</span>);
-
-<span class="kw">impl</span> <span class="ident">std::fmt::Display</span> <span class="kw">for</span> <span class="ident">InvalidAmountTierError</span> {
-    <span class="kw">fn</span> <span class="ident">fmt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">f</span>: <span class="kw-2">&amp;mut</span> <span class="ident">std::fmt::Formatter</span>&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; <span class="ident">std::fmt::Result</span> {
-        <span class="macro">write!</span>(<span class="ident">f</span>, <span class="string">&quot;Amount tier unknown to mint: {}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
+<span class="kw">impl </span>From&lt;SignRequest&gt; <span class="kw">for </span>Coins&lt;BlindToken&gt; {
+    <span class="kw">fn </span>from(sig_req: SignRequest) -&gt; <span class="self">Self </span>{
+        sig_req
+            .<span class="number">0
+            </span>.into_iter()
+            .map(|(amt, token)| (amt, <span class="kw">crate</span>::BlindToken(token)))
+            .collect()
     }
 }
 
-<span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MintShareErrors</span>(<span class="kw">pub</span> <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PeerErrorType</span>)&gt;);
+<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]</span>
+<span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">PeerErrorType</span> {
-    <span class="ident">InvalidSignature</span>,
-    <span class="ident">DifferentStructureSigShare</span>,
-    <span class="ident">DifferentNonce</span>,
-    <span class="ident">InvalidAmountTier</span>,
-}
-
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">CombineError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]</span>
-    <span class="ident">TooFewShares</span>(<span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(
-        <span class="string">&quot;Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid&quot;</span>
-    )]</span>
-    <span class="ident">TooFewValidShares</span>(<span class="ident">usize</span>, <span class="ident">usize</span>, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;We could not find our own contribution in the provided shares, so we have no validation reference&quot;</span>)]</span>
-    <span class="ident">NoOwnContribution</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peer {0} contributed {1} shares, 1 expected&quot;</span>)]</span>
-    <span class="ident">MultiplePeerContributions</span>(<span class="ident">PeerId</span>, <span class="ident">usize</span>),
-}
-
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">MintError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;One of the supplied coins had an invalid mint signature&quot;</span>)]</span>
-    <span class="ident">InvalidCoin</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Insufficient coin value: reissuing {0} but only got {1} in coins&quot;</span>)]</span>
-    <span class="ident">TooFewCoins</span>(<span class="ident">Amount</span>, <span class="ident">Amount</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;One of the supplied coins was already spent previously&quot;</span>)]</span>
-    <span class="ident">SpentCoin</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;One of the coins had an invalid amount not issued by the mint: {0:?}&quot;</span>)]</span>
-    <span class="ident">InvalidAmountTier</span>(<span class="ident">Amount</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;One of the coins had an invalid signature&quot;</span>)]</span>
-    <span class="ident">InvalidSignature</span>,
-}
-
-<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">InvalidAmountTierError</span>&gt; <span class="kw">for</span> <span class="ident">MintError</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">e</span>: <span class="ident">InvalidAmountTierError</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">MintError::InvalidAmountTier</span>(<span class="ident">e</span>.<span class="number">0</span>)
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InvalidAmountTierError {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
+        <span class="macro">write!</span>(f, <span class="string">&quot;Amount tier unknown to mint: {}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">test</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config</span>::{<span class="ident">FeeConsensus</span>, <span class="ident">MintClientConfig</span>};
-    <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">BlindToken</span>, <span class="ident">Coins</span>, <span class="ident">CombineError</span>, <span class="ident">Mint</span>, <span class="ident">MintConfig</span>, <span class="ident">PeerErrorType</span>};
-    <span class="kw">use</span> <span class="ident">minimint_api::config::GenerateConfig</span>;
-    <span class="kw">use</span> <span class="ident">minimint_api::db::mem_impl::MemDatabase</span>;
-    <span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">PeerId</span>};
-    <span class="kw">use</span> <span class="ident">rand::rngs::OsRng</span>;
-    <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-    <span class="kw">use</span> <span class="ident">tbs</span>::{<span class="ident">blind_message</span>, <span class="ident">unblind_signature</span>, <span class="ident">verify</span>, <span class="ident">AggregatePublicKey</span>, <span class="ident">Message</span>};
+<span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]</span>
+<span class="kw">pub struct </span>MintShareErrors(<span class="kw">pub </span>Vec&lt;(PeerId, PeerErrorType)&gt;);
 
-    <span class="kw">const</span> <span class="ident">THRESHOLD</span>: <span class="ident">usize</span> = <span class="number">1</span>;
-    <span class="kw">const</span> <span class="ident">MINTS</span>: <span class="ident">usize</span> = <span class="number">5</span>;
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]</span>
+<span class="kw">pub enum </span>PeerErrorType {
+    InvalidSignature,
+    DifferentStructureSigShare,
+    DifferentNonce,
+    InvalidAmountTier,
+}
 
-    <span class="kw">fn</span> <span class="ident">build_configs</span>() -&gt; (<span class="ident">Vec</span>&lt;<span class="ident">MintConfig</span>&gt;, <span class="ident">MintClientConfig</span>) {
-        <span class="kw">let</span> <span class="ident">peers</span> = (<span class="number">0</span>..<span class="ident">MINTS</span> <span class="kw">as</span> <span class="ident">u16</span>).<span class="ident">map</span>(<span class="ident">PeerId::from</span>).<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) = <span class="ident">MintConfig::trusted_dealer_gen</span>(
-            <span class="kw-2">&amp;</span><span class="ident">peers</span>,
-            <span class="ident">THRESHOLD</span>,
-            <span class="kw-2">&amp;</span>[<span class="ident">Amount::from_sat</span>(<span class="number">1</span>)],
-            <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>(),
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]</span>
+<span class="kw">pub enum </span>CombineError {
+    <span class="attribute">#[error(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]</span>
+    TooFewShares(Vec&lt;PeerId&gt;, usize),
+    <span class="attribute">#[error(
+        <span class="string">&quot;Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid&quot;
+    </span>)]</span>
+    TooFewValidShares(usize, usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;We could not find our own contribution in the provided shares, so we have no validation reference&quot;</span>)]</span>
+    NoOwnContribution,
+    <span class="attribute">#[error(<span class="string">&quot;Peer {0} contributed {1} shares, 1 expected&quot;</span>)]</span>
+    MultiplePeerContributions(PeerId, usize),
+}
+
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]</span>
+<span class="kw">pub enum </span>MintError {
+    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins had an invalid mint signature&quot;</span>)]</span>
+    InvalidCoin,
+    <span class="attribute">#[error(<span class="string">&quot;Insufficient coin value: reissuing {0} but only got {1} in coins&quot;</span>)]</span>
+    TooFewCoins(Amount, Amount),
+    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins was already spent previously&quot;</span>)]</span>
+    SpentCoin,
+    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid amount not issued by the mint: {0:?}&quot;</span>)]</span>
+    InvalidAmountTier(Amount),
+    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid signature&quot;</span>)]</span>
+    InvalidSignature,
+}
+
+<span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>MintError {
+    <span class="kw">fn </span>from(e: InvalidAmountTierError) -&gt; <span class="self">Self </span>{
+        MintError::InvalidAmountTier(e.<span class="number">0</span>)
+    }
+}
+
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>test {
+    <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
+    <span class="kw">use crate</span>::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
+    <span class="kw">use </span>minimint_api::config::GenerateConfig;
+    <span class="kw">use </span>minimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>minimint_api::{Amount, PeerId};
+    <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+
+    <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
+    <span class="kw">const </span>MINTS: usize = <span class="number">5</span>;
+
+    <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;MintConfig&gt;, MintClientConfig) {
+        <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>(mint_cfg, client_cfg) = MintConfig::trusted_dealer_gen(
+            <span class="kw-2">&amp;</span>peers,
+            THRESHOLD,
+            <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>)],
+            OsRng::new().unwrap(),
         );
 
-        (<span class="ident">mint_cfg</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">c</span>)| <span class="ident">c</span>).<span class="ident">collect</span>(), <span class="ident">client_cfg</span>)
+        (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)
     }
 
-    <span class="kw">fn</span> <span class="ident">build_mints</span>() -&gt; (<span class="ident">AggregatePublicKey</span>, <span class="ident">Vec</span>&lt;<span class="ident">Mint</span>&gt;) {
-        <span class="kw">let</span> (<span class="ident">mint_cfg</span>, <span class="ident">client_cfg</span>) = <span class="ident">build_configs</span>();
-        <span class="kw">let</span> <span class="ident">mints</span> = <span class="ident">mint_cfg</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|<span class="ident">config</span>| <span class="ident">Mint::new</span>(<span class="ident">config</span>, <span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>, <span class="ident">Arc::new</span>(<span class="ident">MemDatabase::new</span>())))
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">fn </span>build_mints() -&gt; (AggregatePublicKey, Vec&lt;Mint&gt;) {
+        <span class="kw">let </span>(mint_cfg, client_cfg) = build_configs();
+        <span class="kw">let </span>mints = mint_cfg
+            .into_iter()
+            .map(|config| Mint::new(config, MINTS - THRESHOLD, Arc::new(MemDatabase::new())))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">agg_pk</span> = <span class="kw-2">*</span><span class="ident">client_cfg</span>.<span class="ident">tbs_pks</span>.<span class="ident">keys</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>();
+        <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg.tbs_pks.keys.get(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap();
 
-        (<span class="ident">agg_pk</span>, <span class="ident">mints</span>)
+        (agg_pk, mints)
     }
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">test_issuance</span>() {
-        <span class="kw">let</span> (<span class="ident">pk</span>, <span class="kw-2">mut</span> <span class="ident">mints</span>) = <span class="ident">build_mints</span>();
+    <span class="attribute">#[test_log::test]</span>
+    <span class="kw">fn </span>test_issuance() {
+        <span class="kw">let </span>(pk, <span class="kw-2">mut </span>mints) = build_mints();
 
-        <span class="kw">let</span> <span class="ident">nonce</span> = <span class="ident">Message::from_bytes</span>(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
-        <span class="kw">let</span> (<span class="ident">bkey</span>, <span class="ident">bmsg</span>) = <span class="ident">blind_message</span>(<span class="ident">nonce</span>);
-        <span class="kw">let</span> <span class="ident">blind_tokens</span> = <span class="ident">Coins</span> {
-            <span class="ident">coins</span>: <span class="macro">vec!</span>[(
-                <span class="ident">Amount::from_sat</span>(<span class="number">1</span>),
-                <span class="macro">vec!</span>[<span class="ident">BlindToken</span>(<span class="ident">bmsg</span>), <span class="ident">BlindToken</span>(<span class="ident">bmsg</span>)],
+        <span class="kw">let </span>nonce = Message::from_bytes(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
+        <span class="kw">let </span>(bkey, bmsg) = blind_message(nonce);
+        <span class="kw">let </span>blind_tokens = Coins {
+            coins: <span class="macro">vec!</span>[(
+                Amount::from_sat(<span class="number">1</span>),
+                <span class="macro">vec!</span>[BlindToken(bmsg), BlindToken(bmsg)],
             )]
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">collect</span>(),
+            .into_iter()
+            .collect(),
         };
 
-        <span class="kw">let</span> <span class="ident">psigs</span> = <span class="ident">mints</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">enumerate</span>()
-            .<span class="ident">map</span>(<span class="kw">move</span> |(<span class="ident">id</span>, <span class="ident">m</span>)| {
+        <span class="kw">let </span>psigs = mints
+            .iter()
+            .enumerate()
+            .map(<span class="kw">move </span>|(id, m)| {
                 (
-                    <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>),
-                    <span class="ident">m</span>.<span class="ident">blind_sign</span>(<span class="ident">blind_tokens</span>.<span class="ident">clone</span>()).<span class="ident">unwrap</span>(),
+                    PeerId::from(id <span class="kw">as </span>u16),
+                    m.blind_sign(blind_tokens.clone()).unwrap(),
                 )
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="ident">our_sig</span> = <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span>.<span class="ident">clone</span>();
-        <span class="kw">let</span> <span class="ident">mint</span> = <span class="kw-2">&amp;mut</span> <span class="ident">mints</span>[<span class="number">0</span>];
+        <span class="kw">let </span>our_sig = psigs[<span class="number">0</span>].<span class="number">1</span>.clone();
+        <span class="kw">let </span>mint = <span class="kw-2">&amp;mut </span>mints[<span class="number">0</span>];
 
-        <span class="comment">// Test happy path</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>.<span class="ident">clone</span>());
-        <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
+        <span class="comment">// Test happy path
+        </span><span class="kw">let </span>(bsig_res, errors) = mint.combine(<span class="prelude-val">Some</span>(our_sig.clone()), psigs.clone());
+        <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        <span class="kw">let</span> <span class="ident">bsig</span> = <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">bsig</span>.<span class="number">0</span>.<span class="ident">amount</span>(), <span class="ident">Amount::from_sat</span>(<span class="number">2</span>));
+        <span class="kw">let </span>bsig = bsig_res.unwrap();
+        <span class="macro">assert_eq!</span>(bsig.<span class="number">0</span>.amount(), Amount::from_sat(<span class="number">2</span>));
 
-        <span class="ident">bsig</span>.<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="kw">_</span>, <span class="ident">bs</span>)| {
-            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
-            <span class="macro">assert!</span>(<span class="ident">verify</span>(<span class="ident">nonce</span>, <span class="ident">sig</span>, <span class="ident">pk</span>));
+        bsig.<span class="number">0</span>.iter().for_each(|(<span class="kw">_</span>, bs)| {
+            <span class="kw">let </span>sig = unblind_signature(bkey, <span class="kw-2">*</span>bs);
+            <span class="macro">assert!</span>(verify(nonce, sig, pk));
         });
 
-        <span class="comment">// Test threshold sig shares</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) =
-            <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>)].<span class="ident">to_vec</span>());
-        <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
+        <span class="comment">// Test threshold sig shares
+        </span><span class="kw">let </span>(bsig_res, errors) =
+            mint.combine(<span class="prelude-val">Some</span>(our_sig.clone()), psigs[..(MINTS - THRESHOLD)].to_vec());
+        <span class="macro">assert!</span>(bsig_res.is_ok());
+        <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        <span class="ident">bsig_res</span>.<span class="ident">unwrap</span>().<span class="number">0</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(|(<span class="kw">_</span>, <span class="ident">bs</span>)| {
-            <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">unblind_signature</span>(<span class="ident">bkey</span>, <span class="kw-2">*</span><span class="ident">bs</span>);
-            <span class="macro">assert!</span>(<span class="ident">verify</span>(<span class="ident">nonce</span>, <span class="ident">sig</span>, <span class="ident">pk</span>));
+        bsig_res.unwrap().<span class="number">0</span>.iter().for_each(|(<span class="kw">_</span>, bs)| {
+            <span class="kw">let </span>sig = unblind_signature(bkey, <span class="kw-2">*</span>bs);
+            <span class="macro">assert!</span>(verify(nonce, sig, pk));
         });
 
-        <span class="comment">// Test too few sig shares</span>
-        <span class="kw">let</span> <span class="ident">few_sigs</span> = <span class="ident">psigs</span>[..(<span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span> - <span class="number">1</span>)].<span class="ident">to_vec</span>();
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()), <span class="ident">few_sigs</span>.<span class="ident">clone</span>());
+        <span class="comment">// Test too few sig shares
+        </span><span class="kw">let </span>few_sigs = psigs[..(MINTS - THRESHOLD - <span class="number">1</span>)].to_vec();
+        <span class="kw">let </span>(bsig_res, errors) = mint.combine(<span class="prelude-val">Some</span>(our_sig.clone()), few_sigs.clone());
         <span class="macro">assert_eq!</span>(
-            <span class="ident">bsig_res</span>,
-            <span class="prelude-val">Err</span>(<span class="ident">CombineError::TooFewShares</span>(
-                <span class="ident">few_sigs</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="ident">peer</span>).<span class="ident">cloned</span>().<span class="ident">collect</span>(),
-                <span class="ident">MINTS</span> - <span class="ident">THRESHOLD</span>
+            bsig_res,
+            <span class="prelude-val">Err</span>(CombineError::TooFewShares(
+                few_sigs.iter().map(|(peer, <span class="kw">_</span>)| peer).cloned().collect(),
+                MINTS - THRESHOLD
             ))
         );
-        <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
+        <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        <span class="comment">// Test no own share</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(<span class="prelude-val">None</span>, <span class="ident">psigs</span>[<span class="number">1</span>..].<span class="ident">to_vec</span>());
-        <span class="macro">assert_eq!</span>(<span class="ident">bsig_res</span>, <span class="prelude-val">Err</span>(<span class="ident">CombineError::NoOwnContribution</span>));
-        <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
+        <span class="comment">// Test no own share
+        </span><span class="kw">let </span>(bsig_res, errors) = mint.combine(<span class="prelude-val">None</span>, psigs[<span class="number">1</span>..].to_vec());
+        <span class="macro">assert_eq!</span>(bsig_res, <span class="prelude-val">Err</span>(CombineError::NoOwnContribution));
+        <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        <span class="comment">// Test multiple peer contributions</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
-            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
-            <span class="ident">psigs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">cloned</span>()
-                .<span class="ident">chain</span>(<span class="ident">std::iter::once</span>(<span class="ident">psigs</span>[<span class="number">0</span>].<span class="ident">clone</span>()))
-                .<span class="ident">collect</span>(),
+        <span class="comment">// Test multiple peer contributions
+        </span><span class="kw">let </span>(bsig_res, errors) = mint.combine(
+            <span class="prelude-val">Some</span>(our_sig.clone()),
+            psigs
+                .iter()
+                .cloned()
+                .chain(std::iter::once(psigs[<span class="number">0</span>].clone()))
+                .collect(),
         );
         <span class="macro">assert_eq!</span>(
-            <span class="ident">bsig_res</span>,
-            <span class="prelude-val">Err</span>(<span class="ident">CombineError::MultiplePeerContributions</span>(<span class="ident">PeerId::from</span>(<span class="number">0</span>), <span class="number">2</span>))
+            bsig_res,
+            <span class="prelude-val">Err</span>(CombineError::MultiplePeerContributions(PeerId::from(<span class="number">0</span>), <span class="number">2</span>))
         );
-        <span class="macro">assert!</span>(<span class="ident">errors</span>.<span class="number">0</span>.<span class="ident">is_empty</span>());
+        <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        <span class="comment">// Test wrong length response</span>
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
-            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
-            <span class="ident">psigs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psigs</span>)| {
-                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">1</span>) {
-                        <span class="ident">psigs</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>().<span class="ident">pop</span>();
+        <span class="comment">// Test wrong length response
+        </span><span class="kw">let </span>(bsig_res, errors) = mint.combine(
+            <span class="prelude-val">Some</span>(our_sig.clone()),
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, <span class="kw-2">mut </span>psigs)| {
+                    <span class="kw">if </span>peer == PeerId::from(<span class="number">1</span>) {
+                        psigs.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap().pop();
                     }
-                    (<span class="ident">peer</span>, <span class="ident">psigs</span>)
+                    (peer, psigs)
                 })
-                .<span class="ident">collect</span>(),
+                .collect(),
         );
-        <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">errors</span>
-            .<span class="number">0</span>
-            .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">1</span>), <span class="ident">PeerErrorType::DifferentStructureSigShare</span>)));
+        <span class="macro">assert!</span>(bsig_res.is_ok());
+        <span class="macro">assert!</span>(errors
+            .<span class="number">0
+            </span>.contains(<span class="kw-2">&amp;</span>(PeerId::from(<span class="number">1</span>), PeerErrorType::DifferentStructureSigShare)));
 
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
-            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>.<span class="ident">clone</span>()),
-            <span class="ident">psigs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)| {
-                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">2</span>) {
-                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">1</span> =
-                            <span class="ident">psigs</span>[<span class="number">0</span>].<span class="number">1</span> .<span class="number">0</span>.<span class="ident">coins</span>[<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)][<span class="number">0</span>].<span class="number">1</span>;
+        <span class="kw">let </span>(bsig_res, errors) = mint.combine(
+            <span class="prelude-val">Some</span>(our_sig.clone()),
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, <span class="kw-2">mut </span>psig)| {
+                    <span class="kw">if </span>peer == PeerId::from(<span class="number">2</span>) {
+                        psig.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">1 </span>=
+                            psigs[<span class="number">0</span>].<span class="number">1 </span>.<span class="number">0</span>.coins[<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)][<span class="number">0</span>].<span class="number">1</span>;
                     }
-                    (<span class="ident">peer</span>, <span class="ident">psig</span>)
+                    (peer, psig)
                 })
-                .<span class="ident">collect</span>(),
+                .collect(),
         );
-        <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">errors</span>
-            .<span class="number">0</span>
-            .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">2</span>), <span class="ident">PeerErrorType::InvalidSignature</span>)));
+        <span class="macro">assert!</span>(bsig_res.is_ok());
+        <span class="macro">assert!</span>(errors
+            .<span class="number">0
+            </span>.contains(<span class="kw-2">&amp;</span>(PeerId::from(<span class="number">2</span>), PeerErrorType::InvalidSignature)));
 
-        <span class="kw">let</span> (<span class="ident">_bk</span>, <span class="ident">bmsg</span>) = <span class="ident">blind_message</span>(<span class="ident">Message::from_bytes</span>(<span class="string">b&quot;test&quot;</span>));
-        <span class="kw">let</span> (<span class="ident">bsig_res</span>, <span class="ident">errors</span>) = <span class="ident">mint</span>.<span class="ident">combine</span>(
-            <span class="prelude-val">Some</span>(<span class="ident">our_sig</span>),
-            <span class="ident">psigs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">cloned</span>()
-                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">psig</span>)| {
-                    <span class="kw">if</span> <span class="ident">peer</span> == <span class="ident">PeerId::from</span>(<span class="number">3</span>) {
-                        <span class="ident">psig</span>.<span class="number">0</span>.<span class="ident">coins</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">Amount::from_sat</span>(<span class="number">1</span>)).<span class="ident">unwrap</span>()[<span class="number">0</span>].<span class="number">0</span> = <span class="ident">bmsg</span>;
+        <span class="kw">let </span>(_bk, bmsg) = blind_message(Message::from_bytes(<span class="string">b&quot;test&quot;</span>));
+        <span class="kw">let </span>(bsig_res, errors) = mint.combine(
+            <span class="prelude-val">Some</span>(our_sig),
+            psigs
+                .iter()
+                .cloned()
+                .map(|(peer, <span class="kw-2">mut </span>psig)| {
+                    <span class="kw">if </span>peer == PeerId::from(<span class="number">3</span>) {
+                        psig.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">0 </span>= bmsg;
                     }
-                    (<span class="ident">peer</span>, <span class="ident">psig</span>)
+                    (peer, psig)
                 })
-                .<span class="ident">collect</span>(),
+                .collect(),
         );
-        <span class="macro">assert!</span>(<span class="ident">bsig_res</span>.<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">errors</span>
-            .<span class="number">0</span>
-            .<span class="ident">contains</span>(<span class="kw-2">&amp;</span>(<span class="ident">PeerId::from</span>(<span class="number">3</span>), <span class="ident">PeerErrorType::DifferentNonce</span>)));
+        <span class="macro">assert!</span>(bsig_res.is_ok());
+        <span class="macro">assert!</span>(errors
+            .<span class="number">0
+            </span>.contains(<span class="kw-2">&amp;</span>(PeerId::from(<span class="number">3</span>), PeerErrorType::DifferentNonce)));
     }
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="attribute">#[<span class="ident">should_panic</span>(<span class="ident">expected</span> = <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]</span>
-    <span class="kw">fn</span> <span class="ident">test_new_panic_without_own_pub_key</span>() {
-        <span class="kw">let</span> (<span class="ident">mint_server_cfg1</span>, <span class="kw">_</span>) = <span class="ident">build_configs</span>();
-        <span class="kw">let</span> (<span class="ident">mint_server_cfg2</span>, <span class="kw">_</span>) = <span class="ident">build_configs</span>();
+    <span class="attribute">#[test_log::test]</span>
+    <span class="attribute">#[should_panic(expected = <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]</span>
+    <span class="kw">fn </span>test_new_panic_without_own_pub_key() {
+        <span class="kw">let </span>(mint_server_cfg1, <span class="kw">_</span>) = build_configs();
+        <span class="kw">let </span>(mint_server_cfg2, <span class="kw">_</span>) = build_configs();
 
-        <span class="ident">Mint::new</span>(
-            <span class="ident">MintConfig</span> {
-                <span class="ident">tbs_sks</span>: <span class="ident">mint_server_cfg1</span>[<span class="number">0</span>].<span class="ident">tbs_sks</span>.<span class="ident">clone</span>(),
-                <span class="ident">peer_tbs_pks</span>: <span class="ident">mint_server_cfg2</span>[<span class="number">0</span>].<span class="ident">peer_tbs_pks</span>.<span class="ident">clone</span>(),
-                <span class="ident">fee_consensus</span>: <span class="ident">FeeConsensus::default</span>(),
+        Mint::new(
+            MintConfig {
+                tbs_sks: mint_server_cfg1[<span class="number">0</span>].tbs_sks.clone(),
+                peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>].peer_tbs_pks.clone(),
+                fee_consensus: FeeConsensus::default(),
             },
-            <span class="ident">THRESHOLD</span>,
-            <span class="ident">Arc::new</span>(<span class="ident">MemDatabase::new</span>()),
+            THRESHOLD,
+            Arc::new(MemDatabase::new()),
         );
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

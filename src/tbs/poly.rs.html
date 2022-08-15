@@ -94,101 +94,101 @@
 <span id="94">94</span>
 <span id="95">95</span>
 <span id="96">96</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::FromRandom</span>;
-<span class="kw">use</span> <span class="ident">ff::Field</span>;
-<span class="kw">use</span> <span class="ident">rand::RngCore</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">std::marker::PhantomData</span>;
-<span class="kw">use</span> <span class="ident">std::ops</span>::{<span class="ident">Add</span>, <span class="ident">AddAssign</span>, <span class="ident">Mul</span>, <span class="ident">MulAssign</span>};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::FromRandom;
+<span class="kw">use </span>ff::Field;
+<span class="kw">use </span>rand::RngCore;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::marker::PhantomData;
+<span class="kw">use </span>std::ops::{Add, AddAssign, Mul, MulAssign};
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Poly</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">G</span>: <span class="ident">Debug</span>,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>Poly&lt;G, S&gt;
+<span class="kw">where
+    </span>G: Debug,
 {
-    <span class="ident">coefficients</span>: <span class="ident">Vec</span>&lt;<span class="ident">G</span>&gt;,
-    <span class="ident">_pd</span>: <span class="ident">PhantomData</span>&lt;<span class="ident">S</span>&gt;,
+    coefficients: Vec&lt;G&gt;,
+    _pd: PhantomData&lt;S&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt; <span class="ident">Poly</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">G</span>: <span class="ident">Debug</span> + <span class="ident">MulAssign</span>&lt;<span class="ident">S</span>&gt; + <span class="ident">AddAssign</span>&lt;<span class="ident">G</span>&gt; + <span class="ident">FromRandom</span> + <span class="ident">Copy</span>,
-    <span class="ident">S</span>: <span class="ident">Copy</span>,
+<span class="kw">impl</span>&lt;G, S&gt; Poly&lt;G, S&gt;
+<span class="kw">where
+    </span>G: Debug + MulAssign&lt;S&gt; + AddAssign&lt;G&gt; + FromRandom + Copy,
+    S: Copy,
 {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">random</span>(<span class="ident">degree</span>: <span class="ident">usize</span>, <span class="ident">rng</span>: <span class="kw-2">&amp;mut</span> <span class="kw">impl</span> <span class="ident">RngCore</span>) -&gt; <span class="self">Self</span> {
-        <span class="macro">assert_ne!</span>(<span class="ident">degree</span>, <span class="ident">usize::max_value</span>());
-        <span class="kw">let</span> <span class="ident">coefficients</span> = (<span class="number">0</span>..=<span class="ident">degree</span>).<span class="ident">map</span>(|<span class="kw">_</span>| <span class="ident">G::from_random</span>(<span class="ident">rng</span>)).<span class="ident">collect</span>();
-        <span class="ident">Poly</span> {
-            <span class="ident">coefficients</span>,
-            <span class="ident">_pd</span>: <span class="ident">PhantomData</span>,
+    <span class="kw">pub fn </span>random(degree: usize, rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>RngCore) -&gt; <span class="self">Self </span>{
+        <span class="macro">assert_ne!</span>(degree, usize::max_value());
+        <span class="kw">let </span>coefficients = (<span class="number">0</span>..=degree).map(|<span class="kw">_</span>| G::from_random(rng)).collect();
+        Poly {
+            coefficients,
+            _pd: PhantomData,
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">evaluate</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">x</span>: <span class="kw">impl</span> <span class="ident">Into</span>&lt;<span class="ident">S</span>&gt;) -&gt; <span class="ident">G</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">result</span> = <span class="kw-2">*</span><span class="self">self</span>
-            .<span class="ident">coefficients</span>
-            .<span class="ident">last</span>()
-            .<span class="ident">expect</span>(<span class="string">&quot;Polynomial has no coefficients&quot;</span>);
-        <span class="kw">let</span> <span class="ident">x</span>: <span class="ident">S</span> = <span class="ident">x</span>.<span class="ident">into</span>();
-        <span class="kw">for</span> <span class="kw-2">&amp;</span><span class="ident">c</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">coefficients</span>.<span class="ident">iter</span>().<span class="ident">rev</span>().<span class="ident">skip</span>(<span class="number">1</span>) {
-            <span class="ident">result</span>.<span class="ident">mul_assign</span>(<span class="ident">x</span>);
-            <span class="ident">result</span>.<span class="ident">add_assign</span>(<span class="ident">c</span>);
+    <span class="kw">pub fn </span>evaluate(<span class="kw-2">&amp;</span><span class="self">self</span>, x: <span class="kw">impl </span>Into&lt;S&gt;) -&gt; G {
+        <span class="kw">let </span><span class="kw-2">mut </span>result = <span class="kw-2">*</span><span class="self">self
+            </span>.coefficients
+            .last()
+            .expect(<span class="string">&quot;Polynomial has no coefficients&quot;</span>);
+        <span class="kw">let </span>x: S = x.into();
+        <span class="kw">for </span><span class="kw-2">&amp;</span>c <span class="kw">in </span><span class="self">self</span>.coefficients.iter().rev().skip(<span class="number">1</span>) {
+            result.mul_assign(x);
+            result.add_assign(c);
         }
-        <span class="ident">result</span>
+        result
     }
 }
 
-<span class="doccomment">/// Interpolates the constant factor of a polynomial defined by the points supplied in `elements`.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// # Panics</span>
-<span class="doccomment">/// If less than 2 points are supplied.</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">interpolate_zero</span>&lt;<span class="ident">G</span>, <span class="ident">S</span>&gt;(<span class="ident">elements</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">S</span>, <span class="ident">G</span>)&gt; + <span class="ident">Clone</span>) -&gt; <span class="ident">G</span>
-<span class="kw">where</span>
-    <span class="ident">G</span>: <span class="ident">Copy</span> + <span class="ident">Mul</span>&lt;<span class="ident">S</span>, <span class="ident">Output</span> = <span class="ident">G</span>&gt; + <span class="ident">Add</span>&lt;<span class="ident">G</span>, <span class="ident">Output</span> = <span class="ident">G</span>&gt;,
-    <span class="ident">S</span>: <span class="ident">Copy</span> + <span class="ident">Field</span>,
+<span class="doccomment">/// Interpolates the constant factor of a polynomial defined by the points supplied in `elements`.
+///
+/// # Panics
+/// If less than 2 points are supplied.
+</span><span class="kw">pub fn </span>interpolate_zero&lt;G, S&gt;(elements: <span class="kw">impl </span>Iterator&lt;Item = (S, G)&gt; + Clone) -&gt; G
+<span class="kw">where
+    </span>G: Copy + Mul&lt;S, Output = G&gt; + Add&lt;G, Output = G&gt;,
+    S: Copy + Field,
 {
-    <span class="kw">let</span> <span class="ident">elements_closure</span> = <span class="ident">elements</span>.<span class="ident">clone</span>();
-    <span class="kw">let</span> <span class="ident">lagrange_coefficient</span> = <span class="kw">move</span> |<span class="ident">i</span>: <span class="ident">usize</span>| -&gt; <span class="ident">S</span> {
-        <span class="kw">let</span> <span class="ident">xi</span> = <span class="ident">elements_closure</span>.<span class="ident">clone</span>().<span class="ident">nth</span>(<span class="ident">i</span>).<span class="ident">unwrap</span>().<span class="number">0</span>;
+    <span class="kw">let </span>elements_closure = elements.clone();
+    <span class="kw">let </span>lagrange_coefficient = <span class="kw">move </span>|i: usize| -&gt; S {
+        <span class="kw">let </span>xi = elements_closure.clone().nth(i).unwrap().<span class="number">0</span>;
 
-        <span class="ident">elements_closure</span>
-            .<span class="ident">clone</span>()
-            .<span class="ident">enumerate</span>()
-            .<span class="ident">filter_map</span>(|(<span class="ident">idx</span>, (<span class="ident">x</span>, <span class="kw">_</span>))| {
-                <span class="kw">if</span> <span class="ident">idx</span> != <span class="ident">i</span> {
-                    <span class="prelude-val">Some</span>(-<span class="ident">x</span> * (<span class="ident">xi</span> - <span class="ident">x</span>).<span class="ident">invert</span>().<span class="ident">unwrap</span>())
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">None</span>
-                }
+        elements_closure
+            .clone()
+            .enumerate()
+            .filter_map(|(idx, (x, <span class="kw">_</span>))| {
+                <span class="kw">if </span>idx != i {
+                    <span class="prelude-val">Some</span>(-x * (xi - x).invert().unwrap())
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
             })
-            .<span class="ident">reduce</span>(|<span class="ident">a</span>, <span class="ident">b</span>| <span class="ident">a</span> * <span class="ident">b</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Elements may not be empty!&quot;</span>)
+            .reduce(|a, b| a * b)
+            .expect(<span class="string">&quot;Elements may not be empty!&quot;</span>)
     };
 
-    <span class="ident">elements</span>
-        .<span class="ident">enumerate</span>()
-        .<span class="ident">map</span>(|(<span class="ident">idx</span>, (<span class="kw">_</span>, <span class="ident">y</span>))| <span class="ident">y</span> * <span class="ident">lagrange_coefficient</span>(<span class="ident">idx</span>))
-        .<span class="ident">reduce</span>(|<span class="ident">a</span>, <span class="ident">b</span>| <span class="ident">a</span> + <span class="ident">b</span>)
-        .<span class="ident">expect</span>(<span class="string">&quot;Elements may not be empty!&quot;</span>)
+    elements
+        .enumerate()
+        .map(|(idx, (<span class="kw">_</span>, y))| y * lagrange_coefficient(idx))
+        .reduce(|a, b| a + b)
+        .expect(<span class="string">&quot;Elements may not be empty!&quot;</span>)
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="attribute">#[<span class="ident">test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">test_interpolate_simple</span>() {
-        <span class="kw">use</span> <span class="ident">bls12_381::Scalar</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="attribute">#[test]</span>
+    <span class="kw">fn </span>test_interpolate_simple() {
+        <span class="kw">use </span>bls12_381::Scalar;
 
-        <span class="comment">// f(x) = 6 + 3x + 5x^2</span>
-        <span class="kw">let</span> <span class="ident">vals</span> = <span class="macro">vec!</span>[
-            (<span class="ident">Scalar::from</span>(<span class="number">1</span>), <span class="ident">Scalar::from</span>(<span class="number">14</span>)),
-            (<span class="ident">Scalar::from</span>(<span class="number">2</span>), <span class="ident">Scalar::from</span>(<span class="number">32</span>)),
-            (<span class="ident">Scalar::from</span>(<span class="number">3</span>), <span class="ident">Scalar::from</span>(<span class="number">60</span>)),
+        <span class="comment">// f(x) = 6 + 3x + 5x^2
+        </span><span class="kw">let </span>vals = <span class="macro">vec!</span>[
+            (Scalar::from(<span class="number">1</span>), Scalar::from(<span class="number">14</span>)),
+            (Scalar::from(<span class="number">2</span>), Scalar::from(<span class="number">32</span>)),
+            (Scalar::from(<span class="number">3</span>), Scalar::from(<span class="number">60</span>)),
         ];
         <span class="macro">assert_eq!</span>(
-            <span class="ident"><span class="kw">crate</span>::poly::interpolate_zero</span>(<span class="ident">vals</span>.<span class="ident">into_iter</span>()),
-            <span class="ident">Scalar::from</span>(<span class="number">6</span>)
+            <span class="kw">crate</span>::poly::interpolate_zero(vals.into_iter()),
+            Scalar::from(<span class="number">6</span>)
         );
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

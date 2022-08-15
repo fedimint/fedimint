@@ -45,52 +45,52 @@
 <span id="45">45</span>
 <span id="46">46</span>
 <span id="47">47</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::MinimintConsensus</span>;
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::consensus::MinimintConsensus;
+<span class="kw">use </span>async_trait::async_trait;
 
-<span class="kw">use</span> <span class="ident">minimint_api::module::interconnect::ModuleInterconect</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::ApiError</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::FederationModule</span>;
-<span class="kw">use</span> <span class="ident">rand::CryptoRng</span>;
-<span class="kw">use</span> <span class="ident">secp256k1_zkp::rand::RngCore</span>;
-<span class="kw">use</span> <span class="ident">serde_json::Value</span>;
+<span class="kw">use </span>minimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>minimint_api::module::ApiError;
+<span class="kw">use </span>minimint_api::FederationModule;
+<span class="kw">use </span>rand::CryptoRng;
+<span class="kw">use </span>secp256k1_zkp::rand::RngCore;
+<span class="kw">use </span>serde_json::Value;
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintInterconnect</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; {
-    <span class="kw">pub</span> <span class="ident">minimint</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;,
+<span class="kw">pub struct </span>MinimintInterconnect&lt;<span class="lifetime">&#39;a</span>, R: RngCore + CryptoRng&gt; {
+    <span class="kw">pub </span>minimint: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MinimintConsensus&lt;R&gt;,
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">R</span>&gt; <span class="ident">ModuleInterconect</span> <span class="kw">for</span> <span class="ident">MinimintInterconnect</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">R</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+<span class="attribute">#[async_trait]</span>
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, R&gt; ModuleInterconect <span class="kw">for </span>MinimintInterconnect&lt;<span class="lifetime">&#39;a</span>, R&gt;
+<span class="kw">where
+    </span>R: RngCore + CryptoRng,
 {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span>(
+    <span class="kw">async fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
-        <span class="ident">path</span>: <span class="ident">String</span>,
-        <span class="ident">data</span>: <span class="ident">Value</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Value</span>, <span class="ident">ApiError</span>&gt; {
-        <span class="kw">match</span> <span class="ident">module</span> {
-            <span class="string">&quot;wallet&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">wallet</span>, <span class="ident">path</span>, <span class="ident">data</span>).<span class="kw">await</span>,
-            <span class="string">&quot;mint&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">mint</span>, <span class="ident">path</span>, <span class="ident">data</span>).<span class="kw">await</span>,
-            <span class="string">&quot;ln&quot;</span> =&gt; <span class="ident">call_internal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">minimint</span>.<span class="ident">ln</span>, <span class="ident">path</span>, <span class="ident">data</span>).<span class="kw">await</span>,
-            <span class="kw">_</span> =&gt; <span class="prelude-val">Err</span>(<span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Module not found&quot;</span>))),
+        module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        path: String,
+        data: Value,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Value, ApiError&gt; {
+        <span class="kw">match </span>module {
+            <span class="string">&quot;wallet&quot; </span>=&gt; call_internal(<span class="kw-2">&amp;</span><span class="self">self</span>.minimint.wallet, path, data).<span class="kw">await</span>,
+            <span class="string">&quot;mint&quot; </span>=&gt; call_internal(<span class="kw-2">&amp;</span><span class="self">self</span>.minimint.mint, path, data).<span class="kw">await</span>,
+            <span class="string">&quot;ln&quot; </span>=&gt; call_internal(<span class="kw-2">&amp;</span><span class="self">self</span>.minimint.ln, path, data).<span class="kw">await</span>,
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ApiError::not_found(String::from(<span class="string">&quot;Module not found&quot;</span>))),
         }
     }
 }
 
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call_internal</span>&lt;<span class="ident">M</span>: <span class="ident">FederationModule</span> + <span class="lifetime">&#39;static</span>&gt;(
-    <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">M</span>,
-    <span class="ident">path</span>: <span class="ident">String</span>,
-    <span class="ident">data</span>: <span class="ident">Value</span>,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span>&gt; {
-    <span class="kw">let</span> <span class="ident">endpoint</span> = <span class="ident">module</span>
-        .<span class="ident">api_endpoints</span>()
-        .<span class="ident">iter</span>()
-        .<span class="ident">find</span>(|<span class="ident">endpoint</span>| <span class="ident">endpoint</span>.<span class="ident">path</span> == <span class="ident">path</span>)
-        .<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Method not found&quot;</span>)))<span class="question-mark">?</span>;
+<span class="kw">async fn </span>call_internal&lt;M: FederationModule + <span class="lifetime">&#39;static</span>&gt;(
+    module: <span class="kw-2">&amp;</span>M,
+    path: String,
+    data: Value,
+) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt; {
+    <span class="kw">let </span>endpoint = module
+        .api_endpoints()
+        .iter()
+        .find(|endpoint| endpoint.path == path)
+        .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Method not found&quot;</span>)))<span class="question-mark">?</span>;
 
-    (<span class="ident">endpoint</span>.<span class="ident">handler</span>)(<span class="ident">module</span>, <span class="ident">data</span>).<span class="kw">await</span>
-}
+    (endpoint.handler)(module, data).<span class="kw">await
+</span>}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

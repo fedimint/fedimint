@@ -66,73 +66,73 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::WalletConfig</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">bitcoind::BitcoindRpc</span>, <span class="ident">Feerate</span>};
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Block</span>, <span class="ident">BlockHash</span>, <span class="ident">Network</span>, <span class="ident">Transaction</span>};
-<span class="kw">use</span> <span class="ident">bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode</span>;
-<span class="kw">use</span> <span class="ident">bitcoincore_rpc</span>::{<span class="ident">Auth</span>, <span class="ident">RpcApi</span>};
-<span class="kw">use</span> <span class="ident">tracing::warn</span>;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
+<span class="kw">use crate</span>::{bitcoind::BitcoindRpc, Feerate};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
+<span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
+<span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
+<span class="kw">use </span>tracing::warn;
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">bitcoind_gen</span>(<span class="ident">cfg</span>: <span class="ident">WalletConfig</span>) -&gt; <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt; {
-    <span class="kw">move</span> || -&gt; <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt; {
-        <span class="ident">Box::new</span>(
-            <span class="ident">bitcoincore_rpc::Client::new</span>(
-                <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">btc_rpc_address</span>,
-                <span class="ident">Auth::UserPass</span>(<span class="ident">cfg</span>.<span class="ident">btc_rpc_user</span>.<span class="ident">clone</span>(), <span class="ident">cfg</span>.<span class="ident">btc_rpc_pass</span>.<span class="ident">clone</span>()),
+<span class="kw">pub fn </span>bitcoind_gen(cfg: WalletConfig) -&gt; <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt; {
+    <span class="kw">move </span>|| -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt; {
+        Box::new(
+            bitcoincore_rpc::Client::new(
+                <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
+                Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
             )
-            .<span class="ident">expect</span>(<span class="string">&quot;Could not connect to bitcoind&quot;</span>),
+            .expect(<span class="string">&quot;Could not connect to bitcoind&quot;</span>),
         )
     }
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span> <span class="ident">BitcoindRpc</span> <span class="kw">for</span> <span class="ident">bitcoincore_rpc::Client</span> {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_network</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Network</span> {
-        <span class="kw">let</span> <span class="ident">network</span> = <span class="ident">minimint_api::task::block_in_place</span>(|| <span class="self">self</span>.<span class="ident">get_blockchain_info</span>())
-            .<span class="ident">expect</span>(<span class="string">&quot;Bitcoind returned an error&quot;</span>);
-        <span class="kw">match</span> <span class="ident">network</span>.<span class="ident">chain</span>.<span class="ident">as_str</span>() {
-            <span class="string">&quot;main&quot;</span> =&gt; <span class="ident">Network::Bitcoin</span>,
-            <span class="string">&quot;test&quot;</span> =&gt; <span class="ident">Network::Testnet</span>,
-            <span class="string">&quot;regtest&quot;</span> =&gt; <span class="ident">Network::Regtest</span>,
-            <span class="string">&quot;signet&quot;</span> =&gt; <span class="ident">Network::Signet</span>,
-            <span class="ident">n</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unknown Network \&quot;{}\&quot;&quot;</span>, <span class="ident">n</span>),
+<span class="attribute">#[async_trait]</span>
+<span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>bitcoincore_rpc::Client {
+    <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
+        <span class="kw">let </span>network = minimint_api::task::block_in_place(|| <span class="self">self</span>.get_blockchain_info())
+            .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>);
+        <span class="kw">match </span>network.chain.as_str() {
+            <span class="string">&quot;main&quot; </span>=&gt; Network::Bitcoin,
+            <span class="string">&quot;test&quot; </span>=&gt; Network::Testnet,
+            <span class="string">&quot;regtest&quot; </span>=&gt; Network::Regtest,
+            <span class="string">&quot;signet&quot; </span>=&gt; Network::Signet,
+            n =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unknown Network \&quot;{}\&quot;&quot;</span>, n),
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">u64</span> {
-        <span class="ident">minimint_api::task::block_in_place</span>(|| <span class="self">self</span>.<span class="ident">get_block_count</span>())
-            .<span class="ident">expect</span>(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
+    <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+        minimint_api::task::block_in_place(|| <span class="self">self</span>.get_block_count())
+            .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_block_hash</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">height</span>: <span class="ident">u64</span>) -&gt; <span class="ident">BlockHash</span> {
-        <span class="ident">minimint_api::task::block_in_place</span>(|| <span class="ident">bitcoincore_rpc::RpcApi::get_block_hash</span>(<span class="self">self</span>, <span class="ident">height</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
+    <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BlockHash {
+        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block_hash(<span class="self">self</span>, height))
+            .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_block</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">hash</span>: <span class="kw-2">&amp;</span><span class="ident">BlockHash</span>) -&gt; <span class="ident">Block</span> {
-        <span class="ident">minimint_api::task::block_in_place</span>(|| <span class="ident">bitcoincore_rpc::RpcApi::get_block</span>(<span class="self">self</span>, <span class="ident">hash</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
+    <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; Block {
+        minimint_api::task::block_in_place(|| bitcoincore_rpc::RpcApi::get_block(<span class="self">self</span>, hash))
+            .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_fee_rate</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">confirmation_target</span>: <span class="ident">u16</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">Feerate</span>&gt; {
-        <span class="ident">minimint_api::task::block_in_place</span>(|| {
-            <span class="self">self</span>.<span class="ident">estimate_smart_fee</span>(<span class="ident">confirmation_target</span>, <span class="prelude-val">Some</span>(<span class="ident">EstimateMode::Conservative</span>))
+    <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Option</span>&lt;Feerate&gt; {
+        minimint_api::task::block_in_place(|| {
+            <span class="self">self</span>.estimate_smart_fee(confirmation_target, <span class="prelude-val">Some</span>(EstimateMode::Conservative))
         })
-        .<span class="ident">expect</span>(<span class="string">&quot;Bitcoind returned an error&quot;</span>) <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable</span>
-        .<span class="ident">fee_rate</span>
-        .<span class="ident">map</span>(|<span class="ident">per_kb</span>| <span class="ident">Feerate</span> {
-            <span class="ident">sats_per_kvb</span>: <span class="ident">per_kb</span>.<span class="ident">as_sat</span>(),
+        .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>) <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
+        </span>.fee_rate
+        .map(|per_kb| Feerate {
+            sats_per_kvb: per_kb.as_sat(),
         })
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">transaction</span>: <span class="ident">Transaction</span>) {
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) =
-            <span class="ident">minimint_api::task::block_in_place</span>(|| <span class="self">self</span>.<span class="ident">send_raw_transaction</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>))
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(error) =
+            minimint_api::task::block_in_place(|| <span class="self">self</span>.send_raw_transaction(<span class="kw-2">&amp;</span>transaction))
         {
-            <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">error</span>, <span class="string">&quot;Submitting transaction failed&quot;</span>);
+            <span class="macro">warn!</span>(<span class="question-mark">?</span>error, <span class="string">&quot;Submitting transaction failed&quot;</span>);
         }
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

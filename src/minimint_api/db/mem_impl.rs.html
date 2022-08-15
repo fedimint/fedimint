@@ -112,89 +112,89 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">super</span>::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">DbBatch</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::Database</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::PrefixIter</span>;
-<span class="kw">use</span> <span class="ident">anyhow::Result</span>;
-<span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">std::sync</span>::{<span class="ident">Arc</span>, <span class="ident">Mutex</span>};
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">trace</span>};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::batch::{BatchItem, DbBatch};
+<span class="kw">use </span><span class="kw">super</span>::Database;
+<span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">use </span>tracing::{error, trace};
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Default</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MemDatabase</span> {
-    <span class="ident">data</span>: <span class="ident">Arc</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">BTreeMap</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;, <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt;&gt;,
+<span class="attribute">#[derive(Debug, Default, Clone)]</span>
+<span class="kw">pub struct </span>MemDatabase {
+    data: Arc&lt;Mutex&lt;BTreeMap&lt;Vec&lt;u8&gt;, Vec&lt;u8&gt;&gt;&gt;&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DummyError</span>;
+<span class="attribute">#[derive(Debug, Eq, PartialEq)]</span>
+<span class="kw">pub struct </span>DummyError;
 
-<span class="kw">impl</span> <span class="ident">MemDatabase</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="ident">MemDatabase</span> {
-        <span class="ident">Default::default</span>()
+<span class="kw">impl </span>MemDatabase {
+    <span class="kw">pub fn </span>new() -&gt; MemDatabase {
+        Default::default()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">dump_db</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let</span> <span class="ident">data</span> = <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">data_iter</span> = <span class="ident">data</span>.<span class="ident">iter</span>();
-        <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">value</span>) <span class="kw">in</span> <span class="ident">data_iter</span> {
-            <span class="macro">eprintln!</span>(<span class="string">&quot;{}: {}&quot;</span>, <span class="ident">hex::encode</span>(<span class="ident">key</span>), <span class="ident">hex::encode</span>(<span class="ident">value</span>));
+    <span class="kw">pub fn </span>dump_db(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="kw">let </span>data = <span class="self">self</span>.data.lock().unwrap();
+        <span class="kw">let </span>data_iter = data.iter();
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>data_iter {
+            <span class="macro">eprintln!</span>(<span class="string">&quot;{}: {}&quot;</span>, hex::encode(key), hex::encode(value));
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Database</span> <span class="kw">for</span> <span class="ident">MemDatabase</span> {
-    <span class="kw">fn</span> <span class="ident">raw_insert_entry</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">value</span>: <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">data</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">insert</span>(<span class="ident">key</span>.<span class="ident">to_vec</span>(), <span class="ident">value</span>))
+<span class="kw">impl </span>Database <span class="kw">for </span>MemDatabase {
+    <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().insert(key.to_vec(), value))
     }
 
-    <span class="kw">fn</span> <span class="ident">raw_get_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">data</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">get</span>(<span class="ident">key</span>).<span class="ident">cloned</span>())
+    <span class="kw">fn </span>raw_get_value(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().get(key).cloned())
     }
 
-    <span class="kw">fn</span> <span class="ident">raw_remove_entry</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="ident">data</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">remove</span>(<span class="ident">key</span>))
+    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.data.lock().unwrap().remove(key))
     }
 
-    <span class="kw">fn</span> <span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">PrefixIter</span>&lt;<span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">data</span> = <span class="self">self</span>
-            .<span class="ident">data</span>
-            .<span class="ident">lock</span>()
-            .<span class="ident">unwrap</span>()
-            .<span class="ident">range</span>::&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;, <span class="kw">_</span>&gt;((<span class="ident">key_prefix</span>.<span class="ident">to_vec</span>())..)
-            .<span class="ident">take_while</span>(|(<span class="ident">key</span>, <span class="kw">_</span>)| <span class="ident">key</span>.<span class="ident">starts_with</span>(<span class="ident">key_prefix</span>))
-            .<span class="ident">map</span>(|(<span class="ident">key</span>, <span class="ident">value</span>)| (<span class="ident">key</span>.<span class="ident">clone</span>(), <span class="ident">value</span>.<span class="ident">clone</span>()))
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="ident">data</span>.<span class="ident">reverse</span>();
+    <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="self">self
+            </span>.data
+            .lock()
+            .unwrap()
+            .range::&lt;Vec&lt;u8&gt;, <span class="kw">_</span>&gt;((key_prefix.to_vec())..)
+            .take_while(|(key, <span class="kw">_</span>)| key.starts_with(key_prefix))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        data.reverse();
 
-        <span class="ident">Box::new</span>(<span class="ident">MemDbIter</span> { <span class="ident">data</span> })
+        Box::new(MemDbIter { data })
     }
 
-    <span class="kw">fn</span> <span class="ident">raw_apply_batch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">batch</span>: <span class="ident">DbBatch</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let</span> <span class="ident">batch</span>: <span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt; = <span class="ident">batch</span>.<span class="ident">into</span>();
+    <span class="kw">fn </span>raw_apply_batch(<span class="kw-2">&amp;</span><span class="self">self</span>, batch: DbBatch) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>batch: Vec&lt;<span class="kw">_</span>&gt; = batch.into();
 
-        <span class="kw">for</span> <span class="ident">change</span> <span class="kw">in</span> <span class="ident">batch</span>.<span class="ident">iter</span>() {
-            <span class="kw">match</span> <span class="ident">change</span> {
-                <span class="ident">BatchItem::InsertNewElement</span>(<span class="ident">element</span>) =&gt; {
-                    <span class="kw">if</span> <span class="self">self</span>
-                        .<span class="ident">raw_insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">element</span>.<span class="ident">key</span>.<span class="ident">to_bytes</span>(), <span class="ident">element</span>.<span class="ident">value</span>.<span class="ident">to_bytes</span>())<span class="question-mark">?</span>
-                        .<span class="ident">is_some</span>()
+        <span class="kw">for </span>change <span class="kw">in </span>batch.iter() {
+            <span class="kw">match </span>change {
+                BatchItem::InsertNewElement(element) =&gt; {
+                    <span class="kw">if </span><span class="self">self
+                        </span>.raw_insert_entry(<span class="kw-2">&amp;</span>element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?
+                        </span>.is_some()
                     {
                         <span class="macro">error!</span>(<span class="string">&quot;Database replaced element! This should not happen!&quot;</span>);
-                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, <span class="ident">element</span>.<span class="ident">key</span>);
+                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, element.key);
                     }
                 }
-                <span class="ident">BatchItem::InsertElement</span>(<span class="ident">element</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">raw_insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">element</span>.<span class="ident">key</span>.<span class="ident">to_bytes</span>(), <span class="ident">element</span>.<span class="ident">value</span>.<span class="ident">to_bytes</span>())<span class="question-mark">?</span>;
+                BatchItem::InsertElement(element) =&gt; {
+                    <span class="self">self</span>.raw_insert_entry(<span class="kw-2">&amp;</span>element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?</span>;
                 }
-                <span class="ident">BatchItem::DeleteElement</span>(<span class="ident">key</span>) =&gt; {
-                    <span class="kw">if</span> <span class="self">self</span>.<span class="ident">raw_remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">key</span>.<span class="ident">to_bytes</span>())<span class="question-mark">?</span>.<span class="ident">is_none</span>() {
+                BatchItem::DeleteElement(key) =&gt; {
+                    <span class="kw">if </span><span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())<span class="question-mark">?</span>.is_none() {
                         <span class="macro">error!</span>(<span class="string">&quot;Database deleted absent element! This should not happen!&quot;</span>);
-                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, <span class="ident">key</span>);
+                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, key);
                     }
                 }
-                <span class="ident">BatchItem::MaybeDeleteElement</span>(<span class="ident">key</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">raw_remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">key</span>.<span class="ident">to_bytes</span>())<span class="question-mark">?</span>;
+                BatchItem::MaybeDeleteElement(key) =&gt; {
+                    <span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())<span class="question-mark">?</span>;
                 }
             }
         }
@@ -203,28 +203,28 @@
     }
 }
 
-<span class="kw">struct</span> <span class="ident">MemDbIter</span> {
-    <span class="ident">data</span>: <span class="ident">Vec</span>&lt;(<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;, <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;)&gt;,
+<span class="kw">struct </span>MemDbIter {
+    data: Vec&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;,
 }
 
-<span class="kw">impl</span> <span class="ident">Iterator</span> <span class="kw">for</span> <span class="ident">MemDbIter</span> {
-    <span class="kw">type</span> <span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;(<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;, <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;)&gt;;
+<span class="kw">impl </span>Iterator <span class="kw">for </span>MemDbIter {
+    <span class="kw">type </span>Item = <span class="prelude-ty">Result</span>&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;;
 
-    <span class="kw">fn</span> <span class="ident">next</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::Item</span>&gt; {
-        <span class="self">self</span>.<span class="ident">data</span>.<span class="ident">pop</span>().<span class="ident">map</span>(<span class="ident">Result::Ok</span>)
+    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
+        <span class="self">self</span>.data.pop().map(Result::Ok)
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::MemDatabase</span>;
-    <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">super</span>::MemDatabase;
+    <span class="kw">use </span>std::sync::Arc;
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">test_basic_rw</span>() {
-        <span class="kw">let</span> <span class="ident">mem_db</span> = <span class="ident">MemDatabase::new</span>();
-        <span class="ident"><span class="kw">crate</span>::db::tests::test_db_impl</span>(<span class="ident">Arc::new</span>(<span class="ident">mem_db</span>));
+    <span class="attribute">#[test_log::test]</span>
+    <span class="kw">fn </span>test_basic_rw() {
+        <span class="kw">let </span>mem_db = MemDatabase::new();
+        <span class="kw">crate</span>::db::tests::test_db_impl(Arc::new(mem_db));
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

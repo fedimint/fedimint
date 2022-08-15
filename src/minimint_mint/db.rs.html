@@ -103,110 +103,110 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">CoinNonce</span>, <span class="ident">PartialSigResponse</span>, <span class="ident">SigResponse</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
+</pre><pre class="rust"><code><span class="kw">use crate</span>::{CoinNonce, PartialSigResponse, SigResponse};
+<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::{Amount, OutPoint, PeerId};
 
-<span class="kw">const</span> <span class="ident">DB_PREFIX_COIN_NONCE</span>: <span class="ident">u8</span> = <span class="number">0x10</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSED_PARTIAL_SIG</span>: <span class="ident">u8</span> = <span class="number">0x11</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_RECEIVED_PARTIAL_SIG</span>: <span class="ident">u8</span> = <span class="number">0x12</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_OUTPUT_OUTCOME</span>: <span class="ident">u8</span> = <span class="number">0x13</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_MINT_AUDIT_ITEM</span>: <span class="ident">u8</span> = <span class="number">0x14</span>;
+<span class="kw">const </span>DB_PREFIX_COIN_NONCE: u8 = <span class="number">0x10</span>;
+<span class="kw">const </span>DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = <span class="number">0x11</span>;
+<span class="kw">const </span>DB_PREFIX_RECEIVED_PARTIAL_SIG: u8 = <span class="number">0x12</span>;
+<span class="kw">const </span>DB_PREFIX_OUTPUT_OUTCOME: u8 = <span class="number">0x13</span>;
+<span class="kw">const </span>DB_PREFIX_MINT_AUDIT_ITEM: u8 = <span class="number">0x14</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">NonceKey</span>(<span class="kw">pub</span> <span class="ident">CoinNonce</span>);
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]</span>
+<span class="kw">pub struct </span>NonceKey(<span class="kw">pub </span>CoinNonce);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">NonceKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_COIN_NONCE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>NonceKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_COIN_NONCE;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposedPartialSignatureKey</span> {
-    <span class="kw">pub</span> <span class="ident">request_id</span>: <span class="ident">OutPoint</span>, <span class="comment">// tx + output idx</span>
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ProposedPartialSignatureKey {
+    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
+</span>}
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignatureKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposedPartialSignatureKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSED_PARTIAL_SIG</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PartialSigResponse</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ProposedPartialSignaturesKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedPartialSignaturesKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    <span class="kw">type </span>Key = ProposedPartialSignatureKey;
+    <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposedPartialSignaturesKeyPrefix</span>;
-
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposedPartialSignaturesKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSED_PARTIAL_SIG</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ProposedPartialSignatureKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PartialSigResponse</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ReceivedPartialSignatureKey {
+    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
+    </span><span class="kw">pub </span>peer_id: PeerId,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ReceivedPartialSignatureKey</span> {
-    <span class="kw">pub</span> <span class="ident">request_id</span>: <span class="ident">OutPoint</span>, <span class="comment">// tx + output idx</span>
-    <span class="kw">pub</span> <span class="ident">peer_id</span>: <span class="ident">PeerId</span>,
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignatureKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ReceivedPartialSignatureKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_RECEIVED_PARTIAL_SIG</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PartialSigResponse</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ReceivedPartialSignatureKeyOutputPrefix {
+    <span class="kw">pub </span>request_id: OutPoint, <span class="comment">// tx + output idx
+</span>}
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignatureKeyOutputPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    <span class="kw">type </span>Key = ReceivedPartialSignatureKey;
+    <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ReceivedPartialSignatureKeyOutputPrefix</span> {
-    <span class="kw">pub</span> <span class="ident">request_id</span>: <span class="ident">OutPoint</span>, <span class="comment">// tx + output idx</span>
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ReceivedPartialSignaturesKeyPrefix;
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ReceivedPartialSignaturesKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    <span class="kw">type </span>Key = ReceivedPartialSignatureKey;
+    <span class="kw">type </span>Value = PartialSigResponse;
 }
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ReceivedPartialSignatureKeyOutputPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_RECEIVED_PARTIAL_SIG</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ReceivedPartialSignatureKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PartialSigResponse</span>;
+<span class="doccomment">/// Transaction id and output index identifying an output outcome
+</span><span class="attribute">#[derive(Debug, Clone, Copy, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutputOutcomeKey(<span class="kw">pub </span>OutPoint);
+
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputOutcomeKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTPUT_OUTCOME;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = SigResponse;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ReceivedPartialSignaturesKeyPrefix</span>;
-
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ReceivedPartialSignaturesKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_RECEIVED_PARTIAL_SIG</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ReceivedPartialSignatureKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PartialSigResponse</span>;
+<span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing
+</span><span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
+<span class="kw">pub enum </span>MintAuditItemKey {
+    Issuance(OutPoint),
+    IssuanceTotal,
+    Redemption(NonceKey),
+    RedemptionTotal,
 }
 
-<span class="doccomment">/// Transaction id and output index identifying an output outcome</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Copy</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutputOutcomeKey</span>(<span class="kw">pub</span> <span class="ident">OutPoint</span>);
-
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutputOutcomeKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTPUT_OUTCOME</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">SigResponse</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>MintAuditItemKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_MINT_AUDIT_ITEM;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = Amount;
 }
 
-<span class="doccomment">/// Represents the amounts of issued (signed) and redeemed (verified) coins for auditing</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">MintAuditItemKey</span> {
-    <span class="ident">Issuance</span>(<span class="ident">OutPoint</span>),
-    <span class="ident">IssuanceTotal</span>,
-    <span class="ident">Redemption</span>(<span class="ident">NonceKey</span>),
-    <span class="ident">RedemptionTotal</span>,
-}
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>MintAuditItemKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">MintAuditItemKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_MINT_AUDIT_ITEM</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Amount</span>;
-}
-
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MintAuditItemKeyPrefix</span>;
-
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">MintAuditItemKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_MINT_AUDIT_ITEM</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">MintAuditItemKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Amount</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>MintAuditItemKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_MINT_AUDIT_ITEM;
+    <span class="kw">type </span>Key = MintAuditItemKey;
+    <span class="kw">type </span>Value = Amount;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

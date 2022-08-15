@@ -52,59 +52,59 @@
 <span id="52">52</span>
 <span id="53">53</span>
 <span id="54">54</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">anyhow::Result</span>;
-<span class="kw">use</span> <span class="ident">clap</span>::{<span class="ident">Parser</span>, <span class="ident">Subcommand</span>};
-<span class="kw">use</span> <span class="ident">clientd::call</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::__reexports::serde_json</span>;
-<span class="kw">use</span> <span class="ident">serde::Serialize</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>clap::{Parser, Subcommand};
+<span class="kw">use </span>clientd::call;
+<span class="kw">use </span>minimint_api::module::__reexports::serde_json;
+<span class="kw">use </span>serde::Serialize;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
-<span class="attribute">#[<span class="ident">clap</span>(<span class="ident">author</span>, <span class="ident">version</span>, <span class="ident">about</span> = <span class="string">&quot;a json-rpc cli application&quot;</span>)]</span>
-<span class="kw">struct</span> <span class="ident">Cli</span> {
-    <span class="doccomment">/// print unformatted json</span>
-    <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">takes_value</span> = <span class="bool-val">false</span>, <span class="ident">long</span> = <span class="string">&quot;raw&quot;</span>, <span class="ident">short</span> = <span class="string">&#39;r&#39;</span>)]</span>
-    <span class="ident">raw_json</span>: <span class="ident">bool</span>,
-    <span class="doccomment">/// call JSON-2.0 RPC method</span>
-    <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">subcommand</span>)]</span>
-    <span class="ident">command</span>: <span class="ident">Commands</span>,
+<span class="attribute">#[derive(Parser)]</span>
+<span class="attribute">#[clap(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]</span>
+<span class="kw">struct </span>Cli {
+    <span class="doccomment">/// print unformatted json
+    </span><span class="attribute">#[clap(takes_value = <span class="bool-val">false</span>, long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]</span>
+    raw_json: bool,
+    <span class="doccomment">/// call JSON-2.0 RPC method
+    </span><span class="attribute">#[clap(subcommand)]</span>
+    command: Commands,
 }
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Subcommand</span>)]</span>
-<span class="kw">enum</span> <span class="ident">Commands</span> {
-    <span class="doccomment">/// rpc-method: info()</span>
-    <span class="ident">Info</span>,
-    <span class="doccomment">/// rpc-method: pending()</span>
-    <span class="ident">Pending</span>,
-    <span class="doccomment">/// rpc-method: pegin_address()</span>
-    <span class="ident">NewPegInAddress</span>,
+<span class="attribute">#[derive(Subcommand)]</span>
+<span class="kw">enum </span>Commands {
+    <span class="doccomment">/// rpc-method: info()
+    </span>Info,
+    <span class="doccomment">/// rpc-method: pending()
+    </span>Pending,
+    <span class="doccomment">/// rpc-method: pegin_address()
+    </span>NewPegInAddress,
 }
-<span class="attribute">#[<span class="ident">tokio::main</span>]</span>
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">main</span>() {
-    <span class="kw">let</span> <span class="ident">args</span> = <span class="ident">Cli::parse</span>();
+<span class="attribute">#[tokio::main]</span>
+<span class="kw">async fn </span>main() {
+    <span class="kw">let </span>args = Cli::parse();
 
-    <span class="kw">match</span> <span class="ident">args</span>.<span class="ident">command</span> {
-        <span class="ident">Commands::Info</span> =&gt; {
-            <span class="ident">print_json</span>(<span class="ident">call</span>(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_info&quot;</span>).<span class="kw">await</span>, <span class="ident">args</span>.<span class="ident">raw_json</span>);
+    <span class="kw">match </span>args.command {
+        Commands::Info =&gt; {
+            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_info&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
-        <span class="ident">Commands::Pending</span> =&gt; {
-            <span class="ident">print_json</span>(<span class="ident">call</span>(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_pending&quot;</span>).<span class="kw">await</span>, <span class="ident">args</span>.<span class="ident">raw_json</span>);
+        Commands::Pending =&gt; {
+            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_pending&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
-        <span class="ident">Commands::NewPegInAddress</span> =&gt; {
-            <span class="ident">print_json</span>(<span class="ident">call</span>(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, <span class="ident">args</span>.<span class="ident">raw_json</span>);
+        Commands::NewPegInAddress =&gt; {
+            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
     }
 }
 
-<span class="kw">fn</span> <span class="ident">print_json</span>&lt;<span class="ident">T</span>: <span class="ident">Serialize</span>&gt;(<span class="ident">result</span>: <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt;, <span class="ident">raw</span>: <span class="ident">bool</span>) {
-    <span class="kw">match</span> <span class="ident">result</span> {
-        <span class="prelude-val">Ok</span>(<span class="ident">p</span>) =&gt; {
-            <span class="kw">if</span> <span class="ident">raw</span> {
-                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">serde_json::to_string</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>).<span class="ident">unwrap</span>());
-            } <span class="kw">else</span> {
-                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">serde_json::to_string_pretty</span>(<span class="kw-2">&amp;</span><span class="ident">p</span>).<span class="ident">unwrap</span>());
+<span class="kw">fn </span>print_json&lt;T: Serialize&gt;(result: <span class="prelude-ty">Result</span>&lt;T&gt;, raw: bool) {
+    <span class="kw">match </span>result {
+        <span class="prelude-val">Ok</span>(p) =&gt; {
+            <span class="kw">if </span>raw {
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string(<span class="kw-2">&amp;</span>p).unwrap());
+            } <span class="kw">else </span>{
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>p).unwrap());
             }
         }
-        <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">e</span>),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;{}&quot;</span>, e),
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

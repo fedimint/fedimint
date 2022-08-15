@@ -38,45 +38,45 @@
 <span id="38">38</span>
 <span id="39">39</span>
 <span id="40">40</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin::secp256k1::KeyPair</span>;
-<span class="kw">use</span> <span class="ident">lightning_invoice::Invoice</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContract</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractInput</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::KeyPair;
+<span class="kw">use </span>lightning_invoice::Invoice;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::Amount;
+<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContract;
+<span class="kw">use </span>minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+<span class="kw">use </span>minimint_core::modules::ln::ContractInput;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">IncomingContractAccount</span> {
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">contract</span>: <span class="ident">IncomingContract</span>,
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>IncomingContractAccount {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>contract: IncomingContract,
 }
 
-<span class="kw">impl</span> <span class="ident">IncomingContractAccount</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">claim</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractInput</span> {
-        <span class="ident">ContractInput</span> {
-            <span class="ident">contract_id</span>: <span class="self">self</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>(),
-            <span class="ident">amount</span>: <span class="self">self</span>.<span class="ident">amount</span>,
-            <span class="ident">witness</span>: <span class="prelude-val">None</span>,
+<span class="kw">impl </span>IncomingContractAccount {
+    <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractInput {
+        ContractInput {
+            contract_id: <span class="self">self</span>.contract.contract_id(),
+            amount: <span class="self">self</span>.amount,
+            witness: <span class="prelude-val">None</span>,
         }
     }
 }
 
-<span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid, expired</span>
-<span class="doccomment">/// Invoice whose &quot;offer&quot; has been accepted by federation</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConfirmedInvoice</span> {
-    <span class="doccomment">/// The invoice itself</span>
-    <span class="kw">pub</span> <span class="ident">invoice</span>: <span class="ident">Invoice</span>,
-    <span class="doccomment">/// Keypair that will be able to sweep contract once it has received payment</span>
-    <span class="kw">pub</span> <span class="ident">keypair</span>: <span class="ident">KeyPair</span>,
+<span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid, expired
+</span><span class="doccomment">/// Invoice whose &quot;offer&quot; has been accepted by federation
+</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ConfirmedInvoice {
+    <span class="doccomment">/// The invoice itself
+    </span><span class="kw">pub </span>invoice: Invoice,
+    <span class="doccomment">/// Keypair that will be able to sweep contract once it has received payment
+    </span><span class="kw">pub </span>keypair: KeyPair,
 }
 
-<span class="kw">impl</span> <span class="ident">ConfirmedInvoice</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
-        <span class="comment">// FIXME: Should we be using the payment hash?</span>
-        (<span class="kw-2">*</span><span class="self">self</span>.<span class="ident">invoice</span>.<span class="ident">payment_hash</span>()).<span class="ident">into</span>()
+<span class="kw">impl </span>ConfirmedInvoice {
+    <span class="kw">pub fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
+        <span class="comment">// FIXME: Should we be using the payment hash?
+        </span>(<span class="kw-2">*</span><span class="self">self</span>.invoice.payment_hash()).into()
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

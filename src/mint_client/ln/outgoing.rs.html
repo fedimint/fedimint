@@ -33,40 +33,40 @@
 <span id="33">33</span>
 <span id="34">34</span>
 <span id="35">35</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::outgoing</span>::{<span class="ident">OutgoingContract</span>, <span class="ident">Preimage</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::IdentifyableContract</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::ContractInput</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::Amount;
+<span class="kw">use </span>minimint_core::modules::ln::contracts::outgoing::{OutgoingContract, Preimage};
+<span class="kw">use </span>minimint_core::modules::ln::contracts::IdentifyableContract;
+<span class="kw">use </span>minimint_core::modules::ln::ContractInput;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContractData</span> {
-    <span class="kw">pub</span> <span class="ident">recovery_key</span>: <span class="ident">bitcoin::KeyPair</span>,
-    <span class="kw">pub</span> <span class="ident">contract_account</span>: <span class="ident">OutgoingContractAccount</span>,
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingContractData {
+    <span class="kw">pub </span>recovery_key: bitcoin::KeyPair,
+    <span class="kw">pub </span>contract_account: OutgoingContractAccount,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContractAccount</span> {
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">contract</span>: <span class="ident">OutgoingContract</span>,
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingContractAccount {
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>contract: OutgoingContract,
 }
 
-<span class="kw">impl</span> <span class="ident">OutgoingContractAccount</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">claim</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">preimage</span>: <span class="ident">Preimage</span>) -&gt; <span class="ident">ContractInput</span> {
-        <span class="ident">ContractInput</span> {
-            <span class="ident">contract_id</span>: <span class="self">self</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>(),
-            <span class="ident">amount</span>: <span class="self">self</span>.<span class="ident">amount</span>,
-            <span class="ident">witness</span>: <span class="prelude-val">Some</span>(<span class="ident">preimage</span>),
+<span class="kw">impl </span>OutgoingContractAccount {
+    <span class="kw">pub fn </span>claim(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: Preimage) -&gt; ContractInput {
+        ContractInput {
+            contract_id: <span class="self">self</span>.contract.contract_id(),
+            amount: <span class="self">self</span>.amount,
+            witness: <span class="prelude-val">Some</span>(preimage),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">refund</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractInput</span> {
-        <span class="ident">ContractInput</span> {
-            <span class="ident">contract_id</span>: <span class="self">self</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>(),
-            <span class="ident">amount</span>: <span class="self">self</span>.<span class="ident">amount</span>,
-            <span class="ident">witness</span>: <span class="prelude-val">None</span>,
+    <span class="kw">pub fn </span>refund(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractInput {
+        ContractInput {
+            contract_id: <span class="self">self</span>.contract.contract_id(),
+            amount: <span class="self">self</span>.amount,
+            witness: <span class="prelude-val">None</span>,
         }
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

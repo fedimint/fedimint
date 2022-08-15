@@ -587,329 +587,329 @@
 <span id="587">587</span>
 <span id="588">588</span>
 <span id="589">589</span>
-</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
-<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">bitcoin_hashes::sha256::Hash</span> <span class="kw">as</span> <span class="ident">Sha256Hash</span>;
-<span class="kw">use</span> <span class="ident">jsonrpsee_core::client::ClientT</span>;
-<span class="kw">use</span> <span class="ident">jsonrpsee_core::Error</span> <span class="kw">as</span> <span class="ident">JsonRpcError</span>;
-<span class="kw">use</span> <span class="ident">jsonrpsee_types::error::CallError</span> <span class="kw">as</span> <span class="ident">RpcCallError</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::task</span>::{<span class="ident">RwLock</span>, <span class="ident">RwLockWriteGuard</span>};
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming::IncomingContractOffer</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractAccount</span>, <span class="ident">LightningGateway</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::outcome</span>::{<span class="ident">TransactionStatus</span>, <span class="ident">TryIntoOutcome</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::transaction::Transaction</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::CoreError</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">instrument</span>, <span class="ident">warn</span>};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
+<span class="kw">use </span>jsonrpsee_core::client::ClientT;
+<span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
+<span class="kw">use </span>jsonrpsee_types::error::CallError <span class="kw">as </span>RpcCallError;
+<span class="kw">use </span>minimint_api::task::{RwLock, RwLockWriteGuard};
+<span class="kw">use </span>minimint_api::{OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span>minimint_core::modules::ln::contracts::ContractId;
+<span class="kw">use </span>minimint_core::modules::ln::{ContractAccount, LightningGateway};
+<span class="kw">use </span>minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
+<span class="kw">use </span>minimint_core::transaction::Transaction;
+<span class="kw">use </span>minimint_core::CoreError;
+<span class="kw">use </span>tracing::{error, instrument, warn};
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">not</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>))]</span>
-<span class="kw">use</span> <span class="ident">jsonrpsee_ws_client</span>::{<span class="ident">WsClient</span>, <span class="ident">WsClientBuilder</span>};
+<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]</span>
+<span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>)]</span>
-<span class="kw">use</span> <span class="ident">jsonrpsee_wasm_client</span>::{<span class="ident">Client</span> <span class="kw">as</span> <span class="ident">WsClient</span>, <span class="ident">WasmClientBuilder</span> <span class="kw">as</span> <span class="ident">WsClientBuilder</span>};
+<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]</span>
+<span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Amount</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOutFees</span>;
-<span class="kw">use</span> <span class="ident">std::time::Duration</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+<span class="kw">use </span>bitcoin::{Address, Amount};
+<span class="kw">use </span>minimint_core::epoch::EpochHistory;
+<span class="kw">use </span>minimint_core::modules::wallet::PegOutFees;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>thiserror::Error;
 
-<span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>, <span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>))]</span>
-<span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">not</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>), <span class="ident">async_trait</span>)]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">FederationApi</span>: <span class="ident">Send</span> + <span class="ident">Sync</span> {
-    <span class="doccomment">/// Fetch the outcome of an entire transaction</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_tx_outcome</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">TransactionId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionStatus</span>&gt;;
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]</span>
+<span class="attribute">#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]</span>
+<span class="kw">pub trait </span>FederationApi: Send + Sync {
+    <span class="doccomment">/// Fetch the outcome of an entire transaction
+    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
 
-    <span class="doccomment">/// Submit a transaction to all federation members</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt;;
+    <span class="doccomment">/// Submit a transaction to all federation members
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">EpochHistory</span>&gt;;
+    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt;;
 
-    <span class="comment">// TODO: more generic module API extensibility</span>
-    <span class="doccomment">/// Fetch ln contract state</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_contract</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ContractAccount</span>&gt;;
+    <span class="comment">// TODO: more generic module API extensibility
+    </span><span class="doccomment">/// Fetch ln contract state
+    </span><span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt;;
 
-    <span class="doccomment">/// Fetch preimage offer for incoming lightning payments</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_offer</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">payment_hash</span>: <span class="ident">Sha256Hash</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">IncomingContractOffer</span>&gt;;
+    <span class="doccomment">/// Fetch preimage offer for incoming lightning payments
+    </span><span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt;;
 
-    <span class="doccomment">/// Fetch the current consensus block height (trailing actual block height)</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">u64</span>&gt;;
+    <span class="doccomment">/// Fetch the current consensus block height (trailing actual block height)
+    </span><span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
 
-    <span class="doccomment">/// Fetch the expected peg-out fees given a peg-out tx</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_peg_out_fees</span>(
+    <span class="doccomment">/// Fetch the expected peg-out fees given a peg-out tx
+    </span><span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">address</span>: <span class="kw-2">&amp;</span><span class="ident">Address</span>,
-        <span class="ident">amount</span>: <span class="kw-2">&amp;</span><span class="ident">Amount</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">PegOutFees</span>&gt;&gt;;
+        address: <span class="kw-2">&amp;</span>Address,
+        amount: <span class="kw-2">&amp;</span>Amount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
 
-    <span class="doccomment">/// Fetch available lightning gateways</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt;&gt;;
+    <span class="doccomment">/// Fetch available lightning gateways
+    </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt;;
 
-    <span class="doccomment">/// Register a gateway with the federation</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+    <span class="doccomment">/// Register a gateway with the federation
+    </span><span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">dyn</span> <span class="ident">FederationApi</span> + <span class="lifetime">&#39;a</span> {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_output_outcome</span>&lt;<span class="ident">T</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">T</span>: <span class="ident">TryIntoOutcome</span> + <span class="ident">Send</span>,
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">dyn </span>FederationApi + <span class="lifetime">&#39;a </span>{
+    <span class="kw">pub async fn </span>fetch_output_outcome&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt;
+    <span class="kw">where
+        </span>T: TryIntoOutcome + Send,
     {
-        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_tx_outcome</span>(<span class="ident">out_point</span>.<span class="ident">txid</span>).<span class="kw">await</span><span class="question-mark">?</span> {
-            <span class="ident">TransactionStatus::Rejected</span>(<span class="ident">e</span>) =&gt; <span class="prelude-val">Err</span>(<span class="ident">ApiError::TransactionRejected</span>(<span class="ident">e</span>)),
-            <span class="ident">TransactionStatus::Accepted</span> { <span class="ident">outputs</span>, .. } =&gt; {
-                <span class="kw">let</span> <span class="ident">outputs_len</span> = <span class="ident">outputs</span>.<span class="ident">len</span>();
-                <span class="ident">outputs</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">nth</span>(<span class="ident">out_point</span>.<span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">usize</span>) <span class="comment">// avoid clone as would be necessary with .get(…)</span>
-                    .<span class="ident">ok_or</span>(<span class="ident">ApiError::OutPointOutOfRange</span>(
-                        <span class="ident">outputs_len</span>,
-                        <span class="ident">out_point</span>.<span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">usize</span>,
+        <span class="kw">match </span><span class="self">self</span>.fetch_tx_outcome(out_point.txid).<span class="kw">await</span><span class="question-mark">? </span>{
+            TransactionStatus::Rejected(e) =&gt; <span class="prelude-val">Err</span>(ApiError::TransactionRejected(e)),
+            TransactionStatus::Accepted { outputs, .. } =&gt; {
+                <span class="kw">let </span>outputs_len = outputs.len();
+                outputs
+                    .into_iter()
+                    .nth(out_point.out_idx <span class="kw">as </span>usize) <span class="comment">// avoid clone as would be necessary with .get(…)
+                    </span>.ok_or(ApiError::OutPointOutOfRange(
+                        outputs_len,
+                        out_point.out_idx <span class="kw">as </span>usize,
                     ))
-                    .<span class="ident">and_then</span>(|<span class="ident">output</span>| <span class="ident">output</span>.<span class="ident">try_into_variant</span>().<span class="ident">map_err</span>(<span class="ident">ApiError::CoreError</span>))
+                    .and_then(|output| output.try_into_variant().map_err(ApiError::CoreError))
             }
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_output_outcome</span>&lt;<span class="ident">T</span>: <span class="ident">TryIntoOutcome</span> + <span class="ident">Send</span>&gt;(
+    <span class="kw">pub async fn </span>await_output_outcome&lt;T: TryIntoOutcome + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
-        <span class="ident">timeout</span>: <span class="ident">Duration</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="kw">let</span> <span class="ident">poll</span> = || <span class="kw">async</span> {
-            <span class="kw">let</span> <span class="ident">interval</span> = <span class="ident">Duration::from_secs</span>(<span class="number">1</span>);
-            <span class="kw">loop</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_output_outcome</span>(<span class="ident">outpoint</span>).<span class="kw">await</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+        outpoint: OutPoint,
+        timeout: Duration,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt; {
+        <span class="kw">let </span>poll = || <span class="kw">async </span>{
+            <span class="kw">let </span>interval = Duration::from_secs(<span class="number">1</span>);
+            <span class="kw">loop </span>{
+                <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">timeout</span>, <span class="ident">poll</span>())
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ApiError::Timeout</span>)<span class="question-mark">?</span>
-    }
+        minimint_api::task::timeout(timeout, poll())
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
+    </span>}
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_offer</span>(
+    <span class="kw">pub async fn </span>await_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">payment_hash</span>: <span class="ident">Sha256Hash</span>,
-        <span class="ident">timeout</span>: <span class="ident">Duration</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
-        <span class="kw">let</span> <span class="ident">poll</span> = || <span class="kw">async</span> {
-            <span class="kw">let</span> <span class="ident">interval</span> = <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
-            <span class="kw">loop</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_offer</span>(<span class="ident">payment_hash</span>).<span class="kw">await</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+        payment_hash: Sha256Hash,
+        timeout: Duration,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; {
+        <span class="kw">let </span>poll = || <span class="kw">async </span>{
+            <span class="kw">let </span>interval = Duration::from_millis(<span class="number">100</span>);
+            <span class="kw">loop </span>{
+                <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">timeout</span>, <span class="ident">poll</span>())
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ApiError::Timeout</span>)<span class="question-mark">?</span>
-    }
+        minimint_api::task::timeout(timeout, poll())
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
+    </span>}
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_contract</span>(
+    <span class="kw">pub async fn </span>await_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">timeout</span>: <span class="ident">Duration</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ContractAccount</span>&gt; {
-        <span class="kw">let</span> <span class="ident">poll</span> = || <span class="kw">async</span> {
-            <span class="kw">let</span> <span class="ident">interval</span> = <span class="ident">Duration::from_millis</span>(<span class="number">100</span>);
-            <span class="kw">loop</span> {
-                <span class="kw">match</span> <span class="self">self</span>.<span class="ident">fetch_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">t</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">t</span>),
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) <span class="kw">if</span> <span class="ident">e</span>.<span class="ident">is_retryable</span>() =&gt; <span class="ident">minimint_api::task::sleep</span>(<span class="ident">interval</span>).<span class="kw">await</span>,
-                    <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">e</span>),
+        contract_id: ContractId,
+        timeout: Duration,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
+        <span class="kw">let </span>poll = || <span class="kw">async </span>{
+            <span class="kw">let </span>interval = Duration::from_millis(<span class="number">100</span>);
+            <span class="kw">loop </span>{
+                <span class="kw">match </span><span class="self">self</span>.fetch_contract(contract_id).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">timeout</span>, <span class="ident">poll</span>())
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ApiError::Timeout</span>)<span class="question-mark">?</span>
-    }
+        minimint_api::task::timeout(timeout, poll())
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
+    </span>}
 }
 
-<span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting equal</span>
-<span class="doccomment">/// results from at least `min_eq_results` of them. Members that return differing results are</span>
-<span class="doccomment">/// returned as a member faults list.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">WsFederationApi</span>&lt;<span class="ident">C</span> = <span class="ident">WsClient</span>&gt; {
-    <span class="ident">members</span>: <span class="ident">Vec</span>&lt;<span class="ident">FederationMember</span>&lt;<span class="ident">C</span>&gt;&gt;,
-    <span class="ident">max_evil</span>: <span class="ident">usize</span>,
+<span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting equal
+/// results from at least `min_eq_results` of them. Members that return differing results are
+/// returned as a member faults list.
+</span><span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
+    members: Vec&lt;FederationMember&lt;C&gt;&gt;,
+    max_evil: usize,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">struct</span> <span class="ident">FederationMember</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="ident">url</span>: <span class="ident">String</span>,
-    <span class="ident">peer_id</span>: <span class="ident">PeerId</span>,
-    <span class="ident">client</span>: <span class="ident">RwLock</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">C</span>&gt;&gt;,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="kw">struct </span>FederationMember&lt;C&gt; {
+    url: String,
+    peer_id: PeerId,
+    client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
 }
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt; = <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">ApiError</span>&gt;;
+<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ApiError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Rpc error: {0}&quot;</span>)]</span>
-    <span class="ident">RpcError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">JsonRpcError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]</span>
-    <span class="ident">TransactionError</span>(<span class="ident">String</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]</span>
-    <span class="ident">TransactionRejected</span>(<span class="ident">String</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]</span>
-    <span class="ident">OutPointOutOfRange</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Core error: {0}&quot;</span>)]</span>
-    <span class="ident">CoreError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">CoreError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]</span>
-    <span class="ident">Timeout</span>,
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>ApiError {
+    <span class="attribute">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]</span>
+    RpcError(<span class="attribute">#[from]</span> JsonRpcError),
+    <span class="attribute">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]</span>
+    TransactionError(String),
+    <span class="attribute">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]</span>
+    TransactionRejected(String),
+    <span class="attribute">#[error(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]</span>
+    OutPointOutOfRange(usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]</span>
+    CoreError(<span class="attribute">#[from]</span> CoreError),
+    <span class="attribute">#[error(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]</span>
+    Timeout,
 }
 
-<span class="kw">impl</span> <span class="ident">ApiError</span> {
-    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="kw">match</span> <span class="self">self</span> {
-            <span class="ident">ApiError::RpcError</span>(<span class="ident">JsonRpcError::Call</span>(<span class="ident">RpcCallError::Custom</span>(<span class="ident">e</span>))) =&gt; <span class="ident">e</span>.<span class="ident">code</span>() == <span class="number">404</span>,
-            <span class="ident">ApiError::CoreError</span>(<span class="ident">e</span>) =&gt; <span class="ident">e</span>.<span class="ident">is_retryable</span>(),
-            <span class="kw">_</span> =&gt; <span class="bool-val">false</span>,
+<span class="kw">impl </span>ApiError {
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later
+    </span><span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">match </span><span class="self">self </span>{
+            ApiError::RpcError(JsonRpcError::Call(RpcCallError::Custom(e))) =&gt; e.code() == <span class="number">404</span>,
+            ApiError::CoreError(e) =&gt; e.is_retryable(),
+            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
         }
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>, <span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>))]</span>
-<span class="attribute">#[<span class="ident">cfg_attr</span>(<span class="ident">not</span>(<span class="ident">target_family</span> = <span class="string">&quot;wasm&quot;</span>), <span class="ident">async_trait</span>)]</span>
-<span class="kw">impl</span>&lt;<span class="ident">C</span>: <span class="ident">JsonRpcClient</span> + <span class="ident">Send</span> + <span class="ident">Sync</span>&gt; <span class="ident">FederationApi</span> <span class="kw">for</span> <span class="ident">WsFederationApi</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="doccomment">/// Fetch the outcome of an entire transaction</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_tx_outcome</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">TransactionId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionStatus</span>&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/fetch_transaction&quot;</span>, <span class="ident">tx</span>).<span class="kw">await</span>
-    }
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]</span>
+<span class="attribute">#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]</span>
+<span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; FederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+    <span class="doccomment">/// Fetch the outcome of an entire transaction
+    </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/fetch_transaction&quot;</span>, tx).<span class="kw">await
+    </span>}
 
-    <span class="doccomment">/// Submit a transaction to all federtion members</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx</span>: <span class="ident">Transaction</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
-        <span class="comment">// TODO: check the id is correct</span>
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/transaction&quot;</span>, <span class="ident">tx</span>).<span class="kw">await</span>
-    }
+    <span class="doccomment">/// Submit a transaction to all federtion members
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="comment">// TODO: check the id is correct
+        </span><span class="self">self</span>.request(<span class="string">&quot;/transaction&quot;</span>, tx).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">EpochHistory</span>&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/fetch_epoch_history&quot;</span>, <span class="ident">epoch</span>).<span class="kw">await</span>
-    }
+    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/fetch_epoch_history&quot;</span>, epoch).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_contract</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ContractAccount</span>&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/ln/account&quot;</span>, <span class="ident">contract</span>).<span class="kw">await</span>
-    }
+    <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/account&quot;</span>, contract).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">u64</span>&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/wallet/block_height&quot;</span>, ()).<span class="kw">await</span>
-    }
+    <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/wallet/block_height&quot;</span>, ()).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_peg_out_fees</span>(
+    <span class="kw">async fn </span>fetch_peg_out_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">address</span>: <span class="kw-2">&amp;</span><span class="ident">Address</span>,
-        <span class="ident">amount</span>: <span class="kw-2">&amp;</span><span class="ident">Amount</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">PegOutFees</span>&gt;&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/wallet/peg_out_fees&quot;</span>, (<span class="ident">address</span>, <span class="ident">amount</span>.<span class="ident">as_sat</span>()))
-            .<span class="kw">await</span>
-    }
+        address: <span class="kw-2">&amp;</span>Address,
+        amount: <span class="kw-2">&amp;</span>Amount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/wallet/peg_out_fees&quot;</span>, (address, amount.as_sat()))
+            .<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_offer</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">payment_hash</span>: <span class="ident">Sha256Hash</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/ln/offer&quot;</span>, <span class="ident">payment_hash</span>).<span class="kw">await</span>
-    }
+    <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/offer&quot;</span>, payment_hash).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt;&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/ln/list_gateways&quot;</span>, ()).<span class="kw">await</span>
-    }
+    <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/list_gateways&quot;</span>, ()).<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="ident">request</span>(<span class="string">&quot;/ln/register_gateway&quot;</span>, <span class="ident">gateway</span>).<span class="kw">await</span>
+    <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/register_gateway&quot;</span>, gateway).<span class="kw">await
+    </span>}
+}
+
+<span class="attribute">#[async_trait]</span>
+<span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
+    <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
+}
+
+<span class="attribute">#[async_trait]</span>
+<span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
+        WsClientBuilder::default().build(url).<span class="kw">await
+    </span>}
+
+    <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.is_connected()
     }
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">JsonRpcClient</span>: <span class="ident">ClientT</span> + <span class="ident">Sized</span> {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>(<span class="ident">url</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="self">Self</span>, <span class="ident">JsonRpcError</span>&gt;;
-    <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span>;
-}
-
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span> <span class="ident">JsonRpcClient</span> <span class="kw">for</span> <span class="ident">WsClient</span> {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>(<span class="ident">url</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="self">Self</span>, <span class="ident">JsonRpcError</span>&gt; {
-        <span class="ident">WsClientBuilder::default</span>().<span class="ident">build</span>(<span class="ident">url</span>).<span class="kw">await</span>
-    }
-
-    <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">is_connected</span>()
+<span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
+    <span class="doccomment">/// Creates a new API client
+    </span><span class="kw">pub fn </span>new(max_evil: usize, members: Vec&lt;(PeerId, String)&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new_with_client(max_evil, members)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">WsFederationApi</span>&lt;<span class="ident">WsClient</span>&gt; {
-    <span class="doccomment">/// Creates a new API client</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">String</span>)&gt;) -&gt; <span class="self">Self</span> {
-        <span class="ident"><span class="self">Self</span>::new_with_client</span>(<span class="ident">max_evil</span>, <span class="ident">members</span>)
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="ident">C</span>&gt; <span class="ident">WsFederationApi</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="doccomment">/// Creates a new API client</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_with_client</span>(<span class="ident">max_evil</span>: <span class="ident">usize</span>, <span class="ident">members</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">String</span>)&gt;) -&gt; <span class="self">Self</span> {
-        <span class="ident">WsFederationApi</span> {
-            <span class="ident">members</span>: <span class="ident">members</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">map</span>(|(<span class="ident">peer_id</span>, <span class="ident">url</span>)| <span class="ident">FederationMember</span> {
-                    <span class="ident">peer_id</span>,
-                    <span class="ident">url</span>,
-                    <span class="ident">client</span>: <span class="ident">RwLock::new</span>(<span class="prelude-val">None</span>),
+<span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt; {
+    <span class="doccomment">/// Creates a new API client
+    </span><span class="kw">pub fn </span>new_with_client(max_evil: usize, members: Vec&lt;(PeerId, String)&gt;) -&gt; <span class="self">Self </span>{
+        WsFederationApi {
+            members: members
+                .into_iter()
+                .map(|(peer_id, url)| FederationMember {
+                    peer_id,
+                    url,
+                    client: RwLock::new(<span class="prelude-val">None</span>),
                 })
-                .<span class="ident">collect</span>(),
-            <span class="ident">max_evil</span>,
+                .collect(),
+            max_evil,
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>: <span class="ident">JsonRpcClient</span>&gt; <span class="ident">FederationMember</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">fields</span>(<span class="ident">peer</span> = %<span class="self">self</span>.<span class="ident">peer_id</span>), <span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>&lt;<span class="ident">R</span>&gt;(
+<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationMember&lt;C&gt; {
+    <span class="attribute">#[instrument(fields(peer = %<span class="self">self</span>.peer_id), skip_all, err)]</span>
+    <span class="kw">pub async fn </span>request&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">method</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-        <span class="ident">params</span>: <span class="kw-2">&amp;</span>[<span class="ident">serde_json::Value</span>],
-    ) -&gt; <span class="ident">std::result::Result</span>&lt;<span class="ident">R</span>, <span class="ident">JsonRpcError</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">R</span>: <span class="ident">serde::de::DeserializeOwned</span>,
+        method: <span class="kw-2">&amp;</span>str,
+        params: <span class="kw-2">&amp;</span>[serde_json::Value],
+    ) -&gt; std::result::Result&lt;R, JsonRpcError&gt;
+    <span class="kw">where
+        </span>R: serde::de::DeserializeOwned,
     {
-        <span class="kw">let</span> <span class="ident">params</span> = <span class="prelude-val">Some</span>(<span class="ident">jsonrpsee_types::ParamsSer::ArrayRef</span>(<span class="ident">params</span>));
-        <span class="kw">let</span> <span class="ident">rclient</span> = <span class="self">self</span>.<span class="ident">client</span>.<span class="ident">read</span>().<span class="kw">await</span>;
-        <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">rclient</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">client</span>) <span class="kw">if</span> <span class="ident">client</span>.<span class="ident">is_connected</span>() =&gt; {
-                <span class="kw">return</span> <span class="ident">client</span>.<span class="ident">request</span>::&lt;<span class="ident">R</span>&gt;(<span class="ident">method</span>, <span class="ident">params</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>params = <span class="prelude-val">Some</span>(jsonrpsee_types::ParamsSer::ArrayRef(params));
+        <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>rclient {
+            <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
+                <span class="kw">return </span>client.request::&lt;R&gt;(method, params).<span class="kw">await</span>;
             }
-            <span class="kw">_</span> =&gt; {}
+            <span class="kw">_ </span>=&gt; {}
         };
 
         <span class="macro">warn!</span>(<span class="string">&quot;web socket not connected, reconnecting&quot;</span>);
 
-        <span class="ident">drop</span>(<span class="ident">rclient</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">wclient</span> = <span class="self">self</span>.<span class="ident">client</span>.<span class="ident">write</span>().<span class="kw">await</span>;
-        <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">*</span><span class="ident">wclient</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">client</span>) <span class="kw">if</span> <span class="ident">client</span>.<span class="ident">is_connected</span>() =&gt; {
-                <span class="comment">// other task has already connected it</span>
-                <span class="kw">let</span> <span class="ident">rclient</span> = <span class="ident">RwLockWriteGuard::downgrade</span>(<span class="ident">wclient</span>);
-                <span class="ident">rclient</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="ident">request</span>::&lt;<span class="ident">R</span>&gt;(<span class="ident">method</span>, <span class="ident">params</span>).<span class="kw">await</span>
-            }
-            <span class="kw">_</span> =&gt; {
-                <span class="comment">// write lock is acquired before creating a new client</span>
-                <span class="comment">// so only one task will try to create a new client</span>
-                <span class="kw">match</span> <span class="ident">C::connect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">url</span>).<span class="kw">await</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">client</span>) =&gt; {
-                        <span class="kw-2">*</span><span class="ident">wclient</span> = <span class="prelude-val">Some</span>(<span class="ident">client</span>);
-                        <span class="comment">// drop the write lock before making the request</span>
-                        <span class="kw">let</span> <span class="ident">rclient</span> = <span class="ident">RwLockWriteGuard::downgrade</span>(<span class="ident">wclient</span>);
-                        <span class="ident">rclient</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="ident">request</span>::&lt;<span class="ident">R</span>&gt;(<span class="ident">method</span>, <span class="ident">params</span>).<span class="kw">await</span>
-                    }
-                    <span class="prelude-val">Err</span>(<span class="ident">err</span>) =&gt; {
-                        <span class="macro">error!</span>(%<span class="ident">err</span>, <span class="string">&quot;unable to connect to server&quot;</span>);
-                        <span class="prelude-val">Err</span>(<span class="ident">err</span>)
+        drop(rclient);
+        <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
+        <span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
+            <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
+                <span class="comment">// other task has already connected it
+                </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
+                rclient.as_ref().unwrap().request::&lt;R&gt;(method, params).<span class="kw">await
+            </span>}
+            <span class="kw">_ </span>=&gt; {
+                <span class="comment">// write lock is acquired before creating a new client
+                // so only one task will try to create a new client
+                </span><span class="kw">match </span>C::connect(<span class="kw-2">&amp;</span><span class="self">self</span>.url).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(client) =&gt; {
+                        <span class="kw-2">*</span>wclient = <span class="prelude-val">Some</span>(client);
+                        <span class="comment">// drop the write lock before making the request
+                        </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
+                        rclient.as_ref().unwrap().request::&lt;R&gt;(method, params).<span class="kw">await
+                    </span>}
+                    <span class="prelude-val">Err</span>(err) =&gt; {
+                        <span class="macro">error!</span>(%err, <span class="string">&quot;unable to connect to server&quot;</span>);
+                        <span class="prelude-val">Err</span>(err)
                     }
                 }
             }
@@ -917,264 +917,264 @@
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">C</span>: <span class="ident">JsonRpcClient</span>&gt; <span class="ident">WsFederationApi</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>&lt;<span class="ident">P</span>: <span class="ident">serde::Serialize</span>, <span class="ident">R</span>: <span class="ident">serde::de::DeserializeOwned</span>&gt;(
+<span class="kw">impl</span>&lt;C: JsonRpcClient&gt; WsFederationApi&lt;C&gt; {
+    <span class="kw">pub async fn </span>request&lt;P: serde::Serialize, R: serde::de::DeserializeOwned&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">method</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>,
-        <span class="ident">param</span>: <span class="ident">P</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">R</span>&gt; {
-        <span class="kw">let</span> <span class="ident">params</span> = [<span class="ident">serde_json::to_value</span>(<span class="ident">param</span>).<span class="ident">expect</span>(<span class="string">&quot;encoding error&quot;</span>)];
-        <span class="kw">let</span> <span class="ident">requests</span> = <span class="self">self</span>
-            .<span class="ident">members</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|<span class="ident">member</span>| <span class="ident">Box::pin</span>(<span class="ident">member</span>.<span class="ident">request</span>(<span class="ident">method</span>, <span class="kw-2">&amp;</span><span class="ident">params</span>)));
+        method: <span class="kw-2">&amp;</span>str,
+        param: P,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt; {
+        <span class="kw">let </span>params = [serde_json::to_value(param).expect(<span class="string">&quot;encoding error&quot;</span>)];
+        <span class="kw">let </span>requests = <span class="self">self
+            </span>.members
+            .iter()
+            .map(|member| Box::pin(member.request(method, <span class="kw-2">&amp;</span>params)));
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">error</span> = <span class="prelude-val">None</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">successes</span> = <span class="number">0</span>;
-        <span class="kw">for</span> <span class="ident">request</span> <span class="kw">in</span> <span class="ident">requests</span> {
-            <span class="kw">match</span> <span class="ident">request</span>.<span class="kw">await</span> {
-                <span class="prelude-val">Ok</span>(<span class="ident">res</span>) =&gt; {
-                    <span class="kw">if</span> <span class="ident">successes</span> == <span class="self">self</span>.<span class="ident">max_evil</span> {
-                        <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">res</span>);
-                    } <span class="kw">else</span> {
-                        <span class="ident">successes</span> += <span class="number">1</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>successes = <span class="number">0</span>;
+        <span class="kw">for </span>request <span class="kw">in </span>requests {
+            <span class="kw">match </span>request.<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(res) =&gt; {
+                    <span class="kw">if </span>successes == <span class="self">self</span>.max_evil {
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(res);
+                    } <span class="kw">else </span>{
+                        successes += <span class="number">1</span>;
                     }
                 }
-                <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; <span class="ident">error</span> = <span class="prelude-val">Some</span>(<span class="ident">e</span>),
+                <span class="prelude-val">Err</span>(e) =&gt; error = <span class="prelude-val">Some</span>(e),
             };
         }
 
-        <span class="prelude-val">Err</span>(<span class="ident">ApiError::RpcError</span>(
-            <span class="ident">error</span>.<span class="ident">expect</span>(<span class="string">&quot;If there was no success there has to be an error&quot;</span>),
+        <span class="prelude-val">Err</span>(ApiError::RpcError(
+            error.expect(<span class="string">&quot;If there was no success there has to be an error&quot;</span>),
         ))
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident">anyhow::anyhow</span>;
-    <span class="kw">use</span> <span class="ident">once_cell::sync::Lazy</span>;
-    <span class="kw">use</span> <span class="ident">std</span>::{
-        <span class="ident">collections::HashSet</span>,
-        <span class="ident">sync</span>::{
-            <span class="ident">atomic</span>::{<span class="ident">AtomicBool</span>, <span class="ident">AtomicUsize</span>, <span class="ident">Ordering</span>},
-            <span class="ident">Mutex</span>,
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span>anyhow::anyhow;
+    <span class="kw">use </span>once_cell::sync::Lazy;
+    <span class="kw">use </span>std::{
+        collections::HashSet,
+        sync::{
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            Mutex,
         },
     };
 
-    <span class="kw">use</span> <span class="kw">super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
-    <span class="kw">type</span> <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span> = ()&gt; = <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">JsonRpcError</span>&gt;;
+    <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcError&gt;;
 
-    <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-    <span class="kw">trait</span> <span class="ident">SimpleClient</span>: <span class="ident">Sized</span> {
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
-        <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-            <span class="bool-val">true</span>
-        }
-        <span class="comment">// reply with json</span>
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">method</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">String</span>&gt;;
+    <span class="attribute">#[async_trait]</span>
+    <span class="kw">trait </span>SimpleClient: Sized {
+        <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+            <span class="bool-val">true
+        </span>}
+        <span class="comment">// reply with json
+        </span><span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt;;
     }
 
-    <span class="kw">struct</span> <span class="ident">Client</span>&lt;<span class="ident">C</span>: <span class="ident">SimpleClient</span>&gt;(<span class="ident">C</span>);
+    <span class="kw">struct </span>Client&lt;C: SimpleClient&gt;(C);
 
-    <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-    <span class="kw">impl</span>&lt;<span class="ident">C</span>: <span class="ident">SimpleClient</span> + <span class="ident">Send</span> + <span class="ident">Sync</span>&gt; <span class="ident">JsonRpcClient</span> <span class="kw">for</span> <span class="ident">Client</span>&lt;<span class="ident">C</span>&gt; {
-        <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-            <span class="self">self</span>.<span class="number">0</span>.<span class="ident">is_connected</span>()
+    <span class="attribute">#[async_trait]</span>
+    <span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
+        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+            <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>(<span class="ident">_url</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(<span class="ident">C::connect</span>().<span class="kw">await</span><span class="question-mark">?</span>))
+        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
         }
     }
 
-    <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-    <span class="kw">impl</span>&lt;<span class="ident">C</span>: <span class="ident">SimpleClient</span> + <span class="ident">Send</span> + <span class="ident">Sync</span>&gt; <span class="ident">ClientT</span> <span class="kw">for</span> <span class="ident">Client</span>&lt;<span class="ident">C</span>&gt; {
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">R</span>&gt;(
+    <span class="attribute">#[async_trait]</span>
+    <span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
+        <span class="kw">async fn </span>request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            <span class="ident">method</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">str</span>,
-            <span class="ident">_params</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">jsonrpsee_types::ParamsSer</span>&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">R</span>&gt;
-        <span class="kw">where</span>
-            <span class="ident">R</span>: <span class="ident">jsonrpsee_core::DeserializeOwned</span>,
+            method: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+            _params: <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt;
+        <span class="kw">where
+            </span>R: jsonrpsee_core::DeserializeOwned,
         {
-            <span class="kw">let</span> <span class="ident">json</span> = <span class="self">self</span>.<span class="number">0</span>.<span class="ident">request</span>(<span class="ident">method</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(<span class="ident">serde_json::from_str</span>(<span class="kw-2">&amp;</span><span class="ident">json</span>).<span class="ident">unwrap</span>())
+            <span class="kw">let </span>json = <span class="self">self</span>.<span class="number">0</span>.request(method).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>json).unwrap())
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">notification</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw">async fn </span>notification&lt;<span class="lifetime">&#39;a</span>&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            <span class="ident">_method</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">str</span>,
-            <span class="ident">_params</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">jsonrpsee_types::ParamsSer</span>&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
+            _method: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
+            _params: <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;,
         ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
             <span class="macro">unimplemented!</span>()
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">batch_request</span>&lt;<span class="lifetime">&#39;a</span>, <span class="ident">R</span>&gt;(
+        <span class="kw">async fn </span>batch_request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            <span class="ident">_batch</span>: <span class="ident">Vec</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">str</span>, <span class="prelude-ty">Option</span>&lt;<span class="ident">jsonrpsee_types::ParamsSer</span>&lt;<span class="lifetime">&#39;a</span>&gt;&gt;)&gt;,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">R</span>&gt;&gt;
-        <span class="kw">where</span>
-            <span class="ident">R</span>: <span class="ident">jsonrpsee_core::DeserializeOwned</span> + <span class="ident">Default</span> + <span class="ident">Clone</span>,
+            _batch: Vec&lt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str, <span class="prelude-ty">Option</span>&lt;jsonrpsee_types::ParamsSer&lt;<span class="lifetime">&#39;a</span>&gt;&gt;)&gt;,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;R&gt;&gt;
+        <span class="kw">where
+            </span>R: jsonrpsee_core::DeserializeOwned + Default + Clone,
         {
             <span class="macro">unimplemented!</span>()
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">federation_member</span>&lt;<span class="ident">C</span>: <span class="ident">SimpleClient</span> + <span class="ident">Send</span> + <span class="ident">Sync</span>&gt;() -&gt; <span class="ident">FederationMember</span>&lt;<span class="ident">Client</span>&lt;<span class="ident">C</span>&gt;&gt; {
-        <span class="ident">FederationMember</span> {
-            <span class="ident">url</span>: <span class="ident">String::new</span>(),
-            <span class="ident">peer_id</span>: <span class="ident">PeerId::from</span>(<span class="number">0</span>),
-            <span class="ident">client</span>: <span class="ident">RwLock::new</span>(<span class="prelude-val">None</span>),
+    <span class="kw">fn </span>federation_member&lt;C: SimpleClient + Send + Sync&gt;() -&gt; FederationMember&lt;Client&lt;C&gt;&gt; {
+        FederationMember {
+            url: String::new(),
+            peer_id: PeerId::from(<span class="number">0</span>),
+            client: RwLock::new(<span class="prelude-val">None</span>),
         }
     }
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_connect</span>() {
-        <span class="kw">static</span> <span class="ident">CONNECTION_COUNT</span>: <span class="ident">AtomicUsize</span> = <span class="ident">AtomicUsize::new</span>(<span class="number">0</span>);
-        <span class="kw">static</span> <span class="ident">CONNECTED</span>: <span class="ident">AtomicBool</span> = <span class="ident">AtomicBool::new</span>(<span class="bool-val">true</span>);
-        <span class="kw">struct</span> <span class="ident">Client</span>;
+    <span class="attribute">#[test_log::test(tokio::test)]</span>
+    <span class="kw">async fn </span>test_connect() {
+        <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+        <span class="kw">static </span>CONNECTED: AtomicBool = AtomicBool::new(<span class="bool-val">true</span>);
+        <span class="kw">struct </span>Client;
 
-        <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-        <span class="kw">impl</span> <span class="ident">SimpleClient</span> <span class="kw">for</span> <span class="ident">Client</span> {
-            <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-                <span class="ident">CONNECTION_COUNT</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Ordering::SeqCst</span>);
-                <span class="prelude-val">Ok</span>(<span class="ident">Client</span>)
+        <span class="attribute">#[async_trait]</span>
+        <span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
+            <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+                CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
+                <span class="prelude-val">Ok</span>(Client)
             }
 
-            <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-                <span class="ident">CONNECTED</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>)
+            <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+                CONNECTED.load(Ordering::SeqCst)
             }
 
-            <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_method</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">String</span>&gt; {
-                <span class="prelude-val">Ok</span>(<span class="string">&quot;null&quot;</span>.<span class="ident">to_string</span>())
+            <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+                <span class="prelude-val">Ok</span>(<span class="string">&quot;null&quot;</span>.to_string())
             }
         }
 
-        <span class="kw">let</span> <span class="ident">fed</span> = <span class="ident">federation_member</span>::&lt;<span class="ident">Client</span>&gt;();
+        <span class="kw">let </span>fed = federation_member::&lt;Client&gt;();
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">0</span>,
-            <span class="string">&quot;should not connect before first request&quot;</span>
-        );
+            <span class="string">&quot;should not connect before first request&quot;
+        </span>);
 
-        <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
-            <span class="string">&quot;should connect once after first request&quot;</span>
-        );
+            <span class="string">&quot;should connect once after first request&quot;
+        </span>);
 
-        <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
-            <span class="string">&quot;should not connect again before disconnect&quot;</span>
-        );
+            <span class="string">&quot;should not connect again before disconnect&quot;
+        </span>);
 
-        <span class="comment">// disconnect</span>
-        <span class="ident">CONNECTED</span>.<span class="ident">store</span>(<span class="bool-val">false</span>, <span class="ident">Ordering::SeqCst</span>);
+        <span class="comment">// disconnect
+        </span>CONNECTED.store(<span class="bool-val">false</span>, Ordering::SeqCst);
 
-        <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">2</span>,
-            <span class="string">&quot;should connect again after disconnect&quot;</span>
-        );
+            <span class="string">&quot;should connect again after disconnect&quot;
+        </span>);
     }
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>(<span class="ident">tokio::test</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">concurrent_requests</span>() {
-        <span class="kw">static</span> <span class="ident">CONNECTION_COUNT</span>: <span class="ident">AtomicUsize</span> = <span class="ident">AtomicUsize::new</span>(<span class="number">0</span>);
-        <span class="kw">static</span> <span class="ident">FAIL</span>: <span class="ident">Lazy</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">HashSet</span>&lt;<span class="ident">usize</span>&gt;&gt;&gt; = <span class="ident">Lazy::new</span>(|| <span class="ident">Mutex::new</span>(<span class="ident">HashSet::new</span>()));
+    <span class="attribute">#[test_log::test(tokio::test)]</span>
+    <span class="kw">async fn </span>concurrent_requests() {
+        <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
+        <span class="kw">static </span>FAIL: Lazy&lt;Mutex&lt;HashSet&lt;usize&gt;&gt;&gt; = Lazy::new(|| Mutex::new(HashSet::new()));
 
-        <span class="kw">struct</span> <span class="ident">Client</span>(<span class="ident">usize</span>);
+        <span class="kw">struct </span>Client(usize);
 
-        <span class="attribute">#[<span class="ident">async_trait</span>]</span>
-        <span class="kw">impl</span> <span class="ident">SimpleClient</span> <span class="kw">for</span> <span class="ident">Client</span> {
-            <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect</span>() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="attribute">#[async_trait]</span>
+        <span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
+            <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
                 <span class="macro">tracing::error!</span>(<span class="string">&quot;connect&quot;</span>);
-                <span class="kw">let</span> <span class="ident">id</span> = <span class="ident">CONNECTION_COUNT</span>.<span class="ident">fetch_add</span>(<span class="number">1</span>, <span class="ident">Ordering::SeqCst</span>);
-                <span class="comment">// slow down</span>
-                <span class="ident">tokio::time::sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">100</span>)).<span class="kw">await</span>;
-                <span class="kw">if</span> <span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">id</span>) {
-                    <span class="prelude-val">Err</span>(<span class="ident">jsonrpsee_core::Error::Transport</span>(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;intentional error&quot;</span>
-                    )))
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">Client</span>(<span class="ident">id</span>))
+                <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
+                <span class="comment">// slow down
+                </span>tokio::time::sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
+                <span class="kw">if </span>FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span>id) {
+                    <span class="prelude-val">Err</span>(jsonrpsee_core::Error::Transport(<span class="macro">anyhow!</span>(
+                        <span class="string">&quot;intentional error&quot;
+                    </span>)))
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Ok</span>(Client(id))
                 }
             }
 
-            <span class="kw">fn</span> <span class="ident">is_connected</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-                !<span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
+            <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+                !FAIL.lock().unwrap().contains(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)
             }
 
-            <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">request</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_method</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">String</span>&gt; {
-                <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_connected</span>() {
-                    <span class="prelude-val">Ok</span>(<span class="string">&quot;null&quot;</span>.<span class="ident">to_string</span>())
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Err</span>(<span class="ident">jsonrpsee_core::Error::Transport</span>(<span class="macro">anyhow!</span>(
-                        <span class="string">&quot;client is disconnected&quot;</span>
-                    )))
+            <span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, _method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+                <span class="kw">if </span><span class="self">self</span>.is_connected() {
+                    <span class="prelude-val">Ok</span>(<span class="string">&quot;null&quot;</span>.to_string())
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(jsonrpsee_core::Error::Transport(<span class="macro">anyhow!</span>(
+                        <span class="string">&quot;client is disconnected&quot;
+                    </span>)))
                 }
             }
         }
 
-        <span class="kw">let</span> <span class="ident">fed</span> = <span class="ident">federation_member</span>::&lt;<span class="ident">Client</span>&gt;();
+        <span class="kw">let </span>fed = federation_member::&lt;Client&gt;();
 
-        <span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">insert</span>(<span class="number">0</span>);
+        FAIL.lock().unwrap().insert(<span class="number">0</span>);
 
         <span class="macro">assert!</span>(
-            <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.<span class="ident">is_err</span>(),
-            <span class="string">&quot;connect for client 0 should fail&quot;</span>
-        );
+            fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.is_err(),
+            <span class="string">&quot;connect for client 0 should fail&quot;
+        </span>);
 
-        <span class="comment">// connect for client 1 should succeed</span>
-        <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="comment">// connect for client 1 should succeed
+        </span>fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">2</span>,
-            <span class="string">&quot;should connect again after error in first connect&quot;</span>
-        );
+            <span class="string">&quot;should connect again after error in first connect&quot;
+        </span>);
 
-        <span class="comment">// force a new connection by disconnecting client 1</span>
-        <span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">insert</span>(<span class="number">1</span>);
+        <span class="comment">// force a new connection by disconnecting client 1
+        </span>FAIL.lock().unwrap().insert(<span class="number">1</span>);
 
-        <span class="comment">// only connect once even for two concurrent requests</span>
-        <span class="kw">let</span> (<span class="ident">reqa</span>, <span class="ident">reqb</span>) = <span class="macro">tokio::join!</span>(<span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
-        <span class="ident">reqa</span>.<span class="ident">expect</span>(<span class="string">&quot;both request should be successful&quot;</span>);
-        <span class="ident">reqb</span>.<span class="ident">expect</span>(<span class="string">&quot;both request should be successful&quot;</span>);
+        <span class="comment">// only connect once even for two concurrent requests
+        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
+        reqa.expect(<span class="string">&quot;both request should be successful&quot;</span>);
+        reqb.expect(<span class="string">&quot;both request should be successful&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">3</span>,
             <span class="string">&quot;should connect once even for two concurrent requests&quot;</span>,
         );
 
-        <span class="comment">// force a new connection by disconnecting client 2</span>
-        <span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">insert</span>(<span class="number">2</span>);
+        <span class="comment">// force a new connection by disconnecting client 2
+        </span>FAIL.lock().unwrap().insert(<span class="number">2</span>);
 
-        <span class="comment">// client 3 should fail</span>
-        <span class="comment">// client 4 should succeed</span>
-        <span class="ident">FAIL</span>.<span class="ident">lock</span>().<span class="ident">unwrap</span>().<span class="ident">insert</span>(<span class="number">3</span>);
+        <span class="comment">// client 3 should fail
+        // client 4 should succeed
+        </span>FAIL.lock().unwrap().insert(<span class="number">3</span>);
 
-        <span class="comment">// only connect once even for two concurrent requests</span>
-        <span class="kw">let</span> (<span class="ident">reqa</span>, <span class="ident">reqb</span>) = <span class="macro">tokio::join!</span>(<span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), <span class="ident">fed</span>.<span class="ident">request</span>::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
+        <span class="comment">// only connect once even for two concurrent requests
+        </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">CONNECTION_COUNT</span>.<span class="ident">load</span>(<span class="ident">Ordering::SeqCst</span>),
+            CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">5</span>,
             <span class="string">&quot;should connect again if first concurrent request fails&quot;</span>,
         );
 
         <span class="macro">assert!</span>(
-            <span class="ident">reqa</span>.<span class="ident">is_err</span>() ^ <span class="ident">reqb</span>.<span class="ident">is_err</span>(),
-            <span class="string">&quot;exactly one of two request should succeed&quot;</span>
-        );
+            reqa.is_err() ^ reqb.is_err(),
+            <span class="string">&quot;exactly one of two request should succeed&quot;
+        </span>);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

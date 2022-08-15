@@ -320,298 +320,298 @@
 <span id="320">320</span>
 <span id="321">321</span>
 <span id="322">322</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::keys::CompressedPublicKey</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::tweakable</span>::{<span class="ident">Contract</span>, <span class="ident">Tweakable</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::util::merkleblock::PartialMerkleTree</span>;
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">BlockHash</span>, <span class="ident">BlockHeader</span>, <span class="ident">OutPoint</span>, <span class="ident">Transaction</span>, <span class="ident">Txid</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">DecodeError</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">miniscript</span>::{<span class="ident">Descriptor</span>, <span class="ident">DescriptorTrait</span>, <span class="ident">TranslatePk2</span>};
-<span class="kw">use</span> <span class="ident">secp256k1</span>::{<span class="ident">Secp256k1</span>, <span class="ident">Verification</span>};
-<span class="kw">use</span> <span class="ident">serde::de::Error</span>;
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Deserializer</span>, <span class="ident">Serialize</span>, <span class="ident">Serializer</span>};
-<span class="kw">use</span> <span class="ident">std::borrow::Cow</span>;
-<span class="kw">use</span> <span class="ident">std::hash::Hash</span>;
-<span class="kw">use</span> <span class="ident">std::io::Cursor</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">validator</span>::{<span class="ident">Validate</span>, <span class="ident">ValidationError</span>};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
+<span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
+<span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
+<span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
+<span class="kw">use </span>minimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+<span class="kw">use </span>secp256k1::{Secp256k1, Verification};
+<span class="kw">use </span>serde::de::Error;
+<span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+<span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::io::Cursor;
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>validator::{Validate, ValidationError};
 
-<span class="doccomment">/// A proof about a script owning a certain output. Verifyable using headers only.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Serialize</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Validate</span>, <span class="ident">Encodable</span>)]</span>
-<span class="attribute">#[<span class="ident">validate</span>(<span class="ident">schema</span>(<span class="ident">function</span> = <span class="string">&quot;validate_peg_in_proof&quot;</span>))]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegInProof</span> {
-    <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
-    <span class="comment">// check that outputs are not more than u32::max (probably enforced if inclusion proof is</span>
-    <span class="comment">// checked first) and that the referenced output has a value that won&#39;t overflow when converted</span>
-    <span class="comment">// to msat</span>
-    <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
-    <span class="comment">// Check that the idx is in range</span>
-    <span class="ident">output_idx</span>: <span class="ident">u32</span>,
-    <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
+<span class="doccomment">/// A proof about a script owning a certain output. Verifyable using headers only.
+</span><span class="attribute">#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]</span>
+<span class="attribute">#[validate(schema(function = <span class="string">&quot;validate_peg_in_proof&quot;</span>))]</span>
+<span class="kw">pub struct </span>PegInProof {
+    txout_proof: TxOutProof,
+    <span class="comment">// check that outputs are not more than u32::max (probably enforced if inclusion proof is
+    // checked first) and that the referenced output has a value that won&#39;t overflow when converted
+    // to msat
+    </span>transaction: Transaction,
+    <span class="comment">// Check that the idx is in range
+    </span>output_idx: u32,
+    tweak_contract_key: secp256k1::XOnlyPublicKey,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">pub</span> <span class="ident">block_header</span>: <span class="ident">BlockHeader</span>,
-    <span class="kw">pub</span> <span class="ident">merkle_proof</span>: <span class="ident">PartialMerkleTree</span>,
+<span class="attribute">#[derive(Clone, Debug)]</span>
+<span class="kw">pub struct </span>TxOutProof {
+    <span class="kw">pub </span>block_header: BlockHeader,
+    <span class="kw">pub </span>merkle_proof: PartialMerkleTree,
 }
 
-<span class="kw">impl</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">block</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BlockHash</span> {
-        <span class="self">self</span>.<span class="ident">block_header</span>.<span class="ident">block_hash</span>()
+<span class="kw">impl </span>TxOutProof {
+    <span class="kw">pub fn </span>block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlockHash {
+        <span class="self">self</span>.block_header.block_hash()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">contains_tx</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tx_id</span>: <span class="ident">Txid</span>) -&gt; <span class="ident">bool</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">transactions</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">indices</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">let</span> <span class="ident">root</span> = <span class="self">self</span>
-            .<span class="ident">merkle_proof</span>
-            .<span class="ident">extract_matches</span>(<span class="kw-2">&amp;mut</span> <span class="ident">transactions</span>, <span class="kw-2">&amp;mut</span> <span class="ident">indices</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Checked at construction time&quot;</span>);
+    <span class="kw">pub fn </span>contains_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, tx_id: Txid) -&gt; bool {
+        <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
+        <span class="kw">let </span>root = <span class="self">self
+            </span>.merkle_proof
+            .extract_matches(<span class="kw-2">&amp;mut </span>transactions, <span class="kw-2">&amp;mut </span>indices)
+            .expect(<span class="string">&quot;Checked at construction time&quot;</span>);
 
-        <span class="macro">debug_assert_eq!</span>(<span class="ident">root</span>, <span class="self">self</span>.<span class="ident">block_header</span>.<span class="ident">merkle_root</span>);
+        <span class="macro">debug_assert_eq!</span>(root, <span class="self">self</span>.block_header.merkle_root);
 
-        <span class="ident">transactions</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">tx_id</span>)
+        transactions.contains(<span class="kw-2">&amp;</span>tx_id)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">block_header</span> = <span class="ident">BlockHeader::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">merkle_proof</span> = <span class="ident">PartialMerkleTree::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>;
+<span class="kw">impl </span>Decodable <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">transactions</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">indices</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">let</span> <span class="ident">root</span> = <span class="ident">merkle_proof</span>
-            .<span class="ident">extract_matches</span>(<span class="kw-2">&amp;mut</span> <span class="ident">transactions</span>, <span class="kw-2">&amp;mut</span> <span class="ident">indices</span>)
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">DecodeError::from_str</span>(<span class="string">&quot;Invalid partial merkle tree&quot;</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
+        <span class="kw">let </span>root = merkle_proof
+            .extract_matches(<span class="kw-2">&amp;mut </span>transactions, <span class="kw-2">&amp;mut </span>indices)
+            .map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">&quot;Invalid partial merkle tree&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">block_header</span>.<span class="ident">merkle_root</span> != <span class="ident">root</span> {
-            <span class="prelude-val">Err</span>(<span class="ident">DecodeError::from_str</span>(
+        <span class="kw">if </span>block_header.merkle_root != root {
+            <span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">&quot;Partial merkle tree does not belong to block header&quot;</span>,
             ))
-        } <span class="kw">else</span> {
-            <span class="prelude-val">Ok</span>(<span class="ident">TxOutProof</span> {
-                <span class="ident">block_header</span>,
-                <span class="ident">merkle_proof</span>,
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(TxOutProof {
+                block_header,
+                merkle_proof,
             })
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Encodable</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_encode</span>&lt;<span class="ident">W</span>: <span class="ident">std::io::Write</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">writer</span>: <span class="ident">W</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">usize</span>, <span class="ident">std::io::Error</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">written</span> = <span class="number">0</span>;
+<span class="kw">impl </span>Encodable <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>written = <span class="number">0</span>;
 
-        <span class="ident">written</span> += <span class="self">self</span>.<span class="ident">block_header</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
-        <span class="ident">written</span> += <span class="self">self</span>.<span class="ident">merkle_proof</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">writer</span>)<span class="question-mark">?</span>;
+        written += <span class="self">self</span>.block_header.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        written += <span class="self">self</span>.merkle_proof.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">written</span>)
+        <span class="prelude-val">Ok</span>(written)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">PegInProof</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(
-        <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
-        <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
-        <span class="ident">output_idx</span>: <span class="ident">u32</span>,
-        <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span>&gt; {
-        <span class="comment">// TODO: remove redundancy with serde validation</span>
-        <span class="kw">if</span> !<span class="ident">txout_proof</span>.<span class="ident">contains_tx</span>(<span class="ident">transaction</span>.<span class="ident">txid</span>()) {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">PegInProofError::TransactionNotInProof</span>);
+<span class="kw">impl </span>PegInProof {
+    <span class="kw">pub fn </span>new(
+        txout_proof: TxOutProof,
+        transaction: Transaction,
+        output_idx: u32,
+        tweak_contract_key: secp256k1::XOnlyPublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PegInProof, PegInProofError&gt; {
+        <span class="comment">// TODO: remove redundancy with serde validation
+        </span><span class="kw">if </span>!txout_proof.contains_tx(transaction.txid()) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::TransactionNotInProof);
         }
 
-        <span class="kw">if</span> <span class="ident">transaction</span>.<span class="ident">output</span>.<span class="ident">len</span>() &gt; <span class="ident">u32::MAX</span> <span class="kw">as</span> <span class="ident">usize</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">PegInProofError::TooManyTransactionOutputs</span>);
+        <span class="kw">if </span>transaction.output.len() &gt; u32::MAX <span class="kw">as </span>usize {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::TooManyTransactionOutputs);
         }
 
-        <span class="kw">if</span> <span class="ident">transaction</span>.<span class="ident">output</span>.<span class="ident">get</span>(<span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">usize</span>).<span class="ident">is_none</span>() {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">PegInProofError::OutputIndexOutOfRange</span>(
-                <span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">usize</span>,
-                <span class="ident">transaction</span>.<span class="ident">output</span>.<span class="ident">len</span>(),
+        <span class="kw">if </span>transaction.output.get(output_idx <span class="kw">as </span>usize).is_none() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::OutputIndexOutOfRange(
+                output_idx <span class="kw">as </span>usize,
+                transaction.output.len(),
             ));
         }
 
-        <span class="prelude-val">Ok</span>(<span class="ident">PegInProof</span> {
-            <span class="ident">txout_proof</span>,
-            <span class="ident">transaction</span>,
-            <span class="ident">output_idx</span>,
-            <span class="ident">tweak_contract_key</span>,
+        <span class="prelude-val">Ok</span>(PegInProof {
+            txout_proof,
+            transaction,
+            output_idx,
+            tweak_contract_key,
         })
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">verify</span>&lt;<span class="ident">C</span>: <span class="ident">Verification</span>&gt;(
+    <span class="kw">pub fn </span>verify&lt;C: Verification&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">C</span>&gt;,
-        <span class="ident">untweaked_pegin_descriptor</span>: <span class="kw-2">&amp;</span><span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">PegInProofError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">script</span> = <span class="ident">untweaked_pegin_descriptor</span>
-            .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">tweak_contract_key</span>, <span class="ident">secp</span>)
-            .<span class="ident">script_pubkey</span>();
+        secp: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
+        untweaked_pegin_descriptor: <span class="kw-2">&amp;</span>Descriptor&lt;CompressedPublicKey&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PegInProofError&gt; {
+        <span class="kw">let </span>script = untweaked_pegin_descriptor
+            .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
+            .script_pubkey();
 
-        <span class="kw">let</span> <span class="ident">txo</span> = <span class="self">self</span>
-            .<span class="ident">transaction</span>
-            .<span class="ident">output</span>
-            .<span class="ident">get</span>(<span class="self">self</span>.<span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">usize</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;output_idx in-rangeness is an invariant guaranteed by constructors&quot;</span>);
+        <span class="kw">let </span>txo = <span class="self">self
+            </span>.transaction
+            .output
+            .get(<span class="self">self</span>.output_idx <span class="kw">as </span>usize)
+            .expect(<span class="string">&quot;output_idx in-rangeness is an invariant guaranteed by constructors&quot;</span>);
 
-        <span class="kw">if</span> <span class="ident">txo</span>.<span class="ident">script_pubkey</span> != <span class="ident">script</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">PegInProofError::ScriptDoesNotMatch</span>);
+        <span class="kw">if </span>txo.script_pubkey != script {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::ScriptDoesNotMatch);
         }
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">proof_block</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">BlockHash</span> {
-        <span class="self">self</span>.<span class="ident">txout_proof</span>.<span class="ident">block</span>()
+    <span class="kw">pub fn </span>proof_block(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BlockHash {
+        <span class="self">self</span>.txout_proof.block()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">tweak_contract_key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">secp256k1::XOnlyPublicKey</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">tweak_contract_key</span>
+    <span class="kw">pub fn </span>tweak_contract_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>secp256k1::XOnlyPublicKey {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">identity</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (<span class="ident">secp256k1::XOnlyPublicKey</span>, <span class="ident">bitcoin::Txid</span>) {
-        (<span class="self">self</span>.<span class="ident">tweak_contract_key</span>, <span class="self">self</span>.<span class="ident">transaction</span>.<span class="ident">txid</span>())
+    <span class="kw">pub fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; (secp256k1::XOnlyPublicKey, bitcoin::Txid) {
+        (<span class="self">self</span>.tweak_contract_key, <span class="self">self</span>.transaction.txid())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">tx_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">bitcoin::TxOut</span> {
-        <span class="self">self</span>.<span class="ident">transaction</span>
-            .<span class="ident">output</span>
-            .<span class="ident">get</span>(<span class="self">self</span>.<span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">usize</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;output_idx in-rangeness is an invariant guaranteed by constructors&quot;</span>)
+    <span class="kw">pub fn </span>tx_output(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>bitcoin::TxOut {
+        <span class="self">self</span>.transaction
+            .output
+            .get(<span class="self">self</span>.output_idx <span class="kw">as </span>usize)
+            .expect(<span class="string">&quot;output_idx in-rangeness is an invariant guaranteed by constructors&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">outpoint</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bitcoin::OutPoint</span> {
-        <span class="ident">OutPoint</span> {
-            <span class="ident">txid</span>: <span class="self">self</span>.<span class="ident">transaction</span>.<span class="ident">txid</span>(),
-            <span class="ident">vout</span>: <span class="self">self</span>.<span class="ident">output_idx</span>,
+    <span class="kw">pub fn </span>outpoint(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::OutPoint {
+        OutPoint {
+            txid: <span class="self">self</span>.transaction.txid(),
+            vout: <span class="self">self</span>.output_idx,
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Tweakable</span> <span class="kw">for</span> <span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">tweak</span>&lt;<span class="ident">Ctx</span>: <span class="ident">Verification</span>, <span class="ident">Ctr</span>: <span class="ident">Contract</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span><span class="ident">Ctr</span>, <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="ident">Secp256k1</span>&lt;<span class="ident">Ctx</span>&gt;) -&gt; <span class="self">Self</span> {
-        <span class="self">self</span>.<span class="ident">translate_pk2_infallible</span>(|<span class="ident">pk</span>| <span class="ident">CompressedPublicKey</span> {
-            <span class="ident">key</span>: <span class="ident">pk</span>.<span class="ident">key</span>.<span class="ident">tweak</span>(<span class="ident">tweak</span>, <span class="ident">secp</span>),
+<span class="kw">impl </span>Tweakable <span class="kw">for </span>Descriptor&lt;CompressedPublicKey&gt; {
+    <span class="kw">fn </span>tweak&lt;Ctx: Verification, Ctr: Contract&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>Ctr, secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.translate_pk2_infallible(|pk| CompressedPublicKey {
+            key: pk.key.tweak(tweak, secp),
         })
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Serialize</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">serialize</span>&lt;<span class="ident">S</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">serializer</span>: <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span>&lt;&lt;<span class="ident">S</span> <span class="kw">as</span> <span class="ident">Serializer</span>&gt;<span class="ident">::Ok</span>, &lt;<span class="ident">S</span> <span class="kw">as</span> <span class="ident">Serializer</span>&gt;<span class="ident">::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">S</span>: <span class="ident">Serializer</span>,
+<span class="kw">impl </span>Serialize <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>serialize&lt;S&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;&lt;S <span class="kw">as </span>Serializer&gt;::Ok, &lt;S <span class="kw">as </span>Serializer&gt;::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
     {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> = <span class="ident">Vec::new</span>();
-        <span class="self">self</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">bytes</span>).<span class="ident">unwrap</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
 
-        <span class="kw">if</span> <span class="ident">serializer</span>.<span class="ident">is_human_readable</span>() {
-            <span class="ident">serializer</span>.<span class="ident">serialize_str</span>(<span class="kw-2">&amp;</span><span class="ident">hex::encode</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>))
-        } <span class="kw">else</span> {
-            <span class="ident">serializer</span>.<span class="ident">serialize_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>)
+        <span class="kw">if </span>serializer.is_human_readable() {
+            serializer.serialize_str(<span class="kw-2">&amp;</span>hex::encode(<span class="kw-2">&amp;</span>bytes))
+        } <span class="kw">else </span>{
+            serializer.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; <span class="ident">Deserialize</span>&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">deserialize</span>&lt;<span class="ident">D</span>&gt;(<span class="ident">deserializer</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, &lt;<span class="ident">D</span> <span class="kw">as</span> <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;&gt;<span class="ident">::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">D</span>: <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;,
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;de</span>&gt; Deserialize&lt;<span class="lifetime">&#39;de</span>&gt; <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>deserialize&lt;D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, &lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error&gt;
+    <span class="kw">where
+        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
-        <span class="kw">if</span> <span class="ident">deserializer</span>.<span class="ident">is_human_readable</span>() {
-            <span class="comment">// TODO: Try Cow</span>
-            <span class="kw">let</span> <span class="ident">hex_str</span>: <span class="ident">Cow</span>&lt;<span class="ident">str</span>&gt; = <span class="ident">Deserialize::deserialize</span>(<span class="ident">deserializer</span>)<span class="question-mark">?</span>;
-            <span class="kw">let</span> <span class="ident">bytes</span> =
-                <span class="ident">hex::decode</span>(<span class="ident">hex_str</span>.<span class="ident">as_ref</span>()).<span class="ident">map_err</span>(&lt;<span class="ident">D</span> <span class="kw">as</span> <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;&gt;<span class="ident">::Error::custom</span>)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(<span class="ident">TxOutProof::consensus_decode</span>(<span class="ident">Cursor::new</span>(<span class="ident">bytes</span>))
-                .<span class="ident">map_err</span>(&lt;<span class="ident">D</span> <span class="kw">as</span> <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;&gt;<span class="ident">::Error::custom</span>)<span class="question-mark">?</span>)
-        } <span class="kw">else</span> {
-            <span class="kw">let</span> <span class="ident">bytes</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>] = <span class="ident">Deserialize::deserialize</span>(<span class="ident">deserializer</span>)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(<span class="ident">TxOutProof::consensus_decode</span>(<span class="ident">Cursor::new</span>(<span class="ident">bytes</span>))
-                .<span class="ident">map_err</span>(&lt;<span class="ident">D</span> <span class="kw">as</span> <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;&gt;<span class="ident">::Error::custom</span>)<span class="question-mark">?</span>)
+        <span class="kw">if </span>deserializer.is_human_readable() {
+            <span class="comment">// TODO: Try Cow
+            </span><span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
+            <span class="kw">let </span>bytes =
+                hex::decode(hex_str.as_ref()).map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(Cursor::new(bytes))
+                .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>bytes: <span class="kw-2">&amp;</span>[u8] = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(Cursor::new(bytes))
+                .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
         }
     }
 }
 
-<span class="kw">fn</span> <span class="ident">validate_peg_in_proof</span>(<span class="ident">proof</span>: <span class="kw-2">&amp;</span><span class="ident">PegInProof</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">ValidationError</span>&gt; {
-    <span class="kw">if</span> !<span class="ident">proof</span>.<span class="ident">txout_proof</span>.<span class="ident">contains_tx</span>(<span class="ident">proof</span>.<span class="ident">transaction</span>.<span class="ident">txid</span>()) {
-        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ValidationError::new</span>(
+<span class="kw">fn </span>validate_peg_in_proof(proof: <span class="kw-2">&amp;</span>PegInProof) -&gt; <span class="prelude-ty">Result</span>&lt;(), ValidationError&gt; {
+    <span class="kw">if </span>!proof.txout_proof.contains_tx(proof.transaction.txid()) {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(ValidationError::new(
             <span class="string">&quot;Supplied transaction is not included in proof&quot;</span>,
         ));
     }
 
-    <span class="kw">if</span> <span class="ident">proof</span>.<span class="ident">transaction</span>.<span class="ident">output</span>.<span class="ident">len</span>() &gt; <span class="ident">u32::MAX</span> <span class="kw">as</span> <span class="ident">usize</span> {
-        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ValidationError::new</span>(
+    <span class="kw">if </span>proof.transaction.output.len() &gt; u32::MAX <span class="kw">as </span>usize {
+        <span class="kw">return </span><span class="prelude-val">Err</span>(ValidationError::new(
             <span class="string">&quot;Supplied transaction has too many outputs&quot;</span>,
         ));
     }
 
-    <span class="kw">match</span> <span class="ident">proof</span>.<span class="ident">transaction</span>.<span class="ident">output</span>.<span class="ident">get</span>(<span class="ident">proof</span>.<span class="ident">output_idx</span> <span class="kw">as</span> <span class="ident">usize</span>) {
-        <span class="prelude-val">Some</span>(<span class="ident">txo</span>) =&gt; {
-            <span class="kw">if</span> <span class="ident">txo</span>.<span class="ident">value</span> &gt; <span class="number">2_100_000_000_000_000</span> {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ValidationError::new</span>(<span class="string">&quot;Txout amount out of range&quot;</span>));
+    <span class="kw">match </span>proof.transaction.output.get(proof.output_idx <span class="kw">as </span>usize) {
+        <span class="prelude-val">Some</span>(txo) =&gt; {
+            <span class="kw">if </span>txo.value &gt; <span class="number">2_100_000_000_000_000 </span>{
+                <span class="kw">return </span><span class="prelude-val">Err</span>(ValidationError::new(<span class="string">&quot;Txout amount out of range&quot;</span>));
             }
         }
-        <span class="prelude-val">None</span> =&gt; {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ValidationError::new</span>(<span class="string">&quot;Output index out of range&quot;</span>));
+        <span class="prelude-val">None </span>=&gt; {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ValidationError::new(<span class="string">&quot;Output index out of range&quot;</span>));
         }
     }
 
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="comment">// TODO: upstream</span>
-<span class="kw">impl</span> <span class="ident">Hash</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">hash</span>&lt;<span class="ident">H</span>: <span class="ident">std::hash::Hasher</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">state</span>: <span class="kw-2">&amp;mut</span> <span class="ident">H</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> = <span class="ident">Vec::new</span>();
-        <span class="self">self</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">bytes</span>).<span class="ident">unwrap</span>();
-        <span class="ident">state</span>.<span class="ident">write</span>(<span class="kw-2">&amp;</span><span class="ident">bytes</span>);
+<span class="comment">// TODO: upstream
+</span><span class="kw">impl </span>Hash <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>hash&lt;H: std::hash::Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes).unwrap();
+        state.write(<span class="kw-2">&amp;</span>bytes);
     }
 }
 
-<span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {
-    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="ident">TxOutProof</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">block_header</span> == <span class="ident">other</span>.<span class="ident">block_header</span> &amp;&amp; <span class="self">self</span>.<span class="ident">merkle_proof</span> == <span class="ident">other</span>.<span class="ident">merkle_proof</span>
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>TxOutProof) -&gt; bool {
+        <span class="self">self</span>.block_header == other.block_header &amp;&amp; <span class="self">self</span>.merkle_proof == other.merkle_proof
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">TxOutProof</span> {}
+<span class="kw">impl </span>Eq <span class="kw">for </span>TxOutProof {}
 
-<span class="kw">impl</span> <span class="ident">Decodable</span> <span class="kw">for</span> <span class="ident">PegInProof</span> {
-    <span class="kw">fn</span> <span class="ident">consensus_decode</span>&lt;<span class="ident">D</span>: <span class="ident">std::io::Read</span>&gt;(<span class="kw-2">mut</span> <span class="ident">d</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodeError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">slf</span> = <span class="ident">PegInProof</span> {
-            <span class="ident">txout_proof</span>: <span class="ident">TxOutProof::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
-            <span class="ident">transaction</span>: <span class="ident">Transaction::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
-            <span class="ident">output_idx</span>: <span class="ident">u32::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
-            <span class="ident">tweak_contract_key</span>: <span class="ident">secp256k1::XOnlyPublicKey::consensus_decode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">d</span>)<span class="question-mark">?</span>,
+<span class="kw">impl </span>Decodable <span class="kw">for </span>PegInProof {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>slf = PegInProof {
+            txout_proof: TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
+            transaction: Transaction::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
+            output_idx: u32::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
         };
 
-        <span class="ident">validate_peg_in_proof</span>(<span class="kw-2">&amp;</span><span class="ident">slf</span>).<span class="ident">map_err</span>(<span class="ident">DecodeError::from_err</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="ident">slf</span>)
+        validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(slf)
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">PegInProofError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Supplied transaction is not included in proof&quot;</span>)]</span>
-    <span class="ident">TransactionNotInProof</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Supplied transaction has too many outputs&quot;</span>)]</span>
-    <span class="ident">TooManyTransactionOutputs</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The output with index {0} referred to does not exist (tx has {1} outputs)&quot;</span>)]</span>
-    <span class="ident">OutputIndexOutOfRange</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The expected script given the tweak did not match the actual script&quot;</span>)]</span>
-    <span class="ident">ScriptDoesNotMatch</span>,
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>PegInProofError {
+    <span class="attribute">#[error(<span class="string">&quot;Supplied transaction is not included in proof&quot;</span>)]</span>
+    TransactionNotInProof,
+    <span class="attribute">#[error(<span class="string">&quot;Supplied transaction has too many outputs&quot;</span>)]</span>
+    TooManyTransactionOutputs,
+    <span class="attribute">#[error(<span class="string">&quot;The output with index {0} referred to does not exist (tx has {1} outputs)&quot;</span>)]</span>
+    OutputIndexOutOfRange(usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;The expected script given the tweak did not match the actual script&quot;</span>)]</span>
+    ScriptDoesNotMatch,
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::TxOutProof</span>;
-    <span class="kw">use</span> <span class="ident">minimint_api::encoding::Decodable</span>;
-    <span class="kw">use</span> <span class="ident">std::io::Cursor</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
+    <span class="kw">use </span>minimint_api::encoding::Decodable;
+    <span class="kw">use </span>std::io::Cursor;
 
-    <span class="attribute">#[<span class="ident">test_log::test</span>]</span>
-    <span class="kw">fn</span> <span class="ident">test_txoutproof_happy_path</span>() {
-        <span class="kw">let</span> <span class="ident">txoutproof_hex</span> = <span class="string">&quot;0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
+    <span class="attribute">#[test_log::test]</span>
+    <span class="kw">fn </span>test_txoutproof_happy_path() {
+        <span class="kw">let </span>txoutproof_hex = <span class="string">&quot;0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
         0000045e274cbfff8fe34e6df61079ae8c8cf5af6d53ff158488e26df5a072363693be15a6760482a0c1731b169\
         074a0a00000dc525bdf029c9d77ac1039826be603bf08837d5dfd58b763590fb3f2db32693eacd2a8b13842289e\
         d8b6b10ffbae3498987ca510d6b54a278bb85a9b6f2daa0efa52ae55f39842e890144f998258b365ae903fd5b8e\
@@ -624,23 +624,23 @@
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000&quot;</span>;
 
-        <span class="kw">let</span> <span class="ident">txoutproof</span> =
-            <span class="ident">TxOutProof::consensus_decode</span>(<span class="ident">Cursor::new</span>(<span class="ident">hex::decode</span>(<span class="ident">txoutproof_hex</span>).<span class="ident">unwrap</span>()))
-                .<span class="ident">unwrap</span>();
+        <span class="kw">let </span>txoutproof =
+            TxOutProof::consensus_decode(Cursor::new(hex::decode(txoutproof_hex).unwrap()))
+                .unwrap();
 
         <span class="macro">assert_eq!</span>(
-            <span class="ident">txoutproof</span>.<span class="ident">block</span>(),
-            <span class="string">&quot;0000000000000000000761505b672f2f7fc3822a5a95089fa469c3fb16ee574b&quot;</span>
-                .<span class="ident">parse</span>()
-                .<span class="ident">unwrap</span>()
+            txoutproof.block(),
+            <span class="string">&quot;0000000000000000000761505b672f2f7fc3822a5a95089fa469c3fb16ee574b&quot;
+                </span>.parse()
+                .unwrap()
         );
 
-        <span class="macro">assert!</span>(<span class="ident">txoutproof</span>.<span class="ident">contains_tx</span>(
-            <span class="string">&quot;efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd&quot;</span>
-                .<span class="ident">parse</span>()
-                .<span class="ident">unwrap</span>()
+        <span class="macro">assert!</span>(txoutproof.contains_tx(
+            <span class="string">&quot;efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd&quot;
+                </span>.parse()
+                .unwrap()
         ))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

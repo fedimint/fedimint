@@ -100,107 +100,107 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">PendingTransaction</span>, <span class="ident">RoundConsensus</span>, <span class="ident">SpendableUTXO</span>, <span class="ident">UnsignedTransaction</span>};
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">BlockHash</span>, <span class="ident">OutPoint</span>, <span class="ident">Txid</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">secp256k1::ecdsa::Signature</span>;
+</pre><pre class="rust"><code><span class="kw">use crate</span>::{PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction};
+<span class="kw">use </span>bitcoin::{BlockHash, OutPoint, Txid};
+<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>secp256k1::ecdsa::Signature;
 
-<span class="kw">const</span> <span class="ident">DB_PREFIX_BLOCK_HASH</span>: <span class="ident">u8</span> = <span class="number">0x30</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_UTXO</span>: <span class="ident">u8</span> = <span class="number">0x31</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_ROUND_CONSENSUS</span>: <span class="ident">u8</span> = <span class="number">0x32</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_UNSIGNED_TRANSACTION</span>: <span class="ident">u8</span> = <span class="number">0x34</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_PENDING_TRANSACTION</span>: <span class="ident">u8</span> = <span class="number">0x35</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_PEG_OUT_TX_SIG_CI</span>: <span class="ident">u8</span> = <span class="number">0x36</span>;
+<span class="kw">const </span>DB_PREFIX_BLOCK_HASH: u8 = <span class="number">0x30</span>;
+<span class="kw">const </span>DB_PREFIX_UTXO: u8 = <span class="number">0x31</span>;
+<span class="kw">const </span>DB_PREFIX_ROUND_CONSENSUS: u8 = <span class="number">0x32</span>;
+<span class="kw">const </span>DB_PREFIX_UNSIGNED_TRANSACTION: u8 = <span class="number">0x34</span>;
+<span class="kw">const </span>DB_PREFIX_PENDING_TRANSACTION: u8 = <span class="number">0x35</span>;
+<span class="kw">const </span>DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = <span class="number">0x36</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">BlockHashKey</span>(<span class="kw">pub</span> <span class="ident">BlockHash</span>);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>BlockHashKey(<span class="kw">pub </span>BlockHash);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">BlockHashKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_BLOCK_HASH</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>BlockHashKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_BLOCK_HASH;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UTXOKey</span>(<span class="kw">pub</span> <span class="ident">OutPoint</span>);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>OutPoint);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UTXOKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_UTXO</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">SpendableUTXO</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UTXOPrefixKey</span>;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>UTXOPrefixKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UTXOPrefixKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_UTXO</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">UTXOKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">SpendableUTXO</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOPrefixKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    <span class="kw">type </span>Key = UTXOKey;
+    <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RoundConsensusKey</span>;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>RoundConsensusKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">RoundConsensusKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_ROUND_CONSENSUS</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">RoundConsensus</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RoundConsensusKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = RoundConsensus;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">Txid</span>);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>UnsignedTransactionKey(<span class="kw">pub </span>Txid);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UnsignedTransactionKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_UNSIGNED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">UnsignedTransaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransactionPrefixKey</span>;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>UnsignedTransactionPrefixKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">UnsignedTransactionPrefixKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_UNSIGNED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">UnsignedTransactionKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">UnsignedTransaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionPrefixKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    <span class="kw">type </span>Key = UnsignedTransactionKey;
+    <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingTransactionKey</span>(<span class="kw">pub</span> <span class="ident">Txid</span>);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PendingTransactionKey(<span class="kw">pub </span>Txid);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PendingTransactionKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PENDING_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PendingTransaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingTransactionPrefixKey</span>;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PendingTransactionPrefixKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PendingTransactionPrefixKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PENDING_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">PendingTransactionKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">PendingTransaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionPrefixKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    <span class="kw">type </span>Key = PendingTransactionKey;
+    <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutTxSignatureCI</span>(<span class="kw">pub</span> <span class="ident">Txid</span>);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegOutTxSignatureCI(<span class="kw">pub </span>Txid);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PegOutTxSignatureCI</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PEG_OUT_TX_SIG_CI</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Vec</span>&lt;<span class="ident">Signature</span>&gt;; <span class="comment">// TODO: define newtype</span>
-}
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCI {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = Vec&lt;Signature&gt;; <span class="comment">// TODO: define newtype
+</span>}
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutTxSignatureCIPrefix</span>;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegOutTxSignatureCIPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">PegOutTxSignatureCIPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PEG_OUT_TX_SIG_CI</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">PegOutTxSignatureCI</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Vec</span>&lt;<span class="ident">Signature</span>&gt;;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCIPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    <span class="kw">type </span>Key = PegOutTxSignatureCI;
+    <span class="kw">type </span>Value = Vec&lt;Signature&gt;;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

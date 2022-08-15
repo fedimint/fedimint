@@ -26,33 +26,33 @@
 <span id="26">26</span>
 <span id="27">27</span>
 <span id="28">28</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>thiserror::Error;
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">modules</span> {
-    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_ln</span> <span class="kw">as</span> <span class="ident">ln</span>;
-    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_mint</span> <span class="kw">as</span> <span class="ident">mint</span>;
-    <span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_wallet</span> <span class="kw">as</span> <span class="ident">wallet</span>;
+<span class="kw">pub mod </span>modules {
+    <span class="kw">pub use </span>minimint_ln <span class="kw">as </span>ln;
+    <span class="kw">pub use </span>minimint_mint <span class="kw">as </span>mint;
+    <span class="kw">pub use </span>minimint_wallet <span class="kw">as </span>wallet;
 }
 
-<span class="doccomment">/// MiniMint toplevel config</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">epoch</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">outcome</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">transaction</span>;
+<span class="doccomment">/// MiniMint toplevel config
+</span><span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>epoch;
+<span class="kw">pub mod </span>outcome;
+<span class="kw">pub mod </span>transaction;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">CoreError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]</span>
-    <span class="ident">MismatchingVariant</span>(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Pending preimage decryption&quot;</span>)]</span>
-    <span class="ident">PendingPreimage</span>,
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>CoreError {
+    <span class="attribute">#[error(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]</span>
+    MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str),
+    <span class="attribute">#[error(<span class="string">&quot;Pending preimage decryption&quot;</span>)]</span>
+    PendingPreimage,
 }
 
-<span class="kw">impl</span> <span class="ident">CoreError</span> {
-    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_retryable</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="ident">CoreError::PendingPreimage</span>)
+<span class="kw">impl </span>CoreError {
+    <span class="doccomment">/// Returns `true` if queried outpoint isn&#39;t ready yet but may become ready later
+    </span><span class="kw">pub fn </span>is_retryable(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="macro">matches!</span>(<span class="self">self</span>, CoreError::PendingPreimage)
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

@@ -581,588 +581,588 @@
 <span id="581">581</span>
 <span id="582">582</span>
 <span id="583">583</span>
-</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
-<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
-<span class="doccomment">//! Provides an abstract network connection interface and multiple implementations</span>
+<span class="doccomment">//! Provides an abstract network connection interface and multiple implementations
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">AnyFramedTransport</span>, <span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">futures::Stream</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
-<span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
-<span class="kw">use</span> <span class="ident">std::convert::TryFrom</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">std::pin::Pin</span>;
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-<span class="kw">use</span> <span class="ident">tokio::io</span>::{<span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>};
-<span class="kw">use</span> <span class="ident">tokio::net</span>::{<span class="ident">TcpListener</span>, <span class="ident">TcpStream</span>};
-<span class="kw">use</span> <span class="ident">tokio_rustls::rustls::server::AllowAnyAuthenticatedClient</span>;
-<span class="kw">use</span> <span class="ident">tokio_rustls::rustls::RootCertStore</span>;
-<span class="kw">use</span> <span class="ident">tokio_rustls</span>::{<span class="ident">rustls</span>, <span class="ident">TlsAcceptor</span>, <span class="ident">TlsConnector</span>, <span class="ident">TlsStream</span>};
+</span><span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>futures::Stream;
+<span class="kw">use </span>minimint_api::PeerId;
+<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::convert::TryFrom;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>tokio::io::{ReadHalf, WriteHalf};
+<span class="kw">use </span>tokio::net::{TcpListener, TcpStream};
+<span class="kw">use </span>tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
+<span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
+<span class="kw">use </span>tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 
-<span class="doccomment">/// Shared [`Connector`] trait object</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">SharedAnyConnector</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
+<span class="doccomment">/// Shared [`Connector`] trait object
+</span><span class="kw">pub type </span>SharedAnyConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;;
 
-<span class="doccomment">/// Owned [`Connector`] trait object</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">AnyConnector</span>&lt;<span class="ident">M</span>&gt; = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;;
+<span class="doccomment">/// Owned [`Connector`] trait object
+</span><span class="kw">pub type </span>AnyConnector&lt;M&gt; = Box&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;;
 
-<span class="doccomment">/// Result of a connection opening future</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; = <span class="prelude-ty">Result</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">M</span>&gt;), <span class="ident">anyhow::Error</span>&gt;;
+<span class="doccomment">/// Result of a connection opening future
+</span><span class="kw">pub type </span>ConnectResult&lt;M&gt; = <span class="prelude-ty">Result</span>&lt;(PeerId, AnyFramedTransport&lt;M&gt;), anyhow::Error&gt;;
 
-<span class="doccomment">/// Owned trait object type for incoming connection listeners</span>
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt; =
-    <span class="ident">Pin</span>&lt;<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;&gt;;
+<span class="doccomment">/// Owned trait object type for incoming connection listeners
+</span><span class="kw">pub type </span>ConnectionListener&lt;M&gt; =
+    Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;&gt;;
 
-<span class="doccomment">/// Allows to connect to peers and to listen for incoming connections</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted</span>
-<span class="doccomment">/// for production deployments.</span>
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; {
-    <span class="doccomment">/// Connect to a `destination`</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;;
+<span class="doccomment">/// Allows to connect to peers and to listen for incoming connections
+///
+/// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted
+/// for production deployments.
+</span><span class="attribute">#[async_trait]</span>
+<span class="kw">pub trait </span>Connector&lt;M&gt; {
+    <span class="doccomment">/// Connect to a `destination`
+    </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
 
-    <span class="doccomment">/// Listen for incoming connections on `bind_addr`</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt;;
+    <span class="doccomment">/// Listen for incoming connections on `bind_addr`
+    </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
 
-    <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself</span>
-    <span class="kw">fn</span> <span class="ident">to_any</span>(<span class="self">self</span>) -&gt; <span class="ident">AnyConnector</span>&lt;<span class="ident">M</span>&gt;
-    <span class="kw">where</span>
-        <span class="self">Self</span>: <span class="ident">Sized</span> + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
+    <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself
+    </span><span class="kw">fn </span>to_any(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
+    <span class="kw">where
+        </span><span class="self">Self</span>: Sized + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="ident">Box::new</span>(<span class="self">self</span>)
+        Box::new(<span class="self">self</span>)
     }
 }
 
-<span class="doccomment">/// TCP connector with encryption and authentication</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TlsTcpConnector</span> {
-    <span class="ident">our_certificate</span>: <span class="ident">rustls::Certificate</span>,
-    <span class="ident">our_private_key</span>: <span class="ident">rustls::PrivateKey</span>,
-    <span class="ident">peer_certs</span>: <span class="ident">Arc</span>&lt;<span class="ident">PeerCertStore</span>&gt;,
-    <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands</span>
-    <span class="ident">cert_store</span>: <span class="ident">RootCertStore</span>,
+<span class="doccomment">/// TCP connector with encryption and authentication
+</span><span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>TlsTcpConnector {
+    our_certificate: rustls::Certificate,
+    our_private_key: rustls::PrivateKey,
+    peer_certs: Arc&lt;PeerCertStore&gt;,
+    <span class="doccomment">/// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands
+    </span>cert_store: RootCertStore,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">TlsConfig</span> {
-    <span class="kw">pub</span> <span class="ident">our_certificate</span>: <span class="ident">rustls::Certificate</span>,
-    <span class="kw">pub</span> <span class="ident">our_private_key</span>: <span class="ident">rustls::PrivateKey</span>,
-    <span class="kw">pub</span> <span class="ident">peer_certs</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>&gt;,
+<span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>TlsConfig {
+    <span class="kw">pub </span>our_certificate: rustls::Certificate,
+    <span class="kw">pub </span>our_private_key: rustls::PrivateKey,
+    <span class="kw">pub </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PeerCertStore</span> {
-    <span class="ident">peer_certificates</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)&gt;,
+<span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>PeerCertStore {
+    peer_certificates: Vec&lt;(PeerId, rustls::Certificate)&gt;,
 }
 
-<span class="kw">impl</span> <span class="ident">TlsTcpConnector</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">TlsConfig</span>) -&gt; <span class="ident">TlsTcpConnector</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cert_store</span> = <span class="ident">RootCertStore::empty</span>();
-        <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">cert</span>) <span class="kw">in</span> <span class="ident">cfg</span>.<span class="ident">peer_certs</span>.<span class="ident">iter</span>() {
-            <span class="ident">cert_store</span>
-                .<span class="ident">add</span>(<span class="ident">cert</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;Could not add peer certificate&quot;</span>);
+<span class="kw">impl </span>TlsTcpConnector {
+    <span class="kw">pub fn </span>new(cfg: TlsConfig) -&gt; TlsTcpConnector {
+        <span class="kw">let </span><span class="kw-2">mut </span>cert_store = RootCertStore::empty();
+        <span class="kw">for </span>(<span class="kw">_</span>, cert) <span class="kw">in </span>cfg.peer_certs.iter() {
+            cert_store
+                .add(cert)
+                .expect(<span class="string">&quot;Could not add peer certificate&quot;</span>);
         }
 
-        <span class="ident">TlsTcpConnector</span> {
-            <span class="ident">our_certificate</span>: <span class="ident">cfg</span>.<span class="ident">our_certificate</span>,
-            <span class="ident">our_private_key</span>: <span class="ident">cfg</span>.<span class="ident">our_private_key</span>,
-            <span class="ident">peer_certs</span>: <span class="ident">Arc::new</span>(<span class="ident">PeerCertStore::new</span>(<span class="ident">cfg</span>.<span class="ident">peer_certs</span>)),
-            <span class="ident">cert_store</span>,
+        TlsTcpConnector {
+            our_certificate: cfg.our_certificate,
+            our_private_key: cfg.our_private_key,
+            peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
+            cert_store,
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">PeerCertStore</span> {
-    <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">certs</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span>&lt;<span class="ident">Item</span> = (<span class="ident">PeerId</span>, <span class="ident">rustls::Certificate</span>)&gt;) -&gt; <span class="ident">PeerCertStore</span> {
-        <span class="ident">PeerCertStore</span> {
-            <span class="ident">peer_certificates</span>: <span class="ident">certs</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>(),
+<span class="kw">impl </span>PeerCertStore {
+    <span class="kw">fn </span>new(certs: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, rustls::Certificate)&gt;) -&gt; PeerCertStore {
+        PeerCertStore {
+            peer_certificates: certs.into_iter().collect(),
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">get_peer_by_cert</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cert</span>: <span class="kw-2">&amp;</span><span class="ident">rustls::Certificate</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">PeerId</span>&gt; {
-        <span class="self">self</span>.<span class="ident">peer_certificates</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">find_map</span>(|(<span class="ident">peer</span>, <span class="ident">peer_cert</span>)| <span class="kw">if</span> <span class="ident">peer_cert</span> == <span class="ident">cert</span> { <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">peer</span>) } <span class="kw">else</span> { <span class="prelude-val">None</span> })
+    <span class="kw">fn </span>get_peer_by_cert(<span class="kw-2">&amp;</span><span class="self">self</span>, cert: <span class="kw-2">&amp;</span>rustls::Certificate) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+        <span class="self">self</span>.peer_certificates
+            .iter()
+            .find_map(|(peer, peer_cert)| <span class="kw">if </span>peer_cert == cert { <span class="prelude-val">Some</span>(<span class="kw-2">*</span>peer) } <span class="kw">else </span>{ <span class="prelude-val">None </span>})
     }
 
-    <span class="kw">fn</span> <span class="ident">authenticate_peer</span>(
+    <span class="kw">fn </span>authenticate_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">received</span>: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[<span class="ident">rustls::Certificate</span>]&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">cert_chain</span> =
-            <span class="ident">received</span>.<span class="ident">ok_or_else</span>(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Peer did not authenticate itself&quot;</span>))<span class="question-mark">?</span>;
+        received: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[rustls::Certificate]&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PeerId, anyhow::Error&gt; {
+        <span class="kw">let </span>cert_chain =
+            received.ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Peer did not authenticate itself&quot;</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">cert_chain</span>.<span class="ident">len</span>() != <span class="number">1</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
+        <span class="kw">if </span>cert_chain.len() != <span class="number">1 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">&quot;Received certificate chain of len={}, expected=1&quot;</span>,
-                <span class="ident">cert_chain</span>.<span class="ident">len</span>()
+                cert_chain.len()
             ));
         }
 
-        <span class="kw">let</span> <span class="ident">received_cert</span> = <span class="ident">cert_chain</span>.<span class="ident">first</span>().<span class="ident">expect</span>(<span class="string">&quot;Checked above&quot;</span>);
+        <span class="kw">let </span>received_cert = cert_chain.first().expect(<span class="string">&quot;Checked above&quot;</span>);
 
-        <span class="self">self</span>.<span class="ident">get_peer_by_cert</span>(<span class="ident">received_cert</span>)
-            .<span class="ident">ok_or_else</span>(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown certificate&quot;</span>))
+        <span class="self">self</span>.get_peer_by_cert(received_cert)
+            .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Unknown certificate&quot;</span>))
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">accept_connection</span>&lt;<span class="ident">M</span>&gt;(
+    <span class="kw">async fn </span>accept_connection&lt;M&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">listener</span>: <span class="kw-2">&amp;mut</span> <span class="ident">TcpListener</span>,
-        <span class="ident">acceptor</span>: <span class="kw-2">&amp;</span><span class="ident">TlsAcceptor</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">M</span>&gt;), <span class="ident">anyhow::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
+        listener: <span class="kw-2">&amp;mut </span>TcpListener,
+        acceptor: <span class="kw-2">&amp;</span>TlsAcceptor,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(PeerId, AnyFramedTransport&lt;M&gt;), anyhow::Error&gt;
+    <span class="kw">where
+        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">let</span> (<span class="ident">connection</span>, <span class="kw">_</span>) = <span class="ident">listener</span>.<span class="ident">accept</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">tls_conn</span> = <span class="ident">acceptor</span>.<span class="ident">accept</span>(<span class="ident">connection</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(connection, <span class="kw">_</span>) = listener.accept().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>tls_conn = acceptor.accept(connection).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) = <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
-        <span class="kw">let</span> <span class="ident">auth_peer</span> = <span class="self">self</span>.<span class="ident">authenticate_peer</span>(<span class="ident">tls_session</span>.<span class="ident">peer_certificates</span>())<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw">_</span>, tls_session) = tls_conn.get_ref();
+        <span class="kw">let </span>auth_peer = <span class="self">self</span>.authenticate_peer(tls_session.peer_certificates())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">framed</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="kw">_</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;&gt;<span class="ident">::new</span>(
-                <span class="ident">tls_conn</span>,
+        <span class="kw">let </span>framed =
+            BidiFramed::&lt;<span class="kw">_</span>, WriteHalf&lt;TlsStream&lt;TcpStream&gt;&gt;, ReadHalf&lt;TlsStream&lt;TcpStream&gt;&gt;&gt;::new(
+                tls_conn,
             )
-            .<span class="ident">to_any</span>();
-        <span class="prelude-val">Ok</span>((<span class="ident">auth_peer</span>, <span class="ident">framed</span>))
+            .to_any();
+        <span class="prelude-val">Ok</span>((auth_peer, framed))
     }
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; <span class="kw">for</span> <span class="ident">TlsTcpConnector</span>
-<span class="kw">where</span>
-    <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
+<span class="attribute">#[async_trait]</span>
+<span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
+<span class="kw">where
+    </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; {
-        <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">rustls::ClientConfig::builder</span>()
-            .<span class="ident">with_safe_defaults</span>()
-            .<span class="ident">with_root_certificates</span>(<span class="self">self</span>.<span class="ident">cert_store</span>.<span class="ident">clone</span>())
-            .<span class="ident">with_single_cert</span>(
-                <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">our_certificate</span>.<span class="ident">clone</span>()],
-                <span class="self">self</span>.<span class="ident">our_private_key</span>.<span class="ident">clone</span>(),
+    <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+        <span class="kw">let </span>cfg = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(<span class="self">self</span>.cert_store.clone())
+            .with_single_cert(
+                <span class="macro">vec!</span>[<span class="self">self</span>.our_certificate.clone()],
+                <span class="self">self</span>.our_private_key.clone(),
             )
-            .<span class="ident">expect</span>(<span class="string">&quot;Failed to create TLS config&quot;</span>);
+            .expect(<span class="string">&quot;Failed to create TLS config&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">fake_domain</span> =
-            <span class="ident">rustls::ServerName::try_from</span>(<span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>()).<span class="ident">as_str</span>())
-                .<span class="ident">expect</span>(<span class="string">&quot;Always a valid DNS name&quot;</span>);
+        <span class="kw">let </span>fake_domain =
+            rustls::ServerName::try_from(<span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize()).as_str())
+                .expect(<span class="string">&quot;Always a valid DNS name&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">connector</span> = <span class="ident">TlsConnector::from</span>(<span class="ident">Arc::new</span>(<span class="ident">cfg</span>));
-        <span class="kw">let</span> <span class="ident">tls_conn</span> = <span class="ident">connector</span>
-            .<span class="ident">connect</span>(<span class="ident">fake_domain</span>, <span class="ident">TcpStream::connect</span>(<span class="ident">destination</span>).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="kw">let </span>connector = TlsConnector::from(Arc::new(cfg));
+        <span class="kw">let </span>tls_conn = connector
+            .connect(fake_domain, TcpStream::connect(destination).<span class="kw">await</span><span class="question-mark">?</span>)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> (<span class="kw">_</span>, <span class="ident">tls_session</span>) = <span class="ident">tls_conn</span>.<span class="ident">get_ref</span>();
-        <span class="kw">let</span> <span class="ident">auth_peer</span> = <span class="self">self</span>
-            .<span class="ident">peer_certs</span>
-            .<span class="ident">authenticate_peer</span>(<span class="ident">tls_session</span>.<span class="ident">peer_certificates</span>())<span class="question-mark">?</span>;
+        <span class="kw">let </span>(<span class="kw">_</span>, tls_session) = tls_conn.get_ref();
+        <span class="kw">let </span>auth_peer = <span class="self">self
+            </span>.peer_certs
+            .authenticate_peer(tls_session.peer_certificates())<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">auth_peer</span> != <span class="ident">peer</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Connected to unexpected peer&quot;</span>));
+        <span class="kw">if </span>auth_peer != peer {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Connected to unexpected peer&quot;</span>));
         }
 
-        <span class="kw">let</span> <span class="ident">framed</span> =
-            <span class="ident">BidiFramed</span>::&lt;<span class="kw">_</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">TlsStream</span>&lt;<span class="ident">TcpStream</span>&gt;&gt;&gt;<span class="ident">::new</span>(
-                <span class="ident">tls_conn</span>,
+        <span class="kw">let </span>framed =
+            BidiFramed::&lt;<span class="kw">_</span>, WriteHalf&lt;TlsStream&lt;TcpStream&gt;&gt;, ReadHalf&lt;TlsStream&lt;TcpStream&gt;&gt;&gt;::new(
+                tls_conn,
             )
-            .<span class="ident">to_any</span>();
+            .to_any();
 
-        <span class="prelude-val">Ok</span>((<span class="ident">peer</span>, <span class="ident">framed</span>))
+        <span class="prelude-val">Ok</span>((peer, framed))
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">bind_addr</span>: <span class="ident">String</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ConnectionListener</span>&lt;<span class="ident">M</span>&gt;, <span class="ident">anyhow::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">verifier</span> = <span class="ident">AllowAnyAuthenticatedClient::new</span>(<span class="self">self</span>.<span class="ident">cert_store</span>.<span class="ident">clone</span>());
-        <span class="kw">let</span> <span class="ident">config</span> = <span class="ident">rustls::ServerConfig::builder</span>()
-            .<span class="ident">with_safe_defaults</span>()
-            .<span class="ident">with_client_cert_verifier</span>(<span class="ident">verifier</span>)
-            .<span class="ident">with_single_cert</span>(
-                <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">our_certificate</span>.<span class="ident">clone</span>()],
-                <span class="self">self</span>.<span class="ident">our_private_key</span>.<span class="ident">clone</span>(),
+    <span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt; {
+        <span class="kw">let </span>verifier = AllowAnyAuthenticatedClient::new(<span class="self">self</span>.cert_store.clone());
+        <span class="kw">let </span>config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_client_cert_verifier(verifier)
+            .with_single_cert(
+                <span class="macro">vec!</span>[<span class="self">self</span>.our_certificate.clone()],
+                <span class="self">self</span>.our_private_key.clone(),
             )
-            .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">listener</span> = <span class="ident">TcpListener::bind</span>(<span class="ident">bind_addr</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">peer_certs</span> = <span class="self">self</span>.<span class="ident">peer_certs</span>.<span class="ident">clone</span>();
+            .unwrap();
+        <span class="kw">let </span>listener = TcpListener::bind(bind_addr).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>peer_certs = <span class="self">self</span>.peer_certs.clone();
 
-        <span class="kw">let</span> <span class="ident">stream</span> = <span class="ident">futures::stream::unfold</span>(<span class="ident">listener</span>, <span class="kw">move</span> |<span class="kw-2">mut</span> <span class="ident">listener</span>| {
-            <span class="kw">let</span> <span class="ident">acceptor</span> = <span class="ident">TlsAcceptor::from</span>(<span class="ident">Arc::new</span>(<span class="ident">config</span>.<span class="ident">clone</span>()));
-            <span class="kw">let</span> <span class="ident">peer_certs</span> = <span class="ident">peer_certs</span>.<span class="ident">clone</span>();
+        <span class="kw">let </span>stream = futures::stream::unfold(listener, <span class="kw">move </span>|<span class="kw-2">mut </span>listener| {
+            <span class="kw">let </span>acceptor = TlsAcceptor::from(Arc::new(config.clone()));
+            <span class="kw">let </span>peer_certs = peer_certs.clone();
 
-            <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">res</span> = <span class="ident">peer_certs</span>.<span class="ident">accept_connection</span>(<span class="kw-2">&amp;mut</span> <span class="ident">listener</span>, <span class="kw-2">&amp;</span><span class="ident">acceptor</span>).<span class="kw">await</span>;
-                <span class="prelude-val">Some</span>((<span class="ident">res</span>, <span class="ident">listener</span>))
+            Box::pin(<span class="kw">async move </span>{
+                <span class="kw">let </span>res = peer_certs.accept_connection(<span class="kw-2">&amp;mut </span>listener, <span class="kw-2">&amp;</span>acceptor).<span class="kw">await</span>;
+                <span class="prelude-val">Some</span>((res, listener))
             })
         });
-        <span class="prelude-val">Ok</span>(<span class="ident">Box::pin</span>(<span class="ident">stream</span>))
+        <span class="prelude-val">Ok</span>(Box::pin(stream))
     }
 }
 
-<span class="doccomment">/// Fake network stack used in tests</span>
-<span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unused_imports</span>)]</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mock</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">ConnectResult</span>, <span class="ident">Connector</span>};
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed</span>::{<span class="ident">BidiFramed</span>, <span class="ident">FramedTransport</span>};
-    <span class="kw">use</span> <span class="ident">anyhow::Error</span>;
-    <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">FutureExt</span>, <span class="ident">SinkExt</span>, <span class="ident">Stream</span>, <span class="ident">StreamExt</span>};
-    <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
-    <span class="kw">use</span> <span class="ident">std::collections::HashMap</span>;
-    <span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-    <span class="kw">use</span> <span class="ident">std::future::Future</span>;
-    <span class="kw">use</span> <span class="ident">std::pin::Pin</span>;
-    <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-    <span class="kw">use</span> <span class="ident">std::time::Duration</span>;
-    <span class="kw">use</span> <span class="ident">tokio::io</span>::{
-        <span class="ident">AsyncRead</span>, <span class="ident">AsyncReadExt</span>, <span class="ident">AsyncWrite</span>, <span class="ident">AsyncWriteExt</span>, <span class="ident">DuplexStream</span>, <span class="ident">ReadHalf</span>, <span class="ident">WriteHalf</span>,
+<span class="doccomment">/// Fake network stack used in tests
+</span><span class="attribute">#[allow(unused_imports)]</span>
+<span class="kw">pub mod </span>mock {
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectResult, Connector};
+    <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
+    <span class="kw">use </span>anyhow::Error;
+    <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
+    <span class="kw">use </span>minimint_api::PeerId;
+    <span class="kw">use </span>std::collections::HashMap;
+    <span class="kw">use </span>std::fmt::Debug;
+    <span class="kw">use </span>std::future::Future;
+    <span class="kw">use </span>std::pin::Pin;
+    <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>std::time::Duration;
+    <span class="kw">use </span>tokio::io::{
+        AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
     };
-    <span class="kw">use</span> <span class="ident">tokio::sync::mpsc::Sender</span>;
-    <span class="kw">use</span> <span class="ident">tokio::sync::Mutex</span>;
+    <span class="kw">use </span>tokio::sync::mpsc::Sender;
+    <span class="kw">use </span>tokio::sync::Mutex;
 
-    <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MockNetwork</span> {
-        <span class="ident">clients</span>: <span class="ident">Arc</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">HashMap</span>&lt;<span class="ident">String</span>, <span class="ident">Sender</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;&gt;&gt;,
+    <span class="kw">pub struct </span>MockNetwork {
+        clients: Arc&lt;Mutex&lt;HashMap&lt;String, Sender&lt;DuplexStream&gt;&gt;&gt;&gt;,
     }
 
-    <span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MockConnector</span> {
-        <span class="ident">id</span>: <span class="ident">PeerId</span>,
-        <span class="ident">clients</span>: <span class="ident">Arc</span>&lt;<span class="ident">Mutex</span>&lt;<span class="ident">HashMap</span>&lt;<span class="ident">String</span>, <span class="ident">Sender</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;&gt;&gt;,
+    <span class="kw">pub struct </span>MockConnector {
+        id: PeerId,
+        clients: Arc&lt;Mutex&lt;HashMap&lt;String, Sender&lt;DuplexStream&gt;&gt;&gt;&gt;,
     }
 
-    <span class="kw">impl</span> <span class="ident">MockNetwork</span> {
-        <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">clippy::new_without_default</span>)]</span>
-        <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>() -&gt; <span class="ident">MockNetwork</span> {
-            <span class="ident">MockNetwork</span> {
-                <span class="ident">clients</span>: <span class="ident">Arc::new</span>(<span class="ident">Default::default</span>()),
+    <span class="kw">impl </span>MockNetwork {
+        <span class="attribute">#[allow(clippy::new_without_default)]</span>
+        <span class="kw">pub fn </span>new() -&gt; MockNetwork {
+            MockNetwork {
+                clients: Arc::new(Default::default()),
             }
         }
 
-        <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">connector</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">id</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">MockConnector</span> {
-            <span class="ident">MockConnector</span> {
-                <span class="ident">id</span>,
-                <span class="ident">clients</span>: <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">clone</span>(),
+        <span class="kw">pub fn </span>connector(<span class="kw-2">&amp;</span><span class="self">self</span>, id: PeerId) -&gt; MockConnector {
+            MockConnector {
+                id,
+                clients: <span class="self">self</span>.clients.clone(),
             }
         }
     }
 
-    <span class="attribute">#[<span class="ident">async_trait::async_trait</span>]</span>
-    <span class="kw">impl</span>&lt;<span class="ident">M</span>&gt; <span class="ident">Connector</span>&lt;<span class="ident">M</span>&gt; <span class="kw">for</span> <span class="ident">MockConnector</span>
-    <span class="kw">where</span>
-        <span class="ident">M</span>: <span class="ident">Debug</span> + <span class="ident">serde::Serialize</span> + <span class="ident">serde::de::DeserializeOwned</span> + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>,
+    <span class="attribute">#[async_trait::async_trait]</span>
+    <span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>MockConnector
+    <span class="kw">where
+        </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_framed</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">destination</span>: <span class="ident">String</span>, <span class="ident">_peer</span>: <span class="ident">PeerId</span>) -&gt; <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt; {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">clients_lock</span> = <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">lock</span>().<span class="kw">await</span>;
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">client</span>) = <span class="ident">clients_lock</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">destination</span>) {
-                <span class="kw">let</span> (<span class="kw-2">mut</span> <span class="ident">stream_our</span>, <span class="ident">stream_theirs</span>) = <span class="ident">tokio::io::duplex</span>(<span class="number">43_689</span>);
-                <span class="ident">client</span>.<span class="ident">send</span>(<span class="ident">stream_theirs</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">do_handshake</span>(<span class="self">self</span>.<span class="ident">id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">stream_our</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                <span class="kw">let</span> <span class="ident">framed</span> = <span class="ident">BidiFramed</span>::&lt;<span class="ident">M</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
-                    <span class="ident">stream_our</span>,
+        <span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, _peer: PeerId) -&gt; ConnectResult&lt;M&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.lock().<span class="kw">await</span>;
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>destination) {
+                <span class="kw">let </span>(<span class="kw-2">mut </span>stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
+                client.send(stream_theirs).<span class="kw">await</span>.unwrap();
+                <span class="kw">let </span>peer = do_handshake(<span class="self">self</span>.id, <span class="kw-2">&amp;mut </span>stream_our).<span class="kw">await</span>.unwrap();
+                <span class="kw">let </span>framed = BidiFramed::&lt;M, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
+                    stream_our,
                 )
-                .<span class="ident">to_any</span>();
-                <span class="prelude-val">Ok</span>((<span class="ident">peer</span>, <span class="ident">framed</span>))
-            } <span class="kw">else</span> {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;can&#39;t connect&quot;</span>));
+                .to_any();
+                <span class="prelude-val">Ok</span>((peer, framed))
+            } <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;can&#39;t connect&quot;</span>));
             }
         }
 
-        <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">listen</span>(
+        <span class="kw">async fn </span>listen(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
-            <span class="ident">bind_addr</span>: <span class="ident">String</span>,
-        ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Pin</span>&lt;<span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Stream</span>&lt;<span class="ident">Item</span> = <span class="ident">ConnectResult</span>&lt;<span class="ident">M</span>&gt;&gt; + <span class="ident">Send</span> + <span class="ident">Unpin</span> + <span class="lifetime">&#39;static</span>&gt;&gt;, <span class="ident">Error</span>&gt;
+            bind_addr: String,
+        ) -&gt; <span class="prelude-ty">Result</span>&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Stream&lt;Item = ConnectResult&lt;M&gt;&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;&gt;, Error&gt;
         {
-            <span class="kw">let</span> (<span class="ident">send</span>, <span class="ident">receive</span>) = <span class="ident">tokio::sync::mpsc::channel</span>(<span class="number">16</span>);
+            <span class="kw">let </span>(send, receive) = tokio::sync::mpsc::channel(<span class="number">16</span>);
 
-            <span class="kw">if</span> <span class="self">self</span>.<span class="ident">clients</span>.<span class="ident">lock</span>().<span class="kw">await</span>.<span class="ident">insert</span>(<span class="ident">bind_addr</span>, <span class="ident">send</span>).<span class="ident">is_some</span>() {
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Address already bound&quot;</span>));
+            <span class="kw">if </span><span class="self">self</span>.clients.lock().<span class="kw">await</span>.insert(bind_addr, send).is_some() {
+                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;Address already bound&quot;</span>));
             }
 
-            <span class="kw">let</span> <span class="ident">our_id</span> = <span class="self">self</span>.<span class="ident">id</span>;
-            <span class="kw">let</span> <span class="ident">stream</span> = <span class="ident">futures::stream::unfold</span>(<span class="ident">receive</span>, <span class="kw">move</span> |<span class="kw-2">mut</span> <span class="ident">receive</span>| {
-                <span class="ident">Box::pin</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">connection</span> = <span class="ident">receive</span>.<span class="ident">recv</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">do_handshake</span>(<span class="ident">our_id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">connection</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">framed</span> =
-                        <span class="ident">BidiFramed</span>::&lt;<span class="ident">M</span>, <span class="ident">WriteHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;, <span class="ident">ReadHalf</span>&lt;<span class="ident">DuplexStream</span>&gt;&gt;<span class="ident">::new</span>(
-                            <span class="ident">connection</span>,
+            <span class="kw">let </span>our_id = <span class="self">self</span>.id;
+            <span class="kw">let </span>stream = futures::stream::unfold(receive, <span class="kw">move </span>|<span class="kw-2">mut </span>receive| {
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="kw">let </span><span class="kw-2">mut </span>connection = receive.recv().<span class="kw">await</span>.unwrap();
+                    <span class="kw">let </span>peer = do_handshake(our_id, <span class="kw-2">&amp;mut </span>connection).<span class="kw">await</span>.unwrap();
+                    <span class="kw">let </span>framed =
+                        BidiFramed::&lt;M, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
+                            connection,
                         )
-                        .<span class="ident">to_any</span>();
+                        .to_any();
 
-                    <span class="prelude-val">Some</span>((<span class="prelude-val">Ok</span>((<span class="ident">peer</span>, <span class="ident">framed</span>)), <span class="ident">receive</span>))
+                    <span class="prelude-val">Some</span>((<span class="prelude-val">Ok</span>((peer, framed)), receive))
                 })
             });
-            <span class="prelude-val">Ok</span>(<span class="ident">Box::pin</span>(<span class="ident">stream</span>))
+            <span class="prelude-val">Ok</span>(Box::pin(stream))
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">do_handshake</span>&lt;<span class="ident">S</span>&gt;(<span class="ident">our_id</span>: <span class="ident">PeerId</span>, <span class="ident">stream</span>: <span class="kw-2">&amp;mut</span> <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PeerId</span>, <span class="ident">anyhow::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">S</span>: <span class="ident">AsyncRead</span> + <span class="ident">AsyncWrite</span> + <span class="ident">Unpin</span>,
+    <span class="kw">async fn </span>do_handshake&lt;S&gt;(our_id: PeerId, stream: <span class="kw-2">&amp;mut </span>S) -&gt; <span class="prelude-ty">Result</span>&lt;PeerId, anyhow::Error&gt;
+    <span class="kw">where
+        </span>S: AsyncRead + AsyncWrite + Unpin,
     {
-        <span class="comment">// Send our id</span>
-        <span class="kw">let</span> <span class="ident">our_id</span> = <span class="ident">our_id</span>.<span class="ident">to_usize</span>() <span class="kw">as</span> <span class="ident">u16</span>;
-        <span class="ident">stream</span>.<span class="ident">write_all</span>(<span class="kw-2">&amp;</span><span class="ident">our_id</span>.<span class="ident">to_le_bytes</span>()[..]).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Send our id
+        </span><span class="kw">let </span>our_id = our_id.to_usize() <span class="kw">as </span>u16;
+        stream.write_all(<span class="kw-2">&amp;</span>our_id.to_le_bytes()[..]).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// Receive peer id</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">peer_id</span> = [<span class="number">0u8</span>; <span class="number">2</span>];
-        <span class="ident">stream</span>.<span class="ident">read_exact</span>(<span class="kw-2">&amp;mut</span> <span class="ident">peer_id</span>[..]).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="ident">PeerId::from</span>(<span class="ident">u16::from_le_bytes</span>(<span class="ident">peer_id</span>)))
+        <span class="comment">// Receive peer id
+        </span><span class="kw">let </span><span class="kw-2">mut </span>peer_id = [<span class="number">0u8</span>; <span class="number">2</span>];
+        stream.read_exact(<span class="kw-2">&amp;mut </span>peer_id[..]).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(PeerId::from(u16::from_le_bytes(peer_id)))
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_mock_network</span>() {
-        <span class="kw">let</span> <span class="ident">peer_a</span> = <span class="ident">PeerId::from</span>(<span class="number">1</span>);
-        <span class="kw">let</span> <span class="ident">peer_b</span> = <span class="ident">PeerId::from</span>(<span class="number">2</span>);
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>test_mock_network() {
+        <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
+        <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
-        <span class="kw">let</span> <span class="ident">net</span> = <span class="ident">MockNetwork::new</span>();
-        <span class="kw">let</span> <span class="ident">conn_a</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
-        <span class="kw">let</span> <span class="ident">conn_b</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
+        <span class="kw">let </span>net = MockNetwork::new();
+        <span class="kw">let </span>conn_a = net.connector(peer_a);
+        <span class="kw">let </span>conn_b = net.connector(peer_b);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> = <span class="ident">Connector</span>::&lt;<span class="ident">u64</span>&gt;<span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">conn_a_fut</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
+        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;u64&gt;::listen(<span class="kw-2">&amp;</span>conn_a, <span class="string">&quot;a&quot;</span>.into()).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
 
-        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) =
-            <span class="ident">Connector</span>::&lt;<span class="ident">u64</span>&gt;<span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) = <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) =
+            Connector::&lt;u64&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, <span class="string">&quot;a&quot;</span>.into(), peer_a)
+                .<span class="kw">await
+                </span>.unwrap();
+        <span class="kw">let </span>(auth_peer_a, <span class="kw-2">mut </span>conn_a) = conn_a_fut.<span class="kw">await</span>.unwrap();
 
-        <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_a</span>, <span class="ident">peer_b</span>);
-        <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_b</span>, <span class="ident">peer_a</span>);
+        <span class="macro">assert_eq!</span>(auth_peer_a, peer_b);
+        <span class="macro">assert_eq!</span>(auth_peer_b, peer_a);
 
-        <span class="ident">conn_a</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="ident">conn_b</span>.<span class="ident">send</span>(<span class="number">21</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        conn_a.send(<span class="number">42</span>).<span class="kw">await</span>.unwrap();
+        conn_b.send(<span class="number">21</span>).<span class="kw">await</span>.unwrap();
 
-        <span class="macro">assert_eq!</span>(<span class="ident">conn_a</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>(), <span class="number">21</span>);
-        <span class="macro">assert_eq!</span>(<span class="ident">conn_b</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>(), <span class="number">42</span>);
+        <span class="macro">assert_eq!</span>(conn_a.next().<span class="kw">await</span>.unwrap().unwrap(), <span class="number">21</span>);
+        <span class="macro">assert_eq!</span>(conn_b.next().<span class="kw">await</span>.unwrap().unwrap(), <span class="number">42</span>);
     }
 
-    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">dead_code</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">timeout</span>&lt;<span class="ident">F</span>, <span class="ident">T</span>&gt;(<span class="ident">f</span>: <span class="ident">F</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">T</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">F</span>: <span class="ident">Future</span>&lt;<span class="ident">Output</span> = <span class="ident">T</span>&gt;,
+    <span class="attribute">#[allow(dead_code)]</span>
+    <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
+    <span class="kw">where
+        </span>F: Future&lt;Output = T&gt;,
     {
-        <span class="ident">tokio::time::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">1</span>), <span class="ident">f</span>).<span class="kw">await</span>.<span class="ident">ok</span>()
+        tokio::time::timeout(Duration::from_secs(<span class="number">1</span>), f).<span class="kw">await</span>.ok()
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">test_large_messages</span>() {
-        <span class="kw">let</span> <span class="ident">peer_a</span> = <span class="ident">PeerId::from</span>(<span class="number">1</span>);
-        <span class="kw">let</span> <span class="ident">peer_b</span> = <span class="ident">PeerId::from</span>(<span class="number">2</span>);
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>test_large_messages() {
+        <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
+        <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
-        <span class="kw">let</span> <span class="ident">net</span> = <span class="ident">MockNetwork::new</span>();
-        <span class="kw">let</span> <span class="ident">conn_a</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_a</span>);
-        <span class="kw">let</span> <span class="ident">conn_b</span> = <span class="ident">net</span>.<span class="ident">connector</span>(<span class="ident">peer_b</span>);
+        <span class="kw">let </span>net = MockNetwork::new();
+        <span class="kw">let </span>conn_a = net.connector(peer_a);
+        <span class="kw">let </span>conn_b = net.connector(peer_b);
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">listener</span> = <span class="ident">Connector</span>::&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;<span class="ident">::listen</span>(<span class="kw-2">&amp;</span><span class="ident">conn_a</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>())
-            .<span class="kw">await</span>
-            .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">conn_a_fut</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> { <span class="ident">listener</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>() });
+        <span class="kw">let </span><span class="kw-2">mut </span>listener = Connector::&lt;Vec&lt;u8&gt;&gt;::listen(<span class="kw-2">&amp;</span>conn_a, <span class="string">&quot;a&quot;</span>.into())
+            .<span class="kw">await
+            </span>.unwrap();
+        <span class="kw">let </span>conn_a_fut = tokio::spawn(<span class="kw">async move </span>{ listener.next().<span class="kw">await</span>.unwrap().unwrap() });
 
-        <span class="kw">let</span> (<span class="ident">auth_peer_b</span>, <span class="kw-2">mut</span> <span class="ident">conn_b</span>) =
-            <span class="ident">Connector</span>::&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;<span class="ident">::connect_framed</span>(<span class="kw-2">&amp;</span><span class="ident">conn_b</span>, <span class="string">&quot;a&quot;</span>.<span class="ident">into</span>(), <span class="ident">peer_a</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">unwrap</span>();
-        <span class="kw">let</span> (<span class="ident">auth_peer_a</span>, <span class="kw-2">mut</span> <span class="ident">conn_a</span>) = <span class="ident">conn_a_fut</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let </span>(auth_peer_b, <span class="kw-2">mut </span>conn_b) =
+            Connector::&lt;Vec&lt;u8&gt;&gt;::connect_framed(<span class="kw-2">&amp;</span>conn_b, <span class="string">&quot;a&quot;</span>.into(), peer_a)
+                .<span class="kw">await
+                </span>.unwrap();
+        <span class="kw">let </span>(auth_peer_a, <span class="kw-2">mut </span>conn_a) = conn_a_fut.<span class="kw">await</span>.unwrap();
 
-        <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_a</span>, <span class="ident">peer_b</span>);
-        <span class="macro">assert_eq!</span>(<span class="ident">auth_peer_b</span>, <span class="ident">peer_a</span>);
+        <span class="macro">assert_eq!</span>(auth_peer_a, peer_b);
+        <span class="macro">assert_eq!</span>(auth_peer_b, peer_a);
 
-        <span class="kw">let</span> <span class="ident">send_future</span> = <span class="kw">async</span> <span class="kw">move</span> {
-            <span class="ident">conn_a</span>.<span class="ident">send</span>(<span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let </span>send_future = <span class="kw">async move </span>{
+            conn_a.send(<span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]).<span class="kw">await</span>.unwrap();
         }
-        .<span class="ident">boxed</span>();
-        <span class="kw">let</span> <span class="ident">receive_future</span> = <span class="kw">async</span> <span class="kw">move</span> {
+        .boxed();
+        <span class="kw">let </span>receive_future = <span class="kw">async move </span>{
             <span class="macro">assert_eq!</span>(
-                <span class="ident">timeout</span>(<span class="ident">conn_b</span>.<span class="ident">next</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>().<span class="ident">unwrap</span>(),
+                timeout(conn_b.next()).<span class="kw">await</span>.unwrap().unwrap().unwrap(),
                 <span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]
             );
         }
-        .<span class="ident">boxed</span>();
+        .boxed();
 
-        <span class="macro">tokio::join!</span>(<span class="ident">send_future</span>, <span class="ident">receive_future</span>);
+        <span class="macro">tokio::join!</span>(send_future, receive_future);
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::gen_cert_and_key</span>;
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">ConnectionListener</span>, <span class="ident">TlsConfig</span>};
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::framed::AnyFramedTransport</span>;
-    <span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">Connector</span>, <span class="ident">TlsTcpConnector</span>};
-    <span class="kw">use</span> <span class="ident">futures</span>::{<span class="ident">SinkExt</span>, <span class="ident">StreamExt</span>};
-    <span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, TlsConfig};
+    <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
+    <span class="kw">use crate</span>::{Connector, TlsTcpConnector};
+    <span class="kw">use </span>futures::{SinkExt, StreamExt};
+    <span class="kw">use </span>minimint_api::PeerId;
 
-    <span class="kw">fn</span> <span class="ident">gen_connector_config</span>(<span class="ident">count</span>: <span class="ident">usize</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">TlsConfig</span>&gt; {
-        <span class="kw">let</span> <span class="ident">peer_keys</span> = (<span class="number">0</span>..<span class="ident">count</span>)
-            .<span class="ident">map</span>(|<span class="ident">id</span>| {
-                <span class="kw">let</span> <span class="ident">peer</span> = <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>);
-                <span class="ident">gen_cert_and_key</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, <span class="ident">peer</span>.<span class="ident">to_usize</span>())).<span class="ident">unwrap</span>()
+    <span class="kw">fn </span>gen_connector_config(count: usize) -&gt; Vec&lt;TlsConfig&gt; {
+        <span class="kw">let </span>peer_keys = (<span class="number">0</span>..count)
+            .map(|id| {
+                <span class="kw">let </span>peer = PeerId::from(id <span class="kw">as </span>u16);
+                gen_cert_and_key(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize())).unwrap()
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="ident">peer_keys</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">cert</span>, <span class="ident">key</span>)| <span class="ident">TlsConfig</span> {
-                <span class="ident">our_certificate</span>: <span class="ident">cert</span>.<span class="ident">clone</span>(),
-                <span class="ident">our_private_key</span>: <span class="ident">key</span>.<span class="ident">clone</span>(),
-                <span class="ident">peer_certs</span>: <span class="ident">peer_keys</span>
-                    .<span class="ident">iter</span>()
-                    .<span class="ident">enumerate</span>()
-                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, (<span class="ident">cert</span>, <span class="kw">_</span>))| (<span class="ident">PeerId::from</span>(<span class="ident">peer</span> <span class="kw">as</span> <span class="ident">u16</span>), <span class="ident">cert</span>.<span class="ident">clone</span>()))
-                    .<span class="ident">collect</span>(),
+        peer_keys
+            .iter()
+            .map(|(cert, key)| TlsConfig {
+                our_certificate: cert.clone(),
+                our_private_key: key.clone(),
+                peer_certs: peer_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(peer, (cert, <span class="kw">_</span>))| (PeerId::from(peer <span class="kw">as </span>u16), cert.clone()))
+                    .collect(),
             })
-            .<span class="ident">collect</span>()
+            .collect()
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_success</span>() {
-        <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(</span>
-        <span class="kw">let</span> <span class="ident">bind_addr</span> = <span class="string">&quot;127.0.0.1:7000&quot;</span>.<span class="ident">to_owned</span>();
-        <span class="kw">let</span> <span class="ident">connectors</span> = <span class="ident">gen_connector_config</span>(<span class="number">5</span>)
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(<span class="ident">TlsTcpConnector::new</span>)
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>connect_success() {
+        <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(
+        </span><span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.to_owned();
+        <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
+            .into_iter()
+            .map(TlsTcpConnector::new)
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
-            <span class="ident">connectors</span>[<span class="number">0</span>].<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
+            connectors[<span class="number">0</span>].listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
 
-        <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-            <span class="kw">let</span> (<span class="ident">peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>) = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-            <span class="macro">assert_eq!</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="number">2</span>);
-            <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-            <span class="macro">assert_eq!</span>(<span class="ident">received</span>, <span class="number">42</span>);
-            <span class="ident">conn</span>.<span class="ident">send</span>(<span class="number">21</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-            <span class="macro">assert!</span>(<span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">is_err</span>());
+        <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+            <span class="kw">let </span>(peer, <span class="kw-2">mut </span>conn) = server.next().<span class="kw">await</span>.unwrap().unwrap();
+            <span class="macro">assert_eq!</span>(peer.to_usize(), <span class="number">2</span>);
+            <span class="kw">let </span>received = conn.next().<span class="kw">await</span>.unwrap().unwrap();
+            <span class="macro">assert_eq!</span>(received, <span class="number">42</span>);
+            conn.send(<span class="number">21</span>).<span class="kw">await</span>.unwrap();
+            <span class="macro">assert!</span>(conn.next().<span class="kw">await</span>.unwrap().is_err());
         });
 
-        <span class="kw">let</span> (<span class="ident">peer_of_a</span>, <span class="kw-2">mut</span> <span class="ident">client_a</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">connectors</span>[<span class="number">2</span>]
-            .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
-            .<span class="kw">await</span>
-            .<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">peer_of_a</span>.<span class="ident">to_usize</span>(), <span class="number">0</span>);
-        <span class="ident">client_a</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">received</span> = <span class="ident">client_a</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">received</span>, <span class="number">21</span>);
-        <span class="ident">drop</span>(<span class="ident">client_a</span>);
+        <span class="kw">let </span>(peer_of_a, <span class="kw-2">mut </span>client_a): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = connectors[<span class="number">2</span>]
+            .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
+            .<span class="kw">await
+            </span>.unwrap();
+        <span class="macro">assert_eq!</span>(peer_of_a.to_usize(), <span class="number">0</span>);
+        client_a.send(<span class="number">42</span>).<span class="kw">await</span>.unwrap();
+        <span class="kw">let </span>received = client_a.next().<span class="kw">await</span>.unwrap().unwrap();
+        <span class="macro">assert_eq!</span>(received, <span class="number">21</span>);
+        drop(client_a);
 
-        <span class="ident">server_task</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        server_task.<span class="kw">await</span>.unwrap();
     }
 
-    <span class="attribute">#[<span class="ident">tokio::test</span>]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">connect_reject</span>() {
-        <span class="kw">let</span> <span class="ident">bind_addr</span> = <span class="string">&quot;127.0.0.1:7001&quot;</span>.<span class="ident">to_owned</span>();
-        <span class="kw">let</span> <span class="ident">cfg</span> = <span class="ident">gen_connector_config</span>(<span class="number">5</span>);
+    <span class="attribute">#[tokio::test]</span>
+    <span class="kw">async fn </span>connect_reject() {
+        <span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.to_owned();
+        <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
-        <span class="kw">let</span> <span class="ident">honest</span> = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">0</span>].<span class="ident">clone</span>());
+        <span class="kw">let </span>honest = TlsTcpConnector::new(cfg[<span class="number">0</span>].clone());
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">malicious_wrong_key_cfg</span> = <span class="ident">cfg</span>[<span class="number">1</span>].<span class="ident">clone</span>();
-        <span class="ident">malicious_wrong_key_cfg</span>.<span class="ident">our_private_key</span> = <span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">our_private_key</span>.<span class="ident">clone</span>();
-        <span class="kw">let</span> <span class="ident">malicious_wrong_key</span> = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">malicious_wrong_key_cfg</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>malicious_wrong_key_cfg = cfg[<span class="number">1</span>].clone();
+        malicious_wrong_key_cfg.our_private_key = cfg[<span class="number">2</span>].our_private_key.clone();
+        <span class="kw">let </span>malicious_wrong_key = TlsTcpConnector::new(malicious_wrong_key_cfg);
 
-        <span class="comment">// Honest server, malicious client with wrong private key</span>
-        {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
-                <span class="ident">honest</span>.<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="comment">// Honest server, malicious client with wrong private key
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
+                honest.listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
-                    <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                    <span class="string">&quot;invalid peer certificate signature&quot;</span>
-                );
+                    conn_res.err().unwrap().to_string().as_str(),
+                    <span class="string">&quot;invalid peer certificate signature&quot;
+                </span>);
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">malicious_wrong_key</span>
-                    .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
+            <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
+                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = malicious_wrong_key
+                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="ident">conn</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
+                conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.next().<span class="kw">await</span>.unwrap()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;::Ok(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
-                <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                <span class="string">&quot;received fatal alert: AccessDenied&quot;</span>
-            );
+                conn_res.err().unwrap().to_string().as_str(),
+                <span class="string">&quot;received fatal alert: AccessDenied&quot;
+            </span>);
 
-            <span class="ident">server_task</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            server_task.<span class="kw">await</span>.unwrap();
         }
 
-        <span class="comment">// Malicious server with wrong key, honest client</span>
-        {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; =
-                <span class="ident">malicious_wrong_key</span>.<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>()).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        <span class="comment">// Malicious server with wrong key, honest client
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; =
+                malicious_wrong_key.listen(bind_addr.clone()).<span class="kw">await</span>.unwrap();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
-                    <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                    <span class="string">&quot;received fatal alert: BadCertificate&quot;</span>
-                );
+                    conn_res.err().unwrap().to_string().as_str(),
+                    <span class="string">&quot;received fatal alert: BadCertificate&quot;
+                </span>);
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">honest</span>
-                    .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">1</span>))
+            <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
+                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = honest
+                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">1</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="ident">conn</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
+                conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.next().<span class="kw">await</span>.unwrap()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;::Ok(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
-                <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                <span class="string">&quot;invalid peer certificate signature&quot;</span>
-            );
+                conn_res.err().unwrap().to_string().as_str(),
+                <span class="string">&quot;invalid peer certificate signature&quot;
+            </span>);
 
-            <span class="ident">server_task</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            server_task.<span class="kw">await</span>.unwrap();
         }
 
-        <span class="comment">// Server with wrong certificate, honest client</span>
-        {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">server</span>: <span class="ident">ConnectionListener</span>&lt;<span class="ident">u64</span>&gt; = <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>[<span class="number">2</span>].<span class="ident">clone</span>())
-                .<span class="ident">listen</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>())
-                .<span class="kw">await</span>
-                .<span class="ident">unwrap</span>();
+        <span class="comment">// Server with wrong certificate, honest client
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>server: ConnectionListener&lt;u64&gt; = TlsTcpConnector::new(cfg[<span class="number">2</span>].clone())
+                .listen(bind_addr.clone())
+                .<span class="kw">await
+                </span>.unwrap();
 
-            <span class="kw">let</span> <span class="ident">server_task</span> = <span class="ident">tokio::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">server</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            <span class="kw">let </span>server_task = tokio::spawn(<span class="kw">async move </span>{
+                <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
-                    <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                    <span class="string">&quot;received fatal alert: BadCertificate&quot;</span>
-                );
+                    conn_res.err().unwrap().to_string().as_str(),
+                    <span class="string">&quot;received fatal alert: BadCertificate&quot;
+                </span>);
             });
 
-            <span class="kw">let</span> <span class="ident">err_anytime</span> = <span class="kw">async</span> {
-                <span class="kw">let</span> (<span class="ident">_peer</span>, <span class="kw-2">mut</span> <span class="ident">conn</span>): (<span class="kw">_</span>, <span class="ident">AnyFramedTransport</span>&lt;<span class="ident">u64</span>&gt;) = <span class="ident">honest</span>
-                    .<span class="ident">connect_framed</span>(<span class="ident">bind_addr</span>.<span class="ident">clone</span>(), <span class="ident">PeerId::from</span>(<span class="number">0</span>))
+            <span class="kw">let </span>err_anytime = <span class="kw">async </span>{
+                <span class="kw">let </span>(_peer, <span class="kw-2">mut </span>conn): (<span class="kw">_</span>, AnyFramedTransport&lt;u64&gt;) = honest
+                    .connect_framed(bind_addr.clone(), PeerId::from(<span class="number">0</span>))
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="ident">conn</span>.<span class="ident">send</span>(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">flush</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="ident">conn</span>.<span class="ident">next</span>().<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
+                conn.send(<span class="number">42</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.flush().<span class="kw">await</span><span class="question-mark">?</span>;
+                conn.next().<span class="kw">await</span>.unwrap()<span class="question-mark">?</span>;
 
-                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, <span class="ident">anyhow::Error</span>&gt;<span class="ident">::Ok</span>(())
+                <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;::Ok(())
             };
 
-            <span class="kw">let</span> <span class="ident">conn_res</span> = <span class="ident">err_anytime</span>.<span class="kw">await</span>;
+            <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
-                <span class="ident">conn_res</span>.<span class="ident">err</span>().<span class="ident">unwrap</span>().<span class="ident">to_string</span>().<span class="ident">as_str</span>(),
-                <span class="string">&quot;invalid peer certificate contents: invalid peer certificate: CertNotValidForName&quot;</span>
-            );
+                conn_res.err().unwrap().to_string().as_str(),
+                <span class="string">&quot;invalid peer certificate contents: invalid peer certificate: CertNotValidForName&quot;
+            </span>);
 
-            <span class="ident">server_task</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>();
+            server_task.<span class="kw">await</span>.unwrap();
         }
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

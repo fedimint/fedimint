@@ -44,51 +44,51 @@
 <span id="44">44</span>
 <span id="45">45</span>
 <span id="46">46</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">axum</span>::{<span class="ident">routing::post</span>, <span class="ident">Extension</span>, <span class="ident">Json</span>, <span class="ident">Router</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>axum::{routing::post, Extension, Json, Router};
 
-<span class="kw">use</span> <span class="ident">tokio::sync::mpsc</span>;
-<span class="kw">use</span> <span class="ident">tokio::sync::oneshot</span>;
-<span class="kw">use</span> <span class="ident">tower_http::cors::CorsLayer</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">instrument</span>};
+<span class="kw">use </span>tokio::sync::mpsc;
+<span class="kw">use </span>tokio::sync::oneshot;
+<span class="kw">use </span>tower_http::cors::CorsLayer;
+<span class="kw">use </span>tracing::{debug, instrument};
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::GatewayRequestInner</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">GatewayRequest</span>, <span class="ident">LnGatewayError</span>};
-<span class="kw">use</span> <span class="ident">minimint::modules::ln::contracts::ContractId</span>;
+<span class="kw">use </span><span class="kw">crate</span>::GatewayRequestInner;
+<span class="kw">use crate</span>::{GatewayRequest, LnGatewayError};
+<span class="kw">use </span>minimint::modules::ln::contracts::ContractId;
 
-<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">err</span>)]</span>
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_invoice</span>(
-    <span class="ident">Extension</span>(<span class="ident">gw_sender</span>): <span class="ident">Extension</span>&lt;<span class="ident">mpsc::Sender</span>&lt;<span class="ident">GatewayRequest</span>&gt;&gt;,
-    <span class="ident">Json</span>(<span class="ident">contract_id</span>): <span class="ident">Json</span>&lt;<span class="ident">ContractId</span>&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">LnGatewayError</span>&gt; {
-    <span class="macro">debug!</span>(%<span class="ident">contract_id</span>, <span class="string">&quot;Received request to pay invoice&quot;</span>);
+<span class="attribute">#[instrument(skip_all, err)]</span>
+<span class="kw">pub async fn </span>pay_invoice(
+    Extension(gw_sender): Extension&lt;mpsc::Sender&lt;GatewayRequest&gt;&gt;,
+    Json(contract_id): Json&lt;ContractId&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;(), LnGatewayError&gt; {
+    <span class="macro">debug!</span>(%contract_id, <span class="string">&quot;Received request to pay invoice&quot;</span>);
 
-    <span class="kw">let</span> (<span class="ident">sender</span>, <span class="ident">receiver</span>) = <span class="ident">oneshot::channel</span>::&lt;<span class="prelude-ty">Result</span>&lt;(), <span class="ident">LnGatewayError</span>&gt;&gt;();
+    <span class="kw">let </span>(sender, receiver) = oneshot::channel::&lt;<span class="prelude-ty">Result</span>&lt;(), LnGatewayError&gt;&gt;();
 
-    <span class="kw">let</span> <span class="ident">msg</span> = <span class="ident">GatewayRequest::PayInvoice</span>(<span class="ident">GatewayRequestInner</span> {
-        <span class="ident">request</span>: <span class="ident">contract_id</span>,
-        <span class="ident">sender</span>,
+    <span class="kw">let </span>msg = GatewayRequest::PayInvoice(GatewayRequestInner {
+        request: contract_id,
+        sender,
     });
-    <span class="ident">gw_sender</span>
-        .<span class="ident">send</span>(<span class="ident">msg</span>)
-        .<span class="kw">await</span>
-        .<span class="ident">expect</span>(<span class="string">&quot;failed to send over channel&quot;</span>);
-    <span class="ident">receiver</span>.<span class="kw">await</span>.<span class="ident">unwrap</span>()<span class="question-mark">?</span>;
+    gw_sender
+        .send(msg)
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;failed to send over channel&quot;</span>);
+    receiver.<span class="kw">await</span>.unwrap()<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_webserver</span>(<span class="ident">sender</span>: <span class="ident">mpsc::Sender</span>&lt;<span class="ident">GatewayRequest</span>&gt;) -&gt; <span class="ident">axum::response::Result</span>&lt;()&gt; {
-    <span class="kw">let</span> <span class="ident">app</span> = <span class="ident">Router::new</span>()
-        .<span class="ident">route</span>(<span class="string">&quot;/pay_invoice&quot;</span>, <span class="ident">post</span>(<span class="ident">pay_invoice</span>))
-        .<span class="ident">layer</span>(<span class="ident">Extension</span>(<span class="ident">sender</span>))
-        .<span class="ident">layer</span>(<span class="ident">CorsLayer::permissive</span>());
+<span class="kw">pub async fn </span>run_webserver(sender: mpsc::Sender&lt;GatewayRequest&gt;) -&gt; axum::response::Result&lt;()&gt; {
+    <span class="kw">let </span>app = Router::new()
+        .route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice))
+        .layer(Extension(sender))
+        .layer(CorsLayer::permissive());
 
-    <span class="ident">axum::Server::bind</span>(<span class="kw-2">&amp;</span><span class="string">&quot;127.0.0.1:8080&quot;</span>.<span class="ident">parse</span>().<span class="ident">unwrap</span>())
-        .<span class="ident">serve</span>(<span class="ident">app</span>.<span class="ident">into_make_service</span>())
-        .<span class="kw">await</span>
-        .<span class="ident">unwrap</span>();
+    axum::Server::bind(<span class="kw-2">&amp;</span><span class="string">&quot;127.0.0.1:8080&quot;</span>.parse().unwrap())
+        .serve(app.into_make_service())
+        .<span class="kw">await
+        </span>.unwrap();
 
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

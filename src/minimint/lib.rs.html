@@ -241,248 +241,248 @@
 <span id="241">241</span>
 <span id="242">242</span>
 <span id="243">243</span>
-</pre><pre class="rust"><code><span class="kw">extern</span> <span class="kw">crate</span> <span class="ident">minimint_api</span>;
+</pre><pre class="rust"><code><span class="kw">extern crate </span>minimint_api;
 
-<span class="kw">use</span> <span class="ident">std::collections::BTreeMap</span>;
-<span class="kw">use</span> <span class="ident">std::future::Future</span>;
-<span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use</span> <span class="ident">hbbft::honey_badger</span>::{<span class="ident">HoneyBadger</span>, <span class="ident">Message</span>};
-<span class="kw">use</span> <span class="ident">hbbft::NetworkInfo</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::rand::Rand07Compat</span>;
-<span class="kw">use</span> <span class="ident">rand::rngs::OsRng</span>;
-<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">tokio::sync::Notify</span>;
-<span class="kw">use</span> <span class="ident">tokio::task::spawn</span>;
-<span class="kw">use</span> <span class="ident">tracing::warn</span>;
+<span class="kw">use </span>hbbft::honey_badger::{HoneyBadger, Message};
+<span class="kw">use </span>hbbft::NetworkInfo;
+<span class="kw">use </span>minimint_api::rand::Rand07Compat;
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>tokio::sync::Notify;
+<span class="kw">use </span>tokio::task::spawn;
+<span class="kw">use </span>tracing::warn;
 
-<span class="kw">use</span> <span class="ident">config::ServerConfig</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::PeerId</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::LightningModule</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::bitcoind::BitcoindRpc</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">bitcoincore_rpc</span>, <span class="ident">Wallet</span>};
+<span class="kw">use </span>config::ServerConfig;
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::PeerId;
+<span class="kw">use </span>minimint_core::modules::ln::LightningModule;
+<span class="kw">use </span>minimint_core::modules::wallet::bitcoind::BitcoindRpc;
+<span class="kw">use </span>minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
-<span class="kw">use</span> <span class="ident">minimint_core::epoch::ConsensusItem</span>;
-<span class="kw">pub</span> <span class="kw">use</span> <span class="ident">minimint_core</span>::<span class="kw-2">*</span>;
+<span class="kw">use </span>minimint_core::epoch::ConsensusItem;
+<span class="kw">pub use </span>minimint_core::<span class="kw-2">*</span>;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus</span>::{<span class="ident">ConsensusOutcome</span>, <span class="ident">ConsensusProposal</span>, <span class="ident">MinimintConsensus</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::connect</span>::{<span class="ident">Connector</span>, <span class="ident">TlsTcpConnector</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::net::peers</span>::{
-    <span class="ident">AnyPeerConnections</span>, <span class="ident">PeerConnections</span>, <span class="ident">PeerConnector</span>, <span class="ident">ReconnectPeerConnections</span>,
+<span class="kw">use </span><span class="kw">crate</span>::consensus::{ConsensusOutcome, ConsensusProposal, MinimintConsensus};
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{
+    AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::rng::RngGenerator</span>;
+<span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
 
-<span class="doccomment">/// The actual implementation of the federated mint</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">consensus</span>;
+<span class="doccomment">/// The actual implementation of the federated mint
+</span><span class="kw">pub mod </span>consensus;
 
-<span class="doccomment">/// Provides interfaces for ACID-compliant data store backends</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
+<span class="doccomment">/// Provides interfaces for ACID-compliant data store backends
+</span><span class="kw">pub mod </span>db;
 
-<span class="doccomment">/// Networking for mint-to-mint and client-to-mint communiccation</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">net</span>;
+<span class="doccomment">/// Networking for mint-to-mint and client-to-mint communiccation
+</span><span class="kw">pub mod </span>net;
 
-<span class="doccomment">/// MiniMint toplevel config</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
+<span class="doccomment">/// MiniMint toplevel config
+</span><span class="kw">pub mod </span>config;
 
-<span class="doccomment">/// Some abstractions to handle randomness</span>
-<span class="kw">mod</span> <span class="ident">rng</span>;
+<span class="doccomment">/// Some abstractions to handle randomness
+</span><span class="kw">mod </span>rng;
 
-<span class="kw">type</span> <span class="ident">PeerMessage</span> = (<span class="ident">PeerId</span>, <span class="ident">Message</span>&lt;<span class="ident">PeerId</span>&gt;);
+<span class="kw">type </span>PeerMessage = (PeerId, Message&lt;PeerId&gt;);
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintServer</span> {
-    <span class="kw">pub</span> <span class="ident">consensus</span>: <span class="ident">Arc</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">OsRng</span>&gt;&gt;,
-    <span class="kw">pub</span> <span class="ident">connections</span>: <span class="ident">AnyPeerConnections</span>&lt;<span class="ident">Message</span>&lt;<span class="ident">PeerId</span>&gt;&gt;,
-    <span class="kw">pub</span> <span class="ident">cfg</span>: <span class="ident">ServerConfig</span>,
-    <span class="kw">pub</span> <span class="ident">hbbft</span>: <span class="ident">HoneyBadger</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;, <span class="ident">PeerId</span>&gt;,
+<span class="kw">pub struct </span>MinimintServer {
+    <span class="kw">pub </span>consensus: Arc&lt;MinimintConsensus&lt;OsRng&gt;&gt;,
+    <span class="kw">pub </span>connections: AnyPeerConnections&lt;Message&lt;PeerId&gt;&gt;,
+    <span class="kw">pub </span>cfg: ServerConfig,
+    <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;,
 }
 
-<span class="doccomment">/// Start all the components of the mint and plug them together</span>
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_minimint</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">db_path</span>: <span class="ident">PathBuf</span>) {
-    <span class="kw">let</span> <span class="ident">server</span> = <span class="ident">MinimintServer::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>(), <span class="ident">db_path</span>.<span class="ident">clone</span>()).<span class="kw">await</span>;
-    <span class="ident">spawn</span>(<span class="ident">net::api::run_server</span>(<span class="ident">cfg</span>, <span class="ident">server</span>.<span class="ident">consensus</span>.<span class="ident">clone</span>()));
-    <span class="ident">server</span>.<span class="ident">run_consensus</span>().<span class="kw">await</span>;
+<span class="doccomment">/// Start all the components of the mint and plug them together
+</span><span class="kw">pub async fn </span>run_minimint(cfg: ServerConfig, db_path: PathBuf) {
+    <span class="kw">let </span>server = MinimintServer::new(cfg.clone(), db_path.clone()).<span class="kw">await</span>;
+    spawn(net::api::run_server(cfg, server.consensus.clone()));
+    server.run_consensus().<span class="kw">await</span>;
 }
 
-<span class="kw">impl</span> <span class="ident">MinimintServer</span> {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">ServerConfig</span>, <span class="ident">db_path</span>: <span class="ident">PathBuf</span>) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="ident">connector</span>: <span class="ident">PeerConnector</span>&lt;<span class="ident">Message</span>&lt;<span class="ident">PeerId</span>&gt;&gt; =
-            <span class="ident">TlsTcpConnector::new</span>(<span class="ident">cfg</span>.<span class="ident">tls_config</span>()).<span class="ident">to_any</span>();
+<span class="kw">impl </span>MinimintServer {
+    <span class="kw">pub async fn </span>new(cfg: ServerConfig, db_path: PathBuf) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>connector: PeerConnector&lt;Message&lt;PeerId&gt;&gt; =
+            TlsTcpConnector::new(cfg.tls_config()).to_any();
 
-        <span class="ident"><span class="self">Self</span>::new_with</span>(
-            <span class="ident">cfg</span>.<span class="ident">clone</span>(),
-            <span class="ident">Arc::new</span>(<span class="ident">rocksdb::OptimisticTransactionDB::open_default</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>()),
-            <span class="ident">bitcoincore_rpc::bitcoind_gen</span>(<span class="ident">cfg</span>.<span class="ident">wallet</span>.<span class="ident">clone</span>()),
-            <span class="ident">connector</span>,
+        <span class="self">Self</span>::new_with(
+            cfg.clone(),
+            Arc::new(rocksdb::OptimisticTransactionDB::open_default(<span class="kw-2">&amp;</span>db_path).unwrap()),
+            bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
+            connector,
         )
-        .<span class="kw">await</span>
-    }
+        .<span class="kw">await
+    </span>}
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_with</span>(
-        <span class="ident">cfg</span>: <span class="ident">ServerConfig</span>,
-        <span class="ident">database</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
-        <span class="ident">bitcoind</span>: <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;,
-        <span class="ident">connector</span>: <span class="ident">PeerConnector</span>&lt;<span class="ident">Message</span>&lt;<span class="ident">PeerId</span>&gt;&gt;,
-    ) -&gt; <span class="self">Self</span> {
+    <span class="kw">pub async fn </span>new_with(
+        cfg: ServerConfig,
+        database: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+        bitcoind: <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+        connector: PeerConnector&lt;Message&lt;PeerId&gt;&gt;,
+    ) -&gt; <span class="self">Self </span>{
         <span class="macro">assert_eq!</span>(
-            <span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">keys</span>().<span class="ident">max</span>().<span class="ident">copied</span>().<span class="ident">map</span>(|<span class="ident">id</span>| <span class="ident">id</span>.<span class="ident">to_usize</span>()),
-            <span class="prelude-val">Some</span>(<span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">len</span>() - <span class="number">1</span>)
+            cfg.peers.keys().max().copied().map(|id| id.to_usize()),
+            <span class="prelude-val">Some</span>(cfg.peers.len() - <span class="number">1</span>)
         );
-        <span class="macro">assert_eq!</span>(<span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">keys</span>().<span class="ident">min</span>().<span class="ident">copied</span>(), <span class="prelude-val">Some</span>(<span class="ident">PeerId::from</span>(<span class="number">0</span>)));
+        <span class="macro">assert_eq!</span>(cfg.peers.keys().min().copied(), <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)));
 
-        <span class="kw">let</span> <span class="ident">threshold</span> = <span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">len</span>() - <span class="ident">cfg</span>.<span class="ident">max_faulty</span>();
+        <span class="kw">let </span>threshold = cfg.peers.len() - cfg.max_faulty();
 
-        <span class="kw">let</span> <span class="ident">mint</span> =
-            <span class="ident">minimint_core::modules::mint::Mint::new</span>(<span class="ident">cfg</span>.<span class="ident">mint</span>.<span class="ident">clone</span>(), <span class="ident">threshold</span>, <span class="ident">database</span>.<span class="ident">clone</span>());
+        <span class="kw">let </span>mint =
+            minimint_core::modules::mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
 
-        <span class="kw">let</span> <span class="ident">wallet</span> = <span class="ident">Wallet::new_with_bitcoind</span>(<span class="ident">cfg</span>.<span class="ident">wallet</span>.<span class="ident">clone</span>(), <span class="ident">database</span>.<span class="ident">clone</span>(), <span class="ident">bitcoind</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">expect</span>(<span class="string">&quot;Couldn&#39;t create wallet&quot;</span>);
+        <span class="kw">let </span>wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Couldn&#39;t create wallet&quot;</span>);
 
-        <span class="kw">let</span> <span class="ident">ln</span> = <span class="ident">LightningModule::new</span>(<span class="ident">cfg</span>.<span class="ident">ln</span>.<span class="ident">clone</span>(), <span class="ident">database</span>.<span class="ident">clone</span>());
+        <span class="kw">let </span>ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
-        <span class="kw">let</span> <span class="ident">consensus</span> = <span class="ident">Arc::new</span>(<span class="ident">MinimintConsensus</span> {
-            <span class="ident">rng_gen</span>: <span class="ident">Box::new</span>(<span class="ident">OsRngGen</span>),
-            <span class="ident">cfg</span>: <span class="ident">cfg</span>.<span class="ident">clone</span>(),
-            <span class="ident">mint</span>,
-            <span class="ident">wallet</span>,
-            <span class="ident">ln</span>,
-            <span class="ident">db</span>: <span class="ident">database</span>,
-            <span class="ident">transaction_notify</span>: <span class="ident">Arc::new</span>(<span class="ident">Notify::new</span>()),
+        <span class="kw">let </span>consensus = Arc::new(MinimintConsensus {
+            rng_gen: Box::new(OsRngGen),
+            cfg: cfg.clone(),
+            mint,
+            wallet,
+            ln,
+            db: database,
+            transaction_notify: Arc::new(Notify::new()),
         });
 
-        <span class="kw">let</span> <span class="ident">connections</span> = <span class="ident">ReconnectPeerConnections::new</span>(<span class="ident">cfg</span>.<span class="ident">network_config</span>(), <span class="ident">connector</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">to_any</span>();
+        <span class="kw">let </span>connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
+            .<span class="kw">await
+            </span>.to_any();
 
-        <span class="kw">let</span> <span class="ident">net_info</span> = <span class="ident">NetworkInfo::new</span>(
-            <span class="ident">cfg</span>.<span class="ident">identity</span>,
-            <span class="ident">cfg</span>.<span class="ident">hbbft_sks</span>.<span class="ident">inner</span>().<span class="ident">clone</span>(),
-            <span class="ident">cfg</span>.<span class="ident">hbbft_pk_set</span>.<span class="ident">clone</span>(),
-            <span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">id</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">id</span>),
+        <span class="kw">let </span>net_info = NetworkInfo::new(
+            cfg.identity,
+            cfg.hbbft_sks.inner().clone(),
+            cfg.hbbft_pk_set.clone(),
+            cfg.peers.iter().map(|(id, <span class="kw">_</span>)| <span class="kw-2">*</span>id),
         );
 
-        <span class="kw">let</span> <span class="ident">hbbft</span>: <span class="ident">HoneyBadger</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;, <span class="kw">_</span>&gt; =
-            <span class="ident">HoneyBadger::builder</span>(<span class="ident">Arc::new</span>(<span class="ident">net_info</span>)).<span class="ident">build</span>();
+        <span class="kw">let </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, <span class="kw">_</span>&gt; =
+            HoneyBadger::builder(Arc::new(net_info)).build();
 
-        <span class="ident">MinimintServer</span> {
-            <span class="ident">connections</span>,
-            <span class="ident">hbbft</span>,
-            <span class="ident">consensus</span>,
-            <span class="ident">cfg</span>: <span class="ident">cfg</span>.<span class="ident">clone</span>(),
+        MinimintServer {
+            connections,
+            hbbft,
+            consensus,
+            cfg: cfg.clone(),
         }
     }
 
-    <span class="doccomment">/// Loop `run_conensus_epoch` forever</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_consensus</span>(<span class="kw-2">mut</span> <span class="self">self</span>) {
-        <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> = <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>();
-        <span class="kw">let</span> <span class="ident">consensus</span> = <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">clone</span>();
+    <span class="doccomment">/// Loop `run_conensus_epoch` forever
+    </span><span class="kw">async fn </span>run_consensus(<span class="kw-2">mut </span><span class="self">self</span>) {
+        <span class="comment">// FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
+        </span><span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
+        <span class="kw">let </span>consensus = <span class="self">self</span>.consensus.clone();
 
-        <span class="kw">loop</span> {
-            <span class="kw">let</span> <span class="ident">outcomes</span> = <span class="self">self</span>
-                .<span class="ident">run_consensus_epoch</span>(<span class="ident">consensus</span>.<span class="ident">get_consensus_proposal</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>outcomes = <span class="self">self
+                </span>.run_consensus_epoch(consensus.get_consensus_proposal(), <span class="kw-2">&amp;mut </span>rng)
                 .<span class="kw">await</span>;
 
-            <span class="kw">for</span> <span class="ident">outcome</span> <span class="kw">in</span> <span class="ident">outcomes</span> {
-                <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">process_consensus_outcome</span>(<span class="ident">outcome</span>).<span class="kw">await</span>;
+            <span class="kw">for </span>outcome <span class="kw">in </span>outcomes {
+                <span class="self">self</span>.consensus.process_consensus_outcome(outcome).<span class="kw">await</span>;
             }
         }
     }
 
-    <span class="doccomment">/// The main consensus function:</span>
-    <span class="doccomment">/// 1. Await a new proposal event or receiving a proposal from peers</span>
-    <span class="doccomment">/// 2. Send the `ConsensusProposal` to peers</span>
-    <span class="doccomment">/// 3. Run HBBFT until a `ConsensusOutcome` can be returned</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_consensus_epoch</span>(
-        <span class="kw-2">&amp;mut</span> <span class="self">self</span>,
-        <span class="ident">proposal</span>: <span class="kw">impl</span> <span class="ident">Future</span>&lt;<span class="ident">Output</span> = <span class="ident">ConsensusProposal</span>&gt;,
-        <span class="ident">rng</span>: <span class="kw-2">&amp;mut</span> (<span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="ident">Clone</span> + <span class="lifetime">&#39;static</span>),
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">ConsensusOutcome</span>&gt; {
-        <span class="comment">// for testing federations with one peer</span>
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">peers</span>.<span class="ident">len</span>() == <span class="number">1</span> {
+    <span class="doccomment">/// The main consensus function:
+    /// 1. Await a new proposal event or receiving a proposal from peers
+    /// 2. Send the `ConsensusProposal` to peers
+    /// 3. Run HBBFT until a `ConsensusOutcome` can be returned
+    </span><span class="kw">pub async fn </span>run_consensus_epoch(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        proposal: <span class="kw">impl </span>Future&lt;Output = ConsensusProposal&gt;,
+        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng + Clone + <span class="lifetime">&#39;static</span>),
+    ) -&gt; Vec&lt;ConsensusOutcome&gt; {
+        <span class="comment">// for testing federations with one peer
+        </span><span class="kw">if </span><span class="self">self</span>.cfg.peers.len() == <span class="number">1 </span>{
             <span class="macro">tokio::select!</span> {
-              () = <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">transaction_notify</span>.<span class="ident">notified</span>() =&gt; (),
-              () = <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">await_consensus_proposal</span>() =&gt; (),
+              () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; (),
+              () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
-            <span class="kw">let</span> <span class="ident">proposal</span> = <span class="ident">proposal</span>.<span class="kw">await</span>;
-            <span class="kw">let</span> <span class="ident">epoch</span> = <span class="self">self</span>.<span class="ident">hbbft</span>.<span class="ident">next_epoch</span>() + <span class="number">1</span>;
-            <span class="self">self</span>.<span class="ident">hbbft</span>.<span class="ident">skip_to_epoch</span>(<span class="ident">epoch</span>);
-            <span class="kw">return</span> <span class="macro">vec!</span>[<span class="ident">ConsensusOutcome</span> {
-                <span class="ident">epoch</span>,
-                <span class="ident">contributions</span>: <span class="ident">BTreeMap::from</span>([(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">identity</span>, <span class="ident">proposal</span>.<span class="ident">items</span>)]),
+            <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
+            <span class="kw">let </span>epoch = <span class="self">self</span>.hbbft.next_epoch() + <span class="number">1</span>;
+            <span class="self">self</span>.hbbft.skip_to_epoch(epoch);
+            <span class="kw">return </span><span class="macro">vec!</span>[ConsensusOutcome {
+                epoch,
+                contributions: BTreeMap::from([(<span class="self">self</span>.cfg.identity, proposal.items)]),
             }];
         }
 
-        <span class="comment">// process messages until new epoch or we have a proposal</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">outcomes</span>: <span class="ident">Vec</span>&lt;<span class="ident">ConsensusOutcome</span>&gt; = <span class="kw">loop</span> {
-            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">await_proposal_or_peer_message</span>().<span class="kw">await</span> {
-                <span class="prelude-val">Some</span>(<span class="ident">msg</span>) <span class="kw">if</span> <span class="self">self</span>.<span class="ident">hbbft</span>.<span class="ident">next_epoch</span>() == <span class="ident">msg</span>.<span class="number">1</span>.<span class="ident">epoch</span>() =&gt; {
-                    <span class="kw">break</span> <span class="self">self</span>.<span class="ident">handle_message</span>(<span class="ident">msg</span>).<span class="kw">await</span>
-                }
-                <span class="prelude-val">Some</span>(<span class="ident">msg</span>) =&gt; <span class="self">self</span>.<span class="ident">handle_message</span>(<span class="ident">msg</span>).<span class="kw">await</span>,
-                <span class="prelude-val">None</span> =&gt; <span class="kw">break</span> <span class="macro">vec!</span>[],
+        <span class="comment">// process messages until new epoch or we have a proposal
+        </span><span class="kw">let </span><span class="kw-2">mut </span>outcomes: Vec&lt;ConsensusOutcome&gt; = <span class="kw">loop </span>{
+            <span class="kw">match </span><span class="self">self</span>.await_proposal_or_peer_message().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(msg) <span class="kw">if </span><span class="self">self</span>.hbbft.next_epoch() == msg.<span class="number">1</span>.epoch() =&gt; {
+                    <span class="kw">break </span><span class="self">self</span>.handle_message(msg).<span class="kw">await
+                </span>}
+                <span class="prelude-val">Some</span>(msg) =&gt; <span class="self">self</span>.handle_message(msg).<span class="kw">await</span>,
+                <span class="prelude-val">None </span>=&gt; <span class="kw">break </span><span class="macro">vec!</span>[],
             };
         };
 
-        <span class="kw">let</span> <span class="ident">proposal</span> = <span class="ident">proposal</span>.<span class="kw">await</span>;
-        <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">proposal</span>.<span class="ident">drop_peers</span>.<span class="ident">iter</span>() {
-            <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">ban_peer</span>(<span class="kw-2">*</span><span class="ident">peer</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>proposal = proposal.<span class="kw">await</span>;
+        <span class="kw">for </span>peer <span class="kw">in </span>proposal.drop_peers.iter() {
+            <span class="self">self</span>.connections.ban_peer(<span class="kw-2">*</span>peer).<span class="kw">await</span>;
         }
 
-        <span class="kw">let</span> <span class="ident">step</span> = <span class="self">self</span>
-            .<span class="ident">hbbft</span>
-            .<span class="ident">propose</span>(<span class="kw-2">&amp;</span><span class="ident">proposal</span>.<span class="ident">items</span>, <span class="kw-2">&amp;mut</span> <span class="ident">Rand07Compat</span>(<span class="ident">rng</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;HBBFT propose failed&quot;</span>);
+        <span class="kw">let </span>step = <span class="self">self
+            </span>.hbbft
+            .propose(<span class="kw-2">&amp;</span>proposal.items, <span class="kw-2">&amp;mut </span>Rand07Compat(rng))
+            .expect(<span class="string">&quot;HBBFT propose failed&quot;</span>);
 
-        <span class="kw">for</span> <span class="ident">msg</span> <span class="kw">in</span> <span class="ident">step</span>.<span class="ident">messages</span> {
-            <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">target</span>, <span class="ident">msg</span>.<span class="ident">message</span>).<span class="kw">await</span>;
+        <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
+            <span class="self">self</span>.connections.send(msg.target, msg.message).<span class="kw">await</span>;
         }
 
-        <span class="kw">while</span> <span class="ident">outcomes</span>.<span class="ident">is_empty</span>() {
-            <span class="kw">let</span> <span class="ident">msg</span> = <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">receive</span>().<span class="kw">await</span>;
-            <span class="ident">outcomes</span> = <span class="self">self</span>.<span class="ident">handle_message</span>(<span class="ident">msg</span>).<span class="kw">await</span>;
+        <span class="kw">while </span>outcomes.is_empty() {
+            <span class="kw">let </span>msg = <span class="self">self</span>.connections.receive().<span class="kw">await</span>;
+            outcomes = <span class="self">self</span>.handle_message(msg).<span class="kw">await</span>;
         }
-        <span class="ident">outcomes</span>
+        outcomes
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_proposal_or_peer_message</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">PeerMessage</span>&gt; {
+    <span class="kw">async fn </span>await_proposal_or_peer_message(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerMessage&gt; {
         <span class="macro">tokio::select!</span> {
-            () = <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">transaction_notify</span>.<span class="ident">notified</span>() =&gt; <span class="prelude-val">None</span>,
-            () = <span class="self">self</span>.<span class="ident">consensus</span>.<span class="ident">await_consensus_proposal</span>() =&gt; <span class="prelude-val">None</span>,
-            <span class="ident">msg</span> = <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">receive</span>() =&gt; <span class="prelude-val">Some</span>(<span class="ident">msg</span>)
+            () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; <span class="prelude-val">None</span>,
+            () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">None</span>,
+            msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Some</span>(msg)
         }
     }
 
-    <span class="doccomment">/// Runs a single HBBFT consensus step</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">handle_message</span>(<span class="kw-2">&amp;mut</span> <span class="self">self</span>, <span class="ident">msg</span>: <span class="ident">PeerMessage</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">ConsensusOutcome</span>&gt; {
-        <span class="kw">let</span> (<span class="ident">peer</span>, <span class="ident">peer_msg</span>) = <span class="ident">msg</span>;
+    <span class="doccomment">/// Runs a single HBBFT consensus step
+    </span><span class="kw">async fn </span>handle_message(<span class="kw-2">&amp;mut </span><span class="self">self</span>, msg: PeerMessage) -&gt; Vec&lt;ConsensusOutcome&gt; {
+        <span class="kw">let </span>(peer, peer_msg) = msg;
 
-        <span class="kw">let</span> <span class="ident">step</span> = <span class="self">self</span>
-            .<span class="ident">hbbft</span>
-            .<span class="ident">handle_message</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>, <span class="ident">peer_msg</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;HBBFT handle message failed&quot;</span>);
+        <span class="kw">let </span>step = <span class="self">self
+            </span>.hbbft
+            .handle_message(<span class="kw-2">&amp;</span>peer, peer_msg)
+            .expect(<span class="string">&quot;HBBFT handle message failed&quot;</span>);
 
-        <span class="kw">if</span> !<span class="ident">step</span>.<span class="ident">fault_log</span>.<span class="ident">is_empty</span>() {
-            <span class="macro">warn!</span>(<span class="question-mark">?</span><span class="ident">step</span>.<span class="ident">fault_log</span>);
+        <span class="kw">if </span>!step.fault_log.is_empty() {
+            <span class="macro">warn!</span>(<span class="question-mark">?</span>step.fault_log);
         }
 
-        <span class="kw">for</span> <span class="ident">msg</span> <span class="kw">in</span> <span class="ident">step</span>.<span class="ident">messages</span> {
-            <span class="self">self</span>.<span class="ident">connections</span>.<span class="ident">send</span>(<span class="ident">msg</span>.<span class="ident">target</span>, <span class="ident">msg</span>.<span class="ident">message</span>).<span class="kw">await</span>;
+        <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
+            <span class="self">self</span>.connections.send(msg.target, msg.message).<span class="kw">await</span>;
         }
 
-        <span class="ident">step</span>.<span class="ident">output</span>
+        step.output
     }
 }
 
-<span class="kw">struct</span> <span class="ident">OsRngGen</span>;
-<span class="kw">impl</span> <span class="ident">RngGenerator</span> <span class="kw">for</span> <span class="ident">OsRngGen</span> {
-    <span class="kw">type</span> <span class="ident">Rng</span> = <span class="ident">OsRng</span>;
+<span class="kw">struct </span>OsRngGen;
+<span class="kw">impl </span>RngGenerator <span class="kw">for </span>OsRngGen {
+    <span class="kw">type </span>Rng = OsRng;
 
-    <span class="kw">fn</span> <span class="ident">get_rng</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="self">Self</span>::Rng</span> {
-        <span class="ident">OsRng::new</span>().<span class="ident">unwrap</span>()
+    <span class="kw">fn </span>get_rng(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Rng {
+        OsRng::new().unwrap()
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

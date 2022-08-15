@@ -672,679 +672,679 @@
 <span id="672">672</span>
 <span id="673">673</span>
 <span id="674">674</span>
-</pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module</span>
-<span class="doccomment">//!</span>
-<span class="doccomment">//! This module allows to atomically and trustlessly (in the federated trust model) interact with</span>
-<span class="doccomment">//! the Lightning network through a Lightning gateway. See [`LightningModule`] for a high level</span>
-<span class="doccomment">//! overview.</span>
-<span class="doccomment">//!</span>
-<span class="doccomment">//! ## Attention: only one operation per contract and round</span>
-<span class="doccomment">//! If this module is active the consensus&#39; conflict filter must ensure that at most one operation</span>
-<span class="doccomment">//! (spend, funding) happens per contract per round</span>
+</pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
+//!
+//! This module allows to atomically and trustlessly (in the federated trust model) interact with
+//! the Lightning network through a Lightning gateway. See [`LightningModule`] for a high level
+//! overview.
+//!
+//! ## Attention: only one operation per contract and round
+//! If this module is active the consensus&#39; conflict filter must ensure that at most one operation
+//! (spend, funding) happens per contract per round
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">contracts</span>;
-<span class="kw">mod</span> <span class="ident">db</span>;
+</span><span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>contracts;
+<span class="kw">mod </span>db;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::LightningModuleConfig</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts::incoming</span>::{
-    <span class="ident">DecryptedPreimage</span>, <span class="ident">EncryptedPreimage</span>, <span class="ident">IncomingContractOffer</span>, <span class="ident">OfferId</span>, <span class="ident">PreimageDecryptionShare</span>,
+<span class="kw">use </span><span class="kw">crate</span>::config::LightningModuleConfig;
+<span class="kw">use </span><span class="kw">crate</span>::contracts::incoming::{
+    DecryptedPreimage, EncryptedPreimage, IncomingContractOffer, OfferId, PreimageDecryptionShare,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts</span>::{
-    <span class="ident">Contract</span>, <span class="ident">ContractId</span>, <span class="ident">ContractOutcome</span>, <span class="ident">FundedContract</span>, <span class="ident">IdentifyableContract</span>,
+<span class="kw">use </span><span class="kw">crate</span>::contracts::{
+    Contract, ContractId, ContractOutcome, FundedContract, IdentifyableContract,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
-    <span class="ident">AgreedDecryptionShareKey</span>, <span class="ident">AgreedDecryptionShareKeyPrefix</span>, <span class="ident">ContractKey</span>, <span class="ident">ContractKeyPrefix</span>,
-    <span class="ident">ContractUpdateKey</span>, <span class="ident">OfferKey</span>, <span class="ident">OfferKeyPrefix</span>, <span class="ident">ProposeDecryptionShareKey</span>,
-    <span class="ident">ProposeDecryptionShareKeyPrefix</span>,
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
+    ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
+    ProposeDecryptionShareKeyPrefix,
 };
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>;
-<span class="kw">use</span> <span class="ident">db</span>::{<span class="ident">LightningGatewayKey</span>, <span class="ident">LightningGatewayKeyPrefix</span>};
-<span class="kw">use</span> <span class="ident">itertools::Itertools</span>;
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+<span class="kw">use </span>itertools::Itertools;
 
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::interconnect::ModuleInterconect</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module</span>::{<span class="ident">api_endpoint</span>, <span class="ident">ApiEndpoint</span>, <span class="ident">ApiError</span>};
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">Amount</span>, <span class="ident">FederationModule</span>, <span class="ident">PeerId</span>};
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">InputMeta</span>, <span class="ident">OutPoint</span>};
-<span class="kw">use</span> <span class="ident">secp256k1::rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
-<span class="kw">use</span> <span class="ident">std::ops::Sub</span>;
+<span class="kw">use </span>minimint_api::db::batch::{BatchItem, BatchTx};
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::module::audit::Audit;
+<span class="kw">use </span>minimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>minimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
+<span class="kw">use </span>minimint_api::{Amount, FederationModule, PeerId};
+<span class="kw">use </span>minimint_api::{InputMeta, OutPoint};
+<span class="kw">use </span>secp256k1::rand::{CryptoRng, RngCore};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::{HashMap, HashSet};
+<span class="kw">use </span>std::ops::Sub;
 
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info_span</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tracing::{debug, error, info_span, instrument, trace, warn};
 
-<span class="doccomment">/// The lightning module implements an account system. It does not have the privacy guarantees of</span>
-<span class="doccomment">/// the e-cash mint module but instead allows for smart contracting. There exist three contract</span>
-<span class="doccomment">/// types that can be used to &quot;lock&quot; accounts:</span>
-<span class="doccomment">///</span>
-<span class="doccomment">///   * [Account]: an account locked with a schnorr public key</span>
-<span class="doccomment">///   * [Outgoing]: an account locked with an HTLC-like contract allowing to incentivize an external</span>
-<span class="doccomment">///     Lightning node to make payments for the funder</span>
-<span class="doccomment">///   * [Incoming]: a contract type that represents the acquisition of a preimage belonging to a hash.</span>
-<span class="doccomment">///     Every incoming contract is preceded by an offer that specifies how much the seller is asking</span>
-<span class="doccomment">///     for the preimage to a particular hash. It also contains some threshold-encrypted data. Once</span>
-<span class="doccomment">///     the contract is funded the data is decrypted. If it is a valid preimage the contract&#39;s funds</span>
-<span class="doccomment">///     are now accessible to the creator of the offer, if not they are accessible to the funder.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// These three primitives allow to integrate the federation with the wider Lightning network</span>
-<span class="doccomment">/// through a centralized but untrusted (except for availability) Lightning gateway server.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// [Account]: contracts::account::AccountContract</span>
-<span class="doccomment">/// [Outgoing]: contracts::outgoing::OutgoingContract</span>
-<span class="doccomment">/// [Incoming]: contracts::incoming::IncomingContract</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningModule</span> {
-    <span class="ident">cfg</span>: <span class="ident">LightningModuleConfig</span>,
-    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
+<span class="doccomment">/// The lightning module implements an account system. It does not have the privacy guarantees of
+/// the e-cash mint module but instead allows for smart contracting. There exist three contract
+/// types that can be used to &quot;lock&quot; accounts:
+///
+///   * [Account]: an account locked with a schnorr public key
+///   * [Outgoing]: an account locked with an HTLC-like contract allowing to incentivize an external
+///     Lightning node to make payments for the funder
+///   * [Incoming]: a contract type that represents the acquisition of a preimage belonging to a hash.
+///     Every incoming contract is preceded by an offer that specifies how much the seller is asking
+///     for the preimage to a particular hash. It also contains some threshold-encrypted data. Once
+///     the contract is funded the data is decrypted. If it is a valid preimage the contract&#39;s funds
+///     are now accessible to the creator of the offer, if not they are accessible to the funder.
+///
+/// These three primitives allow to integrate the federation with the wider Lightning network
+/// through a centralized but untrusted (except for availability) Lightning gateway server.
+///
+/// [Account]: contracts::account::AccountContract
+/// [Outgoing]: contracts::outgoing::OutgoingContract
+/// [Incoming]: contracts::incoming::IncomingContract
+</span><span class="kw">pub struct </span>LightningModule {
+    cfg: LightningModuleConfig,
+    db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractInput</span> {
-    <span class="kw">pub</span> <span class="ident">contract_id</span>: <span class="ident">contracts::ContractId</span>,
-    <span class="doccomment">/// While for now we only support spending the entire contract we need to avoid</span>
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="doccomment">/// Of the three contract types only the outgoing one needs any other witness data than a</span>
-    <span class="doccomment">/// signature. The signature is aggregated on the transaction level, so only the optional</span>
-    <span class="doccomment">/// preimage remains.</span>
-    <span class="kw">pub</span> <span class="ident">witness</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">contracts::outgoing::Preimage</span>&gt;,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ContractInput {
+    <span class="kw">pub </span>contract_id: contracts::ContractId,
+    <span class="doccomment">/// While for now we only support spending the entire contract we need to avoid
+    </span><span class="kw">pub </span>amount: Amount,
+    <span class="doccomment">/// Of the three contract types only the outgoing one needs any other witness data than a
+    /// signature. The signature is aggregated on the transaction level, so only the optional
+    /// preimage remains.
+    </span><span class="kw">pub </span>witness: <span class="prelude-ty">Option</span>&lt;contracts::outgoing::Preimage&gt;,
 }
 
-<span class="doccomment">/// Represents an output of the Lightning module.</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// There are two sub-types:</span>
-<span class="doccomment">///   * Normal contracts users may lock funds in</span>
-<span class="doccomment">///   * Offers to buy preimages (see `contracts::incoming` docs)</span>
-<span class="doccomment">///</span>
-<span class="doccomment">/// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way</span>
-<span class="doccomment">/// of letting clients submit consensus items outside of transactions we let offers be a 0-amount</span>
-<span class="doccomment">/// output. We need to take care to allow 0-input, 1-output transactions for that to allow users</span>
-<span class="doccomment">/// to receive their fist tokens via LN without already having tokens.</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ContractOrOfferOutput</span> {
-    <span class="ident">Contract</span>(<span class="ident">ContractOutput</span>),
-    <span class="ident">Offer</span>(<span class="ident">contracts::incoming::IncomingContractOffer</span>),
+<span class="doccomment">/// Represents an output of the Lightning module.
+///
+/// There are two sub-types:
+///   * Normal contracts users may lock funds in
+///   * Offers to buy preimages (see `contracts::incoming` docs)
+///
+/// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
+/// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
+/// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
+/// to receive their fist tokens via LN without already having tokens.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub enum </span>ContractOrOfferOutput {
+    Contract(ContractOutput),
+    Offer(contracts::incoming::IncomingContractOffer),
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractOutput</span> {
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">contract</span>: <span class="ident">contracts::Contract</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ContractOutput {
+    <span class="kw">pub </span>amount: minimint_api::Amount,
+    <span class="kw">pub </span>contract: contracts::Contract,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ContractAccount</span> {
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">minimint_api::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">contract</span>: <span class="ident">contracts::FundedContract</span>,
+<span class="attribute">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]</span>
+<span class="kw">pub struct </span>ContractAccount {
+    <span class="kw">pub </span>amount: minimint_api::Amount,
+    <span class="kw">pub </span>contract: contracts::FundedContract,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">OutputOutcome</span> {
-    <span class="ident">Contract</span> {
-        <span class="ident">id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">outcome</span>: <span class="ident">ContractOutcome</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub enum </span>OutputOutcome {
+    Contract {
+        id: ContractId,
+        outcome: ContractOutcome,
     },
-    <span class="ident">Offer</span> {
-        <span class="ident">id</span>: <span class="ident">OfferId</span>,
+    Offer {
+        id: OfferId,
     },
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGateway</span> {
-    <span class="kw">pub</span> <span class="ident">mint_pub_key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
-    <span class="kw">pub</span> <span class="ident">node_pub_key</span>: <span class="ident">secp256k1::PublicKey</span>,
-    <span class="kw">pub</span> <span class="ident">api</span>: <span class="ident">String</span>,
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>LightningGateway {
+    <span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
+    <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
+    <span class="kw">pub </span>api: String,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DecryptionShareCI</span> {
-    <span class="kw">pub</span> <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-    <span class="kw">pub</span> <span class="ident">share</span>: <span class="ident">PreimageDecryptionShare</span>,
+<span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]</span>
+<span class="kw">pub struct </span>DecryptionShareCI {
+    <span class="kw">pub </span>contract_id: ContractId,
+    <span class="kw">pub </span>share: PreimageDecryptionShare,
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
-<span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">LightningModule</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">LightningModuleError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">ContractInput</span>;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">ContractOrOfferOutput</span>;
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = <span class="ident">OutputOutcome</span>;
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">DecryptionShareCI</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> = ();
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]</span>
+<span class="kw">impl </span>FederationModule <span class="kw">for </span>LightningModule {
+    <span class="kw">type </span>Error = LightningModuleError;
+    <span class="kw">type </span>TxInput = ContractInput;
+    <span class="kw">type </span>TxOutput = ContractOrOfferOutput;
+    <span class="kw">type </span>TxOutputOutcome = OutputOutcome;
+    <span class="kw">type </span>ConsensusItem = DecryptionShareCI;
+    <span class="kw">type </span>VerificationCache = ();
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">is_empty</span>() {
-            <span class="ident">std::future::pending</span>().<span class="kw">await</span>
-        }
+    <span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>) {
+        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(rng).<span class="kw">await</span>.is_empty() {
+            std::future::pending().<span class="kw">await
+        </span>}
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposeDecryptionShareKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">ProposeDecryptionShareKey</span>(<span class="ident">contract_id</span>), <span class="ident">share</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="ident">DecryptionShareCI</span> { <span class="ident">contract_id</span>, <span class="ident">share</span> }
+    <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>ProposeDecryptionShareKeyPrefix)
+            .map(|res| {
+                <span class="kw">let </span>(ProposeDecryptionShareKey(contract_id), share) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                DecryptionShareCI { contract_id, share }
             })
-            .<span class="ident">collect</span>()
+            .collect()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
-        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(<span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">decryption_share</span>)| {
-            <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %<span class="ident">peer</span>);
-            <span class="kw">let</span> <span class="ident">_guard</span> = <span class="ident">span</span>.<span class="ident">enter</span>();
+        batch.append_from_iter(consensus_items.into_iter().map(|(peer, decryption_share)| {
+            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
+            <span class="kw">let </span>_guard = span.enter();
 
-            <span class="ident">BatchItem::insert_new</span>(
-                <span class="ident">AgreedDecryptionShareKey</span>(<span class="ident">decryption_share</span>.<span class="ident">contract_id</span>, <span class="ident">peer</span>),
-                <span class="ident">decryption_share</span>.<span class="ident">share</span>,
+            BatchItem::insert_new(
+                AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                decryption_share.share,
             )
         }));
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt;,
-    ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
+    <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput&gt;,
+    ) -&gt; <span class="self">Self</span>::VerificationCache {
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="ident">_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">account</span>: <span class="ident">ContractAccount</span> = <span class="self">self</span>
-            .<span class="ident">get_contract_account</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>)
-            .<span class="ident">ok_or</span>(<span class="ident">LightningModuleError::UnknownContract</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>))<span class="question-mark">?</span>;
+        interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
+        _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>account: ContractAccount = <span class="self">self
+            </span>.get_contract_account(input.contract_id)
+            .ok_or(LightningModuleError::UnknownContract(input.contract_id))<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="ident">account</span>.<span class="ident">amount</span> &lt; <span class="ident">input</span>.<span class="ident">amount</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InsufficientFunds</span>(
-                <span class="ident">account</span>.<span class="ident">amount</span>,
-                <span class="ident">input</span>.<span class="ident">amount</span>,
+        <span class="kw">if </span>account.amount &lt; input.amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InsufficientFunds(
+                account.amount,
+                input.amount,
             ));
         }
 
-        <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="kw">match</span> <span class="ident">account</span>.<span class="ident">contract</span> {
-            <span class="ident">FundedContract::Outgoing</span>(<span class="ident">outgoing</span>) =&gt; {
-                <span class="kw">if</span> <span class="ident">outgoing</span>.<span class="ident">timelock</span> &gt; <span class="ident">block_height</span>(<span class="ident">interconnect</span>) {
-                    <span class="comment">// If the timelock hasn&#39;t expired yet …</span>
-                    <span class="kw">let</span> <span class="ident">preimage_hash</span> = <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(
-                        <span class="kw-2">&amp;</span><span class="ident">input</span>
-                            .<span class="ident">witness</span>
-                            .<span class="ident">as_ref</span>()
-                            .<span class="ident">ok_or</span>(<span class="ident">LightningModuleError::MissingPreimage</span>)<span class="question-mark">?</span>
-                            .<span class="number">0</span>[..],
+        <span class="kw">let </span>pub_key = <span class="kw">match </span>account.contract {
+            FundedContract::Outgoing(outgoing) =&gt; {
+                <span class="kw">if </span>outgoing.timelock &gt; block_height(interconnect) {
+                    <span class="comment">// If the timelock hasn&#39;t expired yet …
+                    </span><span class="kw">let </span>preimage_hash = bitcoin_hashes::sha256::Hash::hash(
+                        <span class="kw-2">&amp;</span>input
+                            .witness
+                            .as_ref()
+                            .ok_or(LightningModuleError::MissingPreimage)<span class="question-mark">?
+                            </span>.<span class="number">0</span>[..],
                     );
 
-                    <span class="comment">// … and the spender provides a valid preimage …</span>
-                    <span class="kw">if</span> <span class="ident">preimage_hash</span> != <span class="ident">outgoing</span>.<span class="ident">hash</span> {
-                        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InvalidPreimage</span>);
+                    <span class="comment">// … and the spender provides a valid preimage …
+                    </span><span class="kw">if </span>preimage_hash != outgoing.hash {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InvalidPreimage);
                     }
 
-                    <span class="comment">// … then the contract account can be spent using the gateway key,</span>
-                    <span class="ident">outgoing</span>.<span class="ident">gateway_key</span>
-                } <span class="kw">else</span> {
-                    <span class="comment">// otherwise the user can claim the funds back.</span>
-                    <span class="ident">outgoing</span>.<span class="ident">user_key</span>
+                    <span class="comment">// … then the contract account can be spent using the gateway key,
+                    </span>outgoing.gateway_key
+                } <span class="kw">else </span>{
+                    <span class="comment">// otherwise the user can claim the funds back.
+                    </span>outgoing.user_key
                 }
             }
-            <span class="ident">FundedContract::Account</span>(<span class="ident">acc_contract</span>) =&gt; <span class="ident">acc_contract</span>.<span class="ident">key</span>,
-            <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>) =&gt; <span class="kw">match</span> <span class="ident">incoming</span>.<span class="ident">contract</span>.<span class="ident">decrypted_preimage</span> {
-                <span class="comment">// Once the preimage has been decrypted …</span>
-                <span class="ident">DecryptedPreimage::Pending</span> =&gt; {
-                    <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::ContractNotReady</span>);
+            FundedContract::Account(acc_contract) =&gt; acc_contract.key,
+            FundedContract::Incoming(incoming) =&gt; <span class="kw">match </span>incoming.contract.decrypted_preimage {
+                <span class="comment">// Once the preimage has been decrypted …
+                </span>DecryptedPreimage::Pending =&gt; {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::ContractNotReady);
                 }
-                <span class="comment">// … either the user may spend the funds since they sold a valid preimage …</span>
-                <span class="ident">DecryptedPreimage::Some</span>(<span class="ident">preimage</span>) =&gt; <span class="ident">preimage</span>.<span class="number">0</span>,
-                <span class="comment">// … or the gateway may claim back funds for not receiving the advertised preimage.</span>
-                <span class="ident">DecryptedPreimage::Invalid</span> =&gt; <span class="ident">incoming</span>.<span class="ident">contract</span>.<span class="ident">gateway_key</span>,
+                <span class="comment">// … either the user may spend the funds since they sold a valid preimage …
+                </span>DecryptedPreimage::Some(preimage) =&gt; preimage.<span class="number">0</span>,
+                <span class="comment">// … or the gateway may claim back funds for not receiving the advertised preimage.
+                </span>DecryptedPreimage::Invalid =&gt; incoming.contract.gateway_key,
             },
         };
 
-        <span class="prelude-val">Ok</span>(<span class="ident">InputMeta</span> {
-            <span class="ident">amount</span>: <span class="ident">input</span>.<span class="ident">amount</span>,
-            <span class="ident">puk_keys</span>: <span class="ident">Box::new</span>(<span class="ident">std::iter::once</span>(<span class="ident">pub_key</span>)),
+        <span class="prelude-val">Ok</span>(InputMeta {
+            amount: input.amount,
+            puk_keys: Box::new(std::iter::once(pub_key)),
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-        <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
+        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">account_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">input</span>.<span class="ident">contract_id</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">account_db_key</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
-        <span class="ident">contract_account</span>.<span class="ident">amount</span> -= <span class="ident">meta</span>.<span class="ident">amount</span>;
-        <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">account_db_key</span>, <span class="ident">contract_account</span>);
+        <span class="kw">let </span>account_db_key = ContractKey(input.contract_id);
+        <span class="kw">let </span><span class="kw-2">mut </span>contract_account = <span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>account_db_key)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .expect(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
+        contract_account.amount -= meta.amount;
+        batch.append_insert(account_db_key, contract_account);
 
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">meta</span>)
+        batch.commit();
+        <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">match</span> <span class="ident">output</span> {
-            <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract</span>) =&gt; {
-                <span class="comment">// Incoming contracts are special, they need to match an offer</span>
-                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) = <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="self">self</span>
-                        .<span class="ident">db</span>
-                        .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))
-                        .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                        .<span class="ident">ok_or</span>(<span class="ident">LightningModuleError::NoOffer</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))<span class="question-mark">?</span>;
+    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">match </span>output {
+            ContractOrOfferOutput::Contract(contract) =&gt; {
+                <span class="comment">// Incoming contracts are special, they need to match an offer
+                </span><span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
+                    <span class="kw">let </span>offer = <span class="self">self
+                        </span>.db
+                        .get_value(<span class="kw-2">&amp;</span>OfferKey(incoming.hash))
+                        .expect(<span class="string">&quot;DB error&quot;</span>)
+                        .ok_or(LightningModuleError::NoOffer(incoming.hash))<span class="question-mark">?</span>;
 
-                    <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> &lt; <span class="ident">offer</span>.<span class="ident">amount</span> {
-                        <span class="comment">// If the account is not sufficiently funded fail the output</span>
-                        <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InsufficientIncomingFunding</span>(
-                            <span class="ident">offer</span>.<span class="ident">amount</span>,
-                            <span class="ident">contract</span>.<span class="ident">amount</span>,
+                    <span class="kw">if </span>contract.amount &lt; offer.amount {
+                        <span class="comment">// If the account is not sufficiently funded fail the output
+                        </span><span class="kw">return </span><span class="prelude-val">Err</span>(LightningModuleError::InsufficientIncomingFunding(
+                            offer.amount,
+                            contract.amount,
                         ));
                     }
                 }
 
-                <span class="kw">if</span> <span class="ident">contract</span>.<span class="ident">amount</span> == <span class="ident">Amount::ZERO</span> {
-                    <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::ZeroOutput</span>)
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">contract</span>.<span class="ident">amount</span>)
+                <span class="kw">if </span>contract.amount == Amount::ZERO {
+                    <span class="prelude-val">Err</span>(LightningModuleError::ZeroOutput)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Ok</span>(contract.amount)
                 }
             }
-            <span class="ident">ContractOrOfferOutput::Offer</span>(<span class="ident">offer</span>) =&gt; {
-                <span class="kw">if</span> !<span class="ident">offer</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>.<span class="ident">verify</span>() {
-                    <span class="prelude-val">Err</span>(<span class="ident">LightningModuleError::InvalidEncryptedPreimage</span>)
-                } <span class="kw">else</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">Amount::ZERO</span>)
+            ContractOrOfferOutput::Offer(offer) =&gt; {
+                <span class="kw">if </span>!offer.encrypted_preimage.<span class="number">0</span>.verify() {
+                    <span class="prelude-val">Err</span>(LightningModuleError::InvalidEncryptedPreimage)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Ok</span>(Amount::ZERO)
                 }
             }
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
-        <span class="ident">out_point</span>: <span class="ident">OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">amount</span> = <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
+        out_point: OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
 
-        <span class="kw">match</span> <span class="ident">output</span> {
-            <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">contract</span>) =&gt; {
-                <span class="kw">let</span> <span class="ident">contract_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>());
-                <span class="kw">let</span> <span class="ident">updated_contract_account</span> = <span class="self">self</span>
-                    .<span class="ident">db</span>
-                    .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">contract_db_key</span>)
-                    .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                    .<span class="ident">map</span>(|<span class="kw-2">mut</span> <span class="ident">value</span>: <span class="ident">ContractAccount</span>| {
-                        <span class="ident">value</span>.<span class="ident">amount</span> += <span class="ident">amount</span>;
-                        <span class="ident">value</span>
+        <span class="kw">match </span>output {
+            ContractOrOfferOutput::Contract(contract) =&gt; {
+                <span class="kw">let </span>contract_db_key = ContractKey(contract.contract.contract_id());
+                <span class="kw">let </span>updated_contract_account = <span class="self">self
+                    </span>.db
+                    .get_value(<span class="kw-2">&amp;</span>contract_db_key)
+                    .expect(<span class="string">&quot;DB error&quot;</span>)
+                    .map(|<span class="kw-2">mut </span>value: ContractAccount| {
+                        value.amount += amount;
+                        value
                     })
-                    .<span class="ident">unwrap_or_else</span>(|| <span class="ident">ContractAccount</span> {
-                        <span class="ident">amount</span>,
-                        <span class="ident">contract</span>: <span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">clone</span>().<span class="ident">to_funded</span>(<span class="ident">out_point</span>),
+                    .unwrap_or_else(|| ContractAccount {
+                        amount,
+                        contract: contract.contract.clone().to_funded(out_point),
                     });
-                <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">contract_db_key</span>, <span class="ident">updated_contract_account</span>);
+                batch.append_insert(contract_db_key, updated_contract_account);
 
-                <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-                    <span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>),
-                    <span class="ident">OutputOutcome::Contract</span> {
-                        <span class="ident">id</span>: <span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>(),
-                        <span class="ident">outcome</span>: <span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">to_outcome</span>(),
+                batch.append_insert_new(
+                    ContractUpdateKey(out_point),
+                    OutputOutcome::Contract {
+                        id: contract.contract.contract_id(),
+                        outcome: contract.contract.to_outcome(),
                     },
                 );
 
-                <span class="kw">if</span> <span class="kw">let</span> <span class="ident">Contract::Incoming</span>(<span class="ident">incoming</span>) = <span class="kw-2">&amp;</span><span class="ident">contract</span>.<span class="ident">contract</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="self">self</span>
-                        .<span class="ident">db</span>
-                        .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">incoming</span>.<span class="ident">hash</span>))
-                        .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                        .<span class="ident">expect</span>(<span class="string">&quot;offer exists if output is valid&quot;</span>);
+                <span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
+                    <span class="kw">let </span>offer = <span class="self">self
+                        </span>.db
+                        .get_value(<span class="kw-2">&amp;</span>OfferKey(incoming.hash))
+                        .expect(<span class="string">&quot;DB error&quot;</span>)
+                        .expect(<span class="string">&quot;offer exists if output is valid&quot;</span>);
 
-                    <span class="kw">let</span> <span class="ident">decryption_share</span> = <span class="self">self</span>
-                        .<span class="ident">cfg</span>
-                        .<span class="ident">threshold_sec_key</span>
-                        .<span class="ident">decrypt_share</span>(<span class="kw-2">&amp;</span><span class="ident">incoming</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>)
-                        .<span class="ident">expect</span>(<span class="string">&quot;We checked for decryption share validity on contract creation&quot;</span>);
-                    <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-                        <span class="ident">ProposeDecryptionShareKey</span>(<span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>()),
-                        <span class="ident">PreimageDecryptionShare</span>(<span class="ident">decryption_share</span>),
+                    <span class="kw">let </span>decryption_share = <span class="self">self
+                        </span>.cfg
+                        .threshold_sec_key
+                        .decrypt_share(<span class="kw-2">&amp;</span>incoming.encrypted_preimage.<span class="number">0</span>)
+                        .expect(<span class="string">&quot;We checked for decryption share validity on contract creation&quot;</span>);
+                    batch.append_insert_new(
+                        ProposeDecryptionShareKey(contract.contract.contract_id()),
+                        PreimageDecryptionShare(decryption_share),
                     );
-                    <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">OfferKey</span>(<span class="ident">offer</span>.<span class="ident">hash</span>));
+                    batch.append_delete(OfferKey(offer.hash));
                 }
             }
-            <span class="ident">ContractOrOfferOutput::Offer</span>(<span class="ident">offer</span>) =&gt; {
-                <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-                    <span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>),
-                    <span class="ident">OutputOutcome::Offer</span> { <span class="ident">id</span>: <span class="ident">offer</span>.<span class="ident">id</span>() },
+            ContractOrOfferOutput::Offer(offer) =&gt; {
+                batch.append_insert_new(
+                    ContractUpdateKey(out_point),
+                    OutputOutcome::Offer { id: offer.id() },
                 );
-                <span class="comment">// TODO: sanity-check encrypted preimage size</span>
-                <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">OfferKey</span>(<span class="ident">offer</span>.<span class="ident">hash</span>), (<span class="kw-2">*</span><span class="ident">offer</span>).<span class="ident">clone</span>());
+                <span class="comment">// TODO: sanity-check encrypted preimage size
+                </span>batch.append_insert_new(OfferKey(offer.hash), (<span class="kw-2">*</span>offer).clone());
             }
         }
 
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">amount</span>)
+        batch.commit();
+        <span class="prelude-val">Ok</span>(amount)
     }
 
-    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>)]</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
-        <span class="comment">// Decrypt preimages</span>
-        <span class="kw">let</span> <span class="ident">preimage_decryption_shares</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">AgreedDecryptionShareKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">value</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                (<span class="ident">key</span>.<span class="number">0</span>, (<span class="ident">key</span>.<span class="number">1</span>, <span class="ident">value</span>))
+    <span class="attribute">#[instrument(skip_all)]</span>
+    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="comment">// Decrypt preimages
+        </span><span class="kw">let </span>preimage_decryption_shares = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>AgreedDecryptionShareKeyPrefix)
+            .map(|res| {
+                <span class="kw">let </span>(key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                (key.<span class="number">0</span>, (key.<span class="number">1</span>, value))
             })
-            .<span class="ident">into_group_map</span>();
+            .into_group_map();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bad_peers</span> = <span class="macro">vec!</span>[];
-        <span class="kw">for</span> (<span class="ident">contract_id</span>, <span class="ident">shares</span>) <span class="kw">in</span> <span class="ident">preimage_decryption_shares</span> {
-            <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">shares</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="kw">_</span>)| <span class="kw-2">*</span><span class="ident">peer</span>).<span class="ident">collect</span>();
-            <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %<span class="ident">contract_id</span>);
-            <span class="kw">let</span> <span class="ident">_gaurd</span> = <span class="ident">span</span>.<span class="ident">enter</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>bad_peers = <span class="macro">vec!</span>[];
+        <span class="kw">for </span>(contract_id, shares) <span class="kw">in </span>preimage_decryption_shares {
+            <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = shares.iter().map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer).collect();
+            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;decrypt_preimage&quot;</span>, %contract_id);
+            <span class="kw">let </span>_gaurd = span.enter();
 
-            <span class="kw">let</span> <span class="ident">incoming_contract</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>) {
-                <span class="prelude-val">Some</span>(<span class="ident">ContractAccount</span> {
-                    <span class="ident">contract</span>: <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>),
+            <span class="kw">let </span>incoming_contract = <span class="kw">match </span><span class="self">self</span>.get_contract_account(contract_id) {
+                <span class="prelude-val">Some</span>(ContractAccount {
+                    contract: FundedContract::Incoming(incoming),
                     ..
-                }) =&gt; <span class="ident">incoming</span>.<span class="ident">contract</span>,
-                <span class="kw">_</span> =&gt; {
+                }) =&gt; incoming.contract,
+                <span class="kw">_ </span>=&gt; {
                     <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for non-existent incoming contract&quot;</span>);
-                    <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">peers</span> {
-                        <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">AgreedDecryptionShareKey</span>(<span class="ident">contract_id</span>, <span class="ident">peer</span>));
+                    <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                        batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
                     }
                     <span class="kw">continue</span>;
                 }
             };
 
-            <span class="kw">let</span> <span class="ident">valid_shares</span>: <span class="ident">HashMap</span>&lt;<span class="ident">PeerId</span>, <span class="ident">PreimageDecryptionShare</span>&gt; = <span class="ident">shares</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| {
-                    <span class="self">self</span>.<span class="ident">validate_decryption_share</span>(
-                        <span class="kw-2">*</span><span class="ident">peer</span>,
-                        <span class="ident">share</span>,
-                        <span class="kw-2">&amp;</span><span class="ident">incoming_contract</span>.<span class="ident">encrypted_preimage</span>,
+            <span class="kw">let </span>valid_shares: HashMap&lt;PeerId, PreimageDecryptionShare&gt; = shares
+                .into_iter()
+                .filter(|(peer, share)| {
+                    <span class="self">self</span>.validate_decryption_share(
+                        <span class="kw-2">*</span>peer,
+                        share,
+                        <span class="kw-2">&amp;</span>incoming_contract.encrypted_preimage,
                     )
                 })
-                .<span class="ident">collect</span>();
+                .collect();
 
-            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">consensus_peers</span>.<span class="ident">sub</span>(<span class="kw-2">&amp;</span><span class="ident">valid_shares</span>.<span class="ident">keys</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>()) {
-                <span class="ident">bad_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
-                <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, <span class="ident">peer</span>);
+            <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>valid_shares.keys().cloned().collect()) {
+                bad_peers.push(peer);
+                <span class="macro">warn!</span>(<span class="string">&quot;{} did not contribute valid decryption shares&quot;</span>, peer);
             }
 
-            <span class="kw">if</span> <span class="ident">valid_shares</span>.<span class="ident">len</span>() &lt; <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span> {
+            <span class="kw">if </span>valid_shares.len() &lt; <span class="self">self</span>.cfg.threshold {
                 <span class="macro">warn!</span>(
-                    <span class="ident">valid_shares</span> = %<span class="ident">valid_shares</span>.<span class="ident">len</span>(),
-                    <span class="ident">shares_needed</span> = %<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold</span>,
-                    <span class="string">&quot;Too few decryption shares&quot;</span>
-                );
+                    valid_shares = %valid_shares.len(),
+                    shares_needed = %<span class="self">self</span>.cfg.threshold,
+                    <span class="string">&quot;Too few decryption shares&quot;
+                </span>);
                 <span class="kw">continue</span>;
             }
             <span class="macro">debug!</span>(<span class="string">&quot;Beginning to decrypt preimage&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">contract</span> = <span class="self">self</span>
-                .<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify</span>
+            <span class="kw">let </span>contract = <span class="self">self
+                </span>.get_contract_account(contract_id)
+                .expect(<span class="string">&quot;decryption shares without contracts should be discarded earlier&quot;</span>); <span class="comment">// FIXME: verify
 
-            <span class="kw">let</span> (<span class="ident">incoming_contract</span>, <span class="ident">out_point</span>) = <span class="kw">match</span> <span class="ident">contract</span>.<span class="ident">contract</span> {
-                <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>) =&gt; (<span class="ident">incoming</span>.<span class="ident">contract</span>, <span class="ident">incoming</span>.<span class="ident">out_point</span>),
-                <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(
-                    <span class="string">&quot;decryption shares without incoming contracts should be discarded earlier&quot;</span>
-                ),
+            </span><span class="kw">let </span>(incoming_contract, out_point) = <span class="kw">match </span>contract.contract {
+                FundedContract::Incoming(incoming) =&gt; (incoming.contract, incoming.out_point),
+                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(
+                    <span class="string">&quot;decryption shares without incoming contracts should be discarded earlier&quot;
+                </span>),
             };
 
-            <span class="kw">if</span> !<span class="macro">matches!</span>(
-                <span class="ident">incoming_contract</span>.<span class="ident">decrypted_preimage</span>,
-                <span class="ident">DecryptedPreimage::Pending</span>
+            <span class="kw">if </span>!<span class="macro">matches!</span>(
+                incoming_contract.decrypted_preimage,
+                DecryptedPreimage::Pending
             ) {
                 <span class="macro">warn!</span>(<span class="string">&quot;Tried to decrypt the same preimage twice, this should not happen.&quot;</span>);
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let</span> <span class="ident">preimage</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">threshold_pub_keys</span>.<span class="ident">decrypt</span>(
-                <span class="ident">valid_shares</span>
-                    .<span class="ident">iter</span>()
-                    .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">share</span>)| (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">share</span>.<span class="number">0</span>)),
-                <span class="kw-2">&amp;</span><span class="ident">incoming_contract</span>.<span class="ident">encrypted_preimage</span>.<span class="number">0</span>,
+            <span class="kw">let </span>preimage = <span class="kw">match </span><span class="self">self</span>.cfg.threshold_pub_keys.decrypt(
+                valid_shares
+                    .iter()
+                    .map(|(peer, share)| (peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>)),
+                <span class="kw-2">&amp;</span>incoming_contract.encrypted_preimage.<span class="number">0</span>,
             ) {
-                <span class="prelude-val">Ok</span>(<span class="ident">preimage</span>) =&gt; <span class="ident">preimage</span>,
+                <span class="prelude-val">Ok</span>(preimage) =&gt; preimage,
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="comment">// TODO: check if that can happen even though shares are verified before</span>
-                    <span class="macro">error!</span>(<span class="ident">contract_hash</span> = %<span class="ident">incoming_contract</span>.<span class="ident">hash</span>, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
+                    <span class="comment">// TODO: check if that can happen even though shares are verified before
+                    </span><span class="macro">error!</span>(contract_hash = %incoming_contract.hash, <span class="string">&quot;Failed to decrypt preimage&quot;</span>);
                     <span class="kw">continue</span>;
                 }
             };
 
-            <span class="comment">// Delete decryption shares once we&#39;ve decrypted the preimage</span>
-            <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">ProposeDecryptionShareKey</span>(<span class="ident">contract_id</span>));
-            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">peers</span> {
-                <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">AgreedDecryptionShareKey</span>(<span class="ident">contract_id</span>, <span class="ident">peer</span>));
+            <span class="comment">// Delete decryption shares once we&#39;ve decrypted the preimage
+            </span>batch.append_delete(ProposeDecryptionShareKey(contract_id));
+            <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
             }
 
-            <span class="kw">let</span> <span class="ident">decrypted_preimage</span> = <span class="kw">if</span> <span class="ident">preimage</span>.<span class="ident">len</span>() != <span class="number">32</span> {
-                <span class="ident">DecryptedPreimage::Invalid</span>
-            } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">incoming_contract</span>.<span class="ident">hash</span> == <span class="ident">bitcoin_hashes::sha256::Hash::hash</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
-                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">preimage_key</span>) = <span class="ident">secp256k1::XOnlyPublicKey::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">preimage</span>) {
-                    <span class="ident">DecryptedPreimage::Some</span>(<span class="ident"><span class="kw">crate</span>::contracts::incoming::Preimage</span>(<span class="ident">preimage_key</span>))
-                } <span class="kw">else</span> {
-                    <span class="ident">DecryptedPreimage::Invalid</span>
+            <span class="kw">let </span>decrypted_preimage = <span class="kw">if </span>preimage.len() != <span class="number">32 </span>{
+                DecryptedPreimage::Invalid
+            } <span class="kw">else if </span>incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage) {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(preimage_key) = secp256k1::XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span>preimage) {
+                    DecryptedPreimage::Some(<span class="kw">crate</span>::contracts::incoming::Preimage(preimage_key))
+                } <span class="kw">else </span>{
+                    DecryptedPreimage::Invalid
                 }
-            } <span class="kw">else</span> {
-                <span class="ident">DecryptedPreimage::Invalid</span>
+            } <span class="kw">else </span>{
+                DecryptedPreimage::Invalid
             };
-            <span class="macro">debug!</span>(<span class="question-mark">?</span><span class="ident">decrypted_preimage</span>);
+            <span class="macro">debug!</span>(<span class="question-mark">?</span>decrypted_preimage);
 
-            <span class="comment">// TODO: maybe define update helper fn</span>
-            <span class="comment">// Update contract</span>
-            <span class="kw">let</span> <span class="ident">contract_db_key</span> = <span class="ident">ContractKey</span>(<span class="ident">contract_id</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">contract_account</span> = <span class="self">self</span>
-                .<span class="ident">db</span>
-                .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">contract_db_key</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;checked before that it exists&quot;</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">incoming</span> = <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">contract_account</span>.<span class="ident">contract</span> {
-                <span class="ident">FundedContract::Incoming</span>(<span class="ident">incoming</span>) =&gt; <span class="ident">incoming</span>,
-                <span class="kw">_</span> =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;previously checked that it&#39;s an incoming contrac&quot;</span>),
+            <span class="comment">// TODO: maybe define update helper fn
+            // Update contract
+            </span><span class="kw">let </span>contract_db_key = ContractKey(contract_id);
+            <span class="kw">let </span><span class="kw-2">mut </span>contract_account = <span class="self">self
+                </span>.db
+                .get_value(<span class="kw-2">&amp;</span>contract_db_key)
+                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .expect(<span class="string">&quot;checked before that it exists&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>incoming = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
+                FundedContract::Incoming(incoming) =&gt; incoming,
+                <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;previously checked that it&#39;s an incoming contrac&quot;</span>),
             };
-            <span class="ident">incoming</span>.<span class="ident">contract</span>.<span class="ident">decrypted_preimage</span> = <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
-            <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">contract_account</span>, <span class="string">&quot;Updating contract account&quot;</span>);
-            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">contract_db_key</span>, <span class="ident">contract_account</span>);
+            incoming.contract.decrypted_preimage = decrypted_preimage.clone();
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>contract_account, <span class="string">&quot;Updating contract account&quot;</span>);
+            batch.append_insert(contract_db_key, contract_account);
 
-            <span class="comment">// Update output outcome</span>
-            <span class="kw">let</span> <span class="ident">outcome_db_key</span> = <span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>);
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">outcome</span> = <span class="self">self</span>
-                .<span class="ident">db</span>
-                .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">outcome_db_key</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;outcome was created on funding&quot;</span>);
-            <span class="kw">let</span> <span class="ident">incoming_contract_outcome_preimage</span> = <span class="kw">match</span> <span class="kw-2">&amp;mut</span> <span class="ident">outcome</span> {
-                <span class="ident">OutputOutcome::Contract</span> {
-                    <span class="ident">outcome</span>: <span class="ident">ContractOutcome::Incoming</span>(<span class="ident">decryption_outcome</span>),
+            <span class="comment">// Update output outcome
+            </span><span class="kw">let </span>outcome_db_key = ContractUpdateKey(out_point);
+            <span class="kw">let </span><span class="kw-2">mut </span>outcome = <span class="self">self
+                </span>.db
+                .get_value(<span class="kw-2">&amp;</span>outcome_db_key)
+                .expect(<span class="string">&quot;DB error&quot;</span>)
+                .expect(<span class="string">&quot;outcome was created on funding&quot;</span>);
+            <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
+                OutputOutcome::Contract {
+                    outcome: ContractOutcome::Incoming(decryption_outcome),
                     ..
-                } =&gt; <span class="ident">decryption_outcome</span>,
-                <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
+                } =&gt; decryption_outcome,
+                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
             };
-            <span class="kw-2">*</span><span class="ident">incoming_contract_outcome_preimage</span> = <span class="ident">decrypted_preimage</span>.<span class="ident">clone</span>();
-            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">outcome_db_key</span>, <span class="ident">outcome</span>);
+            <span class="kw-2">*</span>incoming_contract_outcome_preimage = decrypted_preimage.clone();
+            batch.append_insert(outcome_db_key, outcome);
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
 
-        <span class="ident">bad_peers</span>
+        bad_peers
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ContractUpdateKey</span>(<span class="ident">out_point</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
+        <span class="self">self</span>.db
+            .get_value(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">ContractKeyPrefix</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
-            -(<span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">i64</span>)
+    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit.add_items(<span class="kw-2">&amp;</span><span class="self">self</span>.db, <span class="kw-2">&amp;</span>ContractKeyPrefix, |<span class="kw">_</span>, v| {
+            -(v.amount.milli_sat <span class="kw">as </span>i64)
         });
     }
 
-    <span class="kw">fn</span> <span class="ident">api_base_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> {
-        <span class="string">&quot;ln&quot;</span>
-    }
+    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+        <span class="string">&quot;ln&quot;
+    </span>}
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
-        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span>&lt;<span class="ident">LightningModule</span>&gt;] = <span class="kw-2">&amp;</span>[
+    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;] {
+        <span class="kw">const </span>ENDPOINTS: <span class="kw-2">&amp;</span>[ApiEndpoint&lt;LightningModule&gt;] = <span class="kw-2">&amp;</span>[
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/account&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>| -&gt; <span class="ident">ContractAccount</span> {
-                    <span class="ident">module</span>
-                        .<span class="ident">get_contract_account</span>(<span class="ident">contract_id</span>)
-                        .<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Contract not found&quot;</span>)))
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, contract_id: ContractId| -&gt; ContractAccount {
+                    module
+                        .get_contract_account(contract_id)
+                        .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Contract not found&quot;</span>)))
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/offers&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_params</span>: ()| -&gt; <span class="ident">Vec</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
-                    <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">get_offers</span>())
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, _params: ()| -&gt; Vec&lt;IncomingContractOffer&gt; {
+                    <span class="prelude-val">Ok</span>(module.get_offers())
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/offer&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>| -&gt; <span class="ident">IncomingContractOffer</span> {
-                    <span class="kw">let</span> <span class="ident">offer</span> = <span class="ident">module</span>
-                        .<span class="ident">get_offer</span>(<span class="ident">payment_hash</span>)
-                        .<span class="ident">ok_or_else</span>(|| <span class="ident">ApiError::not_found</span>(<span class="ident">String::from</span>(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, payment_hash: bitcoin_hashes::sha256::Hash| -&gt; IncomingContractOffer {
+                    <span class="kw">let </span>offer = module
+                        .get_offer(payment_hash)
+                        .ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;Offer not found&quot;</span>)))<span class="question-mark">?</span>;
 
-                    <span class="macro">debug!</span>(%<span class="ident">payment_hash</span>, <span class="string">&quot;Sending offer info&quot;</span>);
-                    <span class="prelude-val">Ok</span>(<span class="ident">offer</span>)
+                    <span class="macro">debug!</span>(%payment_hash, <span class="string">&quot;Sending offer info&quot;</span>);
+                    <span class="prelude-val">Ok</span>(offer)
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/list_gateways&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">_v</span>: ()| -&gt; <span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt; {
-                    <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">list_gateways</span>())
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, _v: ()| -&gt; Vec&lt;LightningGateway&gt; {
+                    <span class="prelude-val">Ok</span>(module.list_gateways())
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/register_gateway&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">LightningModule</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span>| -&gt; () {
-                    <span class="ident">module</span>.<span class="ident">register_gateway</span>(<span class="ident">gateway</span>);
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>LightningModule, gateway: LightningGateway| -&gt; () {
+                    module.register_gateway(gateway);
                     <span class="prelude-val">Ok</span>(())
                 }
             },
         ];
-        <span class="ident">ENDPOINTS</span>
+        ENDPOINTS
     }
 }
 
-<span class="kw">impl</span> <span class="ident">LightningModule</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">cfg</span>: <span class="ident">LightningModuleConfig</span>, <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;) -&gt; <span class="ident">LightningModule</span> {
-        <span class="ident">LightningModule</span> { <span class="ident">cfg</span>, <span class="ident">db</span> }
+<span class="kw">impl </span>LightningModule {
+    <span class="kw">pub fn </span>new(cfg: LightningModuleConfig, db: Arc&lt;<span class="kw">dyn </span>Database&gt;) -&gt; LightningModule {
+        LightningModule { cfg, db }
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_decryption_share</span>(
+    <span class="kw">fn </span>validate_decryption_share(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">peer</span>: <span class="ident">PeerId</span>,
-        <span class="ident">share</span>: <span class="kw-2">&amp;</span><span class="ident">PreimageDecryptionShare</span>,
-        <span class="ident">message</span>: <span class="kw-2">&amp;</span><span class="ident">EncryptedPreimage</span>,
-    ) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">cfg</span>
-            .<span class="ident">threshold_pub_keys</span>
-            .<span class="ident">public_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>())
-            .<span class="ident">verify_decryption_share</span>(<span class="kw-2">&amp;</span><span class="ident">share</span>.<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="ident">message</span>.<span class="number">0</span>)
+        peer: PeerId,
+        share: <span class="kw-2">&amp;</span>PreimageDecryptionShare,
+        message: <span class="kw-2">&amp;</span>EncryptedPreimage,
+    ) -&gt; bool {
+        <span class="self">self</span>.cfg
+            .threshold_pub_keys
+            .public_key_share(peer.to_usize())
+            .verify_decryption_share(<span class="kw-2">&amp;</span>share.<span class="number">0</span>, <span class="kw-2">&amp;</span>message.<span class="number">0</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offer</span>(
+    <span class="kw">pub fn </span>get_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKey</span>(<span class="ident">payment_hash</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+        payment_hash: bitcoin_hashes::sha256::Hash,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;IncomingContractOffer&gt; {
+        <span class="self">self</span>.db
+            .get_value(<span class="kw-2">&amp;</span>OfferKey(payment_hash))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_offers</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">IncomingContractOffer</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">OfferKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
-            .<span class="ident">collect</span>()
+    <span class="kw">pub fn </span>get_offers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;IncomingContractOffer&gt; {
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>OfferKeyPrefix)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .collect()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_contract_account</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">ContractAccount</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">ContractKey</span>(<span class="ident">contract_id</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+    <span class="kw">pub fn </span>get_contract_account(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Option</span>&lt;ContractAccount&gt; {
+        <span class="self">self</span>.db
+            .get_value(<span class="kw-2">&amp;</span>ContractKey(contract_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_gateways</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">LightningGateway</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">LightningGatewayKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
-            .<span class="ident">collect</span>()
+    <span class="kw">pub fn </span>list_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;LightningGateway&gt; {
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .collect()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">register_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">gateway</span>: <span class="ident">LightningGateway</span>) {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">LightningGatewayKey</span>(<span class="ident">gateway</span>.<span class="ident">node_pub_key</span>), <span class="kw-2">&amp;</span><span class="ident">gateway</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+    <span class="kw">pub fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) {
+        <span class="self">self</span>.db
+            .insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey(gateway.node_pub_key), <span class="kw-2">&amp;</span>gateway)
+            .expect(<span class="string">&quot;DB error&quot;</span>);
     }
 }
 
-<span class="kw">fn</span> <span class="ident">block_height</span>(<span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>) -&gt; <span class="ident">u32</span> {
-    <span class="comment">// This is a future because we are normally reading from a network socket. But for internal</span>
-    <span class="comment">// calls the data is available instantly in one go, so we can just block on it.</span>
-    <span class="kw">let</span> <span class="ident">body</span> = <span class="ident">futures::executor::block_on</span>(<span class="ident">interconnect</span>.<span class="ident">call</span>(
+<span class="kw">fn </span>block_height(interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect) -&gt; u32 {
+    <span class="comment">// This is a future because we are normally reading from a network socket. But for internal
+    // calls the data is available instantly in one go, so we can just block on it.
+    </span><span class="kw">let </span>body = futures::executor::block_on(interconnect.call(
         <span class="string">&quot;wallet&quot;</span>,
-        <span class="string">&quot;/block_height&quot;</span>.<span class="ident">to_owned</span>(),
-        <span class="ident">Default::default</span>(),
+        <span class="string">&quot;/block_height&quot;</span>.to_owned(),
+        Default::default(),
     ))
-    .<span class="ident">expect</span>(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
+    .expect(<span class="string">&quot;Wallet module not present or malfunctioning!&quot;</span>);
 
-    <span class="ident">serde_json::from_value</span>(<span class="ident">body</span>).<span class="ident">expect</span>(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
+    serde_json::from_value(body).expect(<span class="string">&quot;Malformed block height response from wallet module!&quot;</span>)
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">LightningModuleError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]</span>
-    <span class="ident">UnknownContract</span>(<span class="ident">ContractId</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The input contract has too little funds, got {0}, input spends {1}&quot;</span>)]</span>
-    <span class="ident">InsufficientFunds</span>(<span class="ident">Amount</span>, <span class="ident">Amount</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;An outgoing LN contract spend did not provide a preimage&quot;</span>)]</span>
-    <span class="ident">MissingPreimage</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;An outgoing LN contract spend provided a wrong preimage&quot;</span>)]</span>
-    <span class="ident">InvalidPreimage</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Incoming contract not ready to be spent yet, decryption in progress&quot;</span>)]</span>
-    <span class="ident">ContractNotReady</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Output contract value may not be zero unless it&#39;s an offer output&quot;</span>)]</span>
-    <span class="ident">ZeroOutput</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]</span>
-    <span class="ident">InvalidEncryptedPreimage</span>,
-    <span class="attribute">#[<span class="ident">error</span>(
-        <span class="string">&quot;The incoming LN account requires more funding according to the offer (need {0} got {1})&quot;</span>
-    )]</span>
-    <span class="ident">InsufficientIncomingFunding</span>(<span class="ident">Amount</span>, <span class="ident">Amount</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;No offer found for payment hash {0}&quot;</span>)]</span>
-    <span class="ident">NoOffer</span>(<span class="ident">secp256k1::hashes::sha256::Hash</span>),
+<span class="attribute">#[derive(Debug, Error, Eq, PartialEq)]</span>
+<span class="kw">pub enum </span>LightningModuleError {
+    <span class="attribute">#[error(<span class="string">&quot;The the input contract {0} does not exist&quot;</span>)]</span>
+    UnknownContract(ContractId),
+    <span class="attribute">#[error(<span class="string">&quot;The input contract has too little funds, got {0}, input spends {1}&quot;</span>)]</span>
+    InsufficientFunds(Amount, Amount),
+    <span class="attribute">#[error(<span class="string">&quot;An outgoing LN contract spend did not provide a preimage&quot;</span>)]</span>
+    MissingPreimage,
+    <span class="attribute">#[error(<span class="string">&quot;An outgoing LN contract spend provided a wrong preimage&quot;</span>)]</span>
+    InvalidPreimage,
+    <span class="attribute">#[error(<span class="string">&quot;Incoming contract not ready to be spent yet, decryption in progress&quot;</span>)]</span>
+    ContractNotReady,
+    <span class="attribute">#[error(<span class="string">&quot;Output contract value may not be zero unless it&#39;s an offer output&quot;</span>)]</span>
+    ZeroOutput,
+    <span class="attribute">#[error(<span class="string">&quot;Offer contains invalid threshold-encrypted data&quot;</span>)]</span>
+    InvalidEncryptedPreimage,
+    <span class="attribute">#[error(
+        <span class="string">&quot;The incoming LN account requires more funding according to the offer (need {0} got {1})&quot;
+    </span>)]</span>
+    InsufficientIncomingFunding(Amount, Amount),
+    <span class="attribute">#[error(<span class="string">&quot;No offer found for payment hash {0}&quot;</span>)]</span>
+    NoOffer(secp256k1::hashes::sha256::Hash),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

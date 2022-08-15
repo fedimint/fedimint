@@ -1234,1241 +1234,1241 @@
 <span id="1234">1234</span>
 <span id="1235">1235</span>
 <span id="1236">1236</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashMap</span>, <span class="ident">HashSet</span>};
-<span class="kw">use</span> <span class="ident">std::convert::TryInto</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<span class="kw">use </span>std::convert::TryInto;
 
-<span class="kw">use</span> <span class="ident">std::hash::Hasher</span>;
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+<span class="kw">use </span>std::hash::Hasher;
+<span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::bitcoind::BitcoindRpc</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::WalletConfig</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
-    <span class="ident">BlockHashKey</span>, <span class="ident">PegOutTxSignatureCI</span>, <span class="ident">PegOutTxSignatureCIPrefix</span>, <span class="ident">PendingTransactionKey</span>,
-    <span class="ident">PendingTransactionPrefixKey</span>, <span class="ident">RoundConsensusKey</span>, <span class="ident">UTXOKey</span>, <span class="ident">UTXOPrefixKey</span>, <span class="ident">UnsignedTransactionKey</span>,
-    <span class="ident">UnsignedTransactionPrefixKey</span>,
+<span class="kw">use </span><span class="kw">crate</span>::bitcoind::BitcoindRpc;
+<span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+    UnsignedTransactionPrefixKey,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::keys::CompressedPublicKey</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::tweakable::Tweakable</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::txoproof</span>::{<span class="ident">PegInProof</span>, <span class="ident">PegInProofError</span>};
-<span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
-<span class="kw">use</span> <span class="ident">bitcoin::hashes</span>::{<span class="ident">sha256</span>, <span class="ident">Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>, <span class="ident">HashEngine</span>, <span class="ident">Hmac</span>, <span class="ident">HmacEngine</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::secp256k1</span>::{<span class="ident">All</span>, <span class="ident">Secp256k1</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::util::psbt::raw::ProprietaryKey</span>;
-<span class="kw">use</span> <span class="ident">bitcoin::util::psbt</span>::{<span class="ident">Input</span>, <span class="ident">PartiallySignedTransaction</span>};
-<span class="kw">use</span> <span class="ident">bitcoin::util::sighash::SighashCache</span>;
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{
-    <span class="ident">Address</span>, <span class="ident">AddressType</span>, <span class="ident">Amount</span>, <span class="ident">BlockHash</span>, <span class="ident">EcdsaSig</span>, <span class="ident">EcdsaSighashType</span>, <span class="ident">Network</span>, <span class="ident">Script</span>,
-    <span class="ident">Transaction</span>, <span class="ident">TxIn</span>, <span class="ident">TxOut</span>, <span class="ident">Txid</span>,
+<span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
+<span class="kw">use </span><span class="kw">crate</span>::tweakable::Tweakable;
+<span class="kw">use </span><span class="kw">crate</span>::txoproof::{PegInProof, PegInProofError};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
+<span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1};
+<span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
+<span class="kw">use </span>bitcoin::util::psbt::{Input, PartiallySignedTransaction};
+<span class="kw">use </span>bitcoin::util::sighash::SighashCache;
+<span class="kw">use </span>bitcoin::{
+    Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
+    Transaction, TxIn, TxOut, Txid,
 };
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::module::api_endpoint</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::interconnect::ModuleInterconect</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::module::ApiEndpoint</span>;
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">InputMeta</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>};
-<span class="kw">use</span> <span class="ident">minimint_derive::UnzipConsensus</span>;
-<span class="kw">use</span> <span class="ident">miniscript::psbt::PsbtExt</span>;
-<span class="kw">use</span> <span class="ident">miniscript</span>::{<span class="ident">Descriptor</span>, <span class="ident">DescriptorTrait</span>, <span class="ident">TranslatePk2</span>};
-<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">Rng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">secp256k1::Message</span>;
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::ops::Sub</span>;
+<span class="kw">use </span>minimint_api::db::batch::{BatchItem, BatchTx};
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::module::api_endpoint;
+<span class="kw">use </span>minimint_api::module::interconnect::ModuleInterconect;
+<span class="kw">use </span>minimint_api::module::ApiEndpoint;
+<span class="kw">use </span>minimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>minimint_derive::UnzipConsensus;
+<span class="kw">use </span>miniscript::psbt::PsbtExt;
+<span class="kw">use </span>miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+<span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
+<span class="kw">use </span>secp256k1::Message;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::ops::Sub;
 
-<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::task::sleep</span>;
-<span class="kw">use</span> <span class="ident">std::time::Duration</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
+<span class="kw">use </span>minimint_api::module::audit::Audit;
+<span class="kw">use </span>minimint_api::task::sleep;
+<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">bitcoind</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">config</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">db</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">keys</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">tweakable</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">txoproof</span>;
+<span class="kw">pub mod </span>bitcoind;
+<span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>db;
+<span class="kw">pub mod </span>keys;
+<span class="kw">pub mod </span>tweakable;
+<span class="kw">pub mod </span>txoproof;
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;native&quot;</span>)]</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">bitcoincore_rpc</span>;
+<span class="attribute">#[cfg(feature = <span class="string">&quot;native&quot;</span>)]</span>
+<span class="kw">pub mod </span>bitcoincore_rpc;
 
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">CONFIRMATION_TARGET</span>: <span class="ident">u16</span> = <span class="number">10</span>;
+<span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PartialSig</span> = <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;;
+<span class="kw">pub type </span>PartialSig = Vec&lt;u8&gt;;
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PegInDescriptor</span> = <span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt;;
+<span class="kw">pub type </span>PegInDescriptor = Descriptor&lt;CompressedPublicKey&gt;;
 
-<span class="attribute">#[<span class="ident">derive</span>(
-    <span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">UnzipConsensus</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>,
+<span class="attribute">#[derive(
+    Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
 )]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">WalletConsensusItem</span> {
-    <span class="ident">RoundConsensus</span>(<span class="ident">RoundConsensusItem</span>),
-    <span class="ident">PegOutSignature</span>(<span class="ident">PegOutSignatureItem</span>),
+<span class="kw">pub enum </span>WalletConsensusItem {
+    RoundConsensus(RoundConsensusItem),
+    PegOutSignature(PegOutSignatureItem),
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RoundConsensusItem</span> {
-    <span class="kw">pub</span> <span class="ident">block_height</span>: <span class="ident">u32</span>, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic</span>
-    <span class="kw">pub</span> <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
-    <span class="kw">pub</span> <span class="ident">randomness</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
+<span class="attribute">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>RoundConsensusItem {
+    <span class="kw">pub </span>block_height: u32, <span class="comment">// FIXME: use block hash instead, but needs more complicated verification logic
+    </span><span class="kw">pub </span>fee_rate: Feerate,
+    <span class="kw">pub </span>randomness: [u8; <span class="number">32</span>],
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutSignatureItem</span> {
-    <span class="kw">pub</span> <span class="ident">txid</span>: <span class="ident">Txid</span>,
-    <span class="kw">pub</span> <span class="ident">signature</span>: <span class="ident">Vec</span>&lt;<span class="ident">secp256k1::ecdsa::Signature</span>&gt;,
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegOutSignatureItem {
+    <span class="kw">pub </span>txid: Txid,
+    <span class="kw">pub </span>signature: Vec&lt;secp256k1::ecdsa::Signature&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">PartialEq</span>, <span class="ident">Eq</span>, <span class="ident">Hash</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RoundConsensus</span> {
-    <span class="kw">pub</span> <span class="ident">block_height</span>: <span class="ident">u32</span>,
-    <span class="kw">pub</span> <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
-    <span class="kw">pub</span> <span class="ident">randomness_beacon</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
+<span class="attribute">#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>RoundConsensus {
+    <span class="kw">pub </span>block_height: u32,
+    <span class="kw">pub </span>fee_rate: Feerate,
+    <span class="kw">pub </span>randomness_beacon: [u8; <span class="number">32</span>],
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Wallet</span> {
-    <span class="ident">cfg</span>: <span class="ident">WalletConfig</span>,
-    <span class="ident">secp</span>: <span class="ident">Secp256k1</span>&lt;<span class="ident">All</span>&gt;,
-    <span class="ident">btc_rpc</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;,
-    <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
+<span class="kw">pub struct </span>Wallet {
+    cfg: WalletConfig,
+    secp: Secp256k1&lt;All&gt;,
+    btc_rpc: Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+    db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">SpendableUTXO</span> {
-    <span class="kw">pub</span> <span class="ident">tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>SpendableUTXO {
+    <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
+    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
+    <span class="kw">pub </span>amount: bitcoin::Amount,
 }
 
-<span class="doccomment">/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PendingTransaction</span> {
-    <span class="kw">pub</span> <span class="ident">tx</span>: <span class="ident">Transaction</span>,
-    <span class="kw">pub</span> <span class="ident">tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-    <span class="kw">pub</span> <span class="ident">change</span>: <span class="ident">bitcoin::Amount</span>,
+<span class="doccomment">/// A peg-out tx that is ready to be broadcast with a tweak for the change UTXO
+</span><span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PendingTransaction {
+    <span class="kw">pub </span>tx: Transaction,
+    <span class="kw">pub </span>tweak: [u8; <span class="number">32</span>],
+    <span class="kw">pub </span>change: bitcoin::Amount,
 }
 
-<span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UnsignedTransaction</span> {
-    <span class="kw">pub</span> <span class="ident">psbt</span>: <span class="ident">PartiallySignedTransaction</span>,
-    <span class="kw">pub</span> <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)&gt;,
-    <span class="kw">pub</span> <span class="ident">change</span>: <span class="ident">bitcoin::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fees</span>: <span class="ident">PegOutFees</span>,
+<span class="doccomment">/// A PSBT that is awaiting enough signatures from the federation to becoming a `PendingTransaction`
+</span><span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>UnsignedTransaction {
+    <span class="kw">pub </span>psbt: PartiallySignedTransaction,
+    <span class="kw">pub </span>signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
+    <span class="kw">pub </span>change: bitcoin::Amount,
+    <span class="kw">pub </span>fees: PegOutFees,
 }
 
-<span class="kw">struct</span> <span class="ident">StatelessWallet</span>&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="ident">descriptor</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Descriptor</span>&lt;<span class="ident">CompressedPublicKey</span>&gt;,
-    <span class="ident">secret_key</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1::SecretKey</span>,
-    <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">secp256k1::Secp256k1</span>&lt;<span class="ident">secp256k1::All</span>&gt;,
+<span class="kw">struct </span>StatelessWallet&lt;<span class="lifetime">&#39;a</span>&gt; {
+    descriptor: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Descriptor&lt;CompressedPublicKey&gt;,
+    secret_key: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1::SecretKey,
+    secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(
-    <span class="ident">Copy</span>,
-    <span class="ident">Clone</span>,
-    <span class="ident">Debug</span>,
-    <span class="ident">PartialEq</span>,
-    <span class="ident">Ord</span>,
-    <span class="ident">PartialOrd</span>,
-    <span class="ident">Eq</span>,
-    <span class="ident">Hash</span>,
-    <span class="ident">Serialize</span>,
-    <span class="ident">Deserialize</span>,
-    <span class="ident">Encodable</span>,
-    <span class="ident">Decodable</span>,
+<span class="attribute">#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
 )]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Feerate</span> {
-    <span class="kw">pub</span> <span class="ident">sats_per_kvb</span>: <span class="ident">u64</span>,
+<span class="kw">pub struct </span>Feerate {
+    <span class="kw">pub </span>sats_per_kvb: u64,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOutFees</span> {
-    <span class="kw">pub</span> <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
-    <span class="kw">pub</span> <span class="ident">total_weight</span>: <span class="ident">u64</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegOutFees {
+    <span class="kw">pub </span>fee_rate: Feerate,
+    <span class="kw">pub </span>total_weight: u64,
 }
 
-<span class="kw">impl</span> <span class="ident">PegOutFees</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">amount</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Amount</span> {
-        <span class="self">self</span>.<span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="self">self</span>.<span class="ident">total_weight</span>)
+<span class="kw">impl </span>PegOutFees {
+    <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
+        <span class="self">self</span>.fee_rate.calculate_fee(<span class="self">self</span>.total_weight)
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PegOut</span> {
-    <span class="kw">pub</span> <span class="ident">recipient</span>: <span class="ident">bitcoin::Address</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
-    <span class="kw">pub</span> <span class="ident">fees</span>: <span class="ident">PegOutFees</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>PegOut {
+    <span class="kw">pub </span>recipient: bitcoin::Address,
+    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]</span>
+    <span class="kw">pub </span>amount: bitcoin::Amount,
+    <span class="kw">pub </span>fees: PegOutFees,
 }
 
-<span class="attribute">#[<span class="ident">async_trait</span>(<span class="question-mark">?</span><span class="ident">Send</span>)]</span>
-<span class="kw">impl</span> <span class="ident">FederationModule</span> <span class="kw">for</span> <span class="ident">Wallet</span> {
-    <span class="kw">type</span> <span class="ident">Error</span> = <span class="ident">WalletError</span>;
-    <span class="kw">type</span> <span class="ident">TxInput</span> = <span class="ident">Box</span>&lt;<span class="ident">PegInProof</span>&gt;;
-    <span class="kw">type</span> <span class="ident">TxOutput</span> = <span class="ident">PegOut</span>;
-    <span class="comment">// TODO: implement outcome</span>
-    <span class="kw">type</span> <span class="ident">TxOutputOutcome</span> = ();
-    <span class="kw">type</span> <span class="ident">ConsensusItem</span> = <span class="ident">WalletConsensusItem</span>;
-    <span class="kw">type</span> <span class="ident">VerificationCache</span> = ();
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]</span>
+<span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
+    <span class="kw">type </span>Error = WalletError;
+    <span class="kw">type </span>TxInput = Box&lt;PegInProof&gt;;
+    <span class="kw">type </span>TxOutput = PegOut;
+    <span class="comment">// TODO: implement outcome
+    </span><span class="kw">type </span>TxOutputOutcome = ();
+    <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
+    <span class="kw">type </span>VerificationCache = ();
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>, <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
-        <span class="kw">let</span> <span class="ident">last_consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+    <span class="kw">async fn </span>await_consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>, rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>) {
+        <span class="kw">let </span><span class="kw-2">mut </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
+        <span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height().unwrap_or(<span class="number">0</span>);
 
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">consensus_proposal</span>(<span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">len</span>() == <span class="number">1</span> {
-            <span class="kw">while</span> <span class="ident">our_target_height</span> &lt;= <span class="ident">last_consensus_height</span> {
-                <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
-                <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">1000</span>)).<span class="kw">await</span>;
+        <span class="kw">if </span><span class="self">self</span>.consensus_proposal(rng).<span class="kw">await</span>.len() == <span class="number">1 </span>{
+            <span class="kw">while </span>our_target_height &lt;= last_consensus_height {
+                our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
+                sleep(Duration::from_millis(<span class="number">1000</span>)).<span class="kw">await</span>;
             }
         }
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">consensus_proposal</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident"><span class="self">Self</span>::ConsensusItem</span>&gt; {
-        <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable</span>
-        <span class="kw">let</span> <span class="ident">our_target_height</span> = <span class="self">self</span>.<span class="ident">target_height</span>().<span class="kw">await</span>;
+    <span class="kw">async fn </span>consensus_proposal&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;<span class="self">Self</span>::ConsensusItem&gt; {
+        <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
+        </span><span class="kw">let </span>our_target_height = <span class="self">self</span>.target_height().<span class="kw">await</span>;
 
-        <span class="comment">// In case the wallet just got created the height is not committed to the DB yet but will</span>
-        <span class="comment">// be set to 0 first, so we can assume that here.</span>
-        <span class="kw">let</span> <span class="ident">last_consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+        <span class="comment">// In case the wallet just got created the height is not committed to the DB yet but will
+        // be set to 0 first, so we can assume that here.
+        </span><span class="kw">let </span>last_consensus_height = <span class="self">self</span>.consensus_height().unwrap_or(<span class="number">0</span>);
 
-        <span class="kw">let</span> <span class="ident">proposed_height</span> = <span class="kw">if</span> <span class="ident">our_target_height</span> &gt;= <span class="ident">last_consensus_height</span> {
-            <span class="ident">our_target_height</span>
-        } <span class="kw">else</span> {
+        <span class="kw">let </span>proposed_height = <span class="kw">if </span>our_target_height &gt;= last_consensus_height {
+            our_target_height
+        } <span class="kw">else </span>{
             <span class="macro">warn!</span>(
                 <span class="string">&quot;The block height shrunk, new proposal would be {}, but we are sticking to the last consensus height {}.&quot;</span>,
-                <span class="ident">our_target_height</span>,
-                <span class="ident">last_consensus_height</span>
+                our_target_height,
+                last_consensus_height
             );
-            <span class="ident">last_consensus_height</span>
+            last_consensus_height
         };
 
-        <span class="kw">let</span> <span class="ident">fee_rate</span> = <span class="self">self</span>
-            .<span class="ident">btc_rpc</span>
-            .<span class="ident">get_fee_rate</span>(<span class="ident">CONFIRMATION_TARGET</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">unwrap_or</span>(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">default_fee</span>);
+        <span class="kw">let </span>fee_rate = <span class="self">self
+            </span>.btc_rpc
+            .get_fee_rate(CONFIRMATION_TARGET)
+            .<span class="kw">await
+            </span>.unwrap_or(<span class="self">self</span>.cfg.default_fee);
 
-        <span class="kw">let</span> <span class="ident">round_ci</span> = <span class="ident">WalletConsensusItem::RoundConsensus</span>(<span class="ident">RoundConsensusItem</span> {
-            <span class="ident">block_height</span>: <span class="ident">proposed_height</span>,
-            <span class="ident">fee_rate</span>,
-            <span class="ident">randomness</span>: <span class="ident">rng</span>.<span class="ident">gen</span>(),
+        <span class="kw">let </span>round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
+            block_height: proposed_height,
+            fee_rate,
+            randomness: rng.gen(),
         });
 
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PegOutTxSignatureCIPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;FB error&quot;</span>);
-                <span class="ident">WalletConsensusItem::PegOutSignature</span>(<span class="ident">PegOutSignatureItem</span> {
-                    <span class="ident">txid</span>: <span class="ident">key</span>.<span class="number">0</span>,
-                    <span class="ident">signature</span>: <span class="ident">val</span>,
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>PegOutTxSignatureCIPrefix)
+            .map(|res| {
+                <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;FB error&quot;</span>);
+                WalletConsensusItem::PegOutSignature(PegOutSignatureItem {
+                    txid: key.<span class="number">0</span>,
+                    signature: val,
                 })
             })
-            .<span class="ident">chain</span>(<span class="ident">std::iter::once</span>(<span class="ident">round_ci</span>))
-            .<span class="ident">collect</span>()
+            .chain(std::iter::once(round_ci))
+            .collect()
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">begin_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">consensus_items</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident"><span class="self">Self</span>::ConsensusItem</span>)&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
+    <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
-        <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">consensus_items</span>, <span class="string">&quot;Received consensus proposals&quot;</span>);
+        <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_items, <span class="string">&quot;Received consensus proposals&quot;</span>);
 
-        <span class="comment">// Separate round consensus items from signatures for peg-out tx. While signatures can be</span>
-        <span class="comment">// processed separately, all round consensus items need to be available at once.</span>
-        <span class="kw">let</span> <span class="ident">UnzipWalletConsensusItem</span> {
-            <span class="ident">peg_out_signature</span>: <span class="ident">peg_out_signatures</span>,
-            <span class="ident">round_consensus</span>,
-        } = <span class="ident">consensus_items</span>.<span class="ident">into_iter</span>().<span class="ident">unzip_wallet_consensus_item</span>();
+        <span class="comment">// Separate round consensus items from signatures for peg-out tx. While signatures can be
+        // processed separately, all round consensus items need to be available at once.
+        </span><span class="kw">let </span>UnzipWalletConsensusItem {
+            peg_out_signature: peg_out_signatures,
+            round_consensus,
+        } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
-        <span class="comment">// Save signatures to the database</span>
-        <span class="self">self</span>.<span class="ident">save_peg_out_signatures</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">peg_out_signatures</span>);
+        <span class="comment">// Save signatures to the database
+        </span><span class="self">self</span>.save_peg_out_signatures(batch.subtransaction(), peg_out_signatures);
 
-        <span class="comment">// FIXME: also warn on less than 1/3, that should never happen</span>
-        <span class="comment">// Make sure we have enough contributions to continue</span>
-        <span class="kw">if</span> <span class="ident">round_consensus</span>.<span class="ident">is_empty</span>() {
+        <span class="comment">// FIXME: also warn on less than 1/3, that should never happen
+        // Make sure we have enough contributions to continue
+        </span><span class="kw">if </span>round_consensus.is_empty() {
             <span class="macro">panic!</span>(<span class="string">&quot;No proposals were submitted this round&quot;</span>);
         }
 
-        <span class="kw">let</span> <span class="ident">fee_proposals</span> = <span class="ident">round_consensus</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">fee_rate</span>).<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">fee_rate</span> = <span class="self">self</span>.<span class="ident">process_fee_proposals</span>(<span class="ident">fee_proposals</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>fee_proposals = round_consensus.iter().map(|(<span class="kw">_</span>, rc)| rc.fee_rate).collect();
+        <span class="kw">let </span>fee_rate = <span class="self">self</span>.process_fee_proposals(fee_proposals).<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">height_proposals</span> = <span class="ident">round_consensus</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">block_height</span>)
-            .<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">block_height</span> = <span class="self">self</span>
-            .<span class="ident">process_block_height_proposals</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">height_proposals</span>)
+        <span class="kw">let </span>height_proposals = round_consensus
+            .iter()
+            .map(|(<span class="kw">_</span>, rc)| rc.block_height)
+            .collect();
+        <span class="kw">let </span>block_height = <span class="self">self
+            </span>.process_block_height_proposals(batch.subtransaction(), height_proposals)
             .<span class="kw">await</span>;
 
-        <span class="kw">let</span> <span class="ident">randomness_contributions</span> = <span class="ident">round_consensus</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">rc</span>)| <span class="ident">rc</span>.<span class="ident">randomness</span>)
-            .<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">randomness_beacon</span> = <span class="self">self</span>.<span class="ident">process_randomness_contributions</span>(<span class="ident">randomness_contributions</span>);
+        <span class="kw">let </span>randomness_contributions = round_consensus
+            .iter()
+            .map(|(<span class="kw">_</span>, rc)| rc.randomness)
+            .collect();
+        <span class="kw">let </span>randomness_beacon = <span class="self">self</span>.process_randomness_contributions(randomness_contributions);
 
-        <span class="kw">let</span> <span class="ident">round_consensus</span> = <span class="ident">RoundConsensus</span> {
-            <span class="ident">block_height</span>,
-            <span class="ident">fee_rate</span>,
-            <span class="ident">randomness_beacon</span>,
+        <span class="kw">let </span>round_consensus = RoundConsensus {
+            block_height,
+            fee_rate,
+            randomness_beacon,
         };
 
-        <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">RoundConsensusKey</span>, <span class="ident">round_consensus</span>);
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.append_insert(RoundConsensusKey, round_consensus);
+        batch.commit();
     }
 
-    <span class="kw">fn</span> <span class="ident">build_verification_cache</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">_inputs</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>&gt;,
-    ) -&gt; <span class="ident"><span class="self">Self</span>::VerificationCache</span> {
+    <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        _inputs: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput&gt;,
+    ) -&gt; <span class="self">Self</span>::VerificationCache {
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_input</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">fn </span>validate_input&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">_interconnect</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="ident">_cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">if</span> !<span class="self">self</span>.<span class="ident">block_is_known</span>(<span class="ident">input</span>.<span class="ident">proof_block</span>()) {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::UnknownPegInProofBlock</span>(<span class="ident">input</span>.<span class="ident">proof_block</span>()));
+        _interconnect: <span class="kw-2">&amp;</span><span class="kw">dyn </span>ModuleInterconect,
+        _cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">if </span>!<span class="self">self</span>.block_is_known(input.proof_block()) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::UnknownPegInProofBlock(input.proof_block()));
         }
 
-        <span class="ident">input</span>.<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">peg_in_descriptor</span>)<span class="question-mark">?</span>;
+        input.verify(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor)<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">outpoint</span>()))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-            .<span class="ident">is_some</span>()
+        <span class="kw">if </span><span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>UTXOKey(input.outpoint()))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .is_some()
         {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::PegInAlreadyClaimed</span>);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegInAlreadyClaimed);
         }
 
-        <span class="prelude-val">Ok</span>(<span class="ident">InputMeta</span> {
-            <span class="ident">amount</span>: <span class="ident">minimint_api::Amount::from_sat</span>(<span class="ident">input</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>),
-            <span class="ident">puk_keys</span>: <span class="ident">Box::new</span>(<span class="ident">std::iter::once</span>(<span class="kw-2">*</span><span class="ident">input</span>.<span class="ident">tweak_contract_key</span>())),
+        <span class="prelude-val">Ok</span>(InputMeta {
+            amount: minimint_api::Amount::from_sat(input.tx_output().value),
+            puk_keys: Box::new(std::iter::once(<span class="kw-2">*</span>input.tweak_contract_key())),
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_input</span>&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">interconnect</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">ModuleInterconect</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">input</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b</span> <span class="ident"><span class="self">Self</span>::TxInput</span>,
-        <span class="ident">cache</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::VerificationCache</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">InputMeta</span>&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">meta</span> = <span class="self">self</span>.<span class="ident">validate_input</span>(<span class="ident">interconnect</span>, <span class="ident">cache</span>, <span class="ident">input</span>)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="ident">outpoint</span> = %<span class="ident">input</span>.<span class="ident">outpoint</span>(), <span class="ident">amount</span> = %<span class="ident">meta</span>.<span class="ident">amount</span>, <span class="string">&quot;Claiming peg-in&quot;</span>);
+    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
+        cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-            <span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">outpoint</span>()),
-            <span class="ident">SpendableUTXO</span> {
-                <span class="ident">tweak</span>: <span class="ident">input</span>.<span class="ident">tweak_contract_key</span>().<span class="ident">serialize</span>(),
-                <span class="ident">amount</span>: <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">input</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>),
+        batch.append_insert_new(
+            UTXOKey(input.outpoint()),
+            SpendableUTXO {
+                tweak: input.tweak_contract_key().serialize(),
+                amount: bitcoin::Amount::from_sat(input.tx_output().value),
             },
         );
 
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">meta</span>)
+        batch.commit();
+        <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn</span> <span class="ident">validate_output</span>(
+    <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="ident"><span class="self">Self</span>::TxOutput</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">if</span> !<span class="ident">is_address_valid_for_network</span>(<span class="kw-2">&amp;</span><span class="ident">output</span>.<span class="ident">recipient</span>, <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">network</span>) {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::WrongNetwork</span>(
-                <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">network</span>,
-                <span class="ident">output</span>.<span class="ident">recipient</span>.<span class="ident">network</span>,
+        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;minimint_api::Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.network) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
+                <span class="self">self</span>.cfg.network,
+                output.recipient.network,
             ));
         }
-        <span class="kw">let</span> <span class="ident">consensus_fee_rate</span> = <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">fee_rate</span>;
-        <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span> &lt; <span class="ident">consensus_fee_rate</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::PegOutFeeRate</span>(
-                <span class="ident">output</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span>,
-                <span class="ident">consensus_fee_rate</span>,
+        <span class="kw">let </span>consensus_fee_rate = <span class="self">self</span>.current_round_consensus().unwrap().fee_rate;
+        <span class="kw">if </span>output.fees.fee_rate &lt; consensus_fee_rate {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::PegOutFeeRate(
+                output.fees.fee_rate,
+                consensus_fee_rate,
             ));
         }
-        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">create_peg_out_tx</span>(<span class="ident">output</span>).<span class="ident">is_none</span>() {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::NotEnoughSpendableUTXO</span>);
+        <span class="kw">if </span><span class="self">self</span>.create_peg_out_tx(output).is_none() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO);
         }
-        <span class="prelude-val">Ok</span>(<span class="ident">output</span>.<span class="ident">amount</span>.<span class="ident">into</span>())
+        <span class="prelude-val">Ok</span>(output.amount.into())
     }
 
-    <span class="kw">fn</span> <span class="ident">apply_output</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">output</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident"><span class="self">Self</span>::TxOutput</span>,
-        <span class="ident">_out_point</span>: <span class="ident">minimint_api::OutPoint</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">minimint_api::Amount</span>, <span class="ident"><span class="self">Self</span>::Error</span>&gt; {
-        <span class="kw">let</span> <span class="ident">amount</span> = <span class="self">self</span>.<span class="ident">validate_output</span>(<span class="ident">output</span>)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
+        _out_point: minimint_api::OutPoint,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;minimint_api::Amount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
-            <span class="ident">amount</span> = %<span class="ident">output</span>.<span class="ident">amount</span>, <span class="ident">recipient</span> = %<span class="ident">output</span>.<span class="ident">recipient</span>,
+            amount = %output.amount, recipient = %output.recipient,
             <span class="string">&quot;Queuing peg-out&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="self">self</span>
-            .<span class="ident">create_peg_out_tx</span>(<span class="ident">output</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Should have been validated&quot;</span>);
-        <span class="self">self</span>.<span class="ident">offline_wallet</span>().<span class="ident">sign_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">tx</span>.<span class="ident">psbt</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="ident">tx</span>.<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">txid</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = <span class="self">self
+            </span>.create_peg_out_tx(output)
+            .expect(<span class="string">&quot;Should have been validated&quot;</span>);
+        <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
+        <span class="kw">let </span>txid = tx.psbt.unsigned_tx.txid();
         <span class="macro">info!</span>(
-            %<span class="ident">txid</span>,
+            %txid,
             <span class="string">&quot;Signing peg out&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="ident">sigs</span> = <span class="ident">tx</span>
-            .<span class="ident">psbt</span>
-            .<span class="ident">inputs</span>
-            .<span class="ident">iter_mut</span>()
-            .<span class="ident">map</span>(|<span class="ident">input</span>| {
+        <span class="kw">let </span>sigs = tx
+            .psbt
+            .inputs
+            .iter_mut()
+            .map(|input| {
                 <span class="macro">assert_eq!</span>(
-                    <span class="ident">input</span>.<span class="ident">partial_sigs</span>.<span class="ident">len</span>(),
+                    input.partial_sigs.len(),
                     <span class="number">1</span>,
-                    <span class="string">&quot;There was already more than one (our) or no signatures in input&quot;</span>
-                );
+                    <span class="string">&quot;There was already more than one (our) or no signatures in input&quot;
+                </span>);
 
-                <span class="comment">// TODO: don&#39;t put sig into PSBT in the first place</span>
-                <span class="comment">// We actually take out our own signature so everyone finalizes the tx in the</span>
-                <span class="comment">// same epoch.</span>
-                <span class="kw">let</span> <span class="ident">sig</span> = <span class="ident">std::mem::take</span>(<span class="kw-2">&amp;mut</span> <span class="ident">input</span>.<span class="ident">partial_sigs</span>)
-                    .<span class="ident">into_values</span>()
-                    .<span class="ident">next</span>()
-                    .<span class="ident">expect</span>(<span class="string">&quot;asserted previously&quot;</span>);
+                <span class="comment">// TODO: don&#39;t put sig into PSBT in the first place
+                // We actually take out our own signature so everyone finalizes the tx in the
+                // same epoch.
+                </span><span class="kw">let </span>sig = std::mem::take(<span class="kw-2">&amp;mut </span>input.partial_sigs)
+                    .into_values()
+                    .next()
+                    .expect(<span class="string">&quot;asserted previously&quot;</span>);
 
-                <span class="comment">// We drop SIGHASH_ALL, because we always use that and it is only present in the</span>
-                <span class="comment">// PSBT for compatibility with other tools.</span>
-                <span class="ident">secp256k1::ecdsa::Signature::from_der</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="ident">to_vec</span>()[..<span class="ident">sig</span>.<span class="ident">to_vec</span>().<span class="ident">len</span>() - <span class="number">1</span>])
-                    .<span class="ident">expect</span>(<span class="string">&quot;we serialized it ourselves that way&quot;</span>)
+                <span class="comment">// We drop SIGHASH_ALL, because we always use that and it is only present in the
+                // PSBT for compatibility with other tools.
+                </span>secp256k1::ecdsa::Signature::from_der(<span class="kw-2">&amp;</span>sig.to_vec()[..sig.to_vec().len() - <span class="number">1</span>])
+                    .expect(<span class="string">&quot;we serialized it ourselves that way&quot;</span>)
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="comment">// Delete used UTXOs</span>
-        <span class="ident">batch</span>.<span class="ident">append_from_iter</span>(
-            <span class="ident">tx</span>.<span class="ident">psbt</span>
-                .<span class="ident">unsigned_tx</span>
-                .<span class="ident">input</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(|<span class="ident">input</span>| <span class="ident">BatchItem::delete</span>(<span class="ident">UTXOKey</span>(<span class="ident">input</span>.<span class="ident">previous_output</span>))),
+        <span class="comment">// Delete used UTXOs
+        </span>batch.append_from_iter(
+            tx.psbt
+                .unsigned_tx
+                .input
+                .iter()
+                .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
         );
 
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">UnsignedTransactionKey</span>(<span class="ident">txid</span>), <span class="ident">tx</span>);
-        <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">PegOutTxSignatureCI</span>(<span class="ident">txid</span>), <span class="ident">sigs</span>);
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="prelude-val">Ok</span>(<span class="ident">amount</span>)
+        batch.append_insert_new(UnsignedTransactionKey(txid), tx);
+        batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
+        batch.commit();
+        <span class="prelude-val">Ok</span>(amount)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">end_consensus_epoch</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
-        <span class="ident">consensus_peers</span>: <span class="kw-2">&amp;</span><span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;a</span>&gt;,
-        <span class="ident">_rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span> + <span class="lifetime">&#39;a</span>,
-    ) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; {
-        <span class="comment">// Sign and finalize any unsigned transactions that have signatures</span>
-        <span class="kw">let</span> <span class="ident">unsigned_txs</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UnsignedTransactionKey</span>, <span class="ident">UnsignedTransaction</span>)&gt; = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>))
-            .<span class="ident">filter</span>(|(<span class="kw">_</span>, <span class="ident">unsigned</span>)| !<span class="ident">unsigned</span>.<span class="ident">signatures</span>.<span class="ident">is_empty</span>())
-            .<span class="ident">collect</span>();
+    <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
+        consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
+        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
+    ) -&gt; Vec&lt;PeerId&gt; {
+        <span class="comment">// Sign and finalize any unsigned transactions that have signatures
+        </span><span class="kw">let </span>unsigned_txs: Vec&lt;(UnsignedTransactionKey, UnsignedTransaction)&gt; = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>))
+            .filter(|(<span class="kw">_</span>, unsigned)| !unsigned.signatures.is_empty())
+            .collect();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
-        <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">unsigned</span>) <span class="kw">in</span> <span class="ident">unsigned_txs</span> {
-            <span class="kw">let</span> <span class="ident">UnsignedTransaction</span> {
-                <span class="kw-2">mut</span> <span class="ident">psbt</span>,
-                <span class="ident">signatures</span>,
-                <span class="ident">change</span>,
+        <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
+        <span class="kw">for </span>(key, unsigned) <span class="kw">in </span>unsigned_txs {
+            <span class="kw">let </span>UnsignedTransaction {
+                <span class="kw-2">mut </span>psbt,
+                signatures,
+                change,
                 ..
-            } = <span class="ident">unsigned</span>;
+            } = unsigned;
 
-            <span class="kw">let</span> <span class="ident">signers</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">signatures</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">filter_map</span>(
-                    |(<span class="ident">peer</span>, <span class="ident">sig</span>)| <span class="kw">match</span> <span class="self">self</span>.<span class="ident">sign_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="ident">peer</span>, <span class="ident">sig</span>) {
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span><span class="ident">peer</span>),
-                        <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                            <span class="macro">warn!</span>(<span class="string">&quot;Error with {} partial sig {:?}&quot;</span>, <span class="ident">peer</span>, <span class="ident">error</span>);
-                            <span class="prelude-val">None</span>
-                        }
+            <span class="kw">let </span>signers: HashSet&lt;PeerId&gt; = signatures
+                .iter()
+                .filter_map(
+                    |(peer, sig)| <span class="kw">match </span><span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>psbt, peer, sig) {
+                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>peer),
+                        <span class="prelude-val">Err</span>(error) =&gt; {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Error with {} partial sig {:?}&quot;</span>, peer, error);
+                            <span class="prelude-val">None
+                        </span>}
                     },
                 )
-                .<span class="ident">collect</span>();
+                .collect();
 
-            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">consensus_peers</span>.<span class="ident">sub</span>(<span class="kw-2">&amp;</span><span class="ident">signers</span>) {
-                <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing sigs to PSBT&quot;</span>, <span class="ident">peer</span>);
-                <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
+            <span class="kw">for </span>peer <span class="kw">in </span>consensus_peers.sub(<span class="kw-2">&amp;</span>signers) {
+                <span class="macro">error!</span>(<span class="string">&quot;Dropping {:?} for not contributing sigs to PSBT&quot;</span>, peer);
+                drop_peers.push(peer);
             }
 
-            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">finalize_peg_out_psbt</span>(<span class="kw-2">&amp;mut</span> <span class="ident">psbt</span>, <span class="ident">change</span>) {
-                <span class="prelude-val">Ok</span>(<span class="ident">pending_tx</span>) =&gt; {
-                    <span class="comment">// We were able to finalize the transaction, so we will delete the PSBT and instead keep the</span>
-                    <span class="comment">// extracted tx for periodic transmission and to accept the change into our wallet</span>
-                    <span class="comment">// eventually once it confirms.</span>
-                    <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(<span class="ident">PendingTransactionKey</span>(<span class="ident">key</span>.<span class="number">0</span>), <span class="ident">pending_tx</span>);
-                    <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">PegOutTxSignatureCI</span>(<span class="ident">key</span>.<span class="number">0</span>));
-                    <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">key</span>);
+            <span class="kw">match </span><span class="self">self</span>.finalize_peg_out_psbt(<span class="kw-2">&amp;mut </span>psbt, change) {
+                <span class="prelude-val">Ok</span>(pending_tx) =&gt; {
+                    <span class="comment">// We were able to finalize the transaction, so we will delete the PSBT and instead keep the
+                    // extracted tx for periodic transmission and to accept the change into our wallet
+                    // eventually once it confirms.
+                    </span>batch.append_insert_new(PendingTransactionKey(key.<span class="number">0</span>), pending_tx);
+                    batch.append_delete(PegOutTxSignatureCI(key.<span class="number">0</span>));
+                    batch.append_delete(key);
                 }
-                <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Unable to finalize PSBT due to {:?}&quot;</span>, <span class="ident">e</span>)
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Unable to finalize PSBT due to {:?}&quot;</span>, e)
                 }
             }
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
-        <span class="ident">drop_peers</span>
+        batch.commit();
+        drop_peers
     }
 
-    <span class="kw">fn</span> <span class="ident">output_status</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_out_point</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="self">Self</span>::TxOutputOutcome</span>&gt; {
-        <span class="comment">// TODO: return BTC tx id once included in peg-out tx</span>
-        <span class="prelude-val">Some</span>(())
+    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, _out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
+        <span class="comment">// TODO: return BTC tx id once included in peg-out tx
+        </span><span class="prelude-val">Some</span>(())
     }
 
-    <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">audit</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Audit</span>) {
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
-            <span class="ident">v</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
-        });
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
-            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
-        });
-        <span class="ident">audit</span>.<span class="ident">add_items</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">db</span>, <span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>, |<span class="kw">_</span>, <span class="ident">v</span>| {
-            <span class="ident">v</span>.<span class="ident">change</span>.<span class="ident">as_sat</span>() <span class="kw">as</span> <span class="ident">i64</span> * <span class="number">1000</span>
-        });
+    <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {
+        audit.add_items(<span class="kw-2">&amp;</span><span class="self">self</span>.db, <span class="kw-2">&amp;</span>UTXOPrefixKey, |<span class="kw">_</span>, v| {
+            v.amount.as_sat() <span class="kw">as </span>i64 * <span class="number">1000
+        </span>});
+        audit.add_items(<span class="kw-2">&amp;</span><span class="self">self</span>.db, <span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey, |<span class="kw">_</span>, v| {
+            v.change.as_sat() <span class="kw">as </span>i64 * <span class="number">1000
+        </span>});
+        audit.add_items(<span class="kw-2">&amp;</span><span class="self">self</span>.db, <span class="kw-2">&amp;</span>PendingTransactionPrefixKey, |<span class="kw">_</span>, v| {
+            v.change.as_sat() <span class="kw">as </span>i64 * <span class="number">1000
+        </span>});
     }
 
-    <span class="kw">fn</span> <span class="ident">api_base_name</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> {
-        <span class="string">&quot;wallet&quot;</span>
-    }
+    <span class="kw">fn </span>api_base_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str {
+        <span class="string">&quot;wallet&quot;
+    </span>}
 
-    <span class="kw">fn</span> <span class="ident">api_endpoints</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> [<span class="ident">ApiEndpoint</span>&lt;<span class="self">Self</span>&gt;] {
-        <span class="kw">const</span> <span class="ident">ENDPOINTS</span>: <span class="kw-2">&amp;</span>[<span class="ident">ApiEndpoint</span>&lt;<span class="ident">Wallet</span>&gt;] = <span class="kw-2">&amp;</span>[
+    <span class="kw">fn </span>api_endpoints(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;<span class="self">Self</span>&gt;] {
+        <span class="kw">const </span>ENDPOINTS: <span class="kw-2">&amp;</span>[ApiEndpoint&lt;Wallet&gt;] = <span class="kw-2">&amp;</span>[
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/block_height&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">_params</span>: ()| -&gt; <span class="ident">u32</span> {
-                    <span class="prelude-val">Ok</span>(<span class="ident">module</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>))
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, _params: ()| -&gt; u32 {
+                    <span class="prelude-val">Ok</span>(module.consensus_height().unwrap_or(<span class="number">0</span>))
                 }
             },
             <span class="macro">api_endpoint!</span> {
                 <span class="string">&quot;/peg_out_fees&quot;</span>,
-                <span class="kw">async</span> |<span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="ident">Wallet</span>, <span class="ident">params</span>: (<span class="ident">Address</span>, <span class="ident">u64</span>)| -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">PegOutFees</span>&gt; {
-                    <span class="kw">let</span> (<span class="ident">address</span>, <span class="ident">sats</span>) = <span class="ident">params</span>;
-                    <span class="kw">let</span> <span class="ident">consensus</span> = <span class="ident">module</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>();
-                    <span class="kw">let</span> <span class="ident">tx</span> = <span class="ident">module</span>.<span class="ident">offline_wallet</span>().<span class="ident">create_tx</span>(
-                        <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sats</span>),
-                        <span class="ident">address</span>.<span class="ident">script_pubkey</span>(),
-                        <span class="ident">module</span>.<span class="ident">available_utxos</span>(),
-                        <span class="ident">consensus</span>.<span class="ident">fee_rate</span>,
-                        <span class="kw-2">&amp;</span><span class="ident">consensus</span>.<span class="ident">randomness_beacon</span>
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
+                    <span class="kw">let </span>(address, sats) = params;
+                    <span class="kw">let </span>consensus = module.current_round_consensus().unwrap();
+                    <span class="kw">let </span>tx = module.offline_wallet().create_tx(
+                        bitcoin::Amount::from_sat(sats),
+                        address.script_pubkey(),
+                        module.available_utxos(),
+                        consensus.fee_rate,
+                        <span class="kw-2">&amp;</span>consensus.randomness_beacon
                     );
 
-                    <span class="prelude-val">Ok</span>(<span class="ident">tx</span>.<span class="ident">map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">fees</span>))
+                    <span class="prelude-val">Ok</span>(tx.map(|tx| tx.fees))
                 }
             },
         ];
-        <span class="ident">ENDPOINTS</span>
+        ENDPOINTS
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Wallet</span> {
-    <span class="comment">// TODO: work around bitcoind_gen being a closure, maybe make clonable?</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_with_bitcoind</span>(
-        <span class="ident">cfg</span>: <span class="ident">WalletConfig</span>,
-        <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
-        <span class="ident">bitcoind_gen</span>: <span class="kw">impl</span> <span class="ident">Fn</span>() -&gt; <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Wallet</span>, <span class="ident">WalletError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">broadcaster_bitcoind_rpc</span> = <span class="ident">bitcoind_gen</span>();
-        <span class="kw">let</span> <span class="ident">broadcaster_db</span> = <span class="ident">db</span>.<span class="ident">clone</span>();
-        <span class="ident">minimint_api::task::spawn</span>(<span class="kw">async</span> <span class="kw">move</span> {
-            <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">broadcaster_db</span>, <span class="ident">broadcaster_bitcoind_rpc</span>).<span class="kw">await</span>;
+<span class="kw">impl </span>Wallet {
+    <span class="comment">// TODO: work around bitcoind_gen being a closure, maybe make clonable?
+    </span><span class="kw">pub async fn </span>new_with_bitcoind(
+        cfg: WalletConfig,
+        db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+        bitcoind_gen: <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
+        <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind_gen();
+        <span class="kw">let </span>broadcaster_db = db.clone();
+        minimint_api::task::spawn(<span class="kw">async move </span>{
+            run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).<span class="kw">await</span>;
         });
 
-        <span class="kw">let</span> <span class="ident">bitcoind_rpc</span> = <span class="ident">bitcoind_gen</span>();
+        <span class="kw">let </span>bitcoind_rpc = bitcoind_gen();
 
-        <span class="kw">let</span> <span class="ident">bitcoind_net</span> = <span class="ident">bitcoind_rpc</span>.<span class="ident">get_network</span>().<span class="kw">await</span>;
-        <span class="kw">if</span> <span class="ident">bitcoind_net</span> != <span class="ident">cfg</span>.<span class="ident">network</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">WalletError::WrongNetwork</span>(<span class="ident">cfg</span>.<span class="ident">network</span>, <span class="ident">bitcoind_net</span>));
+        <span class="kw">let </span>bitcoind_net = bitcoind_rpc.get_network().<span class="kw">await</span>;
+        <span class="kw">if </span>bitcoind_net != cfg.network {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(cfg.network, bitcoind_net));
         }
 
-        <span class="kw">let</span> <span class="ident">wallet</span> = <span class="ident">Wallet</span> {
-            <span class="ident">cfg</span>,
-            <span class="ident">secp</span>: <span class="ident">Default::default</span>(),
-            <span class="ident">btc_rpc</span>: <span class="ident">bitcoind_rpc</span>,
-            <span class="ident">db</span>,
+        <span class="kw">let </span>wallet = Wallet {
+            cfg,
+            secp: Default::default(),
+            btc_rpc: bitcoind_rpc,
+            db,
         };
 
-        <span class="prelude-val">Ok</span>(<span class="ident">wallet</span>)
+        <span class="prelude-val">Ok</span>(wallet)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">process_randomness_contributions</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">randomness</span>: <span class="ident">Vec</span>&lt;[<span class="ident">u8</span>; <span class="number">32</span>]&gt;) -&gt; [<span class="ident">u8</span>; <span class="number">32</span>] {
-        <span class="kw">fn</span> <span class="ident">xor</span>(<span class="kw-2">mut</span> <span class="ident">lhs</span>: [<span class="ident">u8</span>; <span class="number">32</span>], <span class="ident">rhs</span>: [<span class="ident">u8</span>; <span class="number">32</span>]) -&gt; [<span class="ident">u8</span>; <span class="number">32</span>] {
-            <span class="ident">lhs</span>.<span class="ident">iter_mut</span>().<span class="ident">zip</span>(<span class="ident">rhs</span>).<span class="ident">for_each</span>(|(<span class="ident">lhs</span>, <span class="ident">rhs</span>)| <span class="kw-2">*</span><span class="ident">lhs</span> ^= <span class="ident">rhs</span>);
-            <span class="ident">lhs</span>
+    <span class="kw">pub fn </span>process_randomness_contributions(<span class="kw-2">&amp;</span><span class="self">self</span>, randomness: Vec&lt;[u8; <span class="number">32</span>]&gt;) -&gt; [u8; <span class="number">32</span>] {
+        <span class="kw">fn </span>xor(<span class="kw-2">mut </span>lhs: [u8; <span class="number">32</span>], rhs: [u8; <span class="number">32</span>]) -&gt; [u8; <span class="number">32</span>] {
+            lhs.iter_mut().zip(rhs).for_each(|(lhs, rhs)| <span class="kw-2">*</span>lhs ^= rhs);
+            lhs
         }
 
-        <span class="ident">randomness</span>.<span class="ident">into_iter</span>().<span class="ident">fold</span>([<span class="number">0</span>; <span class="number">32</span>], <span class="ident">xor</span>)
+        randomness.into_iter().fold([<span class="number">0</span>; <span class="number">32</span>], xor)
     }
 
-    <span class="kw">fn</span> <span class="ident">save_peg_out_signatures</span>(
+    <span class="kw">fn </span>save_peg_out_signatures(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
-        <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">PegOutSignatureItem</span>)&gt;,
+        <span class="kw-2">mut </span>batch: BatchTx,
+        signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
     ) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">cache</span>: <span class="ident">BTreeMap</span>&lt;<span class="ident">Txid</span>, <span class="ident">UnsignedTransaction</span>&gt; = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UnsignedTransactionPrefixKey</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">val</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                (<span class="ident">key</span>.<span class="number">0</span>, <span class="ident">val</span>)
+        <span class="kw">let </span><span class="kw-2">mut </span>cache: BTreeMap&lt;Txid, UnsignedTransaction&gt; = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>UnsignedTransactionPrefixKey)
+            .map(|res| {
+                <span class="kw">let </span>(key, val) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                (key.<span class="number">0</span>, val)
             })
-            .<span class="ident">collect</span>();
+            .collect();
 
-        <span class="kw">for</span> (<span class="ident">peer</span>, <span class="ident">sig</span>) <span class="kw">in</span> <span class="ident">signatures</span>.<span class="ident">into_iter</span>() {
-            <span class="kw">match</span> <span class="ident">cache</span>.<span class="ident">get_mut</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="ident">txid</span>) {
-                <span class="prelude-val">Some</span>(<span class="ident">unsigned</span>) =&gt; <span class="ident">unsigned</span>.<span class="ident">signatures</span>.<span class="ident">push</span>((<span class="ident">peer</span>, <span class="ident">sig</span>)),
-                <span class="prelude-val">None</span> =&gt; <span class="macro">warn!</span>(
+        <span class="kw">for </span>(peer, sig) <span class="kw">in </span>signatures.into_iter() {
+            <span class="kw">match </span>cache.get_mut(<span class="kw-2">&amp;</span>sig.txid) {
+                <span class="prelude-val">Some</span>(unsigned) =&gt; unsigned.signatures.push((peer, sig)),
+                <span class="prelude-val">None </span>=&gt; <span class="macro">warn!</span>(
                     <span class="string">&quot;{} sent peg-out signature for unknown PSBT {}&quot;</span>,
-                    <span class="ident">peer</span>, <span class="ident">sig</span>.<span class="ident">txid</span>
+                    peer, sig.txid
                 ),
             }
         }
 
-        <span class="kw">for</span> (<span class="ident">txid</span>, <span class="ident">unsigned</span>) <span class="kw">in</span> <span class="ident">cache</span>.<span class="ident">into_iter</span>() {
-            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">UnsignedTransactionKey</span>(<span class="ident">txid</span>), <span class="ident">unsigned</span>);
+        <span class="kw">for </span>(txid, unsigned) <span class="kw">in </span>cache.into_iter() {
+            batch.append_insert(UnsignedTransactionKey(txid), unsigned);
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 
-    <span class="doccomment">/// Try to attach signatures to a pending peg-out tx.</span>
-    <span class="kw">fn</span> <span class="ident">sign_peg_out_psbt</span>(
+    <span class="doccomment">/// Try to attach signatures to a pending peg-out tx.
+    </span><span class="kw">fn </span>sign_peg_out_psbt(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>,
-        <span class="ident">peer</span>: <span class="kw-2">&amp;</span><span class="ident">PeerId</span>,
-        <span class="ident">signature</span>: <span class="kw-2">&amp;</span><span class="ident">PegOutSignatureItem</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">ProcessPegOutSigError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">peer_key</span> = <span class="self">self</span>
-            .<span class="ident">cfg</span>
-            .<span class="ident">peer_peg_in_keys</span>
-            .<span class="ident">get</span>(<span class="ident">peer</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;always called with valid peer id&quot;</span>);
+        psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction,
+        peer: <span class="kw-2">&amp;</span>PeerId,
+        signature: <span class="kw-2">&amp;</span>PegOutSignatureItem,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ProcessPegOutSigError&gt; {
+        <span class="kw">let </span>peer_key = <span class="self">self
+            </span>.cfg
+            .peer_peg_in_keys
+            .get(peer)
+            .expect(<span class="string">&quot;always called with valid peer id&quot;</span>);
 
-        <span class="kw">if</span> <span class="ident">psbt</span>.<span class="ident">inputs</span>.<span class="ident">len</span>() != <span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">len</span>() {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::WrongSignatureCount</span>(
-                <span class="ident">psbt</span>.<span class="ident">inputs</span>.<span class="ident">len</span>(),
-                <span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">len</span>(),
+        <span class="kw">if </span>psbt.inputs.len() != signature.signature.len() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ProcessPegOutSigError::WrongSignatureCount(
+                psbt.inputs.len(),
+                signature.signature.len(),
             ));
         }
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> = <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
-        <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">input</span>, <span class="ident">signature</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
-            .<span class="ident">inputs</span>
-            .<span class="ident">iter_mut</span>()
-            .<span class="ident">zip</span>(<span class="ident">signature</span>.<span class="ident">signature</span>.<span class="ident">iter</span>())
-            .<span class="ident">enumerate</span>()
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_hasher = SighashCache::new(<span class="kw-2">&amp;</span>psbt.unsigned_tx);
+        <span class="kw">for </span>(idx, (input, signature)) <span class="kw">in </span>psbt
+            .inputs
+            .iter_mut()
+            .zip(signature.signature.iter())
+            .enumerate()
         {
-            <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">tx_hasher</span>
-                .<span class="ident">segwit_signature_hash</span>(
-                    <span class="ident">idx</span>,
-                    <span class="ident">input</span>
-                        .<span class="ident">witness_script</span>
-                        .<span class="ident">as_ref</span>()
-                        .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
-                    <span class="ident">input</span>.<span class="ident">witness_utxo</span>.<span class="ident">as_ref</span>().<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>).<span class="ident">value</span>,
-                    <span class="ident">EcdsaSighashType::All</span>,
+            <span class="kw">let </span>tx_hash = tx_hasher
+                .segwit_signature_hash(
+                    idx,
+                    input
+                        .witness_script
+                        .as_ref()
+                        .expect(<span class="string">&quot;Missing witness script&quot;</span>),
+                    input.witness_utxo.as_ref().expect(<span class="string">&quot;Missing UTXO&quot;</span>).value,
+                    EcdsaSighashType::All,
                 )
-                .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::SighashError</span>)<span class="question-mark">?</span>;
+                .map_err(|<span class="kw">_</span>| ProcessPegOutSigError::SighashError)<span class="question-mark">?</span>;
 
-            <span class="kw">let</span> <span class="ident">tweak</span> = <span class="ident">input</span>
-                .<span class="ident">proprietary</span>
-                .<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>())
-                .<span class="ident">expect</span>(<span class="string">&quot;we saved it with a tweak&quot;</span>);
+            <span class="kw">let </span>tweak = input
+                .proprietary
+                .get(<span class="kw-2">&amp;</span>proprietary_tweak_key())
+                .expect(<span class="string">&quot;we saved it with a tweak&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">tweaked_peer_key</span> = <span class="ident">peer_key</span>.<span class="ident">tweak</span>(<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>);
-            <span class="self">self</span>.<span class="ident">secp</span>
-                .<span class="ident">verify_ecdsa</span>(
-                    <span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(),
-                    <span class="ident">signature</span>,
-                    <span class="kw-2">&amp;</span><span class="ident">tweaked_peer_key</span>.<span class="ident">key</span>,
+            <span class="kw">let </span>tweaked_peer_key = peer_key.tweak(tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp);
+            <span class="self">self</span>.secp
+                .verify_ecdsa(
+                    <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(),
+                    signature,
+                    <span class="kw-2">&amp;</span>tweaked_peer_key.key,
                 )
-                .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::InvalidSignature</span>)<span class="question-mark">?</span>;
+                .map_err(|<span class="kw">_</span>| ProcessPegOutSigError::InvalidSignature)<span class="question-mark">?</span>;
 
-            <span class="kw">if</span> <span class="ident">input</span>
-                .<span class="ident">partial_sigs</span>
-                .<span class="ident">insert</span>(<span class="ident">tweaked_peer_key</span>.<span class="ident">into</span>(), <span class="ident">EcdsaSig::sighash_all</span>(<span class="kw-2">*</span><span class="ident">signature</span>))
-                .<span class="ident">is_some</span>()
+            <span class="kw">if </span>input
+                .partial_sigs
+                .insert(tweaked_peer_key.into(), EcdsaSig::sighash_all(<span class="kw-2">*</span>signature))
+                .is_some()
             {
-                <span class="comment">// Should never happen since peers only sign a PSBT once</span>
-                <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::DuplicateSignature</span>);
+                <span class="comment">// Should never happen since peers only sign a PSBT once
+                </span><span class="kw">return </span><span class="prelude-val">Err</span>(ProcessPegOutSigError::DuplicateSignature);
             }
         }
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">fn</span> <span class="ident">finalize_peg_out_psbt</span>(
+    <span class="kw">fn </span>finalize_peg_out_psbt(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>,
-        <span class="ident">change</span>: <span class="ident">Amount</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PendingTransaction</span>, <span class="ident">ProcessPegOutSigError</span>&gt; {
-        <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds later on.</span>
-        <span class="comment">// The tweak is extracted here because the psbt is moved next and not available anymore</span>
-        <span class="comment">// when the tweak is actually needed in the end to be put into the batch on success.</span>
-        <span class="kw">let</span> <span class="ident">change_tweak</span>: [<span class="ident">u8</span>; <span class="number">32</span>] = <span class="ident">psbt</span>
-            .<span class="ident">outputs</span>
-            .<span class="ident">iter</span>()
-            .<span class="ident">flat_map</span>(|<span class="ident">output</span>| <span class="ident">output</span>.<span class="ident">proprietary</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>()).<span class="ident">cloned</span>())
-            .<span class="ident">next</span>()
-            .<span class="ident">ok_or</span>(<span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>
-            .<span class="ident">try_into</span>()
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ProcessPegOutSigError::MissingOrMalformedChangeTweak</span>)<span class="question-mark">?</span>;
+        psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction,
+        change: Amount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PendingTransaction, ProcessPegOutSigError&gt; {
+        <span class="comment">// We need to save the change output&#39;s tweak key to be able to access the funds later on.
+        // The tweak is extracted here because the psbt is moved next and not available anymore
+        // when the tweak is actually needed in the end to be put into the batch on success.
+        </span><span class="kw">let </span>change_tweak: [u8; <span class="number">32</span>] = psbt
+            .outputs
+            .iter()
+            .flat_map(|output| output.proprietary.get(<span class="kw-2">&amp;</span>proprietary_tweak_key()).cloned())
+            .next()
+            .ok_or(ProcessPegOutSigError::MissingOrMalformedChangeTweak)<span class="question-mark">?
+            </span>.try_into()
+            .map_err(|<span class="kw">_</span>| ProcessPegOutSigError::MissingOrMalformedChangeTweak)<span class="question-mark">?</span>;
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Err</span>(<span class="ident">error</span>) = <span class="ident">psbt</span>.<span class="ident">finalize_mut</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>) {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ProcessPegOutSigError::ErrorFinalizingPsbt</span>(<span class="ident">error</span>));
+        <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = psbt.finalize_mut(<span class="kw-2">&amp;</span><span class="self">self</span>.secp) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ProcessPegOutSigError::ErrorFinalizingPsbt(error));
         }
 
-        <span class="kw">let</span> <span class="ident">tx</span> = <span class="ident">psbt</span>.<span class="ident">clone</span>().<span class="ident">extract_tx</span>();
+        <span class="kw">let </span>tx = psbt.clone().extract_tx();
 
-        <span class="prelude-val">Ok</span>(<span class="ident">PendingTransaction</span> {
-            <span class="ident">tx</span>,
-            <span class="ident">tweak</span>: <span class="ident">change_tweak</span>,
-            <span class="ident">change</span>,
+        <span class="prelude-val">Ok</span>(PendingTransaction {
+            tx,
+            tweak: change_tweak,
+            change,
         })
     }
 
-    <span class="doccomment">/// # Panics</span>
-    <span class="doccomment">/// * If proposals is empty</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_fee_proposals</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span>&lt;<span class="ident">Feerate</span>&gt;) -&gt; <span class="ident">Feerate</span> {
-        <span class="macro">assert!</span>(!<span class="ident">proposals</span>.<span class="ident">is_empty</span>());
+    <span class="doccomment">/// # Panics
+    /// * If proposals is empty
+    </span><span class="kw">async fn </span>process_fee_proposals(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>proposals: Vec&lt;Feerate&gt;) -&gt; Feerate {
+        <span class="macro">assert!</span>(!proposals.is_empty());
 
-        <span class="ident">proposals</span>.<span class="ident">sort</span>();
+        proposals.sort();
 
-        <span class="kw-2">*</span><span class="ident">proposals</span>
-            .<span class="ident">get</span>(<span class="ident">proposals</span>.<span class="ident">len</span>() / <span class="number">2</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;We checked before that proposals aren&#39;t empty&quot;</span>)
+        <span class="kw-2">*</span>proposals
+            .get(proposals.len() / <span class="number">2</span>)
+            .expect(<span class="string">&quot;We checked before that proposals aren&#39;t empty&quot;</span>)
     }
 
-    <span class="doccomment">/// # Panics</span>
-    <span class="doccomment">/// * If proposals is empty</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_block_height_proposals</span>(
+    <span class="doccomment">/// # Panics
+    /// * If proposals is empty
+    </span><span class="kw">async fn </span>process_block_height_proposals(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;_</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">proposals</span>: <span class="ident">Vec</span>&lt;<span class="ident">u32</span>&gt;,
-    ) -&gt; <span class="ident">u32</span> {
-        <span class="macro">assert!</span>(!<span class="ident">proposals</span>.<span class="ident">is_empty</span>());
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
+        <span class="kw-2">mut </span>proposals: Vec&lt;u32&gt;,
+    ) -&gt; u32 {
+        <span class="macro">assert!</span>(!proposals.is_empty());
 
-        <span class="ident">proposals</span>.<span class="ident">sort_unstable</span>();
-        <span class="kw">let</span> <span class="ident">median_proposal</span> = <span class="ident">proposals</span>[<span class="ident">proposals</span>.<span class="ident">len</span>() / <span class="number">2</span>];
+        proposals.sort_unstable();
+        <span class="kw">let </span>median_proposal = proposals[proposals.len() / <span class="number">2</span>];
 
-        <span class="kw">let</span> <span class="ident">consensus_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.consensus_height().unwrap_or(<span class="number">0</span>);
 
-        <span class="kw">if</span> <span class="ident">median_proposal</span> &gt;= <span class="ident">consensus_height</span> {
-            <span class="macro">debug!</span>(<span class="string">&quot;Setting consensus block height to {}&quot;</span>, <span class="ident">median_proposal</span>);
-            <span class="self">self</span>.<span class="ident">sync_up_to_consensus_height</span>(<span class="ident">batch</span>, <span class="ident">median_proposal</span>)
+        <span class="kw">if </span>median_proposal &gt;= consensus_height {
+            <span class="macro">debug!</span>(<span class="string">&quot;Setting consensus block height to {}&quot;</span>, median_proposal);
+            <span class="self">self</span>.sync_up_to_consensus_height(batch, median_proposal)
                 .<span class="kw">await</span>;
-        } <span class="kw">else</span> {
+        } <span class="kw">else </span>{
             <span class="macro">panic!</span>(
                 <span class="string">&quot;Median proposed consensus block height shrunk from {} to {}, the federation is broken&quot;</span>,
-                <span class="ident">consensus_height</span>, <span class="ident">median_proposal</span>
+                consensus_height, median_proposal
             );
         }
 
-        <span class="ident">median_proposal</span>
+        median_proposal
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">current_round_consensus</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">RoundConsensus</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">RoundConsensusKey</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+    <span class="kw">pub fn </span>current_round_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;RoundConsensus&gt; {
+        <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>RoundConsensusKey).expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">target_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">u32</span> {
-        <span class="kw">let</span> <span class="ident">our_network_height</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_height</span>().<span class="kw">await</span> <span class="kw">as</span> <span class="ident">u32</span>;
-        <span class="ident">our_network_height</span>.<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">finality_delay</span>)
+    <span class="kw">pub async fn </span>target_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
+        <span class="kw">let </span>our_network_height = <span class="self">self</span>.btc_rpc.get_block_height().<span class="kw">await as </span>u32;
+        our_network_height.saturating_sub(<span class="self">self</span>.cfg.finality_delay)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">u32</span>&gt; {
-        <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">map</span>(|<span class="ident">rc</span>| <span class="ident">rc</span>.<span class="ident">block_height</span>)
+    <span class="kw">pub fn </span>consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
+        <span class="self">self</span>.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">sync_up_to_consensus_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>&lt;<span class="lifetime">&#39;_</span>&gt;, <span class="ident">new_height</span>: <span class="ident">u32</span>) {
-        <span class="kw">let</span> <span class="ident">old_height</span> = <span class="self">self</span>.<span class="ident">consensus_height</span>().<span class="ident">unwrap_or</span>(<span class="number">0</span>);
-        <span class="kw">if</span> <span class="ident">new_height</span> &lt; <span class="ident">old_height</span> {
+    <span class="kw">async fn </span>sync_up_to_consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;, new_height: u32) {
+        <span class="kw">let </span>old_height = <span class="self">self</span>.consensus_height().unwrap_or(<span class="number">0</span>);
+        <span class="kw">if </span>new_height &lt; old_height {
             <span class="macro">info!</span>(
-                <span class="ident">new_height</span>,
-                <span class="ident">old_height</span>, <span class="string">&quot;Nothing to sync, new height is lower than old height, doing nothing.&quot;</span>
-            );
+                new_height,
+                old_height, <span class="string">&quot;Nothing to sync, new height is lower than old height, doing nothing.&quot;
+            </span>);
             <span class="kw">return</span>;
         }
 
-        <span class="kw">if</span> <span class="ident">new_height</span> == <span class="ident">old_height</span> {
-            <span class="macro">debug!</span>(<span class="ident">height</span> = <span class="ident">old_height</span>, <span class="string">&quot;Height didn&#39;t change&quot;</span>);
+        <span class="kw">if </span>new_height == old_height {
+            <span class="macro">debug!</span>(height = old_height, <span class="string">&quot;Height didn&#39;t change&quot;</span>);
             <span class="kw">return</span>;
         }
 
         <span class="macro">info!</span>(
-            <span class="ident">new_height</span>,
-            <span class="ident">block_to_go</span> = <span class="ident">new_height</span> - <span class="ident">old_height</span>,
+            new_height,
+            block_to_go = new_height - old_height,
             <span class="string">&quot;New consensus height, syncing up&quot;</span>,
         );
 
-        <span class="ident">batch</span>.<span class="ident">reserve</span>((<span class="ident">new_height</span> - <span class="ident">old_height</span>) <span class="kw">as</span> <span class="ident">usize</span> + <span class="number">1</span>);
-        <span class="kw">for</span> <span class="ident">height</span> <span class="kw">in</span> (<span class="ident">old_height</span> + <span class="number">1</span>)..=(<span class="ident">new_height</span>) {
-            <span class="kw">if</span> <span class="ident">height</span> % <span class="number">100</span> == <span class="number">0</span> {
-                <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {}&quot;</span>, <span class="ident">height</span>);
+        batch.reserve((new_height - old_height) <span class="kw">as </span>usize + <span class="number">1</span>);
+        <span class="kw">for </span>height <span class="kw">in </span>(old_height + <span class="number">1</span>)..=(new_height) {
+            <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
+                <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {}&quot;</span>, height);
             }
 
-            <span class="comment">// TODO: use batching for mainnet syncing</span>
-            <span class="macro">trace!</span>(<span class="ident">block</span> = <span class="ident">height</span>, <span class="string">&quot;Fetching block hash&quot;</span>);
-            <span class="kw">let</span> <span class="ident">block_hash</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block_hash</span>(<span class="ident">height</span> <span class="kw">as</span> <span class="ident">u64</span>).<span class="kw">await</span>; <span class="comment">// TODO: use u64 for height everywhere</span>
+            <span class="comment">// TODO: use batching for mainnet syncing
+            </span><span class="macro">trace!</span>(block = height, <span class="string">&quot;Fetching block hash&quot;</span>);
+            <span class="kw">let </span>block_hash = <span class="self">self</span>.btc_rpc.get_block_hash(height <span class="kw">as </span>u64).<span class="kw">await</span>; <span class="comment">// TODO: use u64 for height everywhere
 
-            <span class="kw">let</span> <span class="ident">pending_transactions</span> = <span class="self">self</span>
-                .<span class="ident">db</span>
-                .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
-                .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                    <span class="kw">let</span> (<span class="ident">key</span>, <span class="ident">transaction</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                    (<span class="ident">key</span>.<span class="number">0</span>, <span class="ident">transaction</span>)
+            </span><span class="kw">let </span>pending_transactions = <span class="self">self
+                </span>.db
+                .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
+                .map(|res| {
+                    <span class="kw">let </span>(key, transaction) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                    (key.<span class="number">0</span>, transaction)
                 })
-                .<span class="ident">collect</span>::&lt;<span class="ident">HashMap</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+                .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-            <span class="kw">if</span> !<span class="ident">pending_transactions</span>.<span class="ident">is_empty</span>() {
-                <span class="kw">let</span> <span class="ident">block</span> = <span class="self">self</span>.<span class="ident">btc_rpc</span>.<span class="ident">get_block</span>(<span class="kw-2">&amp;</span><span class="ident">block_hash</span>).<span class="kw">await</span>;
-                <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">block</span>.<span class="ident">txdata</span> {
-                    <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">pending_tx</span>) = <span class="ident">pending_transactions</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">txid</span>()) {
-                        <span class="self">self</span>.<span class="ident">recognize_change_utxo</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="ident">pending_tx</span>);
+            <span class="kw">if </span>!pending_transactions.is_empty() {
+                <span class="kw">let </span>block = <span class="self">self</span>.btc_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span>;
+                <span class="kw">for </span>transaction <span class="kw">in </span>block.txdata {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(pending_tx) = pending_transactions.get(<span class="kw-2">&amp;</span>transaction.txid()) {
+                        <span class="self">self</span>.recognize_change_utxo(batch.subtransaction(), pending_tx);
                     }
                 }
             }
 
-            <span class="ident">batch</span>.<span class="ident">append_insert_new</span>(
-                <span class="ident">BlockHashKey</span>(<span class="ident">BlockHash::from_inner</span>(<span class="ident">block_hash</span>.<span class="ident">into_inner</span>())),
+            batch.append_insert_new(
+                BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
                 (),
             );
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 
-    <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we</span>
-    <span class="doccomment">/// got consensus on.</span>
-    <span class="kw">fn</span> <span class="ident">recognize_change_utxo</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>, <span class="ident">pending_tx</span>: <span class="kw-2">&amp;</span><span class="ident">PendingTransaction</span>) {
-        <span class="kw">let</span> <span class="ident">script_pk</span> = <span class="self">self</span>
-            .<span class="ident">cfg</span>
-            .<span class="ident">peg_in_descriptor</span>
-            .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">pending_tx</span>.<span class="ident">tweak</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>)
-            .<span class="ident">script_pubkey</span>();
-        <span class="kw">for</span> (<span class="ident">idx</span>, <span class="ident">output</span>) <span class="kw">in</span> <span class="ident">pending_tx</span>.<span class="ident">tx</span>.<span class="ident">output</span>.<span class="ident">iter</span>().<span class="ident">enumerate</span>() {
-            <span class="kw">if</span> <span class="ident">output</span>.<span class="ident">script_pubkey</span> == <span class="ident">script_pk</span> {
-                <span class="ident">batch</span>.<span class="ident">append_insert</span>(
-                    <span class="ident">UTXOKey</span>(<span class="ident">bitcoin::OutPoint</span> {
-                        <span class="ident">txid</span>: <span class="ident">pending_tx</span>.<span class="ident">tx</span>.<span class="ident">txid</span>(),
-                        <span class="ident">vout</span>: <span class="ident">idx</span> <span class="kw">as</span> <span class="ident">u32</span>,
+    <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we
+    /// got consensus on.
+    </span><span class="kw">fn </span>recognize_change_utxo(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>batch: BatchTx, pending_tx: <span class="kw-2">&amp;</span>PendingTransaction) {
+        <span class="kw">let </span>script_pk = <span class="self">self
+            </span>.cfg
+            .peg_in_descriptor
+            .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
+            .script_pubkey();
+        <span class="kw">for </span>(idx, output) <span class="kw">in </span>pending_tx.tx.output.iter().enumerate() {
+            <span class="kw">if </span>output.script_pubkey == script_pk {
+                batch.append_insert(
+                    UTXOKey(bitcoin::OutPoint {
+                        txid: pending_tx.tx.txid(),
+                        vout: idx <span class="kw">as </span>u32,
                     }),
-                    <span class="ident">SpendableUTXO</span> {
-                        <span class="ident">tweak</span>: <span class="ident">pending_tx</span>.<span class="ident">tweak</span>,
-                        <span class="ident">amount</span>: <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">output</span>.<span class="ident">value</span>),
+                    SpendableUTXO {
+                        tweak: pending_tx.tweak,
+                        amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
             }
         }
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
     }
 
-    <span class="kw">fn</span> <span class="ident">block_is_known</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">block_hash</span>: <span class="ident">BlockHash</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">BlockHashKey</span>(<span class="ident">block_hash</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
-            .<span class="ident">is_some</span>()
+    <span class="kw">fn </span>block_is_known(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: BlockHash) -&gt; bool {
+        <span class="self">self</span>.db
+            .get_value(<span class="kw-2">&amp;</span>BlockHashKey(block_hash))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .is_some()
     }
 
-    <span class="kw">fn</span> <span class="ident">create_peg_out_tx</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">peg_out</span>: <span class="kw-2">&amp;</span><span class="ident">PegOut</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">UnsignedTransaction</span>&gt; {
-        <span class="kw">let</span> <span class="ident">change_tweak</span> = <span class="self">self</span>.<span class="ident">current_round_consensus</span>().<span class="ident">unwrap</span>().<span class="ident">randomness_beacon</span>;
-        <span class="self">self</span>.<span class="ident">offline_wallet</span>().<span class="ident">create_tx</span>(
-            <span class="ident">peg_out</span>.<span class="ident">amount</span>,
-            <span class="ident">peg_out</span>.<span class="ident">recipient</span>.<span class="ident">script_pubkey</span>(),
-            <span class="self">self</span>.<span class="ident">available_utxos</span>(),
-            <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">fee_rate</span>,
-            <span class="kw-2">&amp;</span><span class="ident">change_tweak</span>,
+    <span class="kw">fn </span>create_peg_out_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, peg_out: <span class="kw-2">&amp;</span>PegOut) -&gt; <span class="prelude-ty">Option</span>&lt;UnsignedTransaction&gt; {
+        <span class="kw">let </span>change_tweak = <span class="self">self</span>.current_round_consensus().unwrap().randomness_beacon;
+        <span class="self">self</span>.offline_wallet().create_tx(
+            peg_out.amount,
+            peg_out.recipient.script_pubkey(),
+            <span class="self">self</span>.available_utxos(),
+            peg_out.fees.fee_rate,
+            <span class="kw-2">&amp;</span>change_tweak,
         )
     }
 
-    <span class="kw">fn</span> <span class="ident">available_utxos</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">UTXOPrefixKey</span>)
-            .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+    <span class="kw">fn </span>available_utxos(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(UTXOKey, SpendableUTXO)&gt; {
+        <span class="self">self</span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
+            .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_wallet_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">bitcoin::Amount</span> {
-        <span class="kw">let</span> <span class="ident">sat_sum</span> = <span class="self">self</span>
-            .<span class="ident">available_utxos</span>()
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|(<span class="kw">_</span>, <span class="ident">utxo</span>)| <span class="ident">utxo</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>())
-            .<span class="ident">sum</span>();
-        <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sat_sum</span>)
+    <span class="kw">pub fn </span>get_wallet_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::Amount {
+        <span class="kw">let </span>sat_sum = <span class="self">self
+            </span>.available_utxos()
+            .into_iter()
+            .map(|(<span class="kw">_</span>, utxo)| utxo.amount.as_sat())
+            .sum();
+        bitcoin::Amount::from_sat(sat_sum)
     }
 
-    <span class="kw">fn</span> <span class="ident">offline_wallet</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">StatelessWallet</span> {
-        <span class="ident">StatelessWallet</span> {
-            <span class="ident">descriptor</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">peg_in_descriptor</span>,
-            <span class="ident">secret_key</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">peg_in_key</span>,
-            <span class="ident">secp</span>: <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">secp</span>,
+    <span class="kw">fn </span>offline_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; StatelessWallet {
+        StatelessWallet {
+            descriptor: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_descriptor,
+            secret_key: <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.peg_in_key,
+            secp: <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
         }
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="ident">StatelessWallet</span>&lt;<span class="lifetime">&#39;a</span>&gt; {
-    <span class="doccomment">/// Attempts to create a tx ready to be signed from available UTXOs.</span>
-    <span class="doccomment">/// Returns `None` if there are not enough `SpendableUTXO`</span>
-    <span class="kw">fn</span> <span class="ident">create_tx</span>(
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; StatelessWallet&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="doccomment">/// Attempts to create a tx ready to be signed from available UTXOs.
+    /// Returns `None` if there are not enough `SpendableUTXO`
+    </span><span class="kw">fn </span>create_tx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">peg_out_amount</span>: <span class="ident">bitcoin::Amount</span>,
-        <span class="ident">destination</span>: <span class="ident">Script</span>,
-        <span class="kw-2">mut</span> <span class="ident">utxos</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt;,
-        <span class="ident">fee_rate</span>: <span class="ident">Feerate</span>,
-        <span class="ident">change_tweak</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>],
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">UnsignedTransaction</span>&gt; {
-        <span class="comment">// When building a transaction we need to take care of two things:</span>
-        <span class="comment">//  * We need enough input amount to fund all outputs</span>
-        <span class="comment">//  * We need to keep an eye on the tx weight so we can factor the fees into out calculation</span>
-        <span class="comment">// We then go on to calculate the base size of the transaction `total_weight` and the</span>
-        <span class="comment">// maximum weight per added input which we will add every time we select an input.</span>
-        <span class="kw">let</span> <span class="ident">change_script</span> = <span class="self">self</span>.<span class="ident">derive_script</span>(<span class="ident">change_tweak</span>);
-        <span class="kw">let</span> <span class="ident">out_weight</span> = (<span class="ident">destination</span>.<span class="ident">len</span>() * <span class="number">4</span> + <span class="number">1</span> + <span class="number">32</span>
-            <span class="comment">// Add change script weight, it&#39;s very likely to be needed if not we just overpay in fees</span>
-            + <span class="number">1</span> <span class="comment">// script len varint, 1 byte for all addresses we accept</span>
-            + <span class="ident">change_script</span>.<span class="ident">len</span>() * <span class="number">4</span> <span class="comment">// script len</span>
-            + <span class="number">32</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// value</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_weight</span> = (<span class="number">16</span> + <span class="comment">// version</span>
-            <span class="number">12</span> + <span class="comment">// up to 2**16-1 inputs</span>
-            <span class="number">12</span> + <span class="comment">// up to 2**16-1 outputs</span>
-            <span class="ident">out_weight</span> + <span class="comment">// weight of all outputs</span>
-            <span class="number">16</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// lock time</span>
-        <span class="kw">let</span> <span class="ident">max_input_weight</span> = (<span class="self">self</span>
-            .<span class="ident">descriptor</span>
-            .<span class="ident">max_satisfaction_weight</span>()
-            .<span class="ident">expect</span>(<span class="string">&quot;is satisfyable&quot;</span>) +
-            <span class="number">128</span> + <span class="comment">// TxOutHash</span>
-            <span class="number">16</span> + <span class="comment">// TxOutIndex</span>
-            <span class="number">16</span>) <span class="kw">as</span> <span class="ident">u64</span>; <span class="comment">// sequence</span>
+        peg_out_amount: bitcoin::Amount,
+        destination: Script,
+        <span class="kw-2">mut </span>utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
+        fee_rate: Feerate,
+        change_tweak: <span class="kw-2">&amp;</span>[u8],
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;UnsignedTransaction&gt; {
+        <span class="comment">// When building a transaction we need to take care of two things:
+        //  * We need enough input amount to fund all outputs
+        //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
+        // We then go on to calculate the base size of the transaction `total_weight` and the
+        // maximum weight per added input which we will add every time we select an input.
+        </span><span class="kw">let </span>change_script = <span class="self">self</span>.derive_script(change_tweak);
+        <span class="kw">let </span>out_weight = (destination.len() * <span class="number">4 </span>+ <span class="number">1 </span>+ <span class="number">32
+            </span><span class="comment">// Add change script weight, it&#39;s very likely to be needed if not we just overpay in fees
+            </span>+ <span class="number">1 </span><span class="comment">// script len varint, 1 byte for all addresses we accept
+            </span>+ change_script.len() * <span class="number">4 </span><span class="comment">// script len
+            </span>+ <span class="number">32</span>) <span class="kw">as </span>u64; <span class="comment">// value
+        </span><span class="kw">let </span><span class="kw-2">mut </span>total_weight = (<span class="number">16 </span>+ <span class="comment">// version
+            </span><span class="number">12 </span>+ <span class="comment">// up to 2**16-1 inputs
+            </span><span class="number">12 </span>+ <span class="comment">// up to 2**16-1 outputs
+            </span>out_weight + <span class="comment">// weight of all outputs
+            </span><span class="number">16</span>) <span class="kw">as </span>u64; <span class="comment">// lock time
+        </span><span class="kw">let </span>max_input_weight = (<span class="self">self
+            </span>.descriptor
+            .max_satisfaction_weight()
+            .expect(<span class="string">&quot;is satisfyable&quot;</span>) +
+            <span class="number">128 </span>+ <span class="comment">// TxOutHash
+            </span><span class="number">16 </span>+ <span class="comment">// TxOutIndex
+            </span><span class="number">16</span>) <span class="kw">as </span>u64; <span class="comment">// sequence
 
-        <span class="comment">// Finally we initialize our accumulator for selected input amounts</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">total_selected_value</span> = <span class="ident">bitcoin::Amount::from_sat</span>(<span class="number">0</span>);
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">selected_utxos</span>: <span class="ident">Vec</span>&lt;(<span class="ident">UTXOKey</span>, <span class="ident">SpendableUTXO</span>)&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">fees</span> = <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
+        // Finally we initialize our accumulator for selected input amounts
+        </span><span class="kw">let </span><span class="kw-2">mut </span>total_selected_value = bitcoin::Amount::from_sat(<span class="number">0</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt; = <span class="macro">vec!</span>[];
+        <span class="kw">let </span><span class="kw-2">mut </span>fees = fee_rate.calculate_fee(total_weight);
 
-        <span class="comment">// When selecting UTXOs we select from largest to smallest amounts</span>
-        <span class="ident">utxos</span>.<span class="ident">sort_by_key</span>(|(<span class="kw">_</span>, <span class="ident">utxo</span>)| <span class="ident">utxo</span>.<span class="ident">amount</span>);
-        <span class="kw">while</span> <span class="ident">total_selected_value</span> &lt; <span class="ident">peg_out_amount</span> + <span class="ident">change_script</span>.<span class="ident">dust_value</span>() + <span class="ident">fees</span> {
-            <span class="kw">match</span> <span class="ident">utxos</span>.<span class="ident">pop</span>() {
-                <span class="prelude-val">Some</span>((<span class="ident">utxo_key</span>, <span class="ident">utxo</span>)) =&gt; {
-                    <span class="ident">total_selected_value</span> += <span class="ident">utxo</span>.<span class="ident">amount</span>;
-                    <span class="ident">total_weight</span> += <span class="ident">max_input_weight</span>;
-                    <span class="ident">fees</span> = <span class="ident">fee_rate</span>.<span class="ident">calculate_fee</span>(<span class="ident">total_weight</span>);
-                    <span class="ident">selected_utxos</span>.<span class="ident">push</span>((<span class="ident">utxo_key</span>, <span class="ident">utxo</span>));
+        <span class="comment">// When selecting UTXOs we select from largest to smallest amounts
+        </span>utxos.sort_by_key(|(<span class="kw">_</span>, utxo)| utxo.amount);
+        <span class="kw">while </span>total_selected_value &lt; peg_out_amount + change_script.dust_value() + fees {
+            <span class="kw">match </span>utxos.pop() {
+                <span class="prelude-val">Some</span>((utxo_key, utxo)) =&gt; {
+                    total_selected_value += utxo.amount;
+                    total_weight += max_input_weight;
+                    fees = fee_rate.calculate_fee(total_weight);
+                    selected_utxos.push((utxo_key, utxo));
                 }
-                <span class="kw">_</span> =&gt; <span class="kw">return</span> <span class="prelude-val">None</span>, <span class="comment">// Not enough UTXOs</span>
-            }
+                <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>, <span class="comment">// Not enough UTXOs
+            </span>}
         }
 
-        <span class="comment">// We always pay ourselves change back to ensure that we don&#39;t lose anything due to dust</span>
-        <span class="kw">let</span> <span class="ident">change</span> = <span class="ident">total_selected_value</span> - <span class="ident">fees</span> - <span class="ident">peg_out_amount</span>;
-        <span class="kw">let</span> <span class="ident">output</span>: <span class="ident">Vec</span>&lt;<span class="ident">TxOut</span>&gt; = <span class="macro">vec!</span>[
-            <span class="ident">TxOut</span> {
-                <span class="ident">value</span>: <span class="ident">peg_out_amount</span>.<span class="ident">as_sat</span>(),
-                <span class="ident">script_pubkey</span>: <span class="ident">destination</span>,
+        <span class="comment">// We always pay ourselves change back to ensure that we don&#39;t lose anything due to dust
+        </span><span class="kw">let </span>change = total_selected_value - fees - peg_out_amount;
+        <span class="kw">let </span>output: Vec&lt;TxOut&gt; = <span class="macro">vec!</span>[
+            TxOut {
+                value: peg_out_amount.as_sat(),
+                script_pubkey: destination,
             },
-            <span class="ident">TxOut</span> {
-                <span class="ident">value</span>: <span class="ident">change</span>.<span class="ident">as_sat</span>(),
-                <span class="ident">script_pubkey</span>: <span class="ident">change_script</span>,
+            TxOut {
+                value: change.as_sat(),
+                script_pubkey: change_script,
             },
         ];
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">change_out</span> = <span class="ident">bitcoin::util::psbt::Output::default</span>();
-        <span class="ident">change_out</span>
-            .<span class="ident">proprietary</span>
-            .<span class="ident">insert</span>(<span class="ident">proprietary_tweak_key</span>(), <span class="ident">change_tweak</span>.<span class="ident">to_vec</span>());
+        <span class="kw">let </span><span class="kw-2">mut </span>change_out = bitcoin::util::psbt::Output::default();
+        change_out
+            .proprietary
+            .insert(proprietary_tweak_key(), change_tweak.to_vec());
 
         <span class="macro">info!</span>(
-            <span class="ident">inputs</span> = <span class="ident">selected_utxos</span>.<span class="ident">len</span>(),
-            <span class="ident">input_sats</span> = <span class="ident">total_selected_value</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">peg_out_sats</span> = <span class="ident">peg_out_amount</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">fees_sats</span> = <span class="ident">fees</span>.<span class="ident">as_sat</span>(),
-            <span class="ident">fee_rate</span> = <span class="ident">fee_rate</span>.<span class="ident">sats_per_kvb</span>,
-            <span class="ident">change_sats</span> = <span class="ident">change</span>.<span class="ident">as_sat</span>(),
+            inputs = selected_utxos.len(),
+            input_sats = total_selected_value.as_sat(),
+            peg_out_sats = peg_out_amount.as_sat(),
+            fees_sats = fees.as_sat(),
+            fee_rate = fee_rate.sats_per_kvb,
+            change_sats = change.as_sat(),
             <span class="string">&quot;Creating peg-out tx&quot;</span>,
         );
 
-        <span class="kw">let</span> <span class="ident">transaction</span> = <span class="ident">Transaction</span> {
-            <span class="ident">version</span>: <span class="number">2</span>,
-            <span class="ident">lock_time</span>: <span class="number">0</span>,
-            <span class="ident">input</span>: <span class="ident">selected_utxos</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">map</span>(|(<span class="ident">utxo_key</span>, <span class="ident">_utxo</span>)| <span class="ident">TxIn</span> {
-                    <span class="ident">previous_output</span>: <span class="ident">utxo_key</span>.<span class="number">0</span>,
-                    <span class="ident">script_sig</span>: <span class="ident">Default::default</span>(),
-                    <span class="ident">sequence</span>: <span class="number">0xFFFFFFFF</span>,
-                    <span class="ident">witness</span>: <span class="ident">bitcoin::Witness::new</span>(),
+        <span class="kw">let </span>transaction = Transaction {
+            version: <span class="number">2</span>,
+            lock_time: <span class="number">0</span>,
+            input: selected_utxos
+                .iter()
+                .map(|(utxo_key, _utxo)| TxIn {
+                    previous_output: utxo_key.<span class="number">0</span>,
+                    script_sig: Default::default(),
+                    sequence: <span class="number">0xFFFFFFFF</span>,
+                    witness: bitcoin::Witness::new(),
                 })
-                .<span class="ident">collect</span>(),
-            <span class="ident">output</span>,
+                .collect(),
+            output,
         };
-        <span class="macro">info!</span>(<span class="ident">txid</span> = %<span class="ident">transaction</span>.<span class="ident">txid</span>(), <span class="string">&quot;Creating peg-out tx&quot;</span>);
+        <span class="macro">info!</span>(txid = %transaction.txid(), <span class="string">&quot;Creating peg-out tx&quot;</span>);
 
-        <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization</span>
-        <span class="kw">let</span> <span class="ident">psbt</span> = <span class="ident">PartiallySignedTransaction</span> {
-            <span class="ident">unsigned_tx</span>: <span class="ident">transaction</span>,
-            <span class="ident">version</span>: <span class="number">0</span>,
-            <span class="ident">xpub</span>: <span class="ident">Default::default</span>(),
-            <span class="ident">proprietary</span>: <span class="ident">Default::default</span>(),
-            <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
-            <span class="ident">inputs</span>: <span class="ident">selected_utxos</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">map</span>(|(<span class="ident">_utxo_key</span>, <span class="ident">utxo</span>)| {
-                    <span class="kw">let</span> <span class="ident">script_pubkey</span> = <span class="self">self</span>
-                        .<span class="ident">descriptor</span>
-                        .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">utxo</span>.<span class="ident">tweak</span>, <span class="self">self</span>.<span class="ident">secp</span>)
-                        .<span class="ident">script_pubkey</span>();
-                    <span class="ident">Input</span> {
-                        <span class="ident">non_witness_utxo</span>: <span class="prelude-val">None</span>,
-                        <span class="ident">witness_utxo</span>: <span class="prelude-val">Some</span>(<span class="ident">TxOut</span> {
-                            <span class="ident">value</span>: <span class="ident">utxo</span>.<span class="ident">amount</span>.<span class="ident">as_sat</span>(),
-                            <span class="ident">script_pubkey</span>,
+        <span class="comment">// FIXME: use custom data structure that guarantees more invariants and only convert to PSBT for finalization
+        </span><span class="kw">let </span>psbt = PartiallySignedTransaction {
+            unsigned_tx: transaction,
+            version: <span class="number">0</span>,
+            xpub: Default::default(),
+            proprietary: Default::default(),
+            unknown: Default::default(),
+            inputs: selected_utxos
+                .into_iter()
+                .map(|(_utxo_key, utxo)| {
+                    <span class="kw">let </span>script_pubkey = <span class="self">self
+                        </span>.descriptor
+                        .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
+                        .script_pubkey();
+                    Input {
+                        non_witness_utxo: <span class="prelude-val">None</span>,
+                        witness_utxo: <span class="prelude-val">Some</span>(TxOut {
+                            value: utxo.amount.as_sat(),
+                            script_pubkey,
                         }),
-                        <span class="ident">partial_sigs</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">sighash_type</span>: <span class="prelude-val">None</span>,
-                        <span class="ident">redeem_script</span>: <span class="prelude-val">None</span>,
-                        <span class="ident">witness_script</span>: <span class="prelude-val">Some</span>(
-                            <span class="self">self</span>.<span class="ident">descriptor</span>
-                                .<span class="ident">tweak</span>(<span class="kw-2">&amp;</span><span class="ident">utxo</span>.<span class="ident">tweak</span>, <span class="self">self</span>.<span class="ident">secp</span>)
-                                .<span class="ident">script_code</span>()
-                                .<span class="ident">expect</span>(<span class="string">&quot;Failed to tweak descriptor&quot;</span>),
+                        partial_sigs: Default::default(),
+                        sighash_type: <span class="prelude-val">None</span>,
+                        redeem_script: <span class="prelude-val">None</span>,
+                        witness_script: <span class="prelude-val">Some</span>(
+                            <span class="self">self</span>.descriptor
+                                .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
+                                .script_code()
+                                .expect(<span class="string">&quot;Failed to tweak descriptor&quot;</span>),
                         ),
-                        <span class="ident">bip32_derivation</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">final_script_sig</span>: <span class="prelude-val">None</span>,
-                        <span class="ident">final_script_witness</span>: <span class="prelude-val">None</span>,
-                        <span class="ident">ripemd160_preimages</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">sha256_preimages</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">hash160_preimages</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">hash256_preimages</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">proprietary</span>: <span class="macro">vec!</span>[(<span class="ident">proprietary_tweak_key</span>(), <span class="ident">utxo</span>.<span class="ident">tweak</span>.<span class="ident">to_vec</span>())]
-                            .<span class="ident">into_iter</span>()
-                            .<span class="ident">collect</span>(),
-                        <span class="ident">tap_key_sig</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">tap_script_sigs</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">tap_scripts</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">tap_key_origins</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">tap_internal_key</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">tap_merkle_root</span>: <span class="ident">Default::default</span>(),
-                        <span class="ident">unknown</span>: <span class="ident">Default::default</span>(),
+                        bip32_derivation: Default::default(),
+                        final_script_sig: <span class="prelude-val">None</span>,
+                        final_script_witness: <span class="prelude-val">None</span>,
+                        ripemd160_preimages: Default::default(),
+                        sha256_preimages: Default::default(),
+                        hash160_preimages: Default::default(),
+                        hash256_preimages: Default::default(),
+                        proprietary: <span class="macro">vec!</span>[(proprietary_tweak_key(), utxo.tweak.to_vec())]
+                            .into_iter()
+                            .collect(),
+                        tap_key_sig: Default::default(),
+                        tap_script_sigs: Default::default(),
+                        tap_scripts: Default::default(),
+                        tap_key_origins: Default::default(),
+                        tap_internal_key: Default::default(),
+                        tap_merkle_root: Default::default(),
+                        unknown: Default::default(),
                     }
                 })
-                .<span class="ident">collect</span>(),
-            <span class="ident">outputs</span>: <span class="macro">vec!</span>[<span class="ident">Default::default</span>(), <span class="ident">change_out</span>],
+                .collect(),
+            outputs: <span class="macro">vec!</span>[Default::default(), change_out],
         };
 
-        <span class="prelude-val">Some</span>(<span class="ident">UnsignedTransaction</span> {
-            <span class="ident">psbt</span>,
-            <span class="ident">signatures</span>: <span class="macro">vec!</span>[],
-            <span class="ident">change</span>,
-            <span class="ident">fees</span>: <span class="ident">PegOutFees</span> {
-                <span class="ident">fee_rate</span>,
-                <span class="ident">total_weight</span>,
+        <span class="prelude-val">Some</span>(UnsignedTransaction {
+            psbt,
+            signatures: <span class="macro">vec!</span>[],
+            change,
+            fees: PegOutFees {
+                fee_rate,
+                total_weight,
             },
         })
     }
 
-    <span class="kw">fn</span> <span class="ident">sign_psbt</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">psbt</span>: <span class="kw-2">&amp;mut</span> <span class="ident">PartiallySignedTransaction</span>) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx_hasher</span> = <span class="ident">SighashCache::new</span>(<span class="kw-2">&amp;</span><span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>);
+    <span class="kw">fn </span>sign_psbt(<span class="kw-2">&amp;</span><span class="self">self</span>, psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction) {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx_hasher = SighashCache::new(<span class="kw-2">&amp;</span>psbt.unsigned_tx);
 
-        <span class="kw">for</span> (<span class="ident">idx</span>, (<span class="ident">psbt_input</span>, <span class="ident">_tx_input</span>)) <span class="kw">in</span> <span class="ident">psbt</span>
-            .<span class="ident">inputs</span>
-            .<span class="ident">iter_mut</span>()
-            .<span class="ident">zip</span>(<span class="ident">psbt</span>.<span class="ident">unsigned_tx</span>.<span class="ident">input</span>.<span class="ident">iter</span>())
-            .<span class="ident">enumerate</span>()
+        <span class="kw">for </span>(idx, (psbt_input, _tx_input)) <span class="kw">in </span>psbt
+            .inputs
+            .iter_mut()
+            .zip(psbt.unsigned_tx.input.iter())
+            .enumerate()
         {
-            <span class="kw">let</span> <span class="ident">tweaked_secret</span> = {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">secret_key</span> = <span class="kw-2">*</span><span class="self">self</span>.<span class="ident">secret_key</span>;
+            <span class="kw">let </span>tweaked_secret = {
+                <span class="kw">let </span><span class="kw-2">mut </span>secret_key = <span class="kw-2">*</span><span class="self">self</span>.secret_key;
 
-                <span class="kw">let</span> <span class="ident">tweak_pk_bytes</span> = <span class="ident">psbt_input</span>
-                    .<span class="ident">proprietary</span>
-                    .<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">proprietary_tweak_key</span>())
-                    .<span class="ident">expect</span>(<span class="string">&quot;Malformed PSBT: expected tweak&quot;</span>);
-                <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">secret_key</span>);
+                <span class="kw">let </span>tweak_pk_bytes = psbt_input
+                    .proprietary
+                    .get(<span class="kw-2">&amp;</span>proprietary_tweak_key())
+                    .expect(<span class="string">&quot;Malformed PSBT: expected tweak&quot;</span>);
+                <span class="kw">let </span>pub_key = secp256k1::PublicKey::from_secret_key(<span class="self">self</span>.secp, <span class="kw-2">&amp;</span>secret_key);
 
-                <span class="kw">let</span> <span class="ident">tweak</span> = {
-                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> = <span class="ident">HmacEngine</span>::&lt;<span class="ident">sha256::Hash</span>&gt;<span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">serialize</span>()[..]);
-                    <span class="ident">hasher</span>.<span class="ident">input</span>(<span class="kw-2">&amp;</span><span class="ident">tweak_pk_bytes</span>[..]);
-                    <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>()
+                <span class="kw">let </span>tweak = {
+                    <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pub_key.serialize()[..]);
+                    hasher.input(<span class="kw-2">&amp;</span>tweak_pk_bytes[..]);
+                    Hmac::from_engine(hasher).into_inner()
                 };
 
-                <span class="ident">secret_key</span>
-                    .<span class="ident">add_assign</span>(<span class="kw-2">&amp;</span><span class="ident">tweak</span>[..])
-                    .<span class="ident">expect</span>(<span class="string">&quot;Tweaking priv key failed&quot;</span>); <span class="comment">// TODO: why could this happen?</span>
-                <span class="ident">secret_key</span>
+                secret_key
+                    .add_assign(<span class="kw-2">&amp;</span>tweak[..])
+                    .expect(<span class="string">&quot;Tweaking priv key failed&quot;</span>); <span class="comment">// TODO: why could this happen?
+                </span>secret_key
             };
 
-            <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">tx_hasher</span>
-                .<span class="ident">segwit_signature_hash</span>(
-                    <span class="ident">idx</span>,
-                    <span class="ident">psbt_input</span>
-                        .<span class="ident">witness_script</span>
-                        .<span class="ident">as_ref</span>()
-                        .<span class="ident">expect</span>(<span class="string">&quot;Missing witness script&quot;</span>),
-                    <span class="ident">psbt_input</span>
-                        .<span class="ident">witness_utxo</span>
-                        .<span class="ident">as_ref</span>()
-                        .<span class="ident">expect</span>(<span class="string">&quot;Missing UTXO&quot;</span>)
-                        .<span class="ident">value</span>,
-                    <span class="ident">EcdsaSighashType::All</span>,
+            <span class="kw">let </span>tx_hash = tx_hasher
+                .segwit_signature_hash(
+                    idx,
+                    psbt_input
+                        .witness_script
+                        .as_ref()
+                        .expect(<span class="string">&quot;Missing witness script&quot;</span>),
+                    psbt_input
+                        .witness_utxo
+                        .as_ref()
+                        .expect(<span class="string">&quot;Missing UTXO&quot;</span>)
+                        .value,
+                    EcdsaSighashType::All,
                 )
-                .<span class="ident">expect</span>(<span class="string">&quot;Failed to create segwit sighash&quot;</span>);
+                .expect(<span class="string">&quot;Failed to create segwit sighash&quot;</span>);
 
-            <span class="kw">let</span> <span class="ident">signature</span> = <span class="self">self</span>
-                .<span class="ident">secp</span>
-                .<span class="ident">sign_ecdsa</span>(<span class="kw-2">&amp;</span><span class="ident">Message::from_slice</span>(<span class="kw-2">&amp;</span><span class="ident">tx_hash</span>[..]).<span class="ident">unwrap</span>(), <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>);
+            <span class="kw">let </span>signature = <span class="self">self
+                </span>.secp
+                .sign_ecdsa(<span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>tx_hash[..]).unwrap(), <span class="kw-2">&amp;</span>tweaked_secret);
 
-            <span class="ident">psbt_input</span>.<span class="ident">partial_sigs</span>.<span class="ident">insert</span>(
-                <span class="ident">bitcoin::PublicKey</span> {
-                    <span class="ident">compressed</span>: <span class="bool-val">true</span>,
-                    <span class="ident">inner</span>: <span class="ident">secp256k1::PublicKey::from_secret_key</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">tweaked_secret</span>),
+            psbt_input.partial_sigs.insert(
+                bitcoin::PublicKey {
+                    compressed: <span class="bool-val">true</span>,
+                    inner: secp256k1::PublicKey::from_secret_key(<span class="self">self</span>.secp, <span class="kw-2">&amp;</span>tweaked_secret),
                 },
-                <span class="ident">EcdsaSig::sighash_all</span>(<span class="ident">signature</span>),
+                EcdsaSig::sighash_all(signature),
             );
         }
     }
 
-    <span class="kw">fn</span> <span class="ident">derive_script</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">tweak</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">Script</span> {
-        <span class="kw">let</span> <span class="ident">descriptor</span> = <span class="self">self</span>.<span class="ident">descriptor</span>.<span class="ident">translate_pk2_infallible</span>(|<span class="ident">pub_key</span>| {
-            <span class="kw">let</span> <span class="ident">hashed_tweak</span> = {
-                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hasher</span> = <span class="ident">HmacEngine</span>::&lt;<span class="ident">sha256::Hash</span>&gt;<span class="ident">::new</span>(<span class="kw-2">&amp;</span><span class="ident">pub_key</span>.<span class="ident">key</span>.<span class="ident">serialize</span>()[..]);
-                <span class="ident">hasher</span>.<span class="ident">input</span>(<span class="ident">tweak</span>);
-                <span class="ident">Hmac::from_engine</span>(<span class="ident">hasher</span>).<span class="ident">into_inner</span>()
+    <span class="kw">fn </span>derive_script(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>[u8]) -&gt; Script {
+        <span class="kw">let </span>descriptor = <span class="self">self</span>.descriptor.translate_pk2_infallible(|pub_key| {
+            <span class="kw">let </span>hashed_tweak = {
+                <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pub_key.key.serialize()[..]);
+                hasher.input(tweak);
+                Hmac::from_engine(hasher).into_inner()
             };
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tweak_key</span> = <span class="ident">pub_key</span>.<span class="ident">key</span>;
-            <span class="ident">tweak_key</span>
-                .<span class="ident">add_exp_assign</span>(<span class="self">self</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;</span><span class="ident">hashed_tweak</span>)
-                .<span class="ident">expect</span>(<span class="string">&quot;tweaking failed&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>tweak_key = pub_key.key;
+            tweak_key
+                .add_exp_assign(<span class="self">self</span>.secp, <span class="kw-2">&amp;</span>hashed_tweak)
+                .expect(<span class="string">&quot;tweaking failed&quot;</span>);
 
-            <span class="ident">CompressedPublicKey</span> { <span class="ident">key</span>: <span class="ident">tweak_key</span> }
+            CompressedPublicKey { key: tweak_key }
         });
 
-        <span class="ident">descriptor</span>.<span class="ident">script_pubkey</span>()
+        descriptor.script_pubkey()
     }
 }
 
-<span class="kw">fn</span> <span class="ident">proprietary_tweak_key</span>() -&gt; <span class="ident">ProprietaryKey</span> {
-    <span class="ident">ProprietaryKey</span> {
-        <span class="ident">prefix</span>: <span class="string">b&quot;minimint&quot;</span>.<span class="ident">to_vec</span>(),
-        <span class="ident">subtype</span>: <span class="number">0x00</span>,
-        <span class="ident">key</span>: <span class="macro">vec!</span>[],
+<span class="kw">fn </span>proprietary_tweak_key() -&gt; ProprietaryKey {
+    ProprietaryKey {
+        prefix: <span class="string">b&quot;minimint&quot;</span>.to_vec(),
+        subtype: <span class="number">0x00</span>,
+        key: <span class="macro">vec!</span>[],
     }
 }
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">is_address_valid_for_network</span>(<span class="ident">address</span>: <span class="kw-2">&amp;</span><span class="ident">Address</span>, <span class="ident">network</span>: <span class="ident">Network</span>) -&gt; <span class="ident">bool</span> {
-    <span class="kw">match</span> (<span class="ident">address</span>.<span class="ident">network</span>, <span class="ident">address</span>.<span class="ident">address_type</span>()) {
-        (<span class="ident">Network::Testnet</span>, <span class="prelude-val">Some</span>(<span class="ident">AddressType::P2pkh</span>))
-        | (<span class="ident">Network::Testnet</span>, <span class="prelude-val">Some</span>(<span class="ident">AddressType::P2sh</span>)) =&gt; {
-            [<span class="ident">Network::Testnet</span>, <span class="ident">Network::Regtest</span>, <span class="ident">Network::Signet</span>].<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">network</span>)
+<span class="kw">pub fn </span>is_address_valid_for_network(address: <span class="kw-2">&amp;</span>Address, network: Network) -&gt; bool {
+    <span class="kw">match </span>(address.network, address.address_type()) {
+        (Network::Testnet, <span class="prelude-val">Some</span>(AddressType::P2pkh))
+        | (Network::Testnet, <span class="prelude-val">Some</span>(AddressType::P2sh)) =&gt; {
+            [Network::Testnet, Network::Regtest, Network::Signet].contains(<span class="kw-2">&amp;</span>network)
         }
-        (<span class="ident">Network::Testnet</span>, <span class="kw">_</span>) =&gt; [<span class="ident">Network::Testnet</span>, <span class="ident">Network::Signet</span>].<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">network</span>),
-        (<span class="ident">addr_net</span>, <span class="kw">_</span>) =&gt; <span class="ident">addr_net</span> == <span class="ident">network</span>,
+        (Network::Testnet, <span class="kw">_</span>) =&gt; [Network::Testnet, Network::Signet].contains(<span class="kw-2">&amp;</span>network),
+        (addr_net, <span class="kw">_</span>) =&gt; addr_net == network,
     }
 }
 
-<span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">level</span> = <span class="string">&quot;debug&quot;</span>, <span class="ident">skip_all</span>)]</span>
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">run_broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">rpc</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>&gt;) {
-    <span class="kw">loop</span> {
-        <span class="ident">broadcast_pending_tx</span>(<span class="kw-2">&amp;</span><span class="ident">db</span>, <span class="ident">rpc</span>.<span class="ident">as_ref</span>()).<span class="kw">await</span>;
-        <span class="ident">minimint_api::task::sleep</span>(<span class="ident">Duration::from_secs</span>(<span class="number">10</span>)).<span class="kw">await</span>;
+<span class="attribute">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]</span>
+<span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Arc&lt;<span class="kw">dyn </span>Database&gt;, rpc: Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;) {
+    <span class="kw">loop </span>{
+        broadcast_pending_tx(<span class="kw-2">&amp;</span>db, rpc.as_ref()).<span class="kw">await</span>;
+        minimint_api::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
     }
 }
 
-<span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">broadcast_pending_tx</span>(<span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">rpc</span>: <span class="kw-2">&amp;</span><span class="kw">dyn</span> <span class="ident">BitcoindRpc</span>) {
-    <span class="kw">let</span> <span class="ident">pending_tx</span> = <span class="ident">db</span>
-        .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingTransactionPrefixKey</span>)
-        .<span class="ident">collect</span>::&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
-        .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+<span class="kw">pub async fn </span>broadcast_pending_tx(db: <span class="kw-2">&amp;</span>Arc&lt;<span class="kw">dyn </span>Database&gt;, rpc: <span class="kw-2">&amp;</span><span class="kw">dyn </span>BitcoindRpc) {
+    <span class="kw">let </span>pending_tx = db
+        .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
+        .expect(<span class="string">&quot;DB error&quot;</span>);
 
-    <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">PendingTransaction</span> { <span class="ident">tx</span>, .. }) <span class="kw">in</span> <span class="ident">pending_tx</span> {
+    <span class="kw">for </span>(<span class="kw">_</span>, PendingTransaction { tx, .. }) <span class="kw">in </span>pending_tx {
         <span class="macro">debug!</span>(
-            <span class="ident">tx</span> = %<span class="ident">tx</span>.<span class="ident">txid</span>(),
-            <span class="ident">weight</span> = <span class="ident">tx</span>.<span class="ident">weight</span>(),
+            tx = %tx.txid(),
+            weight = tx.weight(),
             <span class="string">&quot;Broadcasting peg-out&quot;</span>,
         );
-        <span class="macro">trace!</span>(<span class="ident">transaction</span> = <span class="question-mark">?</span><span class="ident">tx</span>);
-        <span class="ident">rpc</span>.<span class="ident">submit_transaction</span>(<span class="ident">tx</span>).<span class="kw">await</span>;
+        <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
+        rpc.submit_transaction(tx).<span class="kw">await</span>;
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Feerate</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">calculate_fee</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">weight</span>: <span class="ident">u64</span>) -&gt; <span class="ident">bitcoin::Amount</span> {
-        <span class="kw">let</span> <span class="ident">sats</span> = <span class="self">self</span>.<span class="ident">sats_per_kvb</span> * <span class="ident">weight</span> / <span class="number">1000</span>;
-        <span class="ident">bitcoin::Amount::from_sat</span>(<span class="ident">sats</span>)
+<span class="kw">impl </span>Feerate {
+    <span class="kw">pub fn </span>calculate_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, weight: u64) -&gt; bitcoin::Amount {
+        <span class="kw">let </span>sats = <span class="self">self</span>.sats_per_kvb * weight / <span class="number">1000</span>;
+        bitcoin::Amount::from_sat(sats)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">std::hash::Hash</span> <span class="kw">for</span> <span class="ident">PegOutSignatureItem</span> {
-    <span class="kw">fn</span> <span class="ident">hash</span>&lt;<span class="ident">H</span>: <span class="ident">Hasher</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">state</span>: <span class="kw-2">&amp;mut</span> <span class="ident">H</span>) {
-        <span class="self">self</span>.<span class="ident">txid</span>.<span class="ident">hash</span>(<span class="ident">state</span>);
-        <span class="kw">for</span> <span class="ident">sig</span> <span class="kw">in</span> <span class="self">self</span>.<span class="ident">signature</span>.<span class="ident">iter</span>() {
-            <span class="ident">sig</span>.<span class="ident">serialize_der</span>().<span class="ident">hash</span>(<span class="ident">state</span>);
+<span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>PegOutSignatureItem {
+    <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="self">self</span>.txid.hash(state);
+        <span class="kw">for </span>sig <span class="kw">in </span><span class="self">self</span>.signature.iter() {
+            sig.serialize_der().hash(state);
         }
     }
 }
 
-<span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">PegOutSignatureItem</span> {
-    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="ident">PegOutSignatureItem</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="ident">txid</span> == <span class="ident">other</span>.<span class="ident">txid</span> &amp;&amp; <span class="self">self</span>.<span class="ident">signature</span> == <span class="ident">other</span>.<span class="ident">signature</span>
+<span class="kw">impl </span>PartialEq <span class="kw">for </span>PegOutSignatureItem {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>PegOutSignatureItem) -&gt; bool {
+        <span class="self">self</span>.txid == other.txid &amp;&amp; <span class="self">self</span>.signature == other.signature
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">PegOutSignatureItem</span> {}
+<span class="kw">impl </span>Eq <span class="kw">for </span>PegOutSignatureItem {}
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">WalletError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]</span>
-    <span class="ident">WrongNetwork</span>(<span class="ident">Network</span>, <span class="ident">Network</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error querying bitcoind: {0}&quot;</span>)]</span>
-    <span class="ident">RpcError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">anyhow::Error</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Unknown bitcoin network: {0}&quot;</span>)]</span>
-    <span class="ident">UnknownNetwork</span>(<span class="ident">String</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]</span>
-    <span class="ident">UnknownPegInProofBlock</span>(<span class="ident">BlockHash</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]</span>
-    <span class="ident">PegInProofError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">PegInProofError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]</span>
-    <span class="ident">PegInAlreadyClaimed</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-out fee rate {0:?} is set below consensus {1:?}&quot;</span>)]</span>
-    <span class="ident">PegOutFeeRate</span>(<span class="ident">Feerate</span>, <span class="ident">Feerate</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Not enough SpendableUTXO&quot;</span>)]</span>
-    <span class="ident">NotEnoughSpendableUTXO</span>,
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>WalletError {
+    <span class="attribute">#[error(<span class="string">&quot;Connected bitcoind is on wrong network, expected {0}, got {1}&quot;</span>)]</span>
+    WrongNetwork(Network, Network),
+    <span class="attribute">#[error(<span class="string">&quot;Error querying bitcoind: {0}&quot;</span>)]</span>
+    RpcError(<span class="attribute">#[from]</span> anyhow::Error),
+    <span class="attribute">#[error(<span class="string">&quot;Unknown bitcoin network: {0}&quot;</span>)]</span>
+    UnknownNetwork(String),
+    <span class="attribute">#[error(<span class="string">&quot;Unknown block hash in peg-in proof: {0}&quot;</span>)]</span>
+    UnknownPegInProofBlock(BlockHash),
+    <span class="attribute">#[error(<span class="string">&quot;Invalid peg-in proof: {0}&quot;</span>)]</span>
+    PegInProofError(<span class="attribute">#[from]</span> PegInProofError),
+    <span class="attribute">#[error(<span class="string">&quot;The peg-in was already claimed&quot;</span>)]</span>
+    PegInAlreadyClaimed,
+    <span class="attribute">#[error(<span class="string">&quot;Peg-out fee rate {0:?} is set below consensus {1:?}&quot;</span>)]</span>
+    PegOutFeeRate(Feerate, Feerate),
+    <span class="attribute">#[error(<span class="string">&quot;Not enough SpendableUTXO&quot;</span>)]</span>
+    NotEnoughSpendableUTXO,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ProcessPegOutSigError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;No unsigned transaction with id {0} exists&quot;</span>)]</span>
-    <span class="ident">UnknownTransaction</span>(<span class="ident">Txid</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Expected {0} signatures, got {1}&quot;</span>)]</span>
-    <span class="ident">WrongSignatureCount</span>(<span class="ident">usize</span>, <span class="ident">usize</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Bad Sighash&quot;</span>)]</span>
-    <span class="ident">SighashError</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Malformed signature: {0}&quot;</span>)]</span>
-    <span class="ident">MalformedSignature</span>(<span class="ident">secp256k1::Error</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid signature&quot;</span>)]</span>
-    <span class="ident">InvalidSignature</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Duplicate signature&quot;</span>)]</span>
-    <span class="ident">DuplicateSignature</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Missing change tweak&quot;</span>)]</span>
-    <span class="ident">MissingOrMalformedChangeTweak</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]</span>
-    <span class="ident">ErrorFinalizingPsbt</span>(<span class="ident">Vec</span>&lt;<span class="ident">miniscript::psbt::Error</span>&gt;),
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>ProcessPegOutSigError {
+    <span class="attribute">#[error(<span class="string">&quot;No unsigned transaction with id {0} exists&quot;</span>)]</span>
+    UnknownTransaction(Txid),
+    <span class="attribute">#[error(<span class="string">&quot;Expected {0} signatures, got {1}&quot;</span>)]</span>
+    WrongSignatureCount(usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;Bad Sighash&quot;</span>)]</span>
+    SighashError,
+    <span class="attribute">#[error(<span class="string">&quot;Malformed signature: {0}&quot;</span>)]</span>
+    MalformedSignature(secp256k1::Error),
+    <span class="attribute">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]</span>
+    InvalidSignature,
+    <span class="attribute">#[error(<span class="string">&quot;Duplicate signature&quot;</span>)]</span>
+    DuplicateSignature,
+    <span class="attribute">#[error(<span class="string">&quot;Missing change tweak&quot;</span>)]</span>
+    MissingOrMalformedChangeTweak,
+    <span class="attribute">#[error(<span class="string">&quot;Error finalizing PSBT {0:?}&quot;</span>)]</span>
+    ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
 }
 
-<span class="comment">// FIXME: make FakeFed not require Eq</span>
-<span class="doccomment">/// **WARNING**: this is only intended to be used for testing</span>
-<span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">WalletError</span> {
-    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>) == <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">other</span>)
+<span class="comment">// FIXME: make FakeFed not require Eq
+</span><span class="doccomment">/// **WARNING**: this is only intended to be used for testing
+</span><span class="kw">impl </span>PartialEq <span class="kw">for </span>WalletError {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+        <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="self">self</span>) == <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, other)
     }
 }
 
-<span class="doccomment">/// **WARNING**: this is only intended to be used for testing</span>
-<span class="kw">impl</span> <span class="ident">Eq</span> <span class="kw">for</span> <span class="ident">WalletError</span> {}
+<span class="doccomment">/// **WARNING**: this is only intended to be used for testing
+</span><span class="kw">impl </span>Eq <span class="kw">for </span>WalletError {}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

@@ -937,944 +937,944 @@
 <span id="937">937</span>
 <span id="938">938</span>
 <span id="939">939</span>
-</pre><pre class="rust"><code><span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">api</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">ln</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mint</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">transaction</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">utils</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">wallet</span>;
+</pre><pre class="rust"><code><span class="kw">pub mod </span>api;
+<span class="kw">pub mod </span>ln;
+<span class="kw">pub mod </span>mint;
+<span class="kw">pub mod </span>transaction;
+<span class="kw">pub mod </span>utils;
+<span class="kw">pub mod </span>wallet;
 
-<span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">sync::Arc</span>, <span class="ident">time::Duration</span>};
+<span class="kw">use </span>std::{sync::Arc, time::Duration};
 
-<span class="kw">use</span> <span class="ident">futures::StreamExt</span>;
+<span class="kw">use </span>futures::StreamExt;
 
-<span class="kw">use</span> <span class="ident">bitcoin::util::key::KeyPair</span>;
-<span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span> <span class="kw">as</span> <span class="ident">BitcoinTransaction</span>};
+<span class="kw">use </span>bitcoin::util::key::KeyPair;
+<span class="kw">use </span>bitcoin::{Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 
-<span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span>;
-<span class="kw">use</span> <span class="ident">futures::stream::FuturesUnordered</span>;
+<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>futures::stream::FuturesUnordered;
 
-<span class="kw">use</span> <span class="ident">lightning::ln::PaymentSecret</span>;
-<span class="kw">use</span> <span class="ident">lightning::routing::gossip::RoutingFees</span>;
-<span class="kw">use</span> <span class="ident">lightning::routing::router</span>::{<span class="ident">RouteHint</span>, <span class="ident">RouteHintHop</span>};
-<span class="kw">use</span> <span class="ident">lightning_invoice</span>::{<span class="ident">CreationError</span>, <span class="ident">Invoice</span>, <span class="ident">InvoiceBuilder</span>};
-<span class="kw">use</span> <span class="ident">ln::db::LightningGatewayKey</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::task::sleep</span>;
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{
-    <span class="ident">db</span>::{
-        <span class="ident">batch</span>::{<span class="ident">Accumulator</span>, <span class="ident">BatchItem</span>, <span class="ident">DbBatch</span>},
-        <span class="ident">Database</span>,
+<span class="kw">use </span>lightning::ln::PaymentSecret;
+<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
+<span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
+<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+<span class="kw">use </span>ln::db::LightningGatewayKey;
+<span class="kw">use </span>minimint_api::task::sleep;
+<span class="kw">use </span>minimint_api::{
+    db::{
+        batch::{Accumulator, BatchItem, DbBatch},
+        Database,
     },
-    <span class="ident">Amount</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>,
+    Amount, OutPoint, PeerId, TransactionId,
 };
-<span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::incoming</span>::{
-    <span class="ident">DecryptedPreimage</span>, <span class="ident">IncomingContract</span>, <span class="ident">IncomingContractOffer</span>, <span class="ident">OfferId</span>, <span class="ident">Preimage</span>,
+<span class="kw">use </span>minimint_core::epoch::EpochHistory;
+<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::{
+    DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts</span>::{<span class="ident">outgoing</span>, <span class="ident">Contract</span>, <span class="ident">IdentifyableContract</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">ContractOutput</span>, <span class="ident">LightningGateway</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::PegOut</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::outcome::TransactionStatus</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::transaction::TransactionItem</span>;
-<span class="kw">use</span> <span class="ident">minimint_core</span>::{
-    <span class="ident">config::ClientConfig</span>,
-    <span class="ident">modules</span>::{
-        <span class="ident">ln</span>::{
-            <span class="ident">contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">OutgoingContractOutcome</span>},
-            <span class="ident">ContractOrOfferOutput</span>,
+<span class="kw">use </span>minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
+<span class="kw">use </span>minimint_core::modules::ln::{ContractOutput, LightningGateway};
+<span class="kw">use </span>minimint_core::modules::wallet::PegOut;
+<span class="kw">use </span>minimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>minimint_core::transaction::TransactionItem;
+<span class="kw">use </span>minimint_core::{
+    config::ClientConfig,
+    modules::{
+        ln::{
+            contracts::{ContractId, OutgoingContractOutcome},
+            ContractOrOfferOutput,
         },
-        <span class="ident">mint</span>::{<span class="ident">tiered::coins::Coins</span>, <span class="ident">BlindToken</span>},
-        <span class="ident">wallet::txoproof::TxOutProof</span>,
+        mint::{tiered::coins::Coins, BlindToken},
+        wallet::txoproof::TxOutProof,
     },
-    <span class="ident">transaction</span>::{<span class="ident">Input</span>, <span class="ident">Output</span>},
+    transaction::{Input, Output},
 };
-<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">secp256k1_zkp</span>::{<span class="ident">All</span>, <span class="ident">Secp256k1</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
+<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>thiserror::Error;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::db</span>::{
-    <span class="ident">OutgoingContractAccountKey</span>, <span class="ident">OutgoingContractAccountKeyPrefix</span>, <span class="ident">OutgoingPaymentClaimKey</span>,
-    <span class="ident">OutgoingPaymentClaimKeyPrefix</span>,
+<span class="kw">use </span><span class="kw">crate</span>::ln::db::{
+    OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
+    OutgoingPaymentClaimKeyPrefix,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::LnClientError</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint::db</span>::{<span class="ident">CoinKey</span>, <span class="ident">PendingCoinsKeyPrefix</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::mint</span>::{<span class="ident">CoinFinalizationData</span>, <span class="ident">MintClientError</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::TransactionBuilder</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::utils</span>::{<span class="ident">network_to_currency</span>, <span class="ident">OwnedClientContext</span>};
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::wallet::WalletClientError</span>;
-<span class="kw">use</span> <span class="kw">crate</span>::{
-    <span class="ident">api</span>::{<span class="ident">ApiError</span>, <span class="ident">FederationApi</span>},
-    <span class="ident">ln</span>::{<span class="ident">incoming::ConfirmedInvoice</span>, <span class="ident">LnClient</span>},
-    <span class="ident">mint</span>::{<span class="ident">MintClient</span>, <span class="ident">SpendableCoin</span>},
-    <span class="ident">wallet::WalletClient</span>,
+<span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
+<span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
+<span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, PendingCoinsKeyPrefix};
+<span class="kw">use </span><span class="kw">crate</span>::mint::{CoinFinalizationData, MintClientError};
+<span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
+<span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, OwnedClientContext};
+<span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
+<span class="kw">use crate</span>::{
+    api::{ApiError, FederationApi},
+    ln::{incoming::ConfirmedInvoice, LnClient},
+    mint::{MintClient, SpendableCoin},
+    wallet::WalletClient,
 };
 
-<span class="kw">const</span> <span class="ident">TIMELOCK</span>: <span class="ident">u64</span> = <span class="number">100</span>;
+<span class="kw">const </span>TIMELOCK: u64 = <span class="number">100</span>;
 
-<span class="kw">type</span> <span class="prelude-ty">Result</span>&lt;<span class="ident">T</span>&gt; = <span class="ident">std::result::Result</span>&lt;<span class="ident">T</span>, <span class="ident">ClientError</span>&gt;;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">GatewayClient</span> = <span class="ident">Client</span>&lt;<span class="ident">GatewayClientConfig</span>&gt;;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">UserClient</span> = <span class="ident">Client</span>&lt;<span class="ident">UserClientConfig</span>&gt;;
+<span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ClientError&gt;;
+<span class="kw">pub type </span>GatewayClient = Client&lt;GatewayClientConfig&gt;;
+<span class="kw">pub type </span>UserClient = Client&lt;UserClientConfig&gt;;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">PaymentParameters</span> {
-    <span class="kw">pub</span> <span class="ident">max_delay</span>: <span class="ident">u64</span>,
-    <span class="comment">// FIXME: change to absolute fee to avoid rounding errors</span>
-    <span class="kw">pub</span> <span class="ident">max_fee_percent</span>: <span class="ident">f64</span>,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="kw">pub struct </span>PaymentParameters {
+    <span class="kw">pub </span>max_delay: u64,
+    <span class="comment">// FIXME: change to absolute fee to avoid rounding errors
+    </span><span class="kw">pub </span>max_fee_percent: f64,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">UserClientConfig</span>(<span class="kw">pub</span> <span class="ident">ClientConfig</span>);
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
+<span class="kw">pub struct </span>UserClientConfig(<span class="kw">pub </span>ClientConfig);
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">GatewayClientConfig</span> {
-    <span class="kw">pub</span> <span class="ident">client_config</span>: <span class="ident">ClientConfig</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">with</span> = <span class="string">&quot;serde_keypair&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">redeem_key</span>: <span class="ident">bitcoin::KeyPair</span>,
-    <span class="kw">pub</span> <span class="ident">timelock_delta</span>: <span class="ident">u64</span>,
-    <span class="kw">pub</span> <span class="ident">api</span>: <span class="ident">String</span>,
-    <span class="kw">pub</span> <span class="ident">node_pub_key</span>: <span class="ident">bitcoin::secp256k1::PublicKey</span>,
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
+<span class="kw">pub struct </span>GatewayClientConfig {
+    <span class="kw">pub </span>client_config: ClientConfig,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_keypair&quot;</span>)]</span>
+    <span class="kw">pub </span>redeem_key: bitcoin::KeyPair,
+    <span class="kw">pub </span>timelock_delta: u64,
+    <span class="kw">pub </span>api: String,
+    <span class="kw">pub </span>node_pub_key: bitcoin::secp256k1::PublicKey,
 }
 
-<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">GatewayClientConfig</span>&gt; <span class="kw">for</span> <span class="ident">LightningGateway</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">config</span>: <span class="ident">GatewayClientConfig</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">LightningGateway</span> {
-            <span class="ident">mint_pub_key</span>: <span class="ident">config</span>.<span class="ident">redeem_key</span>.<span class="ident">public_key</span>(),
-            <span class="ident">node_pub_key</span>: <span class="ident">config</span>.<span class="ident">node_pub_key</span>,
-            <span class="ident">api</span>: <span class="ident">config</span>.<span class="ident">api</span>,
+<span class="kw">impl </span>From&lt;GatewayClientConfig&gt; <span class="kw">for </span>LightningGateway {
+    <span class="kw">fn </span>from(config: GatewayClientConfig) -&gt; <span class="self">Self </span>{
+        LightningGateway {
+            mint_pub_key: config.redeem_key.public_key(),
+            node_pub_key: config.node_pub_key,
+            api: config.api,
         }
     }
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Client</span>&lt;<span class="ident">C</span>&gt; {
-    <span class="ident">context</span>: <span class="ident">Arc</span>&lt;<span class="ident">OwnedClientContext</span>&lt;<span class="ident">C</span>&gt;&gt;,
+<span class="kw">pub struct </span>Client&lt;C&gt; {
+    context: Arc&lt;OwnedClientContext&lt;C&gt;&gt;,
 }
 
-<span class="kw">impl</span> <span class="ident">AsRef</span>&lt;<span class="ident">ClientConfig</span>&gt; <span class="kw">for</span> <span class="ident">GatewayClientConfig</span> {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">ClientConfig</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">client_config</span>
-    }
-}
-
-<span class="kw">impl</span> <span class="ident">AsRef</span>&lt;<span class="ident">ClientConfig</span>&gt; <span class="kw">for</span> <span class="ident">UserClientConfig</span> {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">ClientConfig</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>
+<span class="kw">impl </span>AsRef&lt;ClientConfig&gt; <span class="kw">for </span>GatewayClientConfig {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.client_config
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>: <span class="ident">AsRef</span>&lt;<span class="ident">ClientConfig</span>&gt; + <span class="ident">Clone</span>&gt; <span class="ident">Client</span>&lt;<span class="ident">T</span>&gt; {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">ln_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">LnClient</span> {
-        <span class="ident">LnClient</span> {
-            <span class="ident">context</span>: <span class="self">self</span>
-                .<span class="ident">context</span>
-                .<span class="ident">borrow_with_module_config</span>(|<span class="ident">cfg</span>| <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">as_ref</span>().<span class="ident">ln</span>),
+<span class="kw">impl </span>AsRef&lt;ClientConfig&gt; <span class="kw">for </span>UserClientConfig {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
+}
+
+<span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone&gt; Client&lt;T&gt; {
+    <span class="kw">pub fn </span>ln_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; LnClient {
+        LnClient {
+            context: <span class="self">self
+                </span>.context
+                .borrow_with_module_config(|cfg| <span class="kw-2">&amp;</span>cfg.as_ref().ln),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">mint_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MintClient</span> {
-        <span class="ident">MintClient</span> {
-            <span class="ident">context</span>: <span class="self">self</span>
-                .<span class="ident">context</span>
-                .<span class="ident">borrow_with_module_config</span>(|<span class="ident">cfg</span>| <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">as_ref</span>().<span class="ident">mint</span>),
+    <span class="kw">pub fn </span>mint_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MintClient {
+        MintClient {
+            context: <span class="self">self
+                </span>.context
+                .borrow_with_module_config(|cfg| <span class="kw-2">&amp;</span>cfg.as_ref().mint),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">wallet_client</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">WalletClient</span> {
-        <span class="ident">WalletClient</span> {
-            <span class="ident">context</span>: <span class="self">self</span>
-                .<span class="ident">context</span>
-                .<span class="ident">borrow_with_module_config</span>(|<span class="ident">cfg</span>| <span class="kw-2">&amp;</span><span class="ident">cfg</span>.<span class="ident">as_ref</span>().<span class="ident">wallet</span>),
+    <span class="kw">pub fn </span>wallet_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; WalletClient {
+        WalletClient {
+            context: <span class="self">self
+                </span>.context
+                .borrow_with_module_config(|cfg| <span class="kw-2">&amp;</span>cfg.as_ref().wallet),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">config</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">T</span> {
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">clone</span>()
+    <span class="kw">pub fn </span>config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; T {
+        <span class="self">self</span>.context.config.clone()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new</span>(<span class="ident">config</span>: <span class="ident">T</span>, <span class="ident">db</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;, <span class="ident">secp</span>: <span class="ident">Secp256k1</span>&lt;<span class="ident">All</span>&gt;) -&gt; <span class="self">Self</span> {
-        <span class="kw">let</span> <span class="ident">api</span> = <span class="ident">api::WsFederationApi::new</span>(
-            <span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">max_evil</span>,
-            <span class="ident">config</span>
-                .<span class="ident">as_ref</span>()
-                .<span class="ident">api_endpoints</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">enumerate</span>()
-                .<span class="ident">map</span>(|(<span class="ident">id</span>, <span class="ident">url</span>)| {
-                    <span class="kw">let</span> <span class="ident">peer_id</span> = <span class="ident">PeerId::from</span>(<span class="ident">id</span> <span class="kw">as</span> <span class="ident">u16</span>); <span class="comment">// FIXME: potentially wrong, currently works imo</span>
-                    <span class="kw">let</span> <span class="ident">url</span> = <span class="ident">url</span>.<span class="ident">parse</span>().<span class="ident">expect</span>(<span class="string">&quot;Invalid URL in config&quot;</span>);
-                    (<span class="ident">peer_id</span>, <span class="ident">url</span>)
+    <span class="kw">pub fn </span>new(config: T, db: Box&lt;<span class="kw">dyn </span>Database&gt;, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>api = api::WsFederationApi::new(
+            config.as_ref().max_evil,
+            config
+                .as_ref()
+                .api_endpoints
+                .iter()
+                .enumerate()
+                .map(|(id, url)| {
+                    <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
+                    </span><span class="kw">let </span>url = url.parse().expect(<span class="string">&quot;Invalid URL in config&quot;</span>);
+                    (peer_id, url)
                 })
-                .<span class="ident">collect</span>(),
+                .collect(),
         );
-        <span class="ident"><span class="self">Self</span>::new_with_api</span>(<span class="ident">config</span>, <span class="ident">db</span>, <span class="ident">Box::new</span>(<span class="ident">api</span>), <span class="ident">secp</span>)
+        <span class="self">Self</span>::new_with_api(config, db, Box::new(api), secp)
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">new_with_api</span>(
-        <span class="ident">config</span>: <span class="ident">T</span>,
-        <span class="ident">db</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
-        <span class="ident">api</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">FederationApi</span>&gt;,
-        <span class="ident">secp</span>: <span class="ident">Secp256k1</span>&lt;<span class="ident">All</span>&gt;,
-    ) -&gt; <span class="ident">Client</span>&lt;<span class="ident">T</span>&gt; {
-        <span class="kw">let</span> <span class="ident">context</span> = <span class="ident">Arc::new</span>(<span class="ident">OwnedClientContext</span> {
-            <span class="ident">config</span>,
-            <span class="ident">db</span>,
-            <span class="ident">api</span>,
-            <span class="ident">secp</span>,
+    <span class="kw">pub fn </span>new_with_api(
+        config: T,
+        db: Box&lt;<span class="kw">dyn </span>Database&gt;,
+        api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
+        secp: Secp256k1&lt;All&gt;,
+    ) -&gt; Client&lt;T&gt; {
+        <span class="kw">let </span>context = Arc::new(OwnedClientContext {
+            config,
+            db,
+            api,
+            secp,
         });
-        <span class="self">Self</span> { <span class="ident">context</span> }
+        <span class="self">Self </span>{ context }
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">peg_in</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub async fn </span>peg_in&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
-        <span class="ident">btc_transaction</span>: <span class="ident">BitcoinTransaction</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
+        txout_proof: TxOutProof,
+        btc_transaction: BitcoinTransaction,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let</span> (<span class="ident">peg_in_key</span>, <span class="ident">peg_in_proof</span>) = <span class="self">self</span>
-            .<span class="ident">wallet_client</span>()
-            .<span class="ident">create_pegin_input</span>(<span class="ident">txout_proof</span>, <span class="ident">btc_transaction</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(peg_in_key, peg_in_proof) = <span class="self">self
+            </span>.wallet_client()
+            .create_pegin_input(txout_proof, btc_transaction)<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">amount</span> = <span class="ident">Amount::from_sat</span>(<span class="ident">peg_in_proof</span>.<span class="ident">tx_output</span>().<span class="ident">value</span>)
-            .<span class="ident">saturating_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">wallet</span>.<span class="ident">fee_consensus</span>.<span class="ident">peg_in_abs</span>);
-        <span class="kw">if</span> <span class="ident">amount</span> == <span class="ident">Amount::ZERO</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::PegInAmountTooSmall</span>);
+        <span class="kw">let </span>amount = Amount::from_sat(peg_in_proof.tx_output().value)
+            .saturating_sub(<span class="self">self</span>.context.config.as_ref().wallet.fee_consensus.peg_in_abs);
+        <span class="kw">if </span>amount == Amount::ZERO {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::PegInAmountTooSmall);
         }
 
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="ident">peg_in_key</span>], <span class="ident">Input::Wallet</span>(<span class="ident">Box::new</span>(<span class="ident">peg_in_proof</span>)));
+        tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
 
-        <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">DbBatch::new</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-            .<span class="kw">await</span>
-    }
+        <span class="self">self</span>.submit_tx_with_change(tx, DbBatch::new(), <span class="kw-2">&amp;mut </span>rng)
+            .<span class="kw">await
+    </span>}
 
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">submit_tx_with_change</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">async fn </span>submit_tx_with_change&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">tx</span>: <span class="ident">TransactionBuilder</span>,
-        <span class="ident">batch</span>: <span class="ident">Accumulator</span>&lt;<span class="ident">BatchItem</span>&gt;,
-        <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>
-            .<span class="ident">mint_client</span>()
-            .<span class="ident">submit_tx_with_change</span>(
-                <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">as_ref</span>().<span class="ident">fee_consensus</span>(),
-                <span class="ident">tx</span>,
-                <span class="ident">batch</span>,
-                <span class="ident">rng</span>,
+        tx: TransactionBuilder,
+        batch: Accumulator&lt;BatchItem&gt;,
+        rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.mint_client()
+            .submit_tx_with_change(
+                <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.as_ref().fee_consensus(),
+                tx,
+                batch,
+                rng,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="doccomment">/// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent</span>
-    <span class="doccomment">/// double spends. Users must ensure that the reissuance transaction is accepted before</span>
-    <span class="doccomment">/// accepting `coins` as a valid payment.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// On success the out point of the newly issued e-cash tokens is returned. It can be used to</span>
-    <span class="doccomment">/// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns</span>
-    <span class="doccomment">/// `Ok(())`, indicating we received our newly issued e-cash tokens.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">reissue</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="doccomment">/// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent
+    /// double spends. Users must ensure that the reissuance transaction is accepted before
+    /// accepting `coins` as a valid payment.
+    ///
+    /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
+    /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
+    /// `Ok(())`, indicating we received our newly issued e-cash tokens.
+    </span><span class="kw">pub async fn </span>reissue&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
-        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>
-            .<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">DbBatch::new</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+        coins: Coins&lt;SpendableCoin&gt;,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+        tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.submit_tx_with_change(tx, DbBatch::new(), <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> })
+        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">pay_for_coins</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub async fn </span>pay_for_coins&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="kw">let</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
+        coins: Coins&lt;BlindToken&gt;,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let</span> <span class="ident">input_coins</span> = <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">coins</span>.<span class="ident">amount</span>())<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">input_coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">Output::Mint</span>(<span class="ident">coins</span>));
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>input_coins = <span class="self">self</span>.mint_client().select_coins(coins.amount())<span class="question-mark">?</span>;
+        tx.input_coins(input_coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+        tx.output(Output::Mint(coins));
+        <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> })
+        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">receive_coins</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub fn </span>receive_coins&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">amount</span>: <span class="ident">Amount</span>,
-        <span class="ident">rng</span>: <span class="ident">R</span>,
-        <span class="ident">create_tx</span>: <span class="kw">impl</span> <span class="ident">FnMut</span>(<span class="ident">Coins</span>&lt;<span class="ident">BlindToken</span>&gt;) -&gt; <span class="ident">OutPoint</span>,
+        amount: Amount,
+        rng: R,
+        create_tx: <span class="kw">impl </span>FnMut(Coins&lt;BlindToken&gt;) -&gt; OutPoint,
     ) {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="self">self</span>.<span class="ident">mint_client</span>()
-            .<span class="ident">receive_coins</span>(<span class="ident">amount</span>, <span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">rng</span>, <span class="ident">create_tx</span>);
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="self">self</span>.mint_client()
+            .receive_coins(amount, batch.transaction(), rng, create_tx);
+        <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">new_peg_out_with_fees</span>(
+    <span class="kw">pub async fn </span>new_peg_out_with_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">amount</span>: <span class="ident">bitcoin::Amount</span>,
-        <span class="ident">recipient</span>: <span class="ident">Address</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PegOut</span>&gt; {
-        <span class="kw">let</span> <span class="ident">fees</span> = <span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">fetch_peg_out_fees</span>(<span class="kw-2">&amp;</span><span class="ident">recipient</span>, <span class="kw-2">&amp;</span><span class="ident">amount</span>)
+        amount: bitcoin::Amount,
+        recipient: Address,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PegOut&gt; {
+        <span class="kw">let </span>fees = <span class="self">self
+            </span>.context
+            .api
+            .fetch_peg_out_fees(<span class="kw-2">&amp;</span>recipient, <span class="kw-2">&amp;</span>amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="ident">fees</span>.<span class="ident">map</span>(|<span class="ident">fees</span>| <span class="ident">PegOut</span> {
-            <span class="ident">recipient</span>,
-            <span class="ident">amount</span>,
-            <span class="ident">fees</span>,
+        fees.map(|fees| PegOut {
+            recipient,
+            amount,
+            fees,
         })
-        .<span class="ident">ok_or</span>(<span class="ident">ClientError::PegOutWaitingForUTXOs</span>)
+        .ok_or(ClientError::PegOutWaitingForUTXOs)
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">peg_out</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub async fn </span>peg_out&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">peg_out</span>: <span class="ident">PegOut</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
-        <span class="kw">let</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
+        peg_out: PegOut,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="kw">let </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let</span> <span class="ident">funding_amount</span> = <span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">config</span>
-            .<span class="ident">as_ref</span>()
-            .<span class="ident">wallet</span>
-            .<span class="ident">fee_consensus</span>
-            .<span class="ident">peg_out_abs</span>
-            + (<span class="ident">peg_out</span>.<span class="ident">amount</span> + <span class="ident">peg_out</span>.<span class="ident">fees</span>.<span class="ident">amount</span>()).<span class="ident">into</span>();
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">funding_amount</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>));
+        <span class="kw">let </span>funding_amount = <span class="self">self
+            </span>.context
+            .config
+            .as_ref()
+            .wallet
+            .fee_consensus
+            .peg_out_abs
+            + (peg_out.amount + peg_out.fees.amount()).into();
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount)<span class="question-mark">?</span>;
+        tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+        tx.output(Output::Wallet(peg_out));
 
-        <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span>
+        <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)
+    ///
+    /// This function requires a cryptographically secure randomness source, and utilizes the [wallet-clients](crate::wallet::WalletClient)
+    /// [get_new_pegin_address](crate::wallet::WalletClient::get_new_pegin_address) to **derive** a bitcoin-address from the federations
+    /// public descriptor by tweaking it.
+    /// - this function will write to the clients DB
+    ///
+    /// read more on fedimints address derivation: &lt;https://fedimint.org/MiniMint/wallet/&gt;
+    </span><span class="kw">pub fn </span>get_new_pegin_address&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; Address {
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span>address = <span class="self">self
+            </span>.wallet_client()
+            .get_new_pegin_address(batch.transaction(), rng);
+        <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+        address
     }
 
-    <span class="doccomment">/// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// This function requires a cryptographically secure randomness source, and utilizes the [wallet-clients](crate::wallet::WalletClient)</span>
-    <span class="doccomment">/// [get_new_pegin_address](crate::wallet::WalletClient::get_new_pegin_address) to **derive** a bitcoin-address from the federations</span>
-    <span class="doccomment">/// public descriptor by tweaking it.</span>
-    <span class="doccomment">/// - this function will write to the clients DB</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// read more on fedimints address derivation: &lt;https://fedimint.org/MiniMint/wallet/&gt;</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_new_pegin_address</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rng</span>: <span class="ident">R</span>) -&gt; <span class="ident">Address</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="ident">address</span> = <span class="self">self</span>
-            .<span class="ident">wallet_client</span>()
-            .<span class="ident">get_new_pegin_address</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">rng</span>);
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-        <span class="ident">address</span>
-    }
-
-    <span class="doccomment">/// **WARNING** this selects and removes coins from the database without confirming whether</span>
-    <span class="doccomment">/// we have successfully spent them in a transaction.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">select_and_spend_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">amount</span>: <span class="ident">Amount</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">batch</span>.<span class="ident">transaction</span>();
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">amount</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">append_from_iter</span>(<span class="ident">coins</span>.<span class="ident">iter</span>().<span class="ident">map</span>(|(<span class="ident">amount</span>, <span class="ident">coin</span>)| {
-            <span class="ident">BatchItem::delete</span>(<span class="ident">CoinKey</span> {
-                <span class="ident">amount</span>,
-                <span class="ident">nonce</span>: <span class="ident">coin</span>.<span class="ident">coin</span>.<span class="number">0</span>.<span class="ident">clone</span>(),
+    <span class="doccomment">/// **WARNING** this selects and removes coins from the database without confirming whether
+    /// we have successfully spent them in a transaction.
+    </span><span class="kw">pub fn </span>select_and_spend_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;Coins&lt;SpendableCoin&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
+        tx.append_from_iter(coins.iter().map(|(amount, coin)| {
+            BatchItem::delete(CoinKey {
+                amount,
+                nonce: coin.coin.<span class="number">0</span>.clone(),
             })
         }));
-        <span class="ident">tx</span>.<span class="ident">commit</span>();
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-        <span class="prelude-val">Ok</span>(<span class="ident">coins</span>)
+        tx.commit();
+        <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="prelude-val">Ok</span>(coins)
     }
 
-    <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried</span>
-    <span class="doccomment">/// the federation too early. Use [`MintClientError::is_retryable`] to determine</span>
-    <span class="doccomment">/// if the operation should be retried at a later time.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_coins</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="self">self</span>.<span class="ident">mint_client</span>()
-            .<span class="ident">fetch_coins</span>(<span class="ident">batch</span>.<span class="ident">transaction</span>(), <span class="ident">outpoint</span>)
+    <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
+    /// the federation too early. Use [`MintClientError::is_retryable`] to determine
+    /// if the operation should be retried at a later time.
+    </span><span class="kw">pub async fn </span>fetch_coins&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="self">self</span>.mint_client()
+            .fetch_coins(batch.transaction(), outpoint)
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin</span>
-    <span class="doccomment">/// inputs back.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">reissue_pending_coins</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">rng</span>: <span class="ident">R</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="kw">let</span> <span class="ident">pending</span> = <span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">PendingCoinsKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>));
+    <span class="doccomment">/// Should be called after any transaction that might have failed in order to get any coin
+    /// inputs back.
+    </span><span class="kw">pub async fn </span>reissue_pending_coins&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span>pending = <span class="self">self
+            </span>.context
+            .db
+            .find_by_prefix(<span class="kw-2">&amp;</span>PendingCoinsKeyPrefix)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>));
 
-        <span class="kw">let</span> <span class="ident">stream</span> = <span class="ident">pending</span>
-            .<span class="ident">map</span>(|(<span class="ident">key</span>, <span class="ident">coins</span>)| <span class="kw">async</span> <span class="kw">move</span> {
-                <span class="kw">loop</span> {
-                    <span class="kw">match</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_tx_outcome</span>(<span class="ident">key</span>.<span class="number">0</span>).<span class="kw">await</span> {
-                        <span class="prelude-val">Ok</span>(<span class="ident">TransactionStatus::Rejected</span>(<span class="kw">_</span>)) =&gt; <span class="kw">return</span> (<span class="ident">key</span>, <span class="ident">coins</span>),
-                        <span class="prelude-val">Ok</span>(<span class="ident">TransactionStatus::Accepted</span> { .. }) =&gt; {
-                            <span class="kw">return</span> (<span class="ident">key</span>, <span class="ident">Coins</span>::&lt;<span class="ident">SpendableCoin</span>&gt;<span class="ident">::default</span>())
+        <span class="kw">let </span>stream = pending
+            .map(|(key, coins)| <span class="kw">async move </span>{
+                <span class="kw">loop </span>{
+                    <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(key.<span class="number">0</span>).<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="kw">return </span>(key, coins),
+                        <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
+                            <span class="kw">return </span>(key, Coins::&lt;SpendableCoin&gt;::default())
                         }
-                        <span class="kw">_</span> =&gt; {}
+                        <span class="kw">_ </span>=&gt; {}
                     }
                 }
             })
-            .<span class="ident">collect</span>::&lt;<span class="ident">FuturesUnordered</span>&lt;<span class="kw">_</span>&gt;&gt;();
+            .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">batch</span>.<span class="ident">transaction</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">all_coins</span> = <span class="ident">Coins</span>::&lt;<span class="ident">SpendableCoin</span>&gt;<span class="ident">::default</span>();
-        <span class="kw">for</span> (<span class="ident">key</span>, <span class="ident">coins</span>) <span class="kw">in</span> <span class="ident">stream</span>.<span class="ident">collect</span>::&lt;<span class="ident">Vec</span>&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await</span> {
-            <span class="ident">all_coins</span>.<span class="ident">extend</span>(<span class="ident">coins</span>);
-            <span class="ident">tx</span>.<span class="ident">append_delete</span>(<span class="ident">key</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
+        <span class="kw">let </span><span class="kw-2">mut </span>all_coins = Coins::&lt;SpendableCoin&gt;::default();
+        <span class="kw">for </span>(key, coins) <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
+            all_coins.extend(coins);
+            tx.append_delete(key);
         }
-        <span class="ident">tx</span>.<span class="ident">commit</span>();
-        <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">batch</span>).<span class="ident">unwrap</span>();
+        tx.commit();
+        <span class="self">self</span>.context.db.apply_batch(batch).unwrap();
 
-        <span class="self">self</span>.<span class="ident">reissue</span>(<span class="ident">all_coins</span>, <span class="ident">rng</span>).<span class="kw">await</span>
-    }
+        <span class="self">self</span>.reissue(all_coins, rng).<span class="kw">await
+    </span>}
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_block_height</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">block_height</span>: <span class="ident">u64</span>) -&gt; <span class="ident">u64</span> {
-        <span class="kw">loop</span> {
-            <span class="kw">match</span> <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_consensus_block_height</span>().<span class="kw">await</span> {
-                <span class="prelude-val">Ok</span>(<span class="ident">height</span>) <span class="kw">if</span> <span class="ident">height</span> &gt;= <span class="ident">block_height</span> =&gt; <span class="kw">return</span> <span class="ident">height</span>,
-                <span class="kw">_</span> =&gt; <span class="ident">sleep</span>(<span class="ident">Duration::from_millis</span>(<span class="number">100</span>)).<span class="kw">await</span>,
+    <span class="kw">pub async fn </span>await_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, block_height: u64) -&gt; u64 {
+        <span class="kw">loop </span>{
+            <span class="kw">match </span><span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await </span>{
+                <span class="prelude-val">Ok</span>(height) <span class="kw">if </span>height &gt;= block_height =&gt; <span class="kw">return </span>height,
+                <span class="kw">_ </span>=&gt; sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>,
             }
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_all_coins</span>&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt;&gt; {
-        <span class="self">self</span>.<span class="ident">mint_client</span>()
-            .<span class="ident">fetch_all_coins</span>()
-            .<span class="kw">await</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">e</span>.<span class="ident">into</span>()))
-            .<span class="ident">collect</span>()
+    <span class="kw">pub async fn </span>fetch_all_coins&lt;<span class="lifetime">&#39;a</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="prelude-ty">Result</span>&lt;OutPoint&gt;&gt; {
+        <span class="self">self</span>.mint_client()
+            .fetch_all_coins()
+            .<span class="kw">await
+            </span>.into_iter()
+            .map(|res| res.map_err(|e| e.into()))
+            .collect()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt; {
-        <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">coins</span>()
+    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Coins&lt;SpendableCoin&gt; {
+        <span class="self">self</span>.mint_client().coins()
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_active_issuances</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;(<span class="ident">OutPoint</span>, <span class="ident">CoinFinalizationData</span>)&gt; {
-        <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">list_active_issuances</span>()
+    <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, CoinFinalizationData)&gt; {
+        <span class="self">self</span>.mint_client().list_active_issuances()
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">EpochHistory</span>&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">fetch_epoch_history</span>(<span class="ident">epoch</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">e</span>.<span class="ident">into</span>())
+    <span class="kw">pub async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
+        <span class="self">self</span>.context
+            .api
+            .fetch_epoch_history(epoch)
+            .<span class="kw">await
+            </span>.map_err(|e| e.into())
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Client</span>&lt;<span class="ident">UserClientConfig</span>&gt; {
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_gateway</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">LightningGateway</span>&gt; {
-        <span class="comment">// fetch gateway from db</span>
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">gateway</span>) = <span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">LightningGatewayKey</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>)
+<span class="kw">impl </span>Client&lt;UserClientConfig&gt; {
+    <span class="kw">pub async fn </span>fetch_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
+        <span class="comment">// fetch gateway from db
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
+            </span>.context
+            .db
+            .get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
+            .expect(<span class="string">&quot;DB error&quot;</span>)
         {
-            <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="ident">gateway</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(gateway);
         }
 
-        <span class="comment">// if db is empty, fetch from federation and save to db</span>
-        <span class="kw">let</span> <span class="ident">gateways</span> = <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_gateways</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if</span> <span class="ident">gateways</span>.<span class="ident">is_empty</span>() {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::NoGateways</span>);
+        <span class="comment">// if db is empty, fetch from federation and save to db
+        </span><span class="kw">let </span>gateways = <span class="self">self</span>.context.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>gateways.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NoGateways);
         };
-        <span class="kw">let</span> <span class="ident">gateway</span> = <span class="ident">gateways</span>[<span class="number">0</span>].<span class="ident">clone</span>();
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">LightningGatewayKey</span>, <span class="kw-2">&amp;</span><span class="ident">gateway</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-        <span class="prelude-val">Ok</span>(<span class="ident">gateway</span>)
+        <span class="kw">let </span>gateway = gateways[<span class="number">0</span>].clone();
+        <span class="self">self</span>.context
+            .db
+            .insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
+            .expect(<span class="string">&quot;DB error&quot;</span>);
+        <span class="prelude-val">Ok</span>(gateway)
     }
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fund_outgoing_ln_contract</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub async fn </span>fund_outgoing_ln_contract&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">invoice</span>: <span class="ident">Invoice</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">ContractId</span>, <span class="ident">OutPoint</span>)&gt; {
-        <span class="kw">let</span> <span class="ident">gateway</span> = <span class="self">self</span>.<span class="ident">fetch_gateway</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
+        invoice: Invoice,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(ContractId, OutPoint)&gt; {
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let</span> <span class="ident">consensus_height</span> = <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_consensus_block_height</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">absolute_timelock</span> = <span class="ident">consensus_height</span> + <span class="ident">TIMELOCK</span>;
+        <span class="kw">let </span>consensus_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>absolute_timelock = consensus_height + TIMELOCK;
 
-        <span class="kw">let</span> <span class="ident">contract</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">create_outgoing_output</span>(
-            <span class="ident">batch</span>.<span class="ident">transaction</span>(),
-            <span class="ident">invoice</span>,
-            <span class="kw-2">&amp;</span><span class="ident">gateway</span>,
-            <span class="ident">absolute_timelock</span> <span class="kw">as</span> <span class="ident">u32</span>,
-            <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>,
+        <span class="kw">let </span>contract = <span class="self">self</span>.ln_client().create_outgoing_output(
+            batch.transaction(),
+            invoice,
+            <span class="kw-2">&amp;</span>gateway,
+            absolute_timelock <span class="kw">as </span>u32,
+            <span class="kw-2">&amp;mut </span>rng,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">contract_id</span> = <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="ident">contract</span> {
-            <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">c</span>) =&gt; <span class="ident">c</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>(),
-            <span class="ident">ContractOrOfferOutput::Offer</span>(<span class="kw">_</span>) =&gt; {
+        <span class="kw">let </span>contract_id = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
+            ContractOrOfferOutput::Contract(c) =&gt; c.contract.contract_id(),
+            ContractOrOfferOutput::Offer(<span class="kw">_</span>) =&gt; {
                 <span class="macro">panic!</span>()
-            } <span class="comment">// FIXME: impl TryFrom</span>
-        };
-        <span class="kw">let</span> <span class="ident">ln_output</span> = <span class="ident">Output::LN</span>(<span class="ident">contract</span>);
+            } <span class="comment">// FIXME: impl TryFrom
+        </span>};
+        <span class="kw">let </span>ln_output = Output::LN(contract);
 
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">ln_output</span>.<span class="ident">amount</span>())<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
-        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">ln_output</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(ln_output.amount())<span class="question-mark">?</span>;
+        tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+        tx.output(ln_output);
+        <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="prelude-val">Ok</span>((<span class="ident">contract_id</span>, <span class="ident">outpoint</span>))
+        <span class="prelude-val">Ok</span>((contract_id, outpoint))
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_outgoing_contract_acceptance</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">await_output_outcome</span>::&lt;<span class="ident">OutgoingContractOutcome</span>&gt;(<span class="ident">outpoint</span>, <span class="ident">Duration::from_secs</span>(<span class="number">30</span>))
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(<span class="ident">ClientError::MintApiError</span>)<span class="question-mark">?</span>;
+    <span class="kw">pub async fn </span>await_outgoing_contract_acceptance(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.context
+            .api
+            .await_output_outcome::&lt;OutgoingContractOutcome&gt;(outpoint, Duration::from_secs(<span class="number">30</span>))
+            .<span class="kw">await
+            </span>.map_err(ClientError::MintApiError)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">generate_invoice</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt;(
+    <span class="kw">pub async fn </span>generate_invoice&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">amount</span>: <span class="ident">Amount</span>,
-        <span class="ident">description</span>: <span class="ident">String</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="ident">R</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">ConfirmedInvoice</span>&gt; {
-        <span class="kw">let</span> <span class="ident">gateway</span> = <span class="self">self</span>.<span class="ident">fetch_gateway</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">payment_keypair</span> = <span class="ident">KeyPair::new</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
-        <span class="kw">let</span> <span class="ident">raw_payment_secret</span> = <span class="ident">payment_keypair</span>.<span class="ident">public_key</span>().<span class="ident">serialize</span>();
-        <span class="kw">let</span> <span class="ident">payment_hash</span> = <span class="ident">bitcoin::secp256k1::hashes::sha256::Hash::hash</span>(<span class="kw-2">&amp;</span><span class="ident">raw_payment_secret</span>);
-        <span class="kw">let</span> <span class="ident">payment_secret</span> = <span class="ident">PaymentSecret</span>(<span class="ident">raw_payment_secret</span>);
+        amount: Amount,
+        description: String,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>raw_payment_secret = payment_keypair.public_key().serialize();
+        <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>raw_payment_secret);
+        <span class="kw">let </span>payment_secret = PaymentSecret(raw_payment_secret);
 
-        <span class="comment">// Temporary lightning node pubkey</span>
-        <span class="kw">let</span> (<span class="ident">node_secret_key</span>, <span class="ident">node_public_key</span>) = <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>.<span class="ident">generate_keypair</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>);
+        <span class="comment">// Temporary lightning node pubkey
+        </span><span class="kw">let </span>(node_secret_key, node_public_key) = <span class="self">self</span>.context.secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
 
-        <span class="comment">// Route hint instructing payer how to route to gateway</span>
-        <span class="kw">let</span> <span class="ident">gateway_route_hint</span> = <span class="ident">RouteHint</span>(<span class="macro">vec!</span>[<span class="ident">RouteHintHop</span> {
-            <span class="ident">src_node_id</span>: <span class="ident">gateway</span>.<span class="ident">node_pub_key</span>,
-            <span class="ident">short_channel_id</span>: <span class="number">8</span>,
-            <span class="ident">fees</span>: <span class="ident">RoutingFees</span> {
-                <span class="ident">base_msat</span>: <span class="number">0</span>,
-                <span class="ident">proportional_millionths</span>: <span class="number">0</span>,
+        <span class="comment">// Route hint instructing payer how to route to gateway
+        </span><span class="kw">let </span>gateway_route_hint = RouteHint(<span class="macro">vec!</span>[RouteHintHop {
+            src_node_id: gateway.node_pub_key,
+            short_channel_id: <span class="number">8</span>,
+            fees: RoutingFees {
+                base_msat: <span class="number">0</span>,
+                proportional_millionths: <span class="number">0</span>,
             },
-            <span class="ident">cltv_expiry_delta</span>: <span class="number">30</span>,
-            <span class="ident">htlc_minimum_msat</span>: <span class="prelude-val">None</span>,
-            <span class="ident">htlc_maximum_msat</span>: <span class="prelude-val">None</span>,
+            cltv_expiry_delta: <span class="number">30</span>,
+            htlc_minimum_msat: <span class="prelude-val">None</span>,
+            htlc_maximum_msat: <span class="prelude-val">None</span>,
         }]);
 
-        <span class="kw">let</span> <span class="ident">invoice</span> =
-            <span class="ident">InvoiceBuilder::new</span>(<span class="ident">network_to_currency</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="number">0</span>.<span class="ident">wallet</span>.<span class="ident">network</span>))
-                .<span class="ident">amount_milli_satoshis</span>(<span class="ident">amount</span>.<span class="ident">milli_sat</span>)
-                .<span class="ident">description</span>(<span class="ident">description</span>)
-                .<span class="ident">payment_hash</span>(<span class="ident">payment_hash</span>)
-                .<span class="ident">payment_secret</span>(<span class="ident">payment_secret</span>)
-                .<span class="ident">current_timestamp</span>()
-                .<span class="ident">min_final_cltv_expiry</span>(<span class="number">18</span>)
-                .<span class="ident">payee_pub_key</span>(<span class="ident">node_public_key</span>)
-                .<span class="ident">private_route</span>(<span class="ident">gateway_route_hint</span>)
-                .<span class="ident">build_signed</span>(|<span class="ident">hash</span>| {
-                    <span class="self">self</span>.<span class="ident">context</span>
-                        .<span class="ident">secp</span>
-                        .<span class="ident">sign_ecdsa_recoverable</span>(<span class="ident">hash</span>, <span class="kw-2">&amp;</span><span class="ident">node_secret_key</span>)
+        <span class="kw">let </span>invoice =
+            InvoiceBuilder::new(network_to_currency(<span class="self">self</span>.context.config.<span class="number">0</span>.wallet.network))
+                .amount_milli_satoshis(amount.milli_sat)
+                .description(description)
+                .payment_hash(payment_hash)
+                .payment_secret(payment_secret)
+                .current_timestamp()
+                .min_final_cltv_expiry(<span class="number">18</span>)
+                .payee_pub_key(node_public_key)
+                .private_route(gateway_route_hint)
+                .build_signed(|hash| {
+                    <span class="self">self</span>.context
+                        .secp
+                        .sign_ecdsa_recoverable(hash, <span class="kw-2">&amp;</span>node_secret_key)
                 })<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">offer_output</span> =
-            <span class="self">self</span>.<span class="ident">ln_client</span>()
-                .<span class="ident">create_offer_output</span>(<span class="ident">amount</span>, <span class="ident">payment_hash</span>, <span class="ident">raw_payment_secret</span>);
-        <span class="kw">let</span> <span class="ident">ln_output</span> = <span class="ident">Output::LN</span>(<span class="ident">offer_output</span>);
+        <span class="kw">let </span>offer_output =
+            <span class="self">self</span>.ln_client()
+                .create_offer_output(amount, payment_hash, raw_payment_secret);
+        <span class="kw">let </span>ln_output = Output::LN(offer_output);
 
-        <span class="comment">// There is no input here because this is just an announcement</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
-        <span class="ident">tx</span>.<span class="ident">output</span>(<span class="ident">ln_output</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>
-            .<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">DbBatch::new</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+        <span class="comment">// There is no input here because this is just an announcement
+        </span><span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+        tx.output(ln_output);
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.submit_tx_with_change(tx, DbBatch::new(), <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// Await acceptance by the federation</span>
-        <span class="kw">let</span> <span class="ident">timeout</span> = <span class="ident">std::time::Duration::from_secs</span>(<span class="number">15</span>);
-        <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">await_output_outcome</span>::&lt;<span class="ident">OfferId</span>&gt;(<span class="ident">outpoint</span>, <span class="ident">timeout</span>)
+        <span class="comment">// Await acceptance by the federation
+        </span><span class="kw">let </span>timeout = std::time::Duration::from_secs(<span class="number">15</span>);
+        <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
+        <span class="self">self</span>.context
+            .api
+            .await_output_outcome::&lt;OfferId&gt;(outpoint, timeout)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">confirmed</span> = <span class="ident">ConfirmedInvoice</span> {
-            <span class="ident">invoice</span>,
-            <span class="ident">keypair</span>: <span class="ident">payment_keypair</span>,
+        <span class="kw">let </span>confirmed = ConfirmedInvoice {
+            invoice,
+            keypair: payment_keypair,
         };
-        <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">save_confirmed_invoice</span>(<span class="kw-2">&amp;</span><span class="ident">confirmed</span>);
+        <span class="self">self</span>.ln_client().save_confirmed_invoice(<span class="kw-2">&amp;</span>confirmed);
 
-        <span class="prelude-val">Ok</span>(<span class="ident">confirmed</span>)
+        <span class="prelude-val">Ok</span>(confirmed)
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">claim_incoming_contract</span>(
+    <span class="kw">pub async fn </span>claim_incoming_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="kw-2">mut</span> <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="comment">// Lookup contract and &quot;confirmed invoice&quot;</span>
-        <span class="kw">let</span> <span class="ident">contract</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_incoming_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">ci</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_confirmed_invoice</span>(<span class="ident">contract_id</span>)<span class="question-mark">?</span>;
+        contract_id: ContractId,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="comment">// Lookup contract and &quot;confirmed invoice&quot;
+        </span><span class="kw">let </span>contract = <span class="self">self</span>.ln_client().get_incoming_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>ci = <span class="self">self</span>.ln_client().get_confirmed_invoice(contract_id)<span class="question-mark">?</span>;
 
-        <span class="comment">// Input claims this contract</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="ident">ci</span>.<span class="ident">keypair</span>], <span class="ident">Input::LN</span>(<span class="ident">contract</span>.<span class="ident">claim</span>()));
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>
-            .<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">DbBatch::new</span>(), <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
+        <span class="comment">// Input claims this contract
+        </span><span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+        tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[ci.keypair], Input::LN(contract.claim()));
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.submit_tx_with_change(tx, DbBatch::new(), <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// TODO: Update database if invoice is paid or expired</span>
+        <span class="comment">// TODO: Update database if invoice is paid or expired
 
-        <span class="prelude-val">Ok</span>(<span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> })
+        </span><span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="doccomment">/// Notify gateway that we&#39;ve escrowed tokens they can claim by routing our payment and wait</span>
-    <span class="doccomment">/// for them to do so</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_outgoing_contract_execution</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let</span> <span class="ident">gateway</span> = <span class="self">self</span>.<span class="ident">fetch_gateway</span>().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="doccomment">/// Notify gateway that we&#39;ve escrowed tokens they can claim by routing our payment and wait
+    /// for them to do so
+    </span><span class="kw">pub async fn </span>await_outgoing_contract_execution(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">future</span> = <span class="ident">reqwest::Client::new</span>()
-            .<span class="ident">post</span>(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/pay_invoice&quot;</span>, <span class="ident">gateway</span>.<span class="ident">api</span>))
-            .<span class="ident">json</span>(<span class="kw-2">&amp;</span><span class="ident">contract_id</span>)
-            .<span class="ident">send</span>();
-        <span class="ident">minimint_api::task::timeout</span>(<span class="ident">Duration::from_secs</span>(<span class="number">15</span>), <span class="ident">future</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(|<span class="kw">_</span>| <span class="ident">ClientError::OutgoingPaymentTimeout</span>)<span class="question-mark">?</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>future = reqwest::Client::new()
+            .post(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/pay_invoice&quot;</span>, gateway.api))
+            .json(<span class="kw-2">&amp;</span>contract_id)
+            .send();
+        minimint_api::task::timeout(Duration::from_secs(<span class="number">15</span>), future)
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">??</span>;
         <span class="prelude-val">Ok</span>(())
     }
 }
 
-<span class="kw">impl</span> <span class="ident">Client</span>&lt;<span class="ident">GatewayClientConfig</span>&gt; {
-    <span class="doccomment">/// Fetch the specified outgoing payment contract account</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">fetch_outgoing_contract</span>(
+<span class="kw">impl </span>Client&lt;GatewayClientConfig&gt; {
+    <span class="doccomment">/// Fetch the specified outgoing payment contract account
+    </span><span class="kw">pub async fn </span>fetch_outgoing_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutgoingContractAccount</span>&gt; {
-        <span class="self">self</span>.<span class="ident">ln_client</span>()
-            .<span class="ident">get_outgoing_contract</span>(<span class="ident">contract_id</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(<span class="ident">ClientError::LnClientError</span>)
+        contract_id: ContractId,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutgoingContractAccount&gt; {
+        <span class="self">self</span>.ln_client()
+            .get_outgoing_contract(contract_id)
+            .<span class="kw">await
+            </span>.map_err(ClientError::LnClientError)
     }
 
-    <span class="doccomment">/// Check if we can claim the contract account and returns the max delay in blocks for how long</span>
-    <span class="doccomment">/// other nodes on the route are allowed to delay the payment.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">validate_outgoing_account</span>(
+    <span class="doccomment">/// Check if we can claim the contract account and returns the max delay in blocks for how long
+    /// other nodes on the route are allowed to delay the payment.
+    </span><span class="kw">pub async fn </span>validate_outgoing_account(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">account</span>: <span class="kw-2">&amp;</span><span class="ident">OutgoingContractAccount</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">PaymentParameters</span>&gt; {
-        <span class="kw">let</span> <span class="ident">our_pub_key</span> =
-            <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_keypair</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>);
+        account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters&gt; {
+        <span class="kw">let </span>our_pub_key =
+            secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.context.config.redeem_key);
 
-        <span class="kw">if</span> <span class="ident">account</span>.<span class="ident">contract</span>.<span class="ident">gateway_key</span> != <span class="ident">our_pub_key</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::NotOurKey</span>);
+        <span class="kw">if </span>account.contract.gateway_key != our_pub_key {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NotOurKey);
         }
 
-        <span class="kw">let</span> <span class="ident">invoice</span>: <span class="ident">Invoice</span> = <span class="ident">account</span>
-            .<span class="ident">contract</span>
-            .<span class="ident">invoice</span>
-            .<span class="ident">parse</span>()
-            .<span class="ident">map_err</span>(<span class="ident">ClientError::InvalidInvoice</span>)<span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">invoice_amount</span> = <span class="ident">Amount::from_msat</span>(
-            <span class="ident">invoice</span>
-                .<span class="ident">amount_milli_satoshis</span>()
-                .<span class="ident">ok_or</span>(<span class="ident">ClientError::InvoiceMissingAmount</span>)<span class="question-mark">?</span>,
+        <span class="kw">let </span>invoice: Invoice = account
+            .contract
+            .invoice
+            .parse()
+            .map_err(ClientError::InvalidInvoice)<span class="question-mark">?</span>;
+        <span class="kw">let </span>invoice_amount = Amount::from_msat(
+            invoice
+                .amount_milli_satoshis()
+                .ok_or(ClientError::InvoiceMissingAmount)<span class="question-mark">?</span>,
         );
 
-        <span class="kw">if</span> <span class="ident">account</span>.<span class="ident">amount</span> &lt; <span class="ident">invoice_amount</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::Underfunded</span>(<span class="ident">invoice_amount</span>, <span class="ident">account</span>.<span class="ident">amount</span>));
+        <span class="kw">if </span>account.amount &lt; invoice_amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::Underfunded(invoice_amount, account.amount));
         }
 
-        <span class="kw">let</span> <span class="ident">max_absolute_fee</span> = <span class="ident">account</span>.<span class="ident">amount</span> - <span class="ident">invoice_amount</span>;
-        <span class="kw">let</span> <span class="ident">max_fee_percent</span> =
-            (<span class="ident">max_absolute_fee</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">f64</span>) / (<span class="ident">invoice_amount</span>.<span class="ident">milli_sat</span> <span class="kw">as</span> <span class="ident">f64</span>);
+        <span class="kw">let </span>max_absolute_fee = account.amount - invoice_amount;
+        <span class="kw">let </span>max_fee_percent =
+            (max_absolute_fee.milli_sat <span class="kw">as </span>f64) / (invoice_amount.milli_sat <span class="kw">as </span>f64);
 
-        <span class="kw">let</span> <span class="ident">consensus_block_height</span> = <span class="self">self</span>.<span class="ident">context</span>.<span class="ident">api</span>.<span class="ident">fetch_consensus_block_height</span>().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// Calculate max delay taking into account current consensus block height and our safety</span>
-        <span class="comment">// margin.</span>
-        <span class="kw">let</span> <span class="ident">max_delay</span> = (<span class="ident">account</span>.<span class="ident">contract</span>.<span class="ident">timelock</span> <span class="kw">as</span> <span class="ident">u64</span>)
-            .<span class="ident">checked_sub</span>(<span class="ident">consensus_block_height</span>)
-            .<span class="ident">and_then</span>(|<span class="ident">delta</span>| <span class="ident">delta</span>.<span class="ident">checked_sub</span>(<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">timelock_delta</span>))
-            .<span class="ident">ok_or</span>(<span class="ident">ClientError::TimeoutTooClose</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus_block_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// Calculate max delay taking into account current consensus block height and our safety
+        // margin.
+        </span><span class="kw">let </span>max_delay = (account.contract.timelock <span class="kw">as </span>u64)
+            .checked_sub(consensus_block_height)
+            .and_then(|delta| delta.checked_sub(<span class="self">self</span>.context.config.timelock_delta))
+            .ok_or(ClientError::TimeoutTooClose)<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">PaymentParameters</span> {
-            <span class="ident">max_delay</span>,
-            <span class="ident">max_fee_percent</span>,
+        <span class="prelude-val">Ok</span>(PaymentParameters {
+            max_delay,
+            max_fee_percent,
         })
     }
 
-    <span class="doccomment">/// Save the details about an outgoing payment the client is about to process. This function has</span>
-    <span class="doccomment">/// to be called prior to instructing the lightning node to pay the invoice since otherwise a</span>
-    <span class="doccomment">/// crash could lead to loss of funds.</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// Note though that extended periods of staying offline will result in loss of funds anyway if</span>
-    <span class="doccomment">/// the client can not claim the respective contract in time.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">save_outgoing_payment</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract</span>: <span class="ident">OutgoingContractAccount</span>) {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(
-                <span class="kw-2">&amp;</span><span class="ident">OutgoingContractAccountKey</span>(<span class="ident">contract</span>.<span class="ident">contract</span>.<span class="ident">contract_id</span>()),
-                <span class="kw-2">&amp;</span><span class="ident">contract</span>,
+    <span class="doccomment">/// Save the details about an outgoing payment the client is about to process. This function has
+    /// to be called prior to instructing the lightning node to pay the invoice since otherwise a
+    /// crash could lead to loss of funds.
+    ///
+    /// Note though that extended periods of staying offline will result in loss of funds anyway if
+    /// the client can not claim the respective contract in time.
+    </span><span class="kw">pub fn </span>save_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: OutgoingContractAccount) {
+        <span class="self">self</span>.context
+            .db
+            .insert_entry(
+                <span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract.contract.contract_id()),
+                <span class="kw-2">&amp;</span>contract,
             )
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            .expect(<span class="string">&quot;DB error&quot;</span>);
     }
 
-    <span class="doccomment">/// Lists all previously saved transactions that have not been driven to completion so far</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_pending_outgoing</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">OutgoingContractAccount</span>&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">OutgoingContractAccountKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
-            .<span class="ident">collect</span>()
+    <span class="doccomment">/// Lists all previously saved transactions that have not been driven to completion so far
+    </span><span class="kw">pub fn </span>list_pending_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutgoingContractAccount&gt; {
+        <span class="self">self</span>.context
+            .db
+            .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingContractAccountKeyPrefix)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">1</span>)
+            .collect()
     }
 
-    <span class="doccomment">/// Abort payment if our node can&#39;t route it</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">abort_outgoing_payment</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">contract_id</span>: <span class="ident">ContractId</span>) {
-        <span class="comment">// FIXME: implement abort by gateway to give funds back to user prematurely</span>
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">OutgoingContractAccountKey</span>(<span class="ident">contract_id</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+    <span class="doccomment">/// Abort payment if our node can&#39;t route it
+    </span><span class="kw">pub fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) {
+        <span class="comment">// FIXME: implement abort by gateway to give funds back to user prematurely
+        </span><span class="self">self</span>.context
+            .db
+            .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>);
     }
 
-    <span class="doccomment">/// Claim an outgoing contract after acquiring the preimage by paying the associated invoice and</span>
-    <span class="doccomment">/// initiates e-cash issuances to receive the bitcoin from the contract (these still need to be</span>
-    <span class="doccomment">/// fetched later to finalize them).</span>
-    <span class="doccomment">///</span>
-    <span class="doccomment">/// Callers need to make sure that the contract can still be claimed by the gateway and has not</span>
-    <span class="doccomment">/// timed out yet. Otherwise the transaction will fail.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">claim_outgoing_contract</span>(
+    <span class="doccomment">/// Claim an outgoing contract after acquiring the preimage by paying the associated invoice and
+    /// initiates e-cash issuances to receive the bitcoin from the contract (these still need to be
+    /// fetched later to finalize them).
+    ///
+    /// Callers need to make sure that the contract can still be claimed by the gateway and has not
+    /// timed out yet. Otherwise the transaction will fail.
+    </span><span class="kw">pub async fn </span>claim_outgoing_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">preimage</span>: [<span class="ident">u8</span>; <span class="number">32</span>],
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tx</span> = <span class="ident">TransactionBuilder::default</span>();
+        contract_id: ContractId,
+        preimage: [u8; <span class="number">32</span>],
+        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let</span> <span class="ident">contract</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_outgoing_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">input</span> = <span class="ident">Input::LN</span>(<span class="ident">contract</span>.<span class="ident">claim</span>(<span class="ident">outgoing::Preimage</span>(<span class="ident">preimage</span>)));
+        <span class="kw">let </span>contract = <span class="self">self</span>.ln_client().get_outgoing_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>input = Input::LN(contract.claim(outgoing::Preimage(preimage)));
 
-        <span class="ident">batch</span>.<span class="ident">autocommit</span>(|<span class="ident">batch</span>| {
-            <span class="ident">batch</span>.<span class="ident">append_delete</span>(<span class="ident">OutgoingContractAccountKey</span>(<span class="ident">contract_id</span>));
-            <span class="ident">batch</span>.<span class="ident">append_insert</span>(<span class="ident">OutgoingPaymentClaimKey</span>(<span class="ident">contract_id</span>), ());
+        batch.autocommit(|batch| {
+            batch.append_delete(OutgoingContractAccountKey(contract_id));
+            batch.append_insert(OutgoingPaymentClaimKey(contract_id), ());
         });
 
-        <span class="ident">tx</span>.<span class="ident">input</span>(<span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>], <span class="ident">input</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">tx</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="self">self</span>.context.config.redeem_key], input);
+        <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> })
+        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">buy_preimage_offer</span>(
+    <span class="kw">pub async fn </span>buy_preimage_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">payment_hash</span>: <span class="kw-2">&amp;</span><span class="ident">bitcoin_hashes::sha256::Hash</span>,
-        <span class="ident">amount</span>: <span class="kw-2">&amp;</span><span class="ident">Amount</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="ident">OutPoint</span>, <span class="ident">ContractId</span>)&gt; {
-        <span class="kw">let</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
+        payment_hash: <span class="kw-2">&amp;</span>bitcoin_hashes::sha256::Hash,
+        amount: <span class="kw-2">&amp;</span>Amount,
+        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutPoint, ContractId)&gt; {
+        <span class="kw">let </span>batch = DbBatch::new();
 
-        <span class="comment">// Fetch offer for this payment hash</span>
-        <span class="kw">let</span> <span class="ident">offer</span>: <span class="ident">IncomingContractOffer</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_offer</span>(<span class="kw-2">*</span><span class="ident">payment_hash</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if</span> <span class="kw-2">&amp;</span><span class="ident">offer</span>.<span class="ident">amount</span> &gt; <span class="ident">amount</span> || <span class="kw-2">&amp;</span><span class="ident">offer</span>.<span class="ident">hash</span> != <span class="ident">payment_hash</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">ClientError::InvalidOffer</span>);
+        <span class="comment">// Fetch offer for this payment hash
+        </span><span class="kw">let </span>offer: IncomingContractOffer = <span class="self">self</span>.ln_client().get_offer(<span class="kw-2">*</span>payment_hash).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span><span class="kw-2">&amp;</span>offer.amount &gt; amount || <span class="kw-2">&amp;</span>offer.hash != payment_hash {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::InvalidOffer);
         }
 
-        <span class="comment">// Inputs</span>
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">builder</span> = <span class="ident">TransactionBuilder::default</span>();
-        <span class="kw">let</span> <span class="ident">coins</span> = <span class="self">self</span>.<span class="ident">mint_client</span>().<span class="ident">select_coins</span>(<span class="ident">offer</span>.<span class="ident">amount</span>)<span class="question-mark">?</span>;
-        <span class="ident">builder</span>.<span class="ident">input_coins</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">secp</span>)<span class="question-mark">?</span>;
+        <span class="comment">// Inputs
+        </span><span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(offer.amount)<span class="question-mark">?</span>;
+        builder.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
 
-        <span class="comment">// Outputs</span>
-        <span class="kw">let</span> <span class="ident">our_pub_key</span> =
-            <span class="ident">secp256k1_zkp::XOnlyPublicKey::from_keypair</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>);
-        <span class="kw">let</span> <span class="ident">contract</span> = <span class="ident">Contract::Incoming</span>(<span class="ident">IncomingContract</span> {
-            <span class="ident">hash</span>: <span class="ident">offer</span>.<span class="ident">hash</span>,
-            <span class="ident">encrypted_preimage</span>: <span class="ident">offer</span>.<span class="ident">encrypted_preimage</span>.<span class="ident">clone</span>(),
-            <span class="ident">decrypted_preimage</span>: <span class="ident">DecryptedPreimage::Pending</span>,
-            <span class="ident">gateway_key</span>: <span class="ident">our_pub_key</span>,
+        <span class="comment">// Outputs
+        </span><span class="kw">let </span>our_pub_key =
+            secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.context.config.redeem_key);
+        <span class="kw">let </span>contract = Contract::Incoming(IncomingContract {
+            hash: offer.hash,
+            encrypted_preimage: offer.encrypted_preimage.clone(),
+            decrypted_preimage: DecryptedPreimage::Pending,
+            gateway_key: our_pub_key,
         });
-        <span class="kw">let</span> <span class="ident">incoming_output</span> = <span class="ident">minimint_core::transaction::Output::LN</span>(
-            <span class="ident">ContractOrOfferOutput::Contract</span>(<span class="ident">ContractOutput</span> {
-                <span class="ident">amount</span>: <span class="kw-2">*</span><span class="ident">amount</span>,
-                <span class="ident">contract</span>: <span class="ident">contract</span>.<span class="ident">clone</span>(),
+        <span class="kw">let </span>incoming_output = minimint_core::transaction::Output::LN(
+            ContractOrOfferOutput::Contract(ContractOutput {
+                amount: <span class="kw-2">*</span>amount,
+                contract: contract.clone(),
             }),
         );
 
-        <span class="comment">// Submit transaction</span>
-        <span class="ident">builder</span>.<span class="ident">output</span>(<span class="ident">incoming_output</span>);
-        <span class="kw">let</span> <span class="ident">txid</span> = <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">builder</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">OutPoint</span> { <span class="ident">txid</span>, <span class="ident">out_idx</span>: <span class="number">0</span> };
+        <span class="comment">// Submit transaction
+        </span>builder.output(incoming_output);
+        <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(builder, batch, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
-        <span class="comment">// FIXME: Save this contract in DB</span>
-        <span class="prelude-val">Ok</span>((<span class="ident">outpoint</span>, <span class="ident">contract</span>.<span class="ident">contract_id</span>()))
+        <span class="comment">// FIXME: Save this contract in DB
+        </span><span class="prelude-val">Ok</span>((outpoint, contract.contract_id()))
     }
 
-    <span class="doccomment">/// Claw back funds after outgoing contract that had invalid preimage</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">refund_incoming_contract</span>(
+    <span class="doccomment">/// Claw back funds after outgoing contract that had invalid preimage
+    </span><span class="kw">pub async fn </span>refund_incoming_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">rng</span>: <span class="kw">impl</span> <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">TransactionId</span>&gt; {
-        <span class="kw">let</span> <span class="ident">batch</span> = <span class="ident">DbBatch::new</span>();
-        <span class="kw">let</span> <span class="ident">contract_account</span> = <span class="self">self</span>.<span class="ident">ln_client</span>().<span class="ident">get_incoming_contract</span>(<span class="ident">contract_id</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+        contract_id: ContractId,
+        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+        <span class="kw">let </span>batch = DbBatch::new();
+        <span class="kw">let </span>contract_account = <span class="self">self</span>.ln_client().get_incoming_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">builder</span> = <span class="ident">TransactionBuilder::default</span>();
+        <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
-        <span class="comment">// Input claims this contract</span>
-        <span class="ident">builder</span>.<span class="ident">input</span>(
-            <span class="kw-2">&amp;mut</span> <span class="macro">vec!</span>[<span class="self">self</span>.<span class="ident">context</span>.<span class="ident">config</span>.<span class="ident">redeem_key</span>],
-            <span class="ident">Input::LN</span>(<span class="ident">contract_account</span>.<span class="ident">claim</span>()),
+        <span class="comment">// Input claims this contract
+        </span>builder.input(
+            <span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="self">self</span>.context.config.redeem_key],
+            Input::LN(contract_account.claim()),
         );
-        <span class="kw">let</span> <span class="ident">mint_tx_id</span> = <span class="self">self</span>.<span class="ident">submit_tx_with_change</span>(<span class="ident">builder</span>, <span class="ident">batch</span>, <span class="ident">rng</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(<span class="ident">mint_tx_id</span>)
+        <span class="kw">let </span>mint_tx_id = <span class="self">self</span>.submit_tx_with_change(builder, batch, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(mint_tx_id)
     }
 
-    <span class="doccomment">/// Lists all claim transactions for outgoing contracts that we have submitted but were not part</span>
-    <span class="doccomment">/// of the consensus yet.</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_pending_claimed_outgoing</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">ContractId</span>&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">OutgoingPaymentClaimKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span> .<span class="number">0</span>)
-            .<span class="ident">collect</span>()
+    <span class="doccomment">/// Lists all claim transactions for outgoing contracts that we have submitted but were not part
+    /// of the consensus yet.
+    </span><span class="kw">pub fn </span>list_pending_claimed_outgoing(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;ContractId&gt; {
+        <span class="self">self</span>.context
+            .db
+            .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKeyPrefix)
+            .map(|res| res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0 </span>.<span class="number">0</span>)
+            .collect()
     }
 
-    <span class="doccomment">/// Wait for a lightning preimage gateway has purchased to be decrypted by the federation</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_preimage_decryption</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Preimage</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>
-            .<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">await_output_outcome</span>::&lt;<span class="ident">Preimage</span>&gt;(<span class="ident">outpoint</span>, <span class="ident">Duration::from_secs</span>(<span class="number">10</span>))
+    <span class="doccomment">/// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
+    </span><span class="kw">pub async fn </span>await_preimage_decryption(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.context
+            .api
+            .await_output_outcome::&lt;Preimage&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="comment">// TODO: improve error propagation on tx transmission</span>
-    <span class="doccomment">/// Waits for a outgoing contract claim transaction to be confirmed and retransmits it</span>
-    <span class="doccomment">/// periodically if this does not happen.</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_outgoing_contract_claimed</span>(
+    <span class="comment">// TODO: improve error propagation on tx transmission
+    </span><span class="doccomment">/// Waits for a outgoing contract claim transaction to be confirmed and retransmits it
+    /// periodically if this does not happen.
+    </span><span class="kw">pub async fn </span>await_outgoing_contract_claimed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">contract_id</span>: <span class="ident">ContractId</span>,
-        <span class="ident">outpoint</span>: <span class="ident">OutPoint</span>,
+        contract_id: ContractId,
+        outpoint: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">await_output_outcome</span>::&lt;<span class="ident">OutgoingContractOutcome</span>&gt;(<span class="ident">outpoint</span>, <span class="ident">Duration::from_secs</span>(<span class="number">10</span>))
+        <span class="self">self</span>.context
+            .api
+            .await_output_outcome::&lt;OutgoingContractOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="comment">// We remove the entry that indicates we are still waiting for transaction</span>
-        <span class="comment">// confirmation. This does not mean we are finished yet. As a last step we need</span>
-        <span class="comment">// to fetch the blind signatures for the newly issued tokens, but as long as the</span>
-        <span class="comment">// federation is honest as a whole they will produce the signatures, so we don&#39;t</span>
-        <span class="comment">// have to worry</span>
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">db</span>
-            .<span class="ident">remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">OutgoingPaymentClaimKey</span>(<span class="ident">contract_id</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="comment">// We remove the entry that indicates we are still waiting for transaction
+        // confirmation. This does not mean we are finished yet. As a last step we need
+        // to fetch the blind signatures for the newly issued tokens, but as long as the
+        // federation is honest as a whole they will produce the signatures, so we don&#39;t
+        // have to worry
+        </span><span class="self">self</span>.context
+            .db
+            .remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentClaimKey(contract_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">list_fetchable_coins</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">OutPoint</span>&gt; {
-        <span class="self">self</span>.<span class="ident">mint_client</span>()
-            .<span class="ident">list_active_issuances</span>()
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">map</span>(|(<span class="ident">outpoint</span>, <span class="kw">_</span>)| <span class="ident">outpoint</span>)
-            .<span class="ident">collect</span>()
+    <span class="kw">pub fn </span>list_fetchable_coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;OutPoint&gt; {
+        <span class="self">self</span>.mint_client()
+            .list_active_issuances()
+            .into_iter()
+            .map(|(outpoint, <span class="kw">_</span>)| outpoint)
+            .collect()
     }
 
-    <span class="doccomment">/// Register this gateway with the federation</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">register_with_federation</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">config</span>: <span class="ident">LightningGateway</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="ident">context</span>
-            .<span class="ident">api</span>
-            .<span class="ident">register_gateway</span>(<span class="ident">config</span>)
-            .<span class="kw">await</span>
-            .<span class="ident">map_err</span>(<span class="ident">ClientError::MintApiError</span>)
+    <span class="doccomment">/// Register this gateway with the federation
+    </span><span class="kw">pub async fn </span>register_with_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, config: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.context
+            .api
+            .register_gateway(config)
+            .<span class="kw">await
+            </span>.map_err(ClientError::MintApiError)
     }
 }
 
-<span class="comment">// FIXME: move this elsewhere. maybe into &quot;core&quot;.</span>
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">serde_keypair</span> {
-    <span class="kw">use</span> <span class="ident">bitcoin::KeyPair</span>;
-    <span class="kw">use</span> <span class="ident">secp256k1_zkp::SecretKey</span>;
-    <span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Deserializer</span>, <span class="ident">Serialize</span>, <span class="ident">Serializer</span>};
+<span class="comment">// FIXME: move this elsewhere. maybe into &quot;core&quot;.
+</span><span class="kw">pub mod </span>serde_keypair {
+    <span class="kw">use </span>bitcoin::KeyPair;
+    <span class="kw">use </span>secp256k1_zkp::SecretKey;
+    <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">missing_docs</span>)]</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">serialize</span>&lt;<span class="ident">S</span>&gt;(<span class="ident">key</span>: <span class="kw-2">&amp;</span><span class="ident">KeyPair</span>, <span class="ident">serializer</span>: <span class="ident">S</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">S::Ok</span>, <span class="ident">S::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">S</span>: <span class="ident">Serializer</span>,
+    <span class="attribute">#[allow(missing_docs)]</span>
+    <span class="kw">pub fn </span>serialize&lt;S&gt;(key: <span class="kw-2">&amp;</span>KeyPair, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
+    <span class="kw">where
+        </span>S: Serializer,
     {
-        <span class="ident">SecretKey::from_keypair</span>(<span class="ident">key</span>).<span class="ident">serialize</span>(<span class="ident">serializer</span>)
+        SecretKey::from_keypair(key).serialize(serializer)
     }
 
-    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">missing_docs</span>)]</span>
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">deserialize</span>&lt;<span class="lifetime">&#39;de</span>, <span class="ident">D</span>&gt;(<span class="ident">deserializer</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">KeyPair</span>, <span class="ident">D::Error</span>&gt;
-    <span class="kw">where</span>
-        <span class="ident">D</span>: <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;,
+    <span class="attribute">#[allow(missing_docs)]</span>
+    <span class="kw">pub fn </span>deserialize&lt;<span class="lifetime">&#39;de</span>, D&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;KeyPair, D::Error&gt;
+    <span class="kw">where
+        </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
-        <span class="kw">let</span> <span class="ident">secret_key</span> = <span class="ident">SecretKey::deserialize</span>(<span class="ident">deserializer</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>secret_key = SecretKey::deserialize(deserializer)<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(<span class="ident">KeyPair::from_secret_key</span>(
-            <span class="ident">secp256k1_zkp::SECP256K1</span>,
-            <span class="ident">secret_key</span>,
+        <span class="prelude-val">Ok</span>(KeyPair::from_secret_key(
+            secp256k1_zkp::SECP256K1,
+            secret_key,
         ))
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Error</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">ClientError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]</span>
-    <span class="ident">MintApiError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">ApiError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]</span>
-    <span class="ident">WalletClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">WalletClientError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Mint client error: {0}&quot;</span>)]</span>
-    <span class="ident">MintClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">MintClientError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Lightning client error: {0}&quot;</span>)]</span>
-    <span class="ident">LnClientError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">LnClientError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]</span>
-    <span class="ident">PegInAmountTooSmall</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Peg-out waiting for UTXOs&quot;</span>)]</span>
-    <span class="ident">PegOutWaitingForUTXOs</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]</span>
-    <span class="ident">WaitContractTimeout</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Error fetching offer&quot;</span>)]</span>
-    <span class="ident">FetchOfferError</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Failed to create lightning invoice: {0}&quot;</span>)]</span>
-    <span class="ident">InvoiceError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">CreationError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The Account or offer is keyed to another gateway&quot;</span>)]</span>
-    <span class="ident">NotOurKey</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Can&#39;t parse contract&#39;s invoice: {0:?}&quot;</span>)]</span>
-    <span class="ident">InvalidInvoice</span>(<span class="ident">lightning_invoice::ParseOrSemanticError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invoice is missing amount&quot;</span>)]</span>
-    <span class="ident">InvoiceMissingAmount</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}&quot;</span>)]</span>
-    <span class="ident">Underfunded</span>(<span class="ident">Amount</span>, <span class="ident">Amount</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;The contract&#39;s timeout is in the past or does not allow for a safety margin&quot;</span>)]</span>
-    <span class="ident">TimeoutTooClose</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;No offer&quot;</span>)]</span>
-    <span class="ident">NoOffer</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid offer&quot;</span>)]</span>
-    <span class="ident">InvalidOffer</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Wrong contract type&quot;</span>)]</span>
-    <span class="ident">WrongContractType</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Wrong transaction type&quot;</span>)]</span>
-    <span class="ident">WrongTransactionType</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid transaction {0}&quot;</span>)]</span>
-    <span class="ident">InvalidTransaction</span>(<span class="ident">String</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Invalid preimage&quot;</span>)]</span>
-    <span class="ident">InvalidPreimage</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Federation has no lightning gateways&quot;</span>)]</span>
-    <span class="ident">NoGateways</span>,
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;HTTP Error {0}&quot;</span>)]</span>
-    <span class="ident">HttpError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">reqwest::Error</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Outgoing payment timeout&quot;</span>)]</span>
-    <span class="ident">OutgoingPaymentTimeout</span>,
+<span class="attribute">#[derive(Error, Debug)]</span>
+<span class="kw">pub enum </span>ClientError {
+    <span class="attribute">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]</span>
+    MintApiError(<span class="attribute">#[from]</span> ApiError),
+    <span class="attribute">#[error(<span class="string">&quot;Wallet client error: {0}&quot;</span>)]</span>
+    WalletClientError(<span class="attribute">#[from]</span> WalletClientError),
+    <span class="attribute">#[error(<span class="string">&quot;Mint client error: {0}&quot;</span>)]</span>
+    MintClientError(<span class="attribute">#[from]</span> MintClientError),
+    <span class="attribute">#[error(<span class="string">&quot;Lightning client error: {0}&quot;</span>)]</span>
+    LnClientError(<span class="attribute">#[from]</span> LnClientError),
+    <span class="attribute">#[error(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]</span>
+    PegInAmountTooSmall,
+    <span class="attribute">#[error(<span class="string">&quot;Peg-out waiting for UTXOs&quot;</span>)]</span>
+    PegOutWaitingForUTXOs,
+    <span class="attribute">#[error(<span class="string">&quot;Timed out while waiting for contract to be accepted&quot;</span>)]</span>
+    WaitContractTimeout,
+    <span class="attribute">#[error(<span class="string">&quot;Error fetching offer&quot;</span>)]</span>
+    FetchOfferError,
+    <span class="attribute">#[error(<span class="string">&quot;Failed to create lightning invoice: {0}&quot;</span>)]</span>
+    InvoiceError(<span class="attribute">#[from]</span> CreationError),
+    <span class="attribute">#[error(<span class="string">&quot;The Account or offer is keyed to another gateway&quot;</span>)]</span>
+    NotOurKey,
+    <span class="attribute">#[error(<span class="string">&quot;Can&#39;t parse contract&#39;s invoice: {0:?}&quot;</span>)]</span>
+    InvalidInvoice(lightning_invoice::ParseOrSemanticError),
+    <span class="attribute">#[error(<span class="string">&quot;Invoice is missing amount&quot;</span>)]</span>
+    InvoiceMissingAmount,
+    <span class="attribute">#[error(<span class="string">&quot;Outgoing contract is underfunded, wants us to pay {0}, but only contains {1}&quot;</span>)]</span>
+    Underfunded(Amount, Amount),
+    <span class="attribute">#[error(<span class="string">&quot;The contract&#39;s timeout is in the past or does not allow for a safety margin&quot;</span>)]</span>
+    TimeoutTooClose,
+    <span class="attribute">#[error(<span class="string">&quot;No offer&quot;</span>)]</span>
+    NoOffer,
+    <span class="attribute">#[error(<span class="string">&quot;Invalid offer&quot;</span>)]</span>
+    InvalidOffer,
+    <span class="attribute">#[error(<span class="string">&quot;Wrong contract type&quot;</span>)]</span>
+    WrongContractType,
+    <span class="attribute">#[error(<span class="string">&quot;Wrong transaction type&quot;</span>)]</span>
+    WrongTransactionType,
+    <span class="attribute">#[error(<span class="string">&quot;Invalid transaction {0}&quot;</span>)]</span>
+    InvalidTransaction(String),
+    <span class="attribute">#[error(<span class="string">&quot;Invalid preimage&quot;</span>)]</span>
+    InvalidPreimage,
+    <span class="attribute">#[error(<span class="string">&quot;Federation has no lightning gateways&quot;</span>)]</span>
+    NoGateways,
+    <span class="attribute">#[error(<span class="string">&quot;HTTP Error {0}&quot;</span>)]</span>
+    HttpError(<span class="attribute">#[from]</span> reqwest::Error),
+    <span class="attribute">#[error(<span class="string">&quot;Outgoing payment timeout&quot;</span>)]</span>
+    OutgoingPaymentTimeout,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

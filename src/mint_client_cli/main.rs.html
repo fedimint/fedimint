@@ -206,213 +206,213 @@
 <span id="206">206</span>
 <span id="207">207</span>
 <span id="208">208</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">bitcoin</span>::{<span class="ident">Address</span>, <span class="ident">Transaction</span>};
-<span class="kw">use</span> <span class="ident">bitcoin_hashes::hex::ToHex</span>;
-<span class="kw">use</span> <span class="ident">clap::Parser</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::config::load_from_file</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::mint::tiered::coins::Coins</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet::txoproof::TxOutProof</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Transaction};
+<span class="kw">use </span>bitcoin_hashes::hex::ToHex;
+<span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>minimint_api::Amount;
+<span class="kw">use </span>minimint_core::config::load_from_file;
+<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>minimint_core::modules::wallet::txoproof::TxOutProof;
 
-<span class="kw">use</span> <span class="ident">mint_client::mint::SpendableCoin</span>;
-<span class="kw">use</span> <span class="ident">mint_client::utils</span>::{
-    <span class="ident">from_hex</span>, <span class="ident">parse_bitcoin_amount</span>, <span class="ident">parse_coins</span>, <span class="ident">parse_minimint_amount</span>, <span class="ident">serialize_coins</span>,
+<span class="kw">use </span>mint_client::mint::SpendableCoin;
+<span class="kw">use </span>mint_client::utils::{
+    from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
 };
-<span class="kw">use</span> <span class="ident">mint_client</span>::{<span class="ident">Client</span>, <span class="ident">UserClientConfig</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::path::PathBuf</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">error</span>, <span class="ident">info</span>};
-<span class="kw">use</span> <span class="ident">tracing_subscriber::EnvFilter</span>;
+<span class="kw">use </span>mint_client::{Client, UserClientConfig};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>tracing::{error, info};
+<span class="kw">use </span>tracing_subscriber::EnvFilter;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
-<span class="kw">struct</span> <span class="ident">Options</span> {
-    <span class="ident">workdir</span>: <span class="ident">PathBuf</span>,
-    <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">subcommand</span>)]</span>
-    <span class="ident">command</span>: <span class="ident">Command</span>,
+<span class="attribute">#[derive(Parser)]</span>
+<span class="kw">struct </span>Options {
+    workdir: PathBuf,
+    <span class="attribute">#[clap(subcommand)]</span>
+    command: Command,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Parser</span>)]</span>
-<span class="kw">enum</span> <span class="ident">Command</span> {
-    <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed</span>
-    <span class="ident">PegInAddress</span>,
+<span class="attribute">#[derive(Parser)]</span>
+<span class="kw">enum </span>Command {
+    <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
+    </span>PegInAddress,
 
-    <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)</span>
-    <span class="ident">PegIn</span> {
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> = <span class="ident">from_hex</span>))]</span>
-        <span class="ident">txout_proof</span>: <span class="ident">TxOutProof</span>,
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> = <span class="ident">from_hex</span>))]</span>
-        <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
+    <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
+    </span>PegIn {
+        <span class="attribute">#[clap(parse(try_from_str = from_hex))]</span>
+        txout_proof: TxOutProof,
+        <span class="attribute">#[clap(parse(try_from_str = from_hex))]</span>
+        transaction: Transaction,
     },
 
-    <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends</span>
-    <span class="ident">Reissue</span> {
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">from_str</span> = <span class="ident">parse_coins</span>))]</span>
-        <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
+    <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends
+    </span>Reissue {
+        <span class="attribute">#[clap(parse(from_str = parse_coins))]</span>
+        coins: Coins&lt;SpendableCoin&gt;,
     },
 
-    <span class="doccomment">/// Prepare coins to send to a third party as a payment</span>
-    <span class="ident">Spend</span> {
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> = <span class="ident">parse_minimint_amount</span>))]</span>
-        <span class="ident">amount</span>: <span class="ident">Amount</span>,
+    <span class="doccomment">/// Prepare coins to send to a third party as a payment
+    </span>Spend {
+        <span class="attribute">#[clap(parse(try_from_str = parse_minimint_amount))]</span>
+        amount: Amount,
     },
 
-    <span class="doccomment">/// Withdraw funds from the federation</span>
-    <span class="ident">PegOut</span> {
-        <span class="ident">address</span>: <span class="ident">Address</span>,
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> = <span class="ident">parse_bitcoin_amount</span>))]</span>
-        <span class="ident">satoshis</span>: <span class="ident">bitcoin::Amount</span>,
+    <span class="doccomment">/// Withdraw funds from the federation
+    </span>PegOut {
+        address: Address,
+        <span class="attribute">#[clap(parse(try_from_str = parse_bitcoin_amount))]</span>
+        satoshis: bitcoin::Amount,
     },
 
-    <span class="doccomment">/// Pay a lightning invoice via a gateway</span>
-    <span class="ident">LnPay</span> { <span class="ident">bolt11</span>: <span class="ident">lightning_invoice::Invoice</span> },
+    <span class="doccomment">/// Pay a lightning invoice via a gateway
+    </span>LnPay { bolt11: lightning_invoice::Invoice },
 
-    <span class="doccomment">/// Fetch (re-)issued coins and finalize issuance process</span>
-    <span class="ident">Fetch</span>,
+    <span class="doccomment">/// Fetch (re-)issued coins and finalize issuance process
+    </span>Fetch,
 
-    <span class="doccomment">/// Display wallet info (holdings, tiers)</span>
-    <span class="ident">Info</span>,
+    <span class="doccomment">/// Display wallet info (holdings, tiers)
+    </span>Info,
 
-    <span class="doccomment">/// Create a lightning invoice to receive payment via gateway</span>
-    <span class="ident">LnInvoice</span> {
-        <span class="attribute">#[<span class="ident">clap</span>(<span class="ident">parse</span>(<span class="ident">try_from_str</span> = <span class="ident">parse_minimint_amount</span>))]</span>
-        <span class="ident">amount</span>: <span class="ident">Amount</span>,
-        <span class="ident">description</span>: <span class="ident">String</span>,
+    <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
+    </span>LnInvoice {
+        <span class="attribute">#[clap(parse(try_from_str = parse_minimint_amount))]</span>
+        amount: Amount,
+        description: String,
     },
 
-    <span class="doccomment">/// Wait for incoming invoice to be paid</span>
-    <span class="ident">WaitInvoice</span> { <span class="ident">invoice</span>: <span class="ident">lightning_invoice::Invoice</span> },
+    <span class="doccomment">/// Wait for incoming invoice to be paid
+    </span>WaitInvoice { invoice: lightning_invoice::Invoice },
 
-    <span class="doccomment">/// Wait for the fed to reach a consensus block height</span>
-    <span class="ident">WaitBlockHeight</span> { <span class="ident">height</span>: <span class="ident">u64</span> },
+    <span class="doccomment">/// Wait for the fed to reach a consensus block height
+    </span>WaitBlockHeight { height: u64 },
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Serialize</span>, <span class="ident">Deserialize</span>)]</span>
-<span class="kw">struct</span> <span class="ident">PayRequest</span> {
-    <span class="ident">coins</span>: <span class="ident">Coins</span>&lt;<span class="ident">SpendableCoin</span>&gt;,
-    <span class="ident">invoice</span>: <span class="ident">String</span>,
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]</span>
+<span class="kw">struct </span>PayRequest {
+    coins: Coins&lt;SpendableCoin&gt;,
+    invoice: String,
 }
 
-<span class="attribute">#[<span class="ident">tokio::main</span>]</span>
-<span class="kw">async</span> <span class="kw">fn</span> <span class="ident">main</span>() {
-    <span class="ident">tracing_subscriber::fmt</span>()
-        .<span class="ident">with_env_filter</span>(
-            <span class="ident">EnvFilter::try_from_default_env</span>().<span class="ident">unwrap_or_else</span>(|<span class="kw">_</span>| <span class="ident">EnvFilter::new</span>(<span class="string">&quot;info&quot;</span>)),
+<span class="attribute">#[tokio::main]</span>
+<span class="kw">async fn </span>main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>)),
         )
-        .<span class="ident">with_writer</span>(<span class="ident">std::io::stderr</span>)
-        .<span class="ident">init</span>();
+        .with_writer(std::io::stderr)
+        .init();
 
-    <span class="kw">let</span> <span class="ident">opts</span> = <span class="ident">Options::parse</span>();
-    <span class="kw">let</span> <span class="ident">cfg_path</span> = <span class="ident">opts</span>.<span class="ident">workdir</span>.<span class="ident">join</span>(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let</span> <span class="ident">db_path</span> = <span class="ident">opts</span>.<span class="ident">workdir</span>.<span class="ident">join</span>(<span class="string">&quot;client.db&quot;</span>);
-    <span class="kw">let</span> <span class="ident">cfg</span>: <span class="ident">UserClientConfig</span> = <span class="ident">load_from_file</span>(<span class="kw-2">&amp;</span><span class="ident">cfg_path</span>);
-    <span class="kw">let</span> <span class="ident">db</span>: <span class="ident">rocksdb::OptimisticTransactionDB</span>&lt;<span class="ident">rocksdb::SingleThreaded</span>&gt; =
-        <span class="ident">rocksdb::OptimisticTransactionDB::open_default</span>(<span class="kw-2">&amp;</span><span class="ident">db_path</span>).<span class="ident">unwrap</span>();
+    <span class="kw">let </span>opts = Options::parse();
+    <span class="kw">let </span>cfg_path = opts.workdir.join(<span class="string">&quot;client.json&quot;</span>);
+    <span class="kw">let </span>db_path = opts.workdir.join(<span class="string">&quot;client.db&quot;</span>);
+    <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
+    <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB&lt;rocksdb::SingleThreaded&gt; =
+        rocksdb::OptimisticTransactionDB::open_default(<span class="kw-2">&amp;</span>db_path).unwrap();
 
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">rng</span> = <span class="ident">rand::rngs::OsRng::new</span>().<span class="ident">unwrap</span>();
+    <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
 
-    <span class="kw">let</span> <span class="ident">client</span> = <span class="ident">Client::new</span>(<span class="ident">cfg</span>.<span class="ident">clone</span>(), <span class="ident">Box::new</span>(<span class="ident">db</span>), <span class="ident">Default::default</span>());
+    <span class="kw">let </span>client = Client::new(cfg.clone(), Box::new(db), Default::default());
 
-    <span class="kw">match</span> <span class="ident">opts</span>.<span class="ident">command</span> {
-        <span class="ident">Command::PegInAddress</span> =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">client</span>.<span class="ident">get_new_pegin_address</span>(<span class="kw-2">&amp;mut</span> <span class="ident">rng</span>))
+    <span class="kw">match </span>opts.command {
+        Command::PegInAddress =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, client.get_new_pegin_address(<span class="kw-2">&amp;mut </span>rng))
         }
-        <span class="ident">Command::PegIn</span> {
-            <span class="ident">txout_proof</span>,
-            <span class="ident">transaction</span>,
+        Command::PegIn {
+            txout_proof,
+            transaction,
         } =&gt; {
-            <span class="kw">let</span> <span class="ident">id</span> = <span class="ident">client</span>
-                .<span class="ident">peg_in</span>(<span class="ident">txout_proof</span>, <span class="ident">transaction</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">unwrap</span>();
+            <span class="kw">let </span>id = client
+                .peg_in(txout_proof, transaction, <span class="kw-2">&amp;mut </span>rng)
+                .<span class="kw">await
+                </span>.unwrap();
             <span class="macro">info!</span>(
-                <span class="ident">id</span> = %<span class="ident">id</span>.<span class="ident">to_hex</span>(),
+                id = %id.to_hex(),
                 <span class="string">&quot;Started peg-in, please fetch the result later&quot;</span>,
             );
         }
-        <span class="ident">Command::Reissue</span> { <span class="ident">coins</span> } =&gt; {
-            <span class="macro">info!</span>(<span class="ident">coins</span> = %<span class="ident">coins</span>.<span class="ident">amount</span>(), <span class="string">&quot;Starting reissuance transaction&quot;</span>);
-            <span class="kw">let</span> <span class="ident">id</span> = <span class="ident">client</span>.<span class="ident">reissue</span>(<span class="ident">coins</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
-            <span class="macro">info!</span>(%<span class="ident">id</span>, <span class="string">&quot;Started reissuance, please fetch the result later&quot;</span>);
+        Command::Reissue { coins } =&gt; {
+            <span class="macro">info!</span>(coins = %coins.amount(), <span class="string">&quot;Starting reissuance transaction&quot;</span>);
+            <span class="kw">let </span>id = client.reissue(coins, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>.unwrap();
+            <span class="macro">info!</span>(%id, <span class="string">&quot;Started reissuance, please fetch the result later&quot;</span>);
         }
-        <span class="ident">Command::Spend</span> { <span class="ident">amount</span> } =&gt; {
-            <span class="kw">match</span> <span class="ident">client</span>.<span class="ident">select_and_spend_coins</span>(<span class="ident">amount</span>) {
-                <span class="prelude-val">Ok</span>(<span class="ident">outgoing_coins</span>) =&gt; {
-                    <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">serialize_coins</span>(<span class="kw-2">&amp;</span><span class="ident">outgoing_coins</span>));
+        Command::Spend { amount } =&gt; {
+            <span class="kw">match </span>client.select_and_spend_coins(amount) {
+                <span class="prelude-val">Ok</span>(outgoing_coins) =&gt; {
+                    <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serialize_coins(<span class="kw-2">&amp;</span>outgoing_coins));
                 }
-                <span class="prelude-val">Err</span>(<span class="ident">e</span>) =&gt; {
-                    <span class="macro">error!</span>(<span class="ident">error</span> = <span class="question-mark">?</span><span class="ident">e</span>);
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">error!</span>(error = <span class="question-mark">?</span>e);
                 }
             };
         }
-        <span class="ident">Command::Fetch</span> =&gt; {
-            <span class="kw">for</span> <span class="ident">fetch_result</span> <span class="kw">in</span> <span class="ident">client</span>.<span class="ident">fetch_all_coins</span>().<span class="kw">await</span> {
-                <span class="macro">info!</span>(<span class="ident">issuance</span> = %<span class="ident">fetch_result</span>.<span class="ident">unwrap</span>().<span class="ident">txid</span>.<span class="ident">to_hex</span>(), <span class="string">&quot;Fetched coins&quot;</span>);
+        Command::Fetch =&gt; {
+            <span class="kw">for </span>fetch_result <span class="kw">in </span>client.fetch_all_coins().<span class="kw">await </span>{
+                <span class="macro">info!</span>(issuance = %fetch_result.unwrap().txid.to_hex(), <span class="string">&quot;Fetched coins&quot;</span>);
             }
         }
-        <span class="ident">Command::Info</span> =&gt; {
-            <span class="kw">let</span> <span class="ident">coins</span> = <span class="ident">client</span>.<span class="ident">coins</span>();
+        Command::Info =&gt; {
+            <span class="kw">let </span>coins = client.coins();
             <span class="macro">println!</span>(
                 <span class="string">&quot;We own {} coins with a total value of {}&quot;</span>,
-                <span class="ident">coins</span>.<span class="ident">coin_count</span>(),
-                <span class="ident">coins</span>.<span class="ident">amount</span>()
+                coins.coin_count(),
+                coins.amount()
             );
-            <span class="kw">for</span> (<span class="ident">amount</span>, <span class="ident">coins</span>) <span class="kw">in</span> <span class="ident">coins</span>.<span class="ident">coins</span> {
-                <span class="macro">println!</span>(<span class="string">&quot;We own {} coins of denomination {}&quot;</span>, <span class="ident">coins</span>.<span class="ident">len</span>(), <span class="ident">amount</span>);
+            <span class="kw">for </span>(amount, coins) <span class="kw">in </span>coins.coins {
+                <span class="macro">println!</span>(<span class="string">&quot;We own {} coins of denomination {}&quot;</span>, coins.len(), amount);
             }
         }
-        <span class="ident">Command::PegOut</span> { <span class="ident">address</span>, <span class="ident">satoshis</span> } =&gt; {
-            <span class="kw">let</span> <span class="ident">peg_out</span> = <span class="ident">client</span>
-                .<span class="ident">new_peg_out_with_fees</span>(<span class="ident">satoshis</span>, <span class="ident">address</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">unwrap</span>();
-            <span class="ident">client</span>.<span class="ident">peg_out</span>(<span class="ident">peg_out</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>).<span class="kw">await</span>.<span class="ident">unwrap</span>();
+        Command::PegOut { address, satoshis } =&gt; {
+            <span class="kw">let </span>peg_out = client
+                .new_peg_out_with_fees(satoshis, address)
+                .<span class="kw">await
+                </span>.unwrap();
+            client.peg_out(peg_out, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>.unwrap();
         }
-        <span class="ident">Command::LnPay</span> { <span class="ident">bolt11</span> } =&gt; {
-            <span class="kw">let</span> (<span class="ident">contract_id</span>, <span class="ident">outpoint</span>) = <span class="ident">client</span>
-                .<span class="ident">fund_outgoing_ln_contract</span>(<span class="ident">bolt11</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Not enough coins&quot;</span>);
+        Command::LnPay { bolt11 } =&gt; {
+            <span class="kw">let </span>(contract_id, outpoint) = client
+                .fund_outgoing_ln_contract(bolt11, <span class="kw-2">&amp;mut </span>rng)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Not enough coins&quot;</span>);
 
-            <span class="ident">client</span>
-                .<span class="ident">await_outgoing_contract_acceptance</span>(<span class="ident">outpoint</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Contract wasn&#39;t accepted in time&quot;</span>);
+            client
+                .await_outgoing_contract_acceptance(outpoint)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Contract wasn&#39;t accepted in time&quot;</span>);
 
             <span class="macro">info!</span>(
-                %<span class="ident">contract_id</span>,
+                %contract_id,
                 <span class="string">&quot;Funded outgoing contract, notifying gateway&quot;</span>,
             );
 
-            <span class="ident">client</span>
-                .<span class="ident">await_outgoing_contract_execution</span>(<span class="ident">contract_id</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Gateway failed to execute contract&quot;</span>);
+            client
+                .await_outgoing_contract_execution(contract_id)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Gateway failed to execute contract&quot;</span>);
         }
-        <span class="ident">Command::LnInvoice</span> {
-            <span class="ident">amount</span>,
-            <span class="ident">description</span>,
+        Command::LnInvoice {
+            amount,
+            description,
         } =&gt; {
-            <span class="kw">let</span> <span class="ident">confirmed_invoice</span> = <span class="ident">client</span>
-                .<span class="ident">generate_invoice</span>(<span class="ident">amount</span>, <span class="ident">description</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Couldn&#39;t create invoice&quot;</span>);
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">confirmed_invoice</span>.<span class="ident">invoice</span>)
+            <span class="kw">let </span>confirmed_invoice = client
+                .generate_invoice(amount, description, <span class="kw-2">&amp;mut </span>rng)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Couldn&#39;t create invoice&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, confirmed_invoice.invoice)
         }
-        <span class="ident">Command::WaitInvoice</span> { <span class="ident">invoice</span> } =&gt; {
-            <span class="kw">let</span> <span class="ident">contract_id</span> = (<span class="kw-2">*</span><span class="ident">invoice</span>.<span class="ident">payment_hash</span>()).<span class="ident">into</span>();
-            <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">client</span>
-                .<span class="ident">claim_incoming_contract</span>(<span class="ident">contract_id</span>, <span class="kw-2">&amp;mut</span> <span class="ident">rng</span>)
-                .<span class="kw">await</span>
-                .<span class="ident">expect</span>(<span class="string">&quot;Timeout waiting for invoice payment&quot;</span>);
+        Command::WaitInvoice { invoice } =&gt; {
+            <span class="kw">let </span>contract_id = (<span class="kw-2">*</span>invoice.payment_hash()).into();
+            <span class="kw">let </span>outpoint = client
+                .claim_incoming_contract(contract_id, <span class="kw-2">&amp;mut </span>rng)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Timeout waiting for invoice payment&quot;</span>);
             <span class="macro">println!</span>(
                 <span class="string">&quot;Paid in minimint transaction {}. Call &#39;fetch&#39; to get your coins.&quot;</span>,
-                <span class="ident">outpoint</span>.<span class="ident">txid</span>
+                outpoint.txid
             );
         }
-        <span class="ident">Command::WaitBlockHeight</span> { <span class="ident">height</span> } =&gt; {
-            <span class="ident">client</span>.<span class="ident">await_consensus_block_height</span>(<span class="ident">height</span>).<span class="kw">await</span>;
+        Command::WaitBlockHeight { height } =&gt; {
+            client.await_consensus_block_height(height).<span class="kw">await</span>;
         }
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

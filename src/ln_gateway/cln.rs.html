@@ -40,47 +40,47 @@
 <span id="40">40</span>
 <span id="41">41</span>
 <span id="42">42</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">minimint_api::Amount</span>;
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Deserializer</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>minimint_api::Amount;
+<span class="kw">use </span>serde::{Deserialize, Deserializer};
 
-<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot; suffix</span>
-<span class="kw">fn</span> <span class="ident">as_minimint_amount</span>&lt;<span class="lifetime">&#39;de</span>, <span class="ident">D</span>&gt;(<span class="ident">amount</span>: <span class="ident">D</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">Amount</span>, <span class="ident">D::Error</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">D</span>: <span class="ident">Deserializer</span>&lt;<span class="lifetime">&#39;de</span>&gt;,
+<span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot; suffix
+</span><span class="kw">fn </span>as_minimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
+<span class="kw">where
+    </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
 {
-    <span class="kw">let</span> <span class="ident">amount</span> = <span class="ident">String::deserialize</span>(<span class="ident">amount</span>)<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(<span class="ident">Amount::from_msat</span>(
-        <span class="ident">amount</span>[<span class="number">0</span>..<span class="ident">amount</span>.<span class="ident">len</span>() - <span class="number">4</span>].<span class="ident">parse</span>::&lt;<span class="ident">u64</span>&gt;().<span class="ident">unwrap</span>(),
+    <span class="kw">let </span>amount = String::deserialize(amount)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Amount::from_msat(
+        amount[<span class="number">0</span>..amount.len() - <span class="number">4</span>].parse::&lt;u64&gt;().unwrap(),
     ))
 }
 
-<span class="comment">// TODO: upstream these structs to cln-plugin</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Deserialize</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Htlc</span> {
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">deserialize_with</span> = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">cltv_expiry</span>: <span class="ident">u32</span>,
-    <span class="kw">pub</span> <span class="ident">cltv_expiry_relative</span>: <span class="ident">u32</span>,
-    <span class="kw">pub</span> <span class="ident">payment_hash</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
+<span class="comment">// TODO: upstream these structs to cln-plugin
+</span><span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
+<span class="kw">pub struct </span>Htlc {
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>cltv_expiry: u32,
+    <span class="kw">pub </span>cltv_expiry_relative: u32,
+    <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Deserialize</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">Onion</span> {
-    <span class="kw">pub</span> <span class="ident">payload</span>: <span class="ident">String</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">rename</span> = <span class="string">&quot;type&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">type_</span>: <span class="ident">String</span>,
-    <span class="kw">pub</span> <span class="ident">short_channel_id</span>: <span class="ident">String</span>,
-    <span class="attribute">#[<span class="ident">serde</span>(<span class="ident">deserialize_with</span> = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
-    <span class="kw">pub</span> <span class="ident">forward_amount</span>: <span class="ident">Amount</span>,
-    <span class="kw">pub</span> <span class="ident">outgoing_cltv_value</span>: <span class="ident">u32</span>,
-    <span class="kw">pub</span> <span class="ident">shared_secret</span>: <span class="ident">bitcoin_hashes::sha256::Hash</span>,
-    <span class="kw">pub</span> <span class="ident">next_onion</span>: <span class="ident">String</span>,
+<span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
+<span class="kw">pub struct </span>Onion {
+    <span class="kw">pub </span>payload: String,
+    <span class="attribute">#[serde(rename = <span class="string">&quot;type&quot;</span>)]</span>
+    <span class="kw">pub </span>type_: String,
+    <span class="kw">pub </span>short_channel_id: String,
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
+    <span class="kw">pub </span>forward_amount: Amount,
+    <span class="kw">pub </span>outgoing_cltv_value: u32,
+    <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
+    <span class="kw">pub </span>next_onion: String,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Deserialize</span>, <span class="ident">Debug</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">HtlcAccepted</span> {
-    <span class="kw">pub</span> <span class="ident">htlc</span>: <span class="ident">Htlc</span>,
-    <span class="kw">pub</span> <span class="ident">onion</span>: <span class="ident">Onion</span>,
+<span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
+<span class="kw">pub struct </span>HtlcAccepted {
+    <span class="kw">pub </span>htlc: Htlc,
+    <span class="kw">pub </span>onion: Onion,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

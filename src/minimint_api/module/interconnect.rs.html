@@ -14,21 +14,21 @@
 <span id="14">14</span>
 <span id="15">15</span>
 <span id="16">16</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">async_trait::async_trait</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::ApiError</span>;
+<span class="kw">use </span><span class="kw">super</span>::ApiError;
 
-<span class="doccomment">/// Provides an interface to call APIs of other modules</span>
-<span class="attribute">#[<span class="ident">async_trait</span>]</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">ModuleInterconect</span> {
-    <span class="doccomment">/// Simulates a call to an API endpoint of another module.</span>
-    <span class="doccomment">/// This has lower latency.</span>
-    <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">call</span>(
+<span class="doccomment">/// Provides an interface to call APIs of other modules
+</span><span class="attribute">#[async_trait]</span>
+<span class="kw">pub trait </span>ModuleInterconect {
+    <span class="doccomment">/// Simulates a call to an API endpoint of another module.
+    /// This has lower latency.
+    </span><span class="kw">async fn </span>call(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">module</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
-        <span class="ident">path</span>: <span class="ident">String</span>,
-        <span class="ident">data</span>: <span class="ident">serde_json::Value</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="ident">serde_json::Value</span>, <span class="ident">ApiError</span>&gt;;
+        module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+        path: String,
+        data: serde_json::Value,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

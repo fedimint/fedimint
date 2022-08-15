@@ -307,314 +307,314 @@
 <span id="307">307</span>
 <span id="308">308</span>
 <span id="309">309</span>
-</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this</span>
-<span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::assertions_on_result_states</span>)]</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">anyhow::Result</span>;
-<span class="kw">use</span> <span class="ident">batch::DbBatch</span>;
-<span class="kw">use</span> <span class="ident">std::error::Error</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tracing::trace</span>;
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>batch::DbBatch;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tracing::trace;
 
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">batch</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">mem_impl</span>;
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">feature</span> = <span class="string">&quot;rocksdb&quot;</span>)]</span>
-<span class="kw">mod</span> <span class="ident">rocksdb_impl</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">sled_impl</span>;
+<span class="kw">pub mod </span>batch;
+<span class="kw">pub mod </span>mem_impl;
+<span class="attribute">#[cfg(feature = <span class="string">&quot;rocksdb&quot;</span>)]</span>
+<span class="kw">mod </span>rocksdb_impl;
+<span class="kw">pub mod </span>sled_impl;
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">DatabaseKeyPrefixConst</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span>;
-    <span class="kw">type</span> <span class="ident">Key</span>: <span class="ident">DatabaseKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span>: <span class="ident">DatabaseValue</span>;
+<span class="kw">pub trait </span>DatabaseKeyPrefixConst {
+    <span class="kw">const </span>DB_PREFIX: u8;
+    <span class="kw">type </span>Key: DatabaseKey;
+    <span class="kw">type </span>Value: DatabaseValue;
 }
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">DatabaseKeyPrefix</span>: <span class="ident">Debug</span> {
-    <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;;
+<span class="kw">pub trait </span>DatabaseKeyPrefix: Debug {
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
 }
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">DatabaseKey</span>: <span class="ident">Sized</span> + <span class="ident">DatabaseKeyPrefix</span> {
-    <span class="kw">fn</span> <span class="ident">from_bytes</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodingError</span>&gt;;
+<span class="kw">pub trait </span>DatabaseKey: Sized + DatabaseKeyPrefix {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">SerializableDatabaseValue</span>: <span class="ident">Debug</span> {
-    <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;;
+<span class="kw">pub trait </span>SerializableDatabaseValue: Debug {
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
 }
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">DatabaseValue</span>: <span class="ident">Sized</span> + <span class="ident">SerializableDatabaseValue</span> {
-    <span class="kw">fn</span> <span class="ident">from_bytes</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodingError</span>&gt;;
+<span class="kw">pub trait </span>DatabaseValue: Sized + SerializableDatabaseValue {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">PrefixIter</span>&lt;<span class="lifetime">&#39;a</span>&gt; = <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;(<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;, <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;)&gt;&gt; + <span class="ident">Send</span> + <span class="lifetime">&#39;a</span>&gt;;
+<span class="kw">pub type </span>PrefixIter&lt;<span class="lifetime">&#39;a</span>&gt; = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;;
 
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">Database</span>: <span class="ident">Send</span> + <span class="ident">Sync</span> {
-    <span class="kw">fn</span> <span class="ident">raw_insert_entry</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>], <span class="ident">value</span>: <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt;;
+<span class="kw">pub trait </span>Database: Send + Sync {
+    <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">fn</span> <span class="ident">raw_get_value</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt;;
+    <span class="kw">fn </span>raw_get_value(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">fn</span> <span class="ident">raw_remove_entry</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt;&gt;&gt;;
+    <span class="kw">fn </span>raw_remove_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
-    <span class="kw">fn</span> <span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">PrefixIter</span>&lt;<span class="lifetime">&#39;_</span>&gt;;
+    <span class="kw">fn </span>raw_find_by_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; PrefixIter&lt;<span class="lifetime">&#39;_</span>&gt;;
 
-    <span class="kw">fn</span> <span class="ident">raw_apply_batch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">batch</span>: <span class="ident">DbBatch</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+    <span class="kw">fn </span>raw_apply_batch(<span class="kw-2">&amp;</span><span class="self">self</span>, batch: DbBatch) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">dyn</span> <span class="ident">Database</span> + <span class="lifetime">&#39;a</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">insert_entry</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span><span class="ident">K</span>, <span class="ident">value</span>: <span class="kw-2">&amp;</span><span class="ident">K::Value</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">K::Value</span>&gt;&gt;
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKey</span> + <span class="ident">DatabaseKeyPrefixConst</span>,
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">dyn </span>Database + <span class="lifetime">&#39;a </span>{
+    <span class="kw">pub fn </span>insert_entry&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K, value: <span class="kw-2">&amp;</span>K::Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        <span class="kw">match</span> <span class="self">self</span>.<span class="ident">raw_insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">key</span>.<span class="ident">to_bytes</span>(), <span class="ident">value</span>.<span class="ident">to_bytes</span>())<span class="question-mark">?</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">old_val_bytes</span>) =&gt; {
+        <span class="kw">match </span><span class="self">self</span>.raw_insert_entry(<span class="kw-2">&amp;</span>key.to_bytes(), value.to_bytes())<span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(old_val_bytes) =&gt; {
                 <span class="macro">trace!</span>(
                     <span class="string">&quot;insert_entry: Decoding {} from bytes {:?}&quot;</span>,
-                    <span class="ident">std::any::type_name</span>::&lt;<span class="ident">K::Value</span>&gt;(),
-                    <span class="ident">old_val_bytes</span>
+                    std::any::type_name::&lt;K::Value&gt;(),
+                    old_val_bytes
                 );
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">K::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">old_val_bytes</span>)<span class="question-mark">?</span>))
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>old_val_bytes)<span class="question-mark">?</span>))
             }
-            <span class="prelude-val">None</span> =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">get_value</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span><span class="ident">K</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">K::Value</span>&gt;&gt;
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKey</span> + <span class="ident">DatabaseKeyPrefixConst</span>,
+    <span class="kw">pub fn </span>get_value&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        <span class="kw">let</span> <span class="ident">key_bytes</span> = <span class="ident">key</span>.<span class="ident">to_bytes</span>();
-        <span class="kw">let</span> <span class="ident">value_bytes</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">raw_get_value</span>(<span class="kw-2">&amp;</span><span class="ident">key_bytes</span>)<span class="question-mark">?</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">value</span>) =&gt; <span class="ident">value</span>,
-            <span class="prelude-val">None</span> =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+        <span class="kw">let </span>key_bytes = key.to_bytes();
+        <span class="kw">let </span>value_bytes = <span class="kw">match </span><span class="self">self</span>.raw_get_value(<span class="kw-2">&amp;</span>key_bytes)<span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(value) =&gt; value,
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         };
 
         <span class="macro">trace!</span>(
             <span class="string">&quot;get_value: Decoding {} from bytes {:?}&quot;</span>,
-            <span class="ident">std::any::type_name</span>::&lt;<span class="ident">K::Value</span>&gt;(),
-            <span class="ident">value_bytes</span>
+            std::any::type_name::&lt;K::Value&gt;(),
+            value_bytes
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">K::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value_bytes</span>)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>))
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">remove_entry</span>&lt;<span class="ident">K</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">key</span>: <span class="kw-2">&amp;</span><span class="ident">K</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;<span class="ident">K::Value</span>&gt;&gt;
-    <span class="kw">where</span>
-        <span class="ident">K</span>: <span class="ident">DatabaseKey</span> + <span class="ident">DatabaseKeyPrefixConst</span>,
+    <span class="kw">pub fn </span>remove_entry&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
+    <span class="kw">where
+        </span>K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        <span class="kw">let</span> <span class="ident">key_bytes</span> = <span class="ident">key</span>.<span class="ident">to_bytes</span>();
-        <span class="kw">let</span> <span class="ident">value_bytes</span> = <span class="kw">match</span> <span class="self">self</span>.<span class="ident">raw_remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">key_bytes</span>)<span class="question-mark">?</span> {
-            <span class="prelude-val">Some</span>(<span class="ident">value</span>) =&gt; <span class="ident">value</span>,
-            <span class="prelude-val">None</span> =&gt; <span class="kw">return</span> <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+        <span class="kw">let </span>key_bytes = key.to_bytes();
+        <span class="kw">let </span>value_bytes = <span class="kw">match </span><span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key_bytes)<span class="question-mark">? </span>{
+            <span class="prelude-val">Some</span>(value) =&gt; value,
+            <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         };
 
         <span class="macro">trace!</span>(
             <span class="string">&quot;remove_entry: Decoding {} from bytes {:?}&quot;</span>,
-            <span class="ident">std::any::type_name</span>::&lt;<span class="ident">K::Value</span>&gt;(),
-            <span class="ident">value_bytes</span>
+            std::any::type_name::&lt;K::Value&gt;(),
+            value_bytes
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="ident">K::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value_bytes</span>)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>))
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">find_by_prefix</span>&lt;<span class="ident">KP</span>&gt;(
+    <span class="kw">pub fn </span>find_by_prefix&lt;KP&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">key_prefix</span>: <span class="kw-2">&amp;</span><span class="ident">KP</span>,
-    ) -&gt; <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="prelude-ty">Result</span>&lt;(<span class="ident">KP::Key</span>, <span class="ident">KP::Value</span>)&gt;&gt; + <span class="lifetime">&#39;_</span>
-    <span class="kw">where</span>
-        <span class="ident">KP</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">DatabaseKeyPrefixConst</span>,
+        key_prefix: <span class="kw-2">&amp;</span>KP,
+    ) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(KP::Key, KP::Value)&gt;&gt; + <span class="lifetime">&#39;_
+    </span><span class="kw">where
+        </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
     {
-        <span class="kw">let</span> <span class="ident">prefix_bytes</span> = <span class="ident">key_prefix</span>.<span class="ident">to_bytes</span>();
-        <span class="self">self</span>.<span class="ident">raw_find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">prefix_bytes</span>).<span class="ident">map</span>(|<span class="ident">res</span>| {
-            <span class="ident">res</span>.<span class="ident">and_then</span>(|(<span class="ident">key_bytes</span>, <span class="ident">value_bytes</span>)| {
-                <span class="kw">let</span> <span class="ident">key</span> = <span class="ident">KP::Key::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">key_bytes</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>prefix_bytes = key_prefix.to_bytes();
+        <span class="self">self</span>.raw_find_by_prefix(<span class="kw-2">&amp;</span>prefix_bytes).map(|res| {
+            res.and_then(|(key_bytes, value_bytes)| {
+                <span class="kw">let </span>key = KP::Key::from_bytes(<span class="kw-2">&amp;</span>key_bytes)<span class="question-mark">?</span>;
                 <span class="macro">trace!</span>(
                     <span class="string">&quot;find by prefix: Decoding {} from bytes {:?}&quot;</span>,
-                    <span class="ident">std::any::type_name</span>::&lt;<span class="ident">KP::Value</span>&gt;(),
-                    <span class="ident">value_bytes</span>
+                    std::any::type_name::&lt;KP::Value&gt;(),
+                    value_bytes
                 );
-                <span class="kw">let</span> <span class="ident">value</span> = <span class="ident">KP::Value::from_bytes</span>(<span class="kw-2">&amp;</span><span class="ident">value_bytes</span>)<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((<span class="ident">key</span>, <span class="ident">value</span>))
+                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((key, value))
             })
         })
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">apply_batch</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">batch</span>: <span class="ident">DbBatch</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.<span class="ident">raw_apply_batch</span>(<span class="ident">batch</span>)
+    <span class="kw">pub fn </span>apply_batch(<span class="kw-2">&amp;</span><span class="self">self</span>, batch: DbBatch) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.raw_apply_batch(batch)
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">DatabaseKeyPrefix</span> <span class="kw">for</span> <span class="ident">T</span>
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">DatabaseKeyPrefixConst</span> + <span class="ident"><span class="kw">crate</span>::encoding::Encodable</span> + <span class="ident">Debug</span>,
+<span class="kw">impl</span>&lt;T&gt; DatabaseKeyPrefix <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Encodable + Debug,
 {
-    <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">data</span> = <span class="macro">vec!</span>[<span class="ident"><span class="self">Self</span>::DB_PREFIX</span>];
-        <span class="self">self</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">data</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;Writing to vec is infallible&quot;</span>);
-        <span class="ident">data</span>
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[<span class="self">Self</span>::DB_PREFIX];
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>data)
+            .expect(<span class="string">&quot;Writing to vec is infallible&quot;</span>);
+        data
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">DatabaseKey</span> <span class="kw">for</span> <span class="ident">T</span>
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">DatabaseKeyPrefix</span> + <span class="ident">DatabaseKeyPrefixConst</span> + <span class="ident"><span class="kw">crate</span>::encoding::Decodable</span> + <span class="ident">Sized</span>,
+<span class="kw">impl</span>&lt;T&gt; DatabaseKey <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Decodable + Sized,
 {
-    <span class="kw">fn</span> <span class="ident">from_bytes</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodingError</span>&gt; {
-        <span class="kw">if</span> <span class="ident">data</span>.<span class="ident">is_empty</span>() {
-            <span class="comment">// TODO: build better coding errors, pretty useless right now</span>
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">DecodingError::wrong_length</span>(<span class="number">1</span>, <span class="number">0</span>));
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
+        <span class="kw">if </span>data.is_empty() {
+            <span class="comment">// TODO: build better coding errors, pretty useless right now
+            </span><span class="kw">return </span><span class="prelude-val">Err</span>(DecodingError::wrong_length(<span class="number">1</span>, <span class="number">0</span>));
         }
 
-        <span class="kw">if</span> <span class="ident">data</span>[<span class="number">0</span>] != <span class="ident"><span class="self">Self</span>::DB_PREFIX</span> {
-            <span class="kw">return</span> <span class="prelude-val">Err</span>(<span class="ident">DecodingError::wrong_prefix</span>(<span class="ident"><span class="self">Self</span>::DB_PREFIX</span>, <span class="ident">data</span>[<span class="number">0</span>]));
+        <span class="kw">if </span>data[<span class="number">0</span>] != <span class="self">Self</span>::DB_PREFIX {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(DecodingError::wrong_prefix(<span class="self">Self</span>::DB_PREFIX, data[<span class="number">0</span>]));
         }
 
-        &lt;<span class="self">Self</span> <span class="kw">as</span> <span class="ident"><span class="kw">crate</span>::encoding::Decodable</span>&gt;<span class="ident">::consensus_decode</span>(<span class="ident">std::io::Cursor::new</span>(<span class="kw-2">&amp;</span><span class="ident">data</span>[<span class="number">1</span>..]))
-            .<span class="ident">map_err</span>(|<span class="ident">decode_error</span>| <span class="ident">DecodingError::Other</span>(<span class="ident">decode_error</span>.<span class="number">0</span>))
+        &lt;<span class="self">Self </span><span class="kw">as </span><span class="kw">crate</span>::encoding::Decodable&gt;::consensus_decode(std::io::Cursor::new(<span class="kw-2">&amp;</span>data[<span class="number">1</span>..]))
+            .map_err(|decode_error| DecodingError::Other(decode_error.<span class="number">0</span>))
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">SerializableDatabaseValue</span> <span class="kw">for</span> <span class="ident">T</span>
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">Encodable</span> + <span class="ident">Debug</span>,
+<span class="kw">impl</span>&lt;T&gt; SerializableDatabaseValue <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: Encodable + Debug,
 {
-    <span class="kw">fn</span> <span class="ident">to_bytes</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Vec</span>&lt;<span class="ident">u8</span>&gt; {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">bytes</span> = <span class="ident">Vec::new</span>();
-        <span class="self">self</span>.<span class="ident">consensus_encode</span>(<span class="kw-2">&amp;mut</span> <span class="ident">bytes</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;writing to vec can&#39;t fail&quot;</span>);
-        <span class="ident">bytes</span>
+    <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::new();
+        <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
+            .expect(<span class="string">&quot;writing to vec can&#39;t fail&quot;</span>);
+        bytes
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">T</span>&gt; <span class="ident">DatabaseValue</span> <span class="kw">for</span> <span class="ident">T</span>
-<span class="kw">where</span>
-    <span class="ident">T</span>: <span class="ident">SerializableDatabaseValue</span> + <span class="ident">Decodable</span>,
+<span class="kw">impl</span>&lt;T&gt; DatabaseValue <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: SerializableDatabaseValue + Decodable,
 {
-    <span class="kw">fn</span> <span class="ident">from_bytes</span>(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="ident">DecodingError</span>&gt; {
-        <span class="ident">T::consensus_decode</span>(<span class="ident">std::io::Cursor::new</span>(<span class="ident">data</span>)).<span class="ident">map_err</span>(|<span class="ident">e</span>| <span class="ident">DecodingError::Other</span>(<span class="ident">e</span>.<span class="number">0</span>))
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
+        T::consensus_decode(std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">DecodingError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Key had a wrong prefix, expected {expected} but got {found}&quot;</span>)]</span>
-    <span class="ident">WrongPrefix</span> { <span class="ident">expected</span>: <span class="ident">u8</span>, <span class="ident">found</span>: <span class="ident">u8</span> },
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Key had a wrong length, expected {expected} but got {found}&quot;</span>)]</span>
-    <span class="ident">WrongLength</span> { <span class="ident">expected</span>: <span class="ident">usize</span>, <span class="ident">found</span>: <span class="ident">usize</span> },
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Other decoding error: {0}&quot;</span>)]</span>
-    <span class="ident">Other</span>(<span class="ident">anyhow::Error</span>),
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>DecodingError {
+    <span class="attribute">#[error(<span class="string">&quot;Key had a wrong prefix, expected {expected} but got {found}&quot;</span>)]</span>
+    WrongPrefix { expected: u8, found: u8 },
+    <span class="attribute">#[error(<span class="string">&quot;Key had a wrong length, expected {expected} but got {found}&quot;</span>)]</span>
+    WrongLength { expected: usize, found: usize },
+    <span class="attribute">#[error(<span class="string">&quot;Other decoding error: {0}&quot;</span>)]</span>
+    Other(anyhow::Error),
 }
 
-<span class="kw">impl</span> <span class="ident">DecodingError</span> {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">other</span>&lt;<span class="ident">E</span>: <span class="ident">Error</span> + <span class="ident">Send</span> + <span class="ident">Sync</span> + <span class="lifetime">&#39;static</span>&gt;(<span class="ident">error</span>: <span class="ident">E</span>) -&gt; <span class="ident">DecodingError</span> {
-        <span class="ident">DecodingError::Other</span>(<span class="ident">anyhow::Error::from</span>(<span class="ident">error</span>))
+<span class="kw">impl </span>DecodingError {
+    <span class="kw">pub fn </span>other&lt;E: Error + Send + Sync + <span class="lifetime">&#39;static</span>&gt;(error: E) -&gt; DecodingError {
+        DecodingError::Other(anyhow::Error::from(error))
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">wrong_prefix</span>(<span class="ident">expected</span>: <span class="ident">u8</span>, <span class="ident">found</span>: <span class="ident">u8</span>) -&gt; <span class="ident">DecodingError</span> {
-        <span class="ident">DecodingError::WrongPrefix</span> { <span class="ident">expected</span>, <span class="ident">found</span> }
+    <span class="kw">pub fn </span>wrong_prefix(expected: u8, found: u8) -&gt; DecodingError {
+        DecodingError::WrongPrefix { expected, found }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">wrong_length</span>(<span class="ident">expected</span>: <span class="ident">usize</span>, <span class="ident">found</span>: <span class="ident">usize</span>) -&gt; <span class="ident">DecodingError</span> {
-        <span class="ident">DecodingError::WrongLength</span> { <span class="ident">expected</span>, <span class="ident">found</span> }
+    <span class="kw">pub fn </span>wrong_length(expected: usize, found: usize) -&gt; DecodingError {
+        DecodingError::WrongLength { expected, found }
     }
 }
 
-<span class="attribute">#[<span class="ident">cfg</span>(<span class="ident">test</span>)]</span>
-<span class="kw">mod</span> <span class="ident">tests</span> {
-    <span class="kw">use</span> <span class="ident"><span class="kw">super</span>::Database</span>;
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db::DatabaseKeyPrefixConst</span>;
-    <span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-    <span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
+<span class="attribute">#[cfg(test)]</span>
+<span class="kw">mod </span>tests {
+    <span class="kw">use </span><span class="kw">super</span>::Database;
+    <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+    <span class="kw">use </span>std::sync::Arc;
 
-    <span class="kw">const</span> <span class="ident">DB_PREFIX_TEST</span>: <span class="ident">u8</span> = <span class="number">0x42</span>;
-    <span class="kw">const</span> <span class="ident">ALT_DB_PREFIX_TEST</span>: <span class="ident">u8</span> = <span class="number">0x43</span>;
+    <span class="kw">const </span>DB_PREFIX_TEST: u8 = <span class="number">0x42</span>;
+    <span class="kw">const </span>ALT_DB_PREFIX_TEST: u8 = <span class="number">0x43</span>;
 
-    <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-    <span class="kw">struct</span> <span class="ident">TestKey</span>(<span class="ident">u64</span>);
+    <span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+    <span class="kw">struct </span>TestKey(u64);
 
-    <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">TestKey</span> {
-        <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_TEST</span>;
-        <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-        <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">TestVal</span>;
+    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>TestKey {
+        <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_TEST;
+        <span class="kw">type </span>Key = <span class="self">Self</span>;
+        <span class="kw">type </span>Value = TestVal;
     }
 
-    <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-    <span class="kw">struct</span> <span class="ident">DbPrefixTestPrefix</span>;
+    <span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+    <span class="kw">struct </span>DbPrefixTestPrefix;
 
-    <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">DbPrefixTestPrefix</span> {
-        <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_TEST</span>;
-        <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">TestKey</span>;
-        <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">TestVal</span>;
+    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DbPrefixTestPrefix {
+        <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_TEST;
+        <span class="kw">type </span>Key = TestKey;
+        <span class="kw">type </span>Value = TestVal;
     }
 
-    <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-    <span class="kw">struct</span> <span class="ident">AltTestKey</span>(<span class="ident">u64</span>);
+    <span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+    <span class="kw">struct </span>AltTestKey(u64);
 
-    <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">AltTestKey</span> {
-        <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">ALT_DB_PREFIX_TEST</span>;
-        <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-        <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">TestVal</span>;
+    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AltTestKey {
+        <span class="kw">const </span>DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        <span class="kw">type </span>Key = <span class="self">Self</span>;
+        <span class="kw">type </span>Value = TestVal;
     }
 
-    <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-    <span class="kw">struct</span> <span class="ident">AltDbPrefixTestPrefix</span>;
+    <span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+    <span class="kw">struct </span>AltDbPrefixTestPrefix;
 
-    <span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">AltDbPrefixTestPrefix</span> {
-        <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">ALT_DB_PREFIX_TEST</span>;
-        <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">AltTestKey</span>;
-        <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">TestVal</span>;
+    <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AltDbPrefixTestPrefix {
+        <span class="kw">const </span>DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        <span class="kw">type </span>Key = AltTestKey;
+        <span class="kw">type </span>Value = TestVal;
     }
 
-    <span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>)]</span>
-    <span class="kw">struct</span> <span class="ident">TestVal</span>(<span class="ident">u64</span>);
+    <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]</span>
+    <span class="kw">struct </span>TestVal(u64);
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">test_db_impl</span>(<span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span> + <span class="lifetime">&#39;static</span>&gt;) {
-        <span class="macro">assert!</span>(<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">1337</span>))
-            .<span class="ident">unwrap</span>()
-            .<span class="ident">is_none</span>());
-        <span class="macro">assert!</span>(<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">123</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">456</span>))
-            .<span class="ident">unwrap</span>()
-            .<span class="ident">is_none</span>());
+    <span class="kw">pub fn </span>test_db_impl(db: Arc&lt;<span class="kw">dyn </span>Database + <span class="lifetime">&#39;static</span>&gt;) {
+        <span class="macro">assert!</span>(db
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">1337</span>))
+            .unwrap()
+            .is_none());
+        <span class="macro">assert!</span>(db
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">123</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">456</span>))
+            .unwrap()
+            .is_none());
 
-        <span class="macro">assert_eq!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>)).<span class="ident">unwrap</span>(), <span class="prelude-val">Some</span>(<span class="ident">TestVal</span>(<span class="number">1337</span>)));
-        <span class="macro">assert_eq!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">123</span>)).<span class="ident">unwrap</span>(), <span class="prelude-val">Some</span>(<span class="ident">TestVal</span>(<span class="number">456</span>)));
-        <span class="macro">assert_eq!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">43</span>)).<span class="ident">unwrap</span>(), <span class="prelude-val">None</span>);
+        <span class="macro">assert_eq!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">1337</span>)));
+        <span class="macro">assert_eq!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">123</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">456</span>)));
+        <span class="macro">assert_eq!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">43</span>)).unwrap(), <span class="prelude-val">None</span>);
 
-        <span class="ident">db</span>.<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">3301</span>)).<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>)).<span class="ident">unwrap</span>(), <span class="prelude-val">Some</span>(<span class="ident">TestVal</span>(<span class="number">3301</span>)));
+        db.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">3301</span>)).unwrap();
+        <span class="macro">assert_eq!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>)).unwrap(), <span class="prelude-val">Some</span>(TestVal(<span class="number">3301</span>)));
 
-        <span class="kw">let</span> <span class="ident">removed</span> = <span class="ident">db</span>.<span class="ident">remove_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>)).<span class="ident">unwrap</span>();
-        <span class="macro">assert_eq!</span>(<span class="ident">removed</span>, <span class="prelude-val">Some</span>(<span class="ident">TestVal</span>(<span class="number">3301</span>)));
-        <span class="macro">assert_eq!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>)).<span class="ident">unwrap</span>(), <span class="prelude-val">None</span>);
+        <span class="kw">let </span>removed = db.remove_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>)).unwrap();
+        <span class="macro">assert_eq!</span>(removed, <span class="prelude-val">Some</span>(TestVal(<span class="number">3301</span>)));
+        <span class="macro">assert_eq!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>)).unwrap(), <span class="prelude-val">None</span>);
 
-        <span class="macro">assert!</span>(<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">0</span>))
-            .<span class="ident">unwrap</span>()
-            .<span class="ident">is_none</span>());
-        <span class="macro">assert!</span>(<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">42</span>)).<span class="ident">is_ok</span>());
+        <span class="macro">assert!</span>(db
+            .insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">0</span>))
+            .unwrap()
+            .is_none());
+        <span class="macro">assert!</span>(db.get_value(<span class="kw-2">&amp;</span>TestKey(<span class="number">42</span>)).is_ok());
 
-        <span class="macro">assert!</span>(<span class="ident">db</span>.<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">55</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">9999</span>)).<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">db</span>.<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">TestKey</span>(<span class="number">54</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">8888</span>)).<span class="ident">is_ok</span>());
+        <span class="macro">assert!</span>(db.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>)).is_ok());
+        <span class="macro">assert!</span>(db.insert_entry(<span class="kw-2">&amp;</span>TestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>)).is_ok());
 
-        <span class="macro">assert!</span>(<span class="ident">db</span>.<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">AltTestKey</span>(<span class="number">55</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">7777</span>)).<span class="ident">is_ok</span>());
-        <span class="macro">assert!</span>(<span class="ident">db</span>.<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">AltTestKey</span>(<span class="number">54</span>), <span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">6666</span>)).<span class="ident">is_ok</span>());
+        <span class="macro">assert!</span>(db.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">55</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>)).is_ok());
+        <span class="macro">assert!</span>(db.insert_entry(<span class="kw-2">&amp;</span>AltTestKey(<span class="number">54</span>), <span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>)).is_ok());
 
-        <span class="kw">for</span> <span class="ident">res</span> <span class="kw">in</span> <span class="ident">db</span>.<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">DbPrefixTestPrefix</span>) {
-            <span class="kw">match</span> <span class="ident">res</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="number">0</span> {
-                <span class="ident">TestKey</span>(<span class="number">55</span>) =&gt; <span class="macro">assert!</span>(<span class="ident">res</span>.<span class="ident">unwrap</span>().<span class="number">1</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">9999</span>))),
-                <span class="ident">TestKey</span>(<span class="number">54</span>) =&gt; <span class="macro">assert!</span>(<span class="ident">res</span>.<span class="ident">unwrap</span>().<span class="number">1</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">8888</span>))),
-                <span class="kw">_</span> =&gt; {}
+        <span class="kw">for </span>res <span class="kw">in </span>db.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix) {
+            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
+                TestKey(<span class="number">55</span>) =&gt; <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">9999</span>))),
+                TestKey(<span class="number">54</span>) =&gt; <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">8888</span>))),
+                <span class="kw">_ </span>=&gt; {}
             }
         }
 
-        <span class="kw">for</span> <span class="ident">res</span> <span class="kw">in</span> <span class="ident">db</span>.<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">AltDbPrefixTestPrefix</span>) {
-            <span class="kw">match</span> <span class="ident">res</span>.<span class="ident">as_ref</span>().<span class="ident">unwrap</span>().<span class="number">0</span> {
-                <span class="ident">AltTestKey</span>(<span class="number">55</span>) =&gt; <span class="macro">assert!</span>(<span class="ident">res</span>.<span class="ident">unwrap</span>().<span class="number">1</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">7777</span>))),
-                <span class="ident">AltTestKey</span>(<span class="number">54</span>) =&gt; <span class="macro">assert!</span>(<span class="ident">res</span>.<span class="ident">unwrap</span>().<span class="number">1</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">TestVal</span>(<span class="number">6666</span>))),
-                <span class="kw">_</span> =&gt; {}
+        <span class="kw">for </span>res <span class="kw">in </span>db.find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix) {
+            <span class="kw">match </span>res.as_ref().unwrap().<span class="number">0 </span>{
+                AltTestKey(<span class="number">55</span>) =&gt; <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">7777</span>))),
+                AltTestKey(<span class="number">54</span>) =&gt; <span class="macro">assert!</span>(res.unwrap().<span class="number">1</span>.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">6666</span>))),
+                <span class="kw">_ </span>=&gt; {}
             }
         }
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

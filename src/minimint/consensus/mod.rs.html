@@ -666,673 +666,673 @@
 <span id="666">666</span>
 <span id="667">667</span>
 <span id="668">668</span>
-</pre><pre class="rust"><code><span class="attribute">#![<span class="ident">allow</span>(<span class="ident">clippy::let_unit_value</span>)]</span>
+</pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]</span>
 
-<span class="kw">mod</span> <span class="ident">conflictfilter</span>;
-<span class="kw">pub</span> <span class="kw">mod</span> <span class="ident">debug</span>;
-<span class="kw">mod</span> <span class="ident">interconnect</span>;
+<span class="kw">mod </span>conflictfilter;
+<span class="kw">pub mod </span>debug;
+<span class="kw">mod </span>interconnect;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::config::ServerConfig</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::conflictfilter::ConflictFilterable</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::interconnect::MinimintInterconnect</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::db</span>::{
-    <span class="ident">AcceptedTransactionKey</span>, <span class="ident">DropPeerKey</span>, <span class="ident">DropPeerKeyPrefix</span>, <span class="ident">EpochHistoryKey</span>, <span class="ident">LastEpochKey</span>,
-    <span class="ident">ProposedTransactionKey</span>, <span class="ident">ProposedTransactionKeyPrefix</span>, <span class="ident">RejectedTransactionKey</span>,
+<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::conflictfilter::ConflictFilterable;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::MinimintInterconnect;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
+    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
 };
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::outcome::OutputOutcome</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::rng::RngGenerator</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction</span>::{<span class="ident">Input</span>, <span class="ident">Output</span>, <span class="ident">Transaction</span>, <span class="ident">TransactionError</span>};
-<span class="kw">use</span> <span class="ident">futures::future::select_all</span>;
-<span class="kw">use</span> <span class="ident">hbbft::honey_badger::Batch</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::batch</span>::{<span class="ident">AccumulatorTx</span>, <span class="ident">BatchItem</span>, <span class="ident">BatchTx</span>, <span class="ident">DbBatch</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::db::Database</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api::module::audit::Audit</span>;
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">FederationModule</span>, <span class="ident">OutPoint</span>, <span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::epoch</span>::<span class="kw-2">*</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln</span>::{<span class="ident">LightningModule</span>, <span class="ident">LightningModuleError</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::mint</span>::{<span class="ident">Mint</span>, <span class="ident">MintError</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::wallet</span>::{<span class="ident">Wallet</span>, <span class="ident">WalletError</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::outcome::TransactionStatus</span>;
-<span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
-<span class="kw">use</span> <span class="ident">std::collections</span>::{<span class="ident">BTreeMap</span>, <span class="ident">HashSet</span>};
-<span class="kw">use</span> <span class="ident">std::iter::FromIterator</span>;
-<span class="kw">use</span> <span class="ident">std::sync::Arc</span>;
-<span class="kw">use</span> <span class="ident">thiserror::Error</span>;
-<span class="kw">use</span> <span class="ident">tokio::sync::Notify</span>;
-<span class="kw">use</span> <span class="ident">tracing</span>::{<span class="ident">debug</span>, <span class="ident">error</span>, <span class="ident">info</span>, <span class="ident">info_span</span>, <span class="ident">instrument</span>, <span class="ident">trace</span>, <span class="ident">warn</span>};
+<span class="kw">use </span><span class="kw">crate</span>::outcome::OutputOutcome;
+<span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::{Input, Output, Transaction, TransactionError};
+<span class="kw">use </span>futures::future::select_all;
+<span class="kw">use </span>hbbft::honey_badger::Batch;
+<span class="kw">use </span>minimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
+<span class="kw">use </span>minimint_api::db::Database;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::module::audit::Audit;
+<span class="kw">use </span>minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>minimint_core::epoch::<span class="kw-2">*</span>;
+<span class="kw">use </span>minimint_core::modules::ln::{LightningModule, LightningModuleError};
+<span class="kw">use </span>minimint_core::modules::mint::{Mint, MintError};
+<span class="kw">use </span>minimint_core::modules::wallet::{Wallet, WalletError};
+<span class="kw">use </span>minimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>tokio::sync::Notify;
+<span class="kw">use </span>tracing::{debug, error, info, info_span, instrument, trace, warn};
 
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">ConsensusOutcome</span> = <span class="ident">Batch</span>&lt;<span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;, <span class="ident">PeerId</span>&gt;;
-<span class="kw">pub</span> <span class="kw">type</span> <span class="ident">HoneyBadgerMessage</span> = <span class="ident">hbbft::honey_badger::Message</span>&lt;<span class="ident">PeerId</span>&gt;;
+<span class="kw">pub type </span>ConsensusOutcome = Batch&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;;
+<span class="kw">pub type </span>HoneyBadgerMessage = hbbft::honey_badger::Message&lt;PeerId&gt;;
 
-<span class="comment">// TODO remove HBBFT `Batch` from `ConsensusOutcome`</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConsensusOutcomeConversion</span>(<span class="kw">pub</span> <span class="ident">ConsensusOutcome</span>);
+<span class="comment">// TODO remove HBBFT `Batch` from `ConsensusOutcome`
+</span><span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>ConsensusOutcomeConversion(<span class="kw">pub </span>ConsensusOutcome);
 
-<span class="kw">impl</span> <span class="ident">PartialEq</span>&lt;<span class="self">Self</span>&gt; <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
-    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; <span class="ident">bool</span> {
-        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">epoch</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">epoch</span>) &amp;&amp; <span class="self">self</span>.<span class="number">0</span>.<span class="ident">contributions</span>.<span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="ident">other</span>.<span class="number">0</span>.<span class="ident">contributions</span>)
+<span class="kw">impl </span>PartialEq&lt;<span class="self">Self</span>&gt; <span class="kw">for </span>ConsensusOutcomeConversion {
+    <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+        <span class="self">self</span>.<span class="number">0</span>.epoch.eq(<span class="kw-2">&amp;</span>other.<span class="number">0</span>.epoch) &amp;&amp; <span class="self">self</span>.<span class="number">0</span>.contributions.eq(<span class="kw-2">&amp;</span>other.<span class="number">0</span>.contributions)
     }
 }
 
-<span class="kw">impl</span> <span class="ident">From</span>&lt;<span class="ident">OutcomeHistory</span>&gt; <span class="kw">for</span> <span class="ident">ConsensusOutcomeConversion</span> {
-    <span class="kw">fn</span> <span class="ident">from</span>(<span class="ident">history</span>: <span class="ident">OutcomeHistory</span>) -&gt; <span class="self">Self</span> {
-        <span class="ident">ConsensusOutcomeConversion</span>(<span class="ident">Batch</span> {
-            <span class="ident">epoch</span>: <span class="ident">history</span>.<span class="ident">epoch</span>,
-            <span class="ident">contributions</span>: <span class="ident">BTreeMap::from_iter</span>(<span class="ident">history</span>.<span class="ident">items</span>.<span class="ident">into_iter</span>()),
+<span class="kw">impl </span>From&lt;OutcomeHistory&gt; <span class="kw">for </span>ConsensusOutcomeConversion {
+    <span class="kw">fn </span>from(history: OutcomeHistory) -&gt; <span class="self">Self </span>{
+        ConsensusOutcomeConversion(Batch {
+            epoch: history.epoch,
+            contributions: BTreeMap::from_iter(history.items.into_iter()),
         })
     }
 }
 
-<span class="doccomment">/// Proposed HBBFT consensus changes including removing peers</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConsensusProposal</span> {
-    <span class="kw">pub</span> <span class="ident">items</span>: <span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt;,
-    <span class="kw">pub</span> <span class="ident">drop_peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;,
+<span class="doccomment">/// Proposed HBBFT consensus changes including removing peers
+</span><span class="attribute">#[derive(Debug, Clone)]</span>
+<span class="kw">pub struct </span>ConsensusProposal {
+    <span class="kw">pub </span>items: Vec&lt;ConsensusItem&gt;,
+    <span class="kw">pub </span>drop_peers: Vec&lt;PeerId&gt;,
 }
 
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+<span class="kw">pub struct </span>MinimintConsensus&lt;R&gt;
+<span class="kw">where
+    </span>R: RngCore + CryptoRng,
 {
-    <span class="doccomment">/// Cryptographic random number generator used for everything</span>
-    <span class="kw">pub</span> <span class="ident">rng_gen</span>: <span class="ident">Box</span>&lt;<span class="kw">dyn</span> <span class="ident">RngGenerator</span>&lt;<span class="ident">Rng</span> = <span class="ident">R</span>&gt;&gt;,
-    <span class="doccomment">/// Configuration describing the federation and containing our secrets</span>
-    <span class="kw">pub</span> <span class="ident">cfg</span>: <span class="ident">ServerConfig</span>,
+    <span class="doccomment">/// Cryptographic random number generator used for everything
+    </span><span class="kw">pub </span>rng_gen: Box&lt;<span class="kw">dyn </span>RngGenerator&lt;Rng = R&gt;&gt;,
+    <span class="doccomment">/// Configuration describing the federation and containing our secrets
+    </span><span class="kw">pub </span>cfg: ServerConfig,
 
-    <span class="doccomment">/// Our local mint</span>
-    <span class="kw">pub</span> <span class="ident">mint</span>: <span class="ident">Mint</span>, <span class="comment">// TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability</span>
-    <span class="kw">pub</span> <span class="ident">wallet</span>: <span class="ident">Wallet</span>,
-    <span class="kw">pub</span> <span class="ident">ln</span>: <span class="ident">LightningModule</span>,
+    <span class="doccomment">/// Our local mint
+    </span><span class="kw">pub </span>mint: Mint, <span class="comment">// TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
+    </span><span class="kw">pub </span>wallet: Wallet,
+    <span class="kw">pub </span>ln: LightningModule,
 
-    <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash</span>
-    <span class="kw">pub</span> <span class="ident">db</span>: <span class="ident">Arc</span>&lt;<span class="kw">dyn</span> <span class="ident">Database</span>&gt;,
+    <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
+    </span><span class="kw">pub </span>db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 
-    <span class="comment">// Notifies tasks when there is a new transaction</span>
-    <span class="kw">pub</span> <span class="ident">transaction_notify</span>: <span class="ident">Arc</span>&lt;<span class="ident">Notify</span>&gt;,
+    <span class="comment">// Notifies tasks when there is a new transaction
+    </span><span class="kw">pub </span>transaction_notify: Arc&lt;Notify&gt;,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AcceptedTransaction</span> {
-    <span class="kw">pub</span> <span class="ident">epoch</span>: <span class="ident">u64</span>,
-    <span class="kw">pub</span> <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>AcceptedTransaction {
+    <span class="kw">pub </span>epoch: u64,
+    <span class="kw">pub </span>transaction: Transaction,
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>)]</span>
-<span class="kw">struct</span> <span class="ident">VerificationCaches</span> {
-    <span class="ident">mint</span>: &lt;<span class="ident">Mint</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
-    <span class="ident">wallet</span>: &lt;<span class="ident">Wallet</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
-    <span class="ident">ln</span>: &lt;<span class="ident">LightningModule</span> <span class="kw">as</span> <span class="ident">FederationModule</span>&gt;<span class="ident">::VerificationCache</span>,
+<span class="attribute">#[derive(Debug)]</span>
+<span class="kw">struct </span>VerificationCaches {
+    mint: &lt;Mint <span class="kw">as </span>FederationModule&gt;::VerificationCache,
+    wallet: &lt;Wallet <span class="kw">as </span>FederationModule&gt;::VerificationCache,
+    ln: &lt;LightningModule <span class="kw">as </span>FederationModule&gt;::VerificationCache,
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">R</span>&gt; <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;
-<span class="kw">where</span>
-    <span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>,
+<span class="kw">impl</span>&lt;R&gt; MinimintConsensus&lt;R&gt;
+<span class="kw">where
+    </span>R: RngCore + CryptoRng,
 {
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">submit_transaction</span>(
+    <span class="kw">pub fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionSubmissionError</span>&gt; {
-        <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
-        <span class="macro">debug!</span>(%<span class="ident">tx_hash</span>, <span class="string">&quot;Received mint transaction&quot;</span>);
+        transaction: Transaction,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionSubmissionError&gt; {
+        <span class="kw">let </span>tx_hash = transaction.tx_hash();
+        <span class="macro">debug!</span>(%tx_hash, <span class="string">&quot;Received mint transaction&quot;</span>);
 
-        <span class="ident">transaction</span>.<span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">fee_consensus</span>())<span class="question-mark">?</span>;
+        transaction.validate_funding(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.fee_consensus())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">inputs</span> {
-            <span class="kw">let</span> <span class="ident">meta</span> = <span class="kw">match</span> <span class="ident">input</span> {
-                <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">coins</span>));
-                    <span class="self">self</span>.<span class="ident">mint</span>
-                        .<span class="ident">validate_input</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(), <span class="kw-2">&amp;</span><span class="ident">cache</span>, <span class="ident">coins</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputCoinError</span>)<span class="question-mark">?</span>
-                }
-                <span class="ident">Input::Wallet</span>(<span class="ident">peg_in</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>
-                        .<span class="ident">wallet</span>
-                        .<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">peg_in</span>));
-                    <span class="self">self</span>.<span class="ident">wallet</span>
-                        .<span class="ident">validate_input</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(), <span class="kw-2">&amp;</span><span class="ident">cache</span>, <span class="ident">peg_in</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputPegIn</span>)<span class="question-mark">?</span>
-                }
-                <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; {
-                    <span class="kw">let</span> <span class="ident">cache</span> = <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">std::iter::once</span>(<span class="ident">input</span>));
-                    <span class="self">self</span>.<span class="ident">ln</span>
-                        .<span class="ident">validate_input</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(), <span class="kw-2">&amp;</span><span class="ident">cache</span>, <span class="ident">input</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::ContractInputError</span>)<span class="question-mark">?</span>
-                }
+        <span class="kw">let </span><span class="kw-2">mut </span>pub_keys = Vec::new();
+        <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.inputs {
+            <span class="kw">let </span>meta = <span class="kw">match </span>input {
+                Input::Mint(coins) =&gt; {
+                    <span class="kw">let </span>cache = <span class="self">self</span>.mint.build_verification_cache(std::iter::once(coins));
+                    <span class="self">self</span>.mint
+                        .validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(), <span class="kw-2">&amp;</span>cache, coins)
+                        .map_err(TransactionSubmissionError::InputCoinError)<span class="question-mark">?
+                </span>}
+                Input::Wallet(peg_in) =&gt; {
+                    <span class="kw">let </span>cache = <span class="self">self
+                        </span>.wallet
+                        .build_verification_cache(std::iter::once(peg_in));
+                    <span class="self">self</span>.wallet
+                        .validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(), <span class="kw-2">&amp;</span>cache, peg_in)
+                        .map_err(TransactionSubmissionError::InputPegIn)<span class="question-mark">?
+                </span>}
+                Input::LN(input) =&gt; {
+                    <span class="kw">let </span>cache = <span class="self">self</span>.ln.build_verification_cache(std::iter::once(input));
+                    <span class="self">self</span>.ln
+                        .validate_input(<span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(), <span class="kw-2">&amp;</span>cache, input)
+                        .map_err(TransactionSubmissionError::ContractInputError)<span class="question-mark">?
+                </span>}
             };
-            <span class="ident">pub_keys</span>.<span class="ident">push</span>(<span class="ident">meta</span>.<span class="ident">puk_keys</span>);
+            pub_keys.push(meta.puk_keys);
         }
-        <span class="ident">transaction</span>.<span class="ident">validate_signature</span>(<span class="ident">pub_keys</span>.<span class="ident">into_iter</span>().<span class="ident">flatten</span>())<span class="question-mark">?</span>;
+        transaction.validate_signature(pub_keys.into_iter().flatten())<span class="question-mark">?</span>;
 
-        <span class="kw">for</span> <span class="ident">output</span> <span class="kw">in</span> <span class="kw-2">&amp;</span><span class="ident">transaction</span>.<span class="ident">outputs</span> {
-            <span class="kw">match</span> <span class="ident">output</span> {
-                <span class="ident">Output::Mint</span>(<span class="ident">coins</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">mint</span>
-                        .<span class="ident">validate_output</span>(<span class="ident">coins</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::OutputCoinError</span>)<span class="question-mark">?</span>;
+        <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>transaction.outputs {
+            <span class="kw">match </span>output {
+                Output::Mint(coins) =&gt; {
+                    <span class="self">self</span>.mint
+                        .validate_output(coins)
+                        .map_err(TransactionSubmissionError::OutputCoinError)<span class="question-mark">?</span>;
                 }
-                <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">wallet</span>
-                        .<span class="ident">validate_output</span>(<span class="ident">peg_out</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::OutputPegOut</span>)<span class="question-mark">?</span>;
+                Output::Wallet(peg_out) =&gt; {
+                    <span class="self">self</span>.wallet
+                        .validate_output(peg_out)
+                        .map_err(TransactionSubmissionError::OutputPegOut)<span class="question-mark">?</span>;
                 }
-                <span class="ident">Output::LN</span>(<span class="ident">output</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">ln</span>
-                        .<span class="ident">validate_output</span>(<span class="ident">output</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::ContractOutputError</span>)<span class="question-mark">?</span>;
+                Output::LN(output) =&gt; {
+                    <span class="self">self</span>.ln
+                        .validate_output(output)
+                        .map_err(TransactionSubmissionError::ContractOutputError)<span class="question-mark">?</span>;
                 }
             }
         }
 
-        <span class="kw">let</span> <span class="ident">new</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">insert_entry</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedTransactionKey</span>(<span class="ident">tx_hash</span>), <span class="kw-2">&amp;</span><span class="ident">transaction</span>)
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>new = <span class="self">self
+            </span>.db
+            .insert_entry(<span class="kw-2">&amp;</span>ProposedTransactionKey(tx_hash), <span class="kw-2">&amp;</span>transaction)
+            .expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="ident">new</span>.<span class="ident">is_some</span>() {
+        <span class="kw">if </span>new.is_some() {
             <span class="macro">warn!</span>(<span class="string">&quot;Added consensus item was already in consensus queue&quot;</span>);
         }
 
-        <span class="self">self</span>.<span class="ident">transaction_notify</span>.<span class="ident">notify_one</span>();
+        <span class="self">self</span>.transaction_notify.notify_one();
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="attribute">#[<span class="ident">instrument</span>(<span class="ident">skip_all</span>, <span class="ident">fields</span>(<span class="ident">epoch</span> = <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>))]</span>
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">process_consensus_outcome</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">consensus_outcome</span>: <span class="ident">ConsensusOutcome</span>) {
-        <span class="macro">info!</span>(<span class="string">&quot;{}&quot;</span>, <span class="ident">debug::epoch_message</span>(<span class="kw-2">&amp;</span><span class="ident">consensus_outcome</span>));
-        <span class="kw">let</span> <span class="ident">epoch</span> = <span class="ident">consensus_outcome</span>.<span class="ident">epoch</span>;
-        <span class="kw">let</span> <span class="ident">epoch_peers</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; =
-            <span class="ident">consensus_outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">copied</span>().<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">outcome</span> = <span class="ident">consensus_outcome</span>.<span class="ident">clone</span>();
+    <span class="attribute">#[instrument(skip_all, fields(epoch = consensus_outcome.epoch))]</span>
+    <span class="kw">pub async fn </span>process_consensus_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, consensus_outcome: ConsensusOutcome) {
+        <span class="macro">info!</span>(<span class="string">&quot;{}&quot;</span>, debug::epoch_message(<span class="kw-2">&amp;</span>consensus_outcome));
+        <span class="kw">let </span>epoch = consensus_outcome.epoch;
+        <span class="kw">let </span>epoch_peers: HashSet&lt;PeerId&gt; =
+            consensus_outcome.contributions.keys().copied().collect();
+        <span class="kw">let </span>outcome = consensus_outcome.clone();
 
-        <span class="kw">let</span> <span class="ident">UnzipConsensusItem</span> {
-            <span class="ident">epoch_info</span>: <span class="ident">epoch_info_cis</span>,
-            <span class="ident">transaction</span>: <span class="ident">transaction_cis</span>,
-            <span class="ident">wallet</span>: <span class="ident">wallet_cis</span>,
-            <span class="ident">mint</span>: <span class="ident">mint_cis</span>,
-            <span class="ident">ln</span>: <span class="ident">ln_cis</span>,
-        } = <span class="ident">consensus_outcome</span>
-            .<span class="ident">contributions</span>
-            .<span class="ident">into_iter</span>()
-            .<span class="ident">flat_map</span>(|(<span class="ident">peer</span>, <span class="ident">cis</span>)| <span class="ident">cis</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="kw">move</span> |<span class="ident">ci</span>| (<span class="ident">peer</span>, <span class="ident">ci</span>)))
-            .<span class="ident">unzip_consensus_item</span>();
+        <span class="kw">let </span>UnzipConsensusItem {
+            epoch_info: epoch_info_cis,
+            transaction: transaction_cis,
+            wallet: wallet_cis,
+            mint: mint_cis,
+            ln: ln_cis,
+        } = consensus_outcome
+            .contributions
+            .into_iter()
+            .flat_map(|(peer, cis)| cis.into_iter().map(<span class="kw">move </span>|ci| (peer, ci)))
+            .unzip_consensus_item();
 
-        <span class="comment">// Begin consensus epoch</span>
-        {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
-            <span class="self">self</span>.<span class="ident">wallet</span>
-                .<span class="ident">begin_consensus_epoch</span>(<span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="ident">wallet_cis</span>, <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+        <span class="comment">// Begin consensus epoch
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>db_batch = DbBatch::new();
+            <span class="self">self</span>.wallet
+                .begin_consensus_epoch(db_batch.transaction(), wallet_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
-            <span class="self">self</span>.<span class="ident">mint</span>
-                .<span class="ident">begin_consensus_epoch</span>(<span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="ident">mint_cis</span>, <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+            <span class="self">self</span>.mint
+                .begin_consensus_epoch(db_batch.transaction(), mint_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
-            <span class="self">self</span>.<span class="ident">ln</span>
-                .<span class="ident">begin_consensus_epoch</span>(<span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="ident">ln_cis</span>, <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+            <span class="self">self</span>.ln
+                .begin_consensus_epoch(db_batch.transaction(), ln_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
-            <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            <span class="self">self</span>.db.apply_batch(db_batch).expect(<span class="string">&quot;DB error&quot;</span>);
         }
 
-        <span class="comment">// Process transactions</span>
-        {
-            <span class="comment">// Since the changes to the database will happen all at once we won&#39;t be able to handle</span>
-            <span class="comment">// conflicts between consensus items in one batch there. Thus we need to make sure that</span>
-            <span class="comment">// all items in a batch are consistent/deterministically filter out inconsistent ones.</span>
-            <span class="comment">// There are two item types that need checking:</span>
-            <span class="comment">//  * peg-ins that each peg-in tx is only used to issue coins once</span>
-            <span class="comment">//  * coin spends to avoid double spends in one batch</span>
-            <span class="comment">//  * only one peg-out allowed per epoch</span>
-            <span class="kw">let</span> (<span class="ident">ok_tx</span>, <span class="ident">err_tx</span>) = <span class="ident">transaction_cis</span>
-                .<span class="ident">into_iter</span>()
-                .<span class="ident">filter_conflicts</span>(|(<span class="kw">_</span>, <span class="ident">tx</span>)| <span class="ident">tx</span>)
-                .<span class="ident">partitioned</span>();
+        <span class="comment">// Process transactions
+        </span>{
+            <span class="comment">// Since the changes to the database will happen all at once we won&#39;t be able to handle
+            // conflicts between consensus items in one batch there. Thus we need to make sure that
+            // all items in a batch are consistent/deterministically filter out inconsistent ones.
+            // There are two item types that need checking:
+            //  * peg-ins that each peg-in tx is only used to issue coins once
+            //  * coin spends to avoid double spends in one batch
+            //  * only one peg-out allowed per epoch
+            </span><span class="kw">let </span>(ok_tx, err_tx) = transaction_cis
+                .into_iter()
+                .filter_conflicts(|(<span class="kw">_</span>, tx)| tx)
+                .partitioned();
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
+            <span class="kw">let </span><span class="kw-2">mut </span>db_batch = DbBatch::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>batch_tx = db_batch.transaction();
 
-            <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">err_tx</span> {
-                <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(
-                    <span class="ident">RejectedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()),
-                    <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">TransactionSubmissionError::TransactionConflictError</span>),
+            <span class="kw">for </span>transaction <span class="kw">in </span>err_tx {
+                batch_tx.append_insert(
+                    RejectedTransactionKey(transaction.tx_hash()),
+                    <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, TransactionSubmissionError::TransactionConflictError),
                 );
             }
 
-            <span class="kw">let</span> <span class="ident">caches</span> = <span class="self">self</span>.<span class="ident">build_verification_caches</span>(<span class="ident">ok_tx</span>.<span class="ident">iter</span>());
-            <span class="kw">for</span> <span class="ident">transaction</span> <span class="kw">in</span> <span class="ident">ok_tx</span> {
-                <span class="kw">let</span> <span class="ident">span</span> = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
-                <span class="comment">// in_scope to make sure that no await is in the middle of the span</span>
-                <span class="kw">let</span> <span class="ident">_enter</span> = <span class="ident">span</span>.<span class="ident">in_scope</span>(|| {
-                    <span class="macro">trace!</span>(<span class="question-mark">?</span><span class="ident">transaction</span>);
-                    <span class="ident">batch_tx</span>.<span class="ident">append_maybe_delete</span>(<span class="ident">ProposedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()));
+            <span class="kw">let </span>caches = <span class="self">self</span>.build_verification_caches(ok_tx.iter());
+            <span class="kw">for </span>transaction <span class="kw">in </span>ok_tx {
+                <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;Processing transaction&quot;</span>);
+                <span class="comment">// in_scope to make sure that no await is in the middle of the span
+                </span><span class="kw">let </span>_enter = span.in_scope(|| {
+                    <span class="macro">trace!</span>(<span class="question-mark">?</span>transaction);
+                    batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()));
 
-                    <span class="comment">// TODO: use borrowed transaction</span>
-                    <span class="kw">match</span> <span class="self">self</span>.<span class="ident">process_transaction</span>(
-                        <span class="ident">batch_tx</span>.<span class="ident">subtransaction</span>(),
-                        <span class="ident">transaction</span>.<span class="ident">clone</span>(),
-                        <span class="kw-2">&amp;</span><span class="ident">caches</span>,
+                    <span class="comment">// TODO: use borrowed transaction
+                    </span><span class="kw">match </span><span class="self">self</span>.process_transaction(
+                        batch_tx.subtransaction(),
+                        transaction.clone(),
+                        <span class="kw-2">&amp;</span>caches,
                     ) {
                         <span class="prelude-val">Ok</span>(()) =&gt; {
-                            <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(
-                                <span class="ident">AcceptedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()),
-                                <span class="ident">AcceptedTransaction</span> { <span class="ident">epoch</span>, <span class="ident">transaction</span> },
+                            batch_tx.append_insert(
+                                AcceptedTransactionKey(transaction.tx_hash()),
+                                AcceptedTransaction { epoch, transaction },
                             );
                         }
-                        <span class="prelude-val">Err</span>(<span class="ident">error</span>) =&gt; {
-                            <span class="macro">warn!</span>(%<span class="ident">error</span>, <span class="string">&quot;Transaction failed&quot;</span>);
-                            <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(
-                                <span class="ident">RejectedTransactionKey</span>(<span class="ident">transaction</span>.<span class="ident">tx_hash</span>()),
-                                <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, <span class="ident">error</span>),
+                        <span class="prelude-val">Err</span>(error) =&gt; {
+                            <span class="macro">warn!</span>(%error, <span class="string">&quot;Transaction failed&quot;</span>);
+                            batch_tx.append_insert(
+                                RejectedTransactionKey(transaction.tx_hash()),
+                                <span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, error),
                             );
                         }
                     }
                 });
             }
-            <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
-            <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            batch_tx.commit();
+            <span class="self">self</span>.db.apply_batch(db_batch).expect(<span class="string">&quot;DB error&quot;</span>);
         }
 
-        <span class="comment">// End consensus epoch</span>
-        {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">db_batch</span> = <span class="ident">DbBatch::new</span>();
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_peers</span> = <span class="ident">Vec</span>::&lt;<span class="ident">PeerId</span>&gt;<span class="ident">::new</span>();
+        <span class="comment">// End consensus epoch
+        </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>db_batch = DbBatch::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
-            <span class="self">self</span>.<span class="ident">save_epoch_history</span>(
-                <span class="ident">outcome</span>,
-                <span class="ident">epoch_info_cis</span>,
-                <span class="ident">db_batch</span>.<span class="ident">transaction</span>(),
-                <span class="kw-2">&amp;mut</span> <span class="ident">drop_peers</span>,
+            <span class="self">self</span>.save_epoch_history(
+                outcome,
+                epoch_info_cis,
+                db_batch.transaction(),
+                <span class="kw-2">&amp;mut </span>drop_peers,
             );
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_wallet</span> = <span class="self">self</span>
-                .<span class="ident">wallet</span>
-                .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+            <span class="kw">let </span><span class="kw-2">mut </span>drop_wallet = <span class="self">self
+                </span>.wallet
+                .end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, db_batch.transaction(), <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_mint</span> = <span class="self">self</span>
-                .<span class="ident">mint</span>
-                .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+            <span class="kw">let </span><span class="kw-2">mut </span>drop_mint = <span class="self">self
+                </span>.mint
+                .end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, db_batch.transaction(), <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">drop_ln</span> = <span class="self">self</span>
-                .<span class="ident">ln</span>
-                .<span class="ident">end_consensus_epoch</span>(<span class="kw-2">&amp;</span><span class="ident">epoch_peers</span>, <span class="ident">db_batch</span>.<span class="ident">transaction</span>(), <span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
+            <span class="kw">let </span><span class="kw-2">mut </span>drop_ln = <span class="self">self
+                </span>.ln
+                .end_consensus_epoch(<span class="kw-2">&amp;</span>epoch_peers, db_batch.transaction(), <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
 
-            <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_wallet</span>);
-            <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_mint</span>);
-            <span class="ident">drop_peers</span>.<span class="ident">append</span>(<span class="kw-2">&amp;mut</span> <span class="ident">drop_ln</span>);
+            drop_peers.append(<span class="kw-2">&amp;mut </span>drop_wallet);
+            drop_peers.append(<span class="kw-2">&amp;mut </span>drop_mint);
+            drop_peers.append(<span class="kw-2">&amp;mut </span>drop_ln);
 
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">batch_tx</span> = <span class="ident">db_batch</span>.<span class="ident">transaction</span>();
-            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">drop_peers</span> {
-                <span class="ident">batch_tx</span>.<span class="ident">append_insert</span>(<span class="ident">DropPeerKey</span>(<span class="ident">peer</span>), ());
+            <span class="kw">let </span><span class="kw-2">mut </span>batch_tx = db_batch.transaction();
+            <span class="kw">for </span>peer <span class="kw">in </span>drop_peers {
+                batch_tx.append_insert(DropPeerKey(peer), ());
             }
-            <span class="ident">batch_tx</span>.<span class="ident">commit</span>();
+            batch_tx.commit();
 
-            <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">apply_batch</span>(<span class="ident">db_batch</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+            <span class="self">self</span>.db.apply_batch(db_batch).expect(<span class="string">&quot;DB error&quot;</span>);
         }
 
-        <span class="kw">let</span> <span class="ident">audit</span> = <span class="self">self</span>.<span class="ident">audit</span>();
-        <span class="kw">if</span> <span class="ident">audit</span>.<span class="ident">sum</span>().<span class="ident">milli_sat</span> &lt; <span class="number">0</span> {
+        <span class="kw">let </span>audit = <span class="self">self</span>.audit();
+        <span class="kw">if </span>audit.sum().milli_sat &lt; <span class="number">0 </span>{
             <span class="macro">panic!</span>(
                 <span class="string">&quot;Balance sheet of the fed has gone negative, this should never happen! {}&quot;</span>,
-                <span class="ident">audit</span>
+                audit
             )
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">epoch_history</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">epoch</span>: <span class="ident">u64</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident">EpochHistory</span>&gt; {
-        <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">EpochHistoryKey</span>(<span class="ident">epoch</span>)).<span class="ident">unwrap</span>()
+    <span class="kw">pub fn </span>epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Option</span>&lt;EpochHistory&gt; {
+        <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>EpochHistoryKey(epoch)).unwrap()
     }
 
-    <span class="kw">fn</span> <span class="ident">save_epoch_history</span>(
+    <span class="kw">fn </span>save_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">outcome</span>: <span class="ident">ConsensusOutcome</span>,
-        <span class="ident">signatures</span>: <span class="ident">Vec</span>&lt;(<span class="ident">PeerId</span>, <span class="ident">EpochSignatureShare</span>)&gt;,
-        <span class="kw-2">mut</span> <span class="ident">transaction</span>: <span class="ident">AccumulatorTx</span>&lt;<span class="ident">BatchItem</span>&gt;,
-        <span class="ident">drop_peers</span>: <span class="kw-2">&amp;mut</span> <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt;,
+        outcome: ConsensusOutcome,
+        signatures: Vec&lt;(PeerId, EpochSignatureShare)&gt;,
+        <span class="kw-2">mut </span>transaction: AccumulatorTx&lt;BatchItem&gt;,
+        drop_peers: <span class="kw-2">&amp;mut </span>Vec&lt;PeerId&gt;,
     ) {
-        <span class="kw">let</span> <span class="ident">prev_epoch_key</span> = <span class="ident">EpochHistoryKey</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>.<span class="ident">saturating_sub</span>(<span class="number">1</span>));
-        <span class="kw">let</span> <span class="ident">peers</span>: <span class="ident">Vec</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">outcome</span>.<span class="ident">contributions</span>.<span class="ident">keys</span>().<span class="ident">cloned</span>().<span class="ident">collect</span>();
-        <span class="kw">let</span> <span class="ident">maybe_prev_epoch</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">prev_epoch_key</span>).<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(<span class="number">1</span>));
+        <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
+        <span class="kw">let </span>maybe_prev_epoch = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>prev_epoch_key).expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="comment">// save current epoch</span>
-        <span class="kw">let</span> <span class="ident">current</span> = <span class="ident">EpochHistory::new</span>(<span class="ident">outcome</span>.<span class="ident">epoch</span>, <span class="ident">outcome</span>.<span class="ident">contributions</span>, <span class="kw-2">&amp;</span><span class="ident">maybe_prev_epoch</span>);
-        <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">LastEpochKey</span>, <span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>));
-        <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">EpochHistoryKey</span>(<span class="ident">current</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>), <span class="ident">current</span>);
+        <span class="comment">// save current epoch
+        </span><span class="kw">let </span>current = EpochHistory::new(outcome.epoch, outcome.contributions, <span class="kw-2">&amp;</span>maybe_prev_epoch);
+        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
+        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
 
-        <span class="comment">// validate and update sigs on last epoch</span>
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="kw-2">mut</span> <span class="ident">prev_epoch</span>) = <span class="ident">maybe_prev_epoch</span> {
-            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">valid_sigs</span>: <span class="ident">HashSet</span>&lt;<span class="ident">PeerId</span>&gt; = <span class="ident">HashSet::new</span>();
+        <span class="comment">// validate and update sigs on last epoch
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_epoch) = maybe_prev_epoch {
+            <span class="kw">let </span><span class="kw-2">mut </span>valid_sigs: HashSet&lt;PeerId&gt; = HashSet::new();
 
-            <span class="kw">let</span> <span class="ident">filtered</span>: <span class="ident">BTreeMap</span>&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="ident">signatures</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">filter</span>(|(<span class="ident">peer</span>, <span class="ident">sig</span>)| {
-                    <span class="kw">let</span> <span class="ident">pub_key</span> = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">public_key_share</span>(<span class="ident">peer</span>.<span class="ident">to_usize</span>());
-                    <span class="ident">pub_key</span>.<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>)
+            <span class="kw">let </span>filtered: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = signatures
+                .iter()
+                .filter(|(peer, sig)| {
+                    <span class="kw">let </span>pub_key = <span class="self">self</span>.cfg.epoch_pk_set.public_key_share(peer.to_usize());
+                    pub_key.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, prev_epoch.hash)
                 })
-                .<span class="ident">map</span>(|(<span class="ident">peer</span>, <span class="ident">sig</span>)| {
-                    <span class="ident">valid_sigs</span>.<span class="ident">insert</span>(<span class="kw-2">*</span><span class="ident">peer</span>);
-                    (<span class="ident">peer</span>.<span class="ident">to_usize</span>(), <span class="kw-2">&amp;</span><span class="ident">sig</span>.<span class="number">0</span>)
+                .map(|(peer, sig)| {
+                    valid_sigs.insert(<span class="kw-2">*</span>peer);
+                    (peer.to_usize(), <span class="kw-2">&amp;</span>sig.<span class="number">0</span>)
                 })
-                .<span class="ident">collect</span>();
+                .collect();
 
-            <span class="kw">for</span> <span class="ident">peer</span> <span class="kw">in</span> <span class="ident">peers</span> {
-                <span class="kw">if</span> !<span class="ident">valid_sigs</span>.<span class="ident">contains</span>(<span class="kw-2">&amp;</span><span class="ident">peer</span>) {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, <span class="ident">peer</span>);
-                    <span class="ident">drop_peers</span>.<span class="ident">push</span>(<span class="ident">peer</span>);
+            <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                <span class="kw">if </span>!valid_sigs.contains(<span class="kw-2">&amp;</span>peer) {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, peer);
+                    drop_peers.push(peer);
                 }
             }
 
-            <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Ok</span>(<span class="ident">final_sig</span>) = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_pk_set</span>.<span class="ident">combine_signatures</span>(<span class="ident">filtered</span>) {
-                <span class="macro">assert!</span>(<span class="self">self</span>
-                    .<span class="ident">cfg</span>
-                    .<span class="ident">epoch_pk_set</span>
-                    .<span class="ident">public_key</span>()
-                    .<span class="ident">verify</span>(<span class="kw-2">&amp;</span><span class="ident">final_sig</span>, <span class="ident">prev_epoch</span>.<span class="ident">hash</span>));
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(final_sig) = <span class="self">self</span>.cfg.epoch_pk_set.combine_signatures(filtered) {
+                <span class="macro">assert!</span>(<span class="self">self
+                    </span>.cfg
+                    .epoch_pk_set
+                    .public_key()
+                    .verify(<span class="kw-2">&amp;</span>final_sig, prev_epoch.hash));
 
-                <span class="ident">prev_epoch</span>.<span class="ident">signature</span> = <span class="prelude-val">Some</span>(<span class="ident">EpochSignature</span>(<span class="ident">final_sig</span>));
-                <span class="ident">transaction</span>.<span class="ident">append_insert</span>(<span class="ident">prev_epoch_key</span>, <span class="ident">prev_epoch</span>);
-            } <span class="kw">else</span> {
-                <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, <span class="ident">prev_epoch</span>.<span class="ident">outcome</span>.<span class="ident">epoch</span>);
+                prev_epoch.signature = <span class="prelude-val">Some</span>(EpochSignature(final_sig));
+                transaction.append_insert(prev_epoch_key, prev_epoch);
+            } <span class="kw">else </span>{
+                <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch.outcome.epoch);
             }
         }
 
-        <span class="ident">transaction</span>.<span class="ident">commit</span>();
+        transaction.commit();
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">await_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="ident">select_all</span>(<span class="macro">vec!</span>[
-            <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
-            <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
-            <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">await_consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>()),
+    <span class="kw">pub async fn </span>await_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        select_all(<span class="macro">vec!</span>[
+            <span class="self">self</span>.wallet.await_consensus_proposal(<span class="self">self</span>.rng_gen.get_rng()),
+            <span class="self">self</span>.ln.await_consensus_proposal(<span class="self">self</span>.rng_gen.get_rng()),
+            <span class="self">self</span>.mint.await_consensus_proposal(<span class="self">self</span>.rng_gen.get_rng()),
         ])
         .<span class="kw">await</span>;
     }
 
-    <span class="kw">pub</span> <span class="kw">async</span> <span class="kw">fn</span> <span class="ident">get_consensus_proposal</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ConsensusProposal</span> {
-        <span class="kw">let</span> <span class="ident">drop_peers</span> = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">DropPeerKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> <span class="ident">key</span> = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
-                <span class="ident">key</span>.<span class="number">0</span>
-            })
-            .<span class="ident">collect</span>();
+    <span class="kw">pub async fn </span>get_consensus_proposal(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ConsensusProposal {
+        <span class="kw">let </span>drop_peers = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>DropPeerKeyPrefix)
+            .map(|res| {
+                <span class="kw">let </span>key = res.expect(<span class="string">&quot;DB error&quot;</span>).<span class="number">0</span>;
+                key.<span class="number">0
+            </span>})
+            .collect();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">items</span>: <span class="ident">Vec</span>&lt;<span class="ident">ConsensusItem</span>&gt; = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">find_by_prefix</span>(<span class="kw-2">&amp;</span><span class="ident">ProposedTransactionKeyPrefix</span>)
-            .<span class="ident">map</span>(|<span class="ident">res</span>| {
-                <span class="kw">let</span> (<span class="ident">_key</span>, <span class="ident">value</span>) = <span class="ident">res</span>.<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
-                <span class="ident">ConsensusItem::Transaction</span>(<span class="ident">value</span>)
+        <span class="kw">let </span><span class="kw-2">mut </span>items: Vec&lt;ConsensusItem&gt; = <span class="self">self
+            </span>.db
+            .find_by_prefix(<span class="kw-2">&amp;</span>ProposedTransactionKeyPrefix)
+            .map(|res| {
+                <span class="kw">let </span>(_key, value) = res.expect(<span class="string">&quot;DB error&quot;</span>);
+                ConsensusItem::Transaction(value)
             })
-            .<span class="ident">chain</span>(
-                <span class="self">self</span>.<span class="ident">wallet</span>
-                    .<span class="ident">consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
-                    .<span class="kw">await</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(<span class="ident">ConsensusItem::Wallet</span>),
+            .chain(
+                <span class="self">self</span>.wallet
+                    .consensus_proposal(<span class="self">self</span>.rng_gen.get_rng())
+                    .<span class="kw">await
+                    </span>.into_iter()
+                    .map(ConsensusItem::Wallet),
             )
-            .<span class="ident">chain</span>(
-                <span class="self">self</span>.<span class="ident">mint</span>
-                    .<span class="ident">consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
-                    .<span class="kw">await</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(<span class="ident">ConsensusItem::Mint</span>),
+            .chain(
+                <span class="self">self</span>.mint
+                    .consensus_proposal(<span class="self">self</span>.rng_gen.get_rng())
+                    .<span class="kw">await
+                    </span>.into_iter()
+                    .map(ConsensusItem::Mint),
             )
-            .<span class="ident">chain</span>(
-                <span class="self">self</span>.<span class="ident">ln</span>
-                    .<span class="ident">consensus_proposal</span>(<span class="self">self</span>.<span class="ident">rng_gen</span>.<span class="ident">get_rng</span>())
-                    .<span class="kw">await</span>
-                    .<span class="ident">into_iter</span>()
-                    .<span class="ident">map</span>(<span class="ident">ConsensusItem::LN</span>),
+            .chain(
+                <span class="self">self</span>.ln
+                    .consensus_proposal(<span class="self">self</span>.rng_gen.get_rng())
+                    .<span class="kw">await
+                    </span>.into_iter()
+                    .map(ConsensusItem::LN),
             )
-            .<span class="ident">collect</span>();
+            .collect();
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">epoch</span>) = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">LastEpochKey</span>).<span class="ident">unwrap</span>() {
-            <span class="kw">let</span> <span class="ident">last_epoch</span> = <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">epoch</span>).<span class="ident">unwrap</span>().<span class="ident">unwrap</span>();
-            <span class="kw">let</span> <span class="ident">sig</span> = <span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">epoch_sks</span>.<span class="number">0</span>.<span class="ident">sign</span>(<span class="ident">last_epoch</span>.<span class="ident">hash</span>);
-            <span class="kw">let</span> <span class="ident">item</span> = <span class="ident">ConsensusItem::EpochInfo</span>(<span class="ident">EpochSignatureShare</span>(<span class="ident">sig</span>));
-            <span class="ident">items</span>.<span class="ident">push</span>(<span class="ident">item</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(epoch) = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>LastEpochKey).unwrap() {
+            <span class="kw">let </span>last_epoch = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>epoch).unwrap().unwrap();
+            <span class="kw">let </span>sig = <span class="self">self</span>.cfg.epoch_sks.<span class="number">0</span>.sign(last_epoch.hash);
+            <span class="kw">let </span>item = ConsensusItem::EpochInfo(EpochSignatureShare(sig));
+            items.push(item);
         };
 
-        <span class="ident">ConsensusProposal</span> { <span class="ident">items</span>, <span class="ident">drop_peers</span> }
+        ConsensusProposal { items, drop_peers }
     }
 
-    <span class="kw">fn</span> <span class="ident">process_transaction</span>(
+    <span class="kw">fn </span>process_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut</span> <span class="ident">batch</span>: <span class="ident">BatchTx</span>,
-        <span class="ident">transaction</span>: <span class="ident">Transaction</span>,
-        <span class="ident">caches</span>: <span class="kw-2">&amp;</span><span class="ident">VerificationCaches</span>,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="ident">TransactionSubmissionError</span>&gt; {
-        <span class="ident">transaction</span>.<span class="ident">validate_funding</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">cfg</span>.<span class="ident">fee_consensus</span>())<span class="question-mark">?</span>;
+        <span class="kw-2">mut </span>batch: BatchTx,
+        transaction: Transaction,
+        caches: <span class="kw-2">&amp;</span>VerificationCaches,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionSubmissionError&gt; {
+        transaction.validate_funding(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.fee_consensus())<span class="question-mark">?</span>;
 
-        <span class="kw">let</span> <span class="ident">tx_hash</span> = <span class="ident">transaction</span>.<span class="ident">tx_hash</span>();
+        <span class="kw">let </span>tx_hash = transaction.tx_hash();
 
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pub_keys</span> = <span class="ident">Vec::new</span>();
-        <span class="kw">for</span> <span class="ident">input</span> <span class="kw">in</span> <span class="ident">transaction</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>() {
-            <span class="kw">let</span> <span class="ident">meta</span> = <span class="kw">match</span> <span class="ident">input</span> {
-                <span class="ident">Input::Mint</span>(<span class="ident">coins</span>) =&gt; <span class="self">self</span>
-                    .<span class="ident">mint</span>
-                    .<span class="ident">apply_input</span>(
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(),
-                        <span class="ident">batch</span>.<span class="ident">subtransaction</span>(),
-                        <span class="ident">coins</span>,
-                        <span class="kw-2">&amp;</span><span class="ident">caches</span>.<span class="ident">mint</span>,
+        <span class="kw">let </span><span class="kw-2">mut </span>pub_keys = Vec::new();
+        <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
+            <span class="kw">let </span>meta = <span class="kw">match </span>input {
+                Input::Mint(coins) =&gt; <span class="self">self
+                    </span>.mint
+                    .apply_input(
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
+                        batch.subtransaction(),
+                        coins,
+                        <span class="kw-2">&amp;</span>caches.mint,
                     )
-                    .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputCoinError</span>)<span class="question-mark">?</span>,
-                <span class="ident">Input::Wallet</span>(<span class="ident">peg_in</span>) =&gt; <span class="self">self</span>
-                    .<span class="ident">wallet</span>
-                    .<span class="ident">apply_input</span>(
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(),
-                        <span class="ident">batch</span>.<span class="ident">subtransaction</span>(),
-                        <span class="ident">peg_in</span>,
-                        <span class="kw-2">&amp;</span><span class="ident">caches</span>.<span class="ident">wallet</span>,
+                    .map_err(TransactionSubmissionError::InputCoinError)<span class="question-mark">?</span>,
+                Input::Wallet(peg_in) =&gt; <span class="self">self
+                    </span>.wallet
+                    .apply_input(
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
+                        batch.subtransaction(),
+                        peg_in,
+                        <span class="kw-2">&amp;</span>caches.wallet,
                     )
-                    .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::InputPegIn</span>)<span class="question-mark">?</span>,
-                <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; <span class="self">self</span>
-                    .<span class="ident">ln</span>
-                    .<span class="ident">apply_input</span>(
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">build_interconnect</span>(),
-                        <span class="ident">batch</span>.<span class="ident">subtransaction</span>(),
-                        <span class="ident">input</span>,
-                        <span class="kw-2">&amp;</span><span class="ident">caches</span>.<span class="ident">ln</span>,
+                    .map_err(TransactionSubmissionError::InputPegIn)<span class="question-mark">?</span>,
+                Input::LN(input) =&gt; <span class="self">self
+                    </span>.ln
+                    .apply_input(
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.build_interconnect(),
+                        batch.subtransaction(),
+                        input,
+                        <span class="kw-2">&amp;</span>caches.ln,
                     )
-                    .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::ContractInputError</span>)<span class="question-mark">?</span>,
+                    .map_err(TransactionSubmissionError::ContractInputError)<span class="question-mark">?</span>,
             };
-            <span class="ident">pub_keys</span>.<span class="ident">push</span>(<span class="ident">meta</span>.<span class="ident">puk_keys</span>);
+            pub_keys.push(meta.puk_keys);
         }
-        <span class="ident">transaction</span>.<span class="ident">validate_signature</span>(<span class="ident">pub_keys</span>.<span class="ident">into_iter</span>().<span class="ident">flatten</span>())<span class="question-mark">?</span>;
+        transaction.validate_signature(pub_keys.into_iter().flatten())<span class="question-mark">?</span>;
 
-        <span class="kw">for</span> (<span class="ident">idx</span>, <span class="ident">output</span>) <span class="kw">in</span> <span class="ident">transaction</span>.<span class="ident">outputs</span>.<span class="ident">into_iter</span>().<span class="ident">enumerate</span>() {
-            <span class="kw">let</span> <span class="ident">out_point</span> = <span class="ident">OutPoint</span> {
-                <span class="ident">txid</span>: <span class="ident">tx_hash</span>,
-                <span class="ident">out_idx</span>: <span class="ident">idx</span> <span class="kw">as</span> <span class="ident">u64</span>,
+        <span class="kw">for </span>(idx, output) <span class="kw">in </span>transaction.outputs.into_iter().enumerate() {
+            <span class="kw">let </span>out_point = OutPoint {
+                txid: tx_hash,
+                out_idx: idx <span class="kw">as </span>u64,
             };
-            <span class="kw">match</span> <span class="ident">output</span> {
-                <span class="ident">Output::Mint</span>(<span class="ident">new_tokens</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">mint</span>
-                        .<span class="ident">apply_output</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="kw-2">&amp;</span><span class="ident">new_tokens</span>, <span class="ident">out_point</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::OutputCoinError</span>)<span class="question-mark">?</span>;
+            <span class="kw">match </span>output {
+                Output::Mint(new_tokens) =&gt; {
+                    <span class="self">self</span>.mint
+                        .apply_output(batch.subtransaction(), <span class="kw-2">&amp;</span>new_tokens, out_point)
+                        .map_err(TransactionSubmissionError::OutputCoinError)<span class="question-mark">?</span>;
                 }
-                <span class="ident">Output::Wallet</span>(<span class="ident">peg_out</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">wallet</span>
-                        .<span class="ident">apply_output</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="kw-2">&amp;</span><span class="ident">peg_out</span>, <span class="ident">out_point</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::OutputPegOut</span>)<span class="question-mark">?</span>;
+                Output::Wallet(peg_out) =&gt; {
+                    <span class="self">self</span>.wallet
+                        .apply_output(batch.subtransaction(), <span class="kw-2">&amp;</span>peg_out, out_point)
+                        .map_err(TransactionSubmissionError::OutputPegOut)<span class="question-mark">?</span>;
                 }
-                <span class="ident">Output::LN</span>(<span class="ident">output</span>) =&gt; {
-                    <span class="self">self</span>.<span class="ident">ln</span>
-                        .<span class="ident">apply_output</span>(<span class="ident">batch</span>.<span class="ident">subtransaction</span>(), <span class="kw-2">&amp;</span><span class="ident">output</span>, <span class="ident">out_point</span>)
-                        .<span class="ident">map_err</span>(<span class="ident">TransactionSubmissionError::ContractOutputError</span>)<span class="question-mark">?</span>;
+                Output::LN(output) =&gt; {
+                    <span class="self">self</span>.ln
+                        .apply_output(batch.subtransaction(), <span class="kw-2">&amp;</span>output, out_point)
+                        .map_err(TransactionSubmissionError::ContractOutputError)<span class="question-mark">?</span>;
                 }
             }
         }
 
-        <span class="ident">batch</span>.<span class="ident">commit</span>();
+        batch.commit();
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">transaction_status</span>(
+    <span class="kw">pub fn </span>transaction_status(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">txid</span>: <span class="ident">TransactionId</span>,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="ident"><span class="kw">crate</span>::outcome::TransactionStatus</span>&gt; {
-        <span class="kw">let</span> <span class="ident">accepted</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">AcceptedTransaction</span>&gt; = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">AcceptedTransactionKey</span>(<span class="ident">txid</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        txid: TransactionId,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw">crate</span>::outcome::TransactionStatus&gt; {
+        <span class="kw">let </span>accepted: <span class="prelude-ty">Option</span>&lt;AcceptedTransaction&gt; = <span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>AcceptedTransactionKey(txid))
+            .expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">accepted_tx</span>) = <span class="ident">accepted</span> {
-            <span class="kw">let</span> <span class="ident">outputs</span> = <span class="ident">accepted_tx</span>
-                .<span class="ident">transaction</span>
-                .<span class="ident">outputs</span>
-                .<span class="ident">iter</span>()
-                .<span class="ident">enumerate</span>()
-                .<span class="ident">map</span>(|(<span class="ident">out_idx</span>, <span class="ident">output</span>)| {
-                    <span class="kw">let</span> <span class="ident">outpoint</span> = <span class="ident">OutPoint</span> {
-                        <span class="ident">txid</span>,
-                        <span class="ident">out_idx</span>: <span class="ident">out_idx</span> <span class="kw">as</span> <span class="ident">u64</span>,
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(accepted_tx) = accepted {
+            <span class="kw">let </span>outputs = accepted_tx
+                .transaction
+                .outputs
+                .iter()
+                .enumerate()
+                .map(|(out_idx, output)| {
+                    <span class="kw">let </span>outpoint = OutPoint {
+                        txid,
+                        out_idx: out_idx <span class="kw">as </span>u64,
                     };
-                    <span class="kw">match</span> <span class="ident">output</span> {
-                        <span class="ident">Output::Mint</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
-                                .<span class="ident">mint</span>
-                                .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
-                                .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
-                            <span class="ident">OutputOutcome::Mint</span>(<span class="ident">outcome</span>)
+                    <span class="kw">match </span>output {
+                        Output::Mint(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">let </span>outcome = <span class="self">self
+                                </span>.mint
+                                .output_status(outpoint)
+                                .expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
+                            OutputOutcome::Mint(outcome)
                         }
-                        <span class="ident">Output::Wallet</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
-                                .<span class="ident">wallet</span>
-                                .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
-                                .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
-                            <span class="ident">OutputOutcome::Wallet</span>(<span class="ident">outcome</span>)
+                        Output::Wallet(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">let </span>outcome = <span class="self">self
+                                </span>.wallet
+                                .output_status(outpoint)
+                                .expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
+                            OutputOutcome::Wallet(outcome)
                         }
-                        <span class="ident">Output::LN</span>(<span class="kw">_</span>) =&gt; {
-                            <span class="kw">let</span> <span class="ident">outcome</span> = <span class="self">self</span>
-                                .<span class="ident">ln</span>
-                                .<span class="ident">output_status</span>(<span class="ident">outpoint</span>)
-                                .<span class="ident">expect</span>(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
-                            <span class="ident">OutputOutcome::LN</span>(<span class="ident">outcome</span>)
+                        Output::LN(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">let </span>outcome = <span class="self">self
+                                </span>.ln
+                                .output_status(outpoint)
+                                .expect(<span class="string">&quot;the transaction was processed, so should be known&quot;</span>);
+                            OutputOutcome::LN(outcome)
                         }
                     }
                 })
-                .<span class="ident">collect</span>();
+                .collect();
 
-            <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident"><span class="kw">crate</span>::outcome::TransactionStatus::Accepted</span> {
-                <span class="ident">epoch</span>: <span class="ident">accepted_tx</span>.<span class="ident">epoch</span>,
-                <span class="ident">outputs</span>,
+            <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="kw">crate</span>::outcome::TransactionStatus::Accepted {
+                epoch: accepted_tx.epoch,
+                outputs,
             });
         }
 
-        <span class="kw">let</span> <span class="ident">rejected</span>: <span class="prelude-ty">Option</span>&lt;<span class="ident">String</span>&gt; = <span class="self">self</span>
-            .<span class="ident">db</span>
-            .<span class="ident">get_value</span>(<span class="kw-2">&amp;</span><span class="ident">RejectedTransactionKey</span>(<span class="ident">txid</span>))
-            .<span class="ident">expect</span>(<span class="string">&quot;DB error&quot;</span>);
+        <span class="kw">let </span>rejected: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="self">self
+            </span>.db
+            .get_value(<span class="kw-2">&amp;</span>RejectedTransactionKey(txid))
+            .expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">message</span>) = <span class="ident">rejected</span> {
-            <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident">TransactionStatus::Rejected</span>(<span class="ident">message</span>));
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(message) = rejected {
+            <span class="kw">return </span><span class="prelude-val">Some</span>(TransactionStatus::Rejected(message));
         }
 
-        <span class="prelude-val">None</span>
-    }
+        <span class="prelude-val">None
+    </span>}
 
-    <span class="kw">fn</span> <span class="ident">build_verification_caches</span>&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">fn </span>build_verification_caches&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="ident">transactions</span>: <span class="kw">impl</span> <span class="ident">Iterator</span>&lt;<span class="ident">Item</span> = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Transaction</span>&gt; + <span class="ident">Clone</span> + <span class="ident">Send</span>,
-    ) -&gt; <span class="ident">VerificationCaches</span> {
-        <span class="kw">let</span> <span class="ident">mint_input_iter</span> = <span class="ident">transactions</span>
-            .<span class="ident">clone</span>()
-            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
-                <span class="ident">Input::Mint</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
-                <span class="ident">Input::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                <span class="ident">Input::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+        transactions: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Transaction&gt; + Clone + Send,
+    ) -&gt; VerificationCaches {
+        <span class="kw">let </span>mint_input_iter = transactions
+            .clone()
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| <span class="kw">match </span>input {
+                Input::Mint(input) =&gt; <span class="prelude-val">Some</span>(input),
+                Input::Wallet(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                Input::LN(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
             });
-        <span class="kw">let</span> <span class="ident">mint_cache</span> = <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">build_verification_cache</span>(<span class="ident">mint_input_iter</span>);
+        <span class="kw">let </span>mint_cache = <span class="self">self</span>.mint.build_verification_cache(mint_input_iter);
 
-        <span class="kw">let</span> <span class="ident">wallet_input_iter</span> = <span class="ident">transactions</span>
-            .<span class="ident">clone</span>()
-            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
-                <span class="ident">Input::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                <span class="ident">Input::Wallet</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
-                <span class="ident">Input::LN</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+        <span class="kw">let </span>wallet_input_iter = transactions
+            .clone()
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| <span class="kw">match </span>input {
+                Input::Mint(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                Input::Wallet(input) =&gt; <span class="prelude-val">Some</span>(input),
+                Input::LN(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
             });
-        <span class="kw">let</span> <span class="ident">wallet_cache</span> = <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">build_verification_cache</span>(<span class="ident">wallet_input_iter</span>);
+        <span class="kw">let </span>wallet_cache = <span class="self">self</span>.wallet.build_verification_cache(wallet_input_iter);
 
-        <span class="kw">let</span> <span class="ident">ln_input_iter</span> = <span class="ident">transactions</span>
-            .<span class="ident">flat_map</span>(|<span class="ident">tx</span>| <span class="ident">tx</span>.<span class="ident">inputs</span>.<span class="ident">iter</span>())
-            .<span class="ident">filter_map</span>(|<span class="ident">input</span>| <span class="kw">match</span> <span class="ident">input</span> {
-                <span class="ident">Input::Mint</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                <span class="ident">Input::Wallet</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                <span class="ident">Input::LN</span>(<span class="ident">input</span>) =&gt; <span class="prelude-val">Some</span>(<span class="ident">input</span>),
+        <span class="kw">let </span>ln_input_iter = transactions
+            .flat_map(|tx| tx.inputs.iter())
+            .filter_map(|input| <span class="kw">match </span>input {
+                Input::Mint(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                Input::Wallet(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+                Input::LN(input) =&gt; <span class="prelude-val">Some</span>(input),
             });
-        <span class="kw">let</span> <span class="ident">ln_cache</span> = <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">build_verification_cache</span>(<span class="ident">ln_input_iter</span>);
+        <span class="kw">let </span>ln_cache = <span class="self">self</span>.ln.build_verification_cache(ln_input_iter);
 
-        <span class="ident">VerificationCaches</span> {
-            <span class="ident">mint</span>: <span class="ident">mint_cache</span>,
-            <span class="ident">wallet</span>: <span class="ident">wallet_cache</span>,
-            <span class="ident">ln</span>: <span class="ident">ln_cache</span>,
+        VerificationCaches {
+            mint: mint_cache,
+            wallet: wallet_cache,
+            ln: ln_cache,
         }
     }
 
-    <span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">audit</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">Audit</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">audit</span> = <span class="ident">Audit::default</span>();
-        <span class="self">self</span>.<span class="ident">mint</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
-        <span class="self">self</span>.<span class="ident">ln</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
-        <span class="self">self</span>.<span class="ident">wallet</span>.<span class="ident">audit</span>(<span class="kw-2">&amp;mut</span> <span class="ident">audit</span>);
-        <span class="ident">audit</span>
+    <span class="kw">pub fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Audit {
+        <span class="kw">let </span><span class="kw-2">mut </span>audit = Audit::default();
+        <span class="self">self</span>.mint.audit(<span class="kw-2">&amp;mut </span>audit);
+        <span class="self">self</span>.ln.audit(<span class="kw-2">&amp;mut </span>audit);
+        <span class="self">self</span>.wallet.audit(<span class="kw-2">&amp;mut </span>audit);
+        audit
     }
 
-    <span class="kw">fn</span> <span class="ident">build_interconnect</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">MinimintInterconnect</span>&lt;<span class="ident">R</span>&gt; {
-        <span class="ident">MinimintInterconnect</span> { <span class="ident">minimint</span>: <span class="self">self</span> }
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">Wallet</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Wallet</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">wallet</span>
+    <span class="kw">fn </span>build_interconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; MinimintInterconnect&lt;R&gt; {
+        MinimintInterconnect { minimint: <span class="self">self </span>}
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">Mint</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">Mint</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">mint</span>
+<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;Wallet&gt; <span class="kw">for </span>MinimintConsensus&lt;R&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Wallet {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.wallet
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">LightningModule</span>&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">LightningModule</span> {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">ln</span>
+<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;Mint&gt; <span class="kw">for </span>MinimintConsensus&lt;R&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Mint {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.mint
     }
 }
 
-<span class="kw">impl</span>&lt;<span class="ident">R</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>&gt; <span class="ident">AsRef</span>&lt;<span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt;&gt; <span class="kw">for</span> <span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
-    <span class="kw">fn</span> <span class="ident">as_ref</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="ident">MinimintConsensus</span>&lt;<span class="ident">R</span>&gt; {
-        <span class="self">self</span>
+<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;LightningModule&gt; <span class="kw">for </span>MinimintConsensus&lt;R&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>LightningModule {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.ln
     }
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Error</span>)]</span>
-<span class="kw">pub</span> <span class="kw">enum</span> <span class="ident">TransactionSubmissionError</span> {
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;High level transaction error: {0}&quot;</span>)]</span>
-    <span class="ident">TransactionError</span>(<span class="attribute">#[<span class="ident">from</span>]</span> <span class="ident">TransactionError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Input coin error: {0}&quot;</span>)]</span>
-    <span class="ident">InputCoinError</span>(<span class="ident">MintError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Input peg-in error: {0}&quot;</span>)]</span>
-    <span class="ident">InputPegIn</span>(<span class="ident">WalletError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;LN contract input error: {0}&quot;</span>)]</span>
-    <span class="ident">ContractInputError</span>(<span class="ident">LightningModuleError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Output coin error: {0}&quot;</span>)]</span>
-    <span class="ident">OutputCoinError</span>(<span class="ident">MintError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Output coin error: {0}&quot;</span>)]</span>
-    <span class="ident">OutputPegOut</span>(<span class="ident">WalletError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;LN contract output error: {0}&quot;</span>)]</span>
-    <span class="ident">ContractOutputError</span>(<span class="ident">LightningModuleError</span>),
-    <span class="attribute">#[<span class="ident">error</span>(<span class="string">&quot;Transaction conflict error&quot;</span>)]</span>
-    <span class="ident">TransactionConflictError</span>,
+<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;MinimintConsensus&lt;R&gt;&gt; <span class="kw">for </span>MinimintConsensus&lt;R&gt; {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>MinimintConsensus&lt;R&gt; {
+        <span class="self">self
+    </span>}
+}
+
+<span class="attribute">#[derive(Debug, Error)]</span>
+<span class="kw">pub enum </span>TransactionSubmissionError {
+    <span class="attribute">#[error(<span class="string">&quot;High level transaction error: {0}&quot;</span>)]</span>
+    TransactionError(<span class="attribute">#[from]</span> TransactionError),
+    <span class="attribute">#[error(<span class="string">&quot;Input coin error: {0}&quot;</span>)]</span>
+    InputCoinError(MintError),
+    <span class="attribute">#[error(<span class="string">&quot;Input peg-in error: {0}&quot;</span>)]</span>
+    InputPegIn(WalletError),
+    <span class="attribute">#[error(<span class="string">&quot;LN contract input error: {0}&quot;</span>)]</span>
+    ContractInputError(LightningModuleError),
+    <span class="attribute">#[error(<span class="string">&quot;Output coin error: {0}&quot;</span>)]</span>
+    OutputCoinError(MintError),
+    <span class="attribute">#[error(<span class="string">&quot;Output coin error: {0}&quot;</span>)]</span>
+    OutputPegOut(WalletError),
+    <span class="attribute">#[error(<span class="string">&quot;LN contract output error: {0}&quot;</span>)]</span>
+    ContractOutputError(LightningModuleError),
+    <span class="attribute">#[error(<span class="string">&quot;Transaction conflict error&quot;</span>)]</span>
+    TransactionConflictError,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

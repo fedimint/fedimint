@@ -18,25 +18,25 @@
 <span id="18">18</span>
 <span id="19">19</span>
 <span id="20">20</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">group::Group</span>;
-<span class="kw">use</span> <span class="ident">rand::SeedableRng</span>;
-<span class="kw">use</span> <span class="ident">rand_chacha::ChaChaRng</span>;
-<span class="kw">use</span> <span class="ident">sha3::digest::generic_array::typenum::U32</span>;
-<span class="kw">use</span> <span class="ident">sha3::Digest</span>;
+</pre><pre class="rust"><code><span class="kw">use </span>group::Group;
+<span class="kw">use </span>rand::SeedableRng;
+<span class="kw">use </span>rand_chacha::ChaChaRng;
+<span class="kw">use </span>sha3::digest::generic_array::typenum::U32;
+<span class="kw">use </span>sha3::Digest;
 
-<span class="kw">const</span> <span class="ident">HASH_TAG</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>] = <span class="string">b&quot;TBS_BLS12-381_&quot;</span>;
+<span class="kw">const </span>HASH_TAG: <span class="kw-2">&amp;</span>[u8] = <span class="string">b&quot;TBS_BLS12-381_&quot;</span>;
 
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">hash_bytes_to_curve</span>&lt;<span class="ident">G</span>: <span class="ident">Group</span>&gt;(<span class="ident">data</span>: <span class="kw-2">&amp;</span>[<span class="ident">u8</span>]) -&gt; <span class="ident">G</span> {
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">hash_engine</span> = <span class="ident">sha3::Sha3_256::new</span>();
-    <span class="ident">hash_engine</span>.<span class="ident">update</span>(<span class="ident">HASH_TAG</span>);
-    <span class="ident">hash_engine</span>.<span class="ident">update</span>(<span class="ident">data</span>);
-    <span class="ident">hash_to_curve</span>(<span class="ident">hash_engine</span>)
+<span class="kw">pub fn </span>hash_bytes_to_curve&lt;G: Group&gt;(data: <span class="kw-2">&amp;</span>[u8]) -&gt; G {
+    <span class="kw">let </span><span class="kw-2">mut </span>hash_engine = sha3::Sha3_256::new();
+    hash_engine.update(HASH_TAG);
+    hash_engine.update(data);
+    hash_to_curve(hash_engine)
 }
 
-<span class="doccomment">/// **IMPORTANT**: the byte hashing fn includes a tag, this doesn&#39;t</span>
-<span class="kw">pub</span> <span class="kw">fn</span> <span class="ident">hash_to_curve</span>&lt;<span class="ident">G</span>: <span class="ident">Group</span>, <span class="ident">H</span>: <span class="ident">Digest</span>&lt;<span class="ident">OutputSize</span> = <span class="ident">U32</span>&gt;&gt;(<span class="ident">hash</span>: <span class="ident">H</span>) -&gt; <span class="ident">G</span> {
-    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">prng</span> = <span class="ident">ChaChaRng::from_seed</span>(<span class="ident">hash</span>.<span class="ident">finalize</span>().<span class="ident">into</span>());
-    <span class="ident">G::random</span>(<span class="kw-2">&amp;mut</span> <span class="ident">prng</span>)
+<span class="doccomment">/// **IMPORTANT**: the byte hashing fn includes a tag, this doesn&#39;t
+</span><span class="kw">pub fn </span>hash_to_curve&lt;G: Group, H: Digest&lt;OutputSize = U32&gt;&gt;(hash: H) -&gt; G {
+    <span class="kw">let </span><span class="kw-2">mut </span>prng = ChaChaRng::from_seed(hash.finalize().into());
+    G::random(<span class="kw-2">&amp;mut </span>prng)
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

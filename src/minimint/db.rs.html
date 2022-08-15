@@ -84,91 +84,91 @@
 <span id="84">84</span>
 <span id="85">85</span>
 <span id="86">86</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::consensus::AcceptedTransaction</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::transaction::Transaction</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_api</span>::{<span class="ident">PeerId</span>, <span class="ident">TransactionId</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::epoch::EpochHistory</span>;
-<span class="kw">use</span> <span class="ident">std::fmt::Debug</span>;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
+<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_api::{PeerId, TransactionId};
+<span class="kw">use </span>minimint_core::epoch::EpochHistory;
+<span class="kw">use </span>std::fmt::Debug;
 
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_PROPOSED_TRANSACTION</span>: <span class="ident">u8</span> = <span class="number">0x01</span>;
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_ACCEPTED_TRANSACTION</span>: <span class="ident">u8</span> = <span class="number">0x02</span>;
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_DROP_PEER</span>: <span class="ident">u8</span> = <span class="number">0x03</span>;
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_REJECTED_TRANSACTION</span>: <span class="ident">u8</span> = <span class="number">0x04</span>;
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_EPOCH_HISTORY</span>: <span class="ident">u8</span> = <span class="number">0x05</span>;
-<span class="kw">pub</span> <span class="kw">const</span> <span class="ident">DB_PREFIX_LAST_EPOCH</span>: <span class="ident">u8</span> = <span class="number">0x06</span>;
+<span class="kw">pub const </span>DB_PREFIX_PROPOSED_TRANSACTION: u8 = <span class="number">0x01</span>;
+<span class="kw">pub const </span>DB_PREFIX_ACCEPTED_TRANSACTION: u8 = <span class="number">0x02</span>;
+<span class="kw">pub const </span>DB_PREFIX_DROP_PEER: u8 = <span class="number">0x03</span>;
+<span class="kw">pub const </span>DB_PREFIX_REJECTED_TRANSACTION: u8 = <span class="number">0x04</span>;
+<span class="kw">pub const </span>DB_PREFIX_EPOCH_HISTORY: u8 = <span class="number">0x05</span>;
+<span class="kw">pub const </span>DB_PREFIX_LAST_EPOCH: u8 = <span class="number">0x06</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">TransactionId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ProposedTransactionKey(<span class="kw">pub </span>TransactionId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposedTransactionKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Transaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = Transaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ProposedTransactionKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ProposedTransactionKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ProposedTransactionKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_PROPOSED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ProposedTransactionKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">Transaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
+    <span class="kw">type </span>Key = ProposedTransactionKey;
+    <span class="kw">type </span>Value = Transaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AcceptedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">TransactionId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>AcceptedTransactionKey(<span class="kw">pub </span>TransactionId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">AcceptedTransactionKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_ACCEPTED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">AcceptedTransaction</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AcceptedTransactionKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_ACCEPTED_TRANSACTION;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = AcceptedTransaction;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">RejectedTransactionKey</span>(<span class="kw">pub</span> <span class="ident">TransactionId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>RejectedTransactionKey(<span class="kw">pub </span>TransactionId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">RejectedTransactionKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_REJECTED_TRANSACTION</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">String</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RejectedTransactionKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_REJECTED_TRANSACTION;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = String;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DropPeerKey</span>(<span class="kw">pub</span> <span class="ident">PeerId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>DropPeerKey(<span class="kw">pub </span>PeerId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">DropPeerKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_DROP_PEER</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DropPeerKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">DropPeerKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>DropPeerKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">DropPeerKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_DROP_PEER</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">DropPeerKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DropPeerKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
+    <span class="kw">type </span>Key = DropPeerKey;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">EpochHistoryKey</span>(<span class="kw">pub</span> <span class="ident">u64</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">EpochHistoryKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_EPOCH_HISTORY</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">EpochHistory</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EpochHistoryKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_EPOCH_HISTORY;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = EpochHistory;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LastEpochKey</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>LastEpochKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LastEpochKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_LAST_EPOCH</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">EpochHistoryKey</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastEpochKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LAST_EPOCH;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = EpochHistoryKey;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

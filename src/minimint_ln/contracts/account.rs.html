@@ -16,23 +16,23 @@
 <span id="16">16</span>
 <span id="17">17</span>
 <span id="18">18</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::contracts</span>::{<span class="ident">ContractId</span>, <span class="ident">IdentifyableContract</span>};
-<span class="kw">use</span> <span class="ident">bitcoin_hashes::Hash</span> <span class="kw">as</span> <span class="ident">BitcoinHash</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">serde</span>::{<span class="ident">Deserialize</span>, <span class="ident">Serialize</span>};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, IdentifyableContract};
+<span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="doccomment">/// A generic contract to hold money in a pub key locked account</span>
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>, <span class="ident">Eq</span>, <span class="ident">PartialEq</span>, <span class="ident">Hash</span>, <span class="ident">Deserialize</span>, <span class="ident">Serialize</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">AccountContract</span> {
-    <span class="kw">pub</span> <span class="ident">key</span>: <span class="ident">secp256k1::XOnlyPublicKey</span>,
+<span class="doccomment">/// A generic contract to hold money in a pub key locked account
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>AccountContract {
+    <span class="kw">pub </span>key: secp256k1::XOnlyPublicKey,
 }
 
-<span class="kw">impl</span> <span class="ident">IdentifyableContract</span> <span class="kw">for</span> <span class="ident">AccountContract</span> {
-    <span class="kw">fn</span> <span class="ident">contract_id</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident">ContractId</span> {
-        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">engine</span> = <span class="ident">ContractId::engine</span>();
-        <span class="ident">Encodable::consensus_encode</span>(<span class="self">self</span>, <span class="kw-2">&amp;mut</span> <span class="ident">engine</span>).<span class="ident">expect</span>(<span class="string">&quot;Hashing never fails&quot;</span>);
-        <span class="ident">ContractId::from_engine</span>(<span class="ident">engine</span>)
+<span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>AccountContract {
+    <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = ContractId::engine();
+        Encodable::consensus_encode(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>engine).expect(<span class="string">&quot;Hashing never fails&quot;</span>);
+        ContractId::from_engine(engine)
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="minimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

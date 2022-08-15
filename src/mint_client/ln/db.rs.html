@@ -93,100 +93,100 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident"><span class="kw">crate</span>::ln::outgoing::OutgoingContractData</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::db::DatabaseKeyPrefixConst</span>;
-<span class="kw">use</span> <span class="ident">minimint_api::encoding</span>::{<span class="ident">Decodable</span>, <span class="ident">Encodable</span>};
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::contracts::ContractId</span>;
-<span class="kw">use</span> <span class="ident">minimint_core::modules::ln::LightningGateway</span>;
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
+<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>minimint_core::modules::ln::contracts::ContractId;
+<span class="kw">use </span>minimint_core::modules::ln::LightningGateway;
 
-<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::incoming::ConfirmedInvoice</span>;
-<span class="kw">use</span> <span class="ident"><span class="kw">super</span>::outgoing::OutgoingContractAccount</span>;
+<span class="kw">use </span><span class="kw">super</span>::incoming::ConfirmedInvoice;
+<span class="kw">use </span><span class="kw">super</span>::outgoing::OutgoingContractAccount;
 
-<span class="kw">const</span> <span class="ident">DB_PREFIX_OUTGOING_PAYMENT</span>: <span class="ident">u8</span> = <span class="number">0x23</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_OUTGOING_PAYMENT_CLAIM</span>: <span class="ident">u8</span> = <span class="number">0x24</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT</span>: <span class="ident">u8</span> = <span class="number">0x25</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_CONFIRMED_INVOICE</span>: <span class="ident">u8</span> = <span class="number">0x26</span>;
-<span class="kw">const</span> <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>: <span class="ident">u8</span> = <span class="number">0x28</span>;
+<span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT: u8 = <span class="number">0x23</span>;
+<span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = <span class="number">0x24</span>;
+<span class="kw">const </span>DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = <span class="number">0x25</span>;
+<span class="kw">const </span>DB_PREFIX_CONFIRMED_INVOICE: u8 = <span class="number">0x26</span>;
+<span class="kw">const </span>DB_PREFIX_LIGHTNING_GATEWAY: u8 = <span class="number">0x28</span>;
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingPaymentKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingPaymentKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_PAYMENT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">OutgoingContractData</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingPaymentKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingPaymentKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingPaymentKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_PAYMENT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">OutgoingPaymentKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">OutgoingContractData</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    <span class="kw">type </span>Key = OutgoingPaymentKey;
+    <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingPaymentClaimKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingPaymentClaimKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_PAYMENT_CLAIM</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingPaymentClaimKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingPaymentClaimKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingPaymentClaimKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_PAYMENT_CLAIM</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">OutgoingPaymentClaimKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = ();
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    <span class="kw">type </span>Key = OutgoingPaymentClaimKey;
+    <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContractAccountKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingContractAccountKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">OutgoingContractAccount</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">OutgoingContractAccountKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>OutgoingContractAccountKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">OutgoingContractAccountKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">OutgoingContractAccountKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">OutgoingContractAccount</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    <span class="kw">type </span>Key = OutgoingContractAccountKey;
+    <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConfirmedInvoiceKey</span>(<span class="kw">pub</span> <span class="ident">ContractId</span>);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ConfirmedInvoiceKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_CONFIRMED_INVOICE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">ConfirmedInvoice</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">ConfirmedInvoiceKeyPrefix</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>ConfirmedInvoiceKeyPrefix;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">ConfirmedInvoiceKeyPrefix</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_CONFIRMED_INVOICE</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="ident">ConfirmedInvoiceKey</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">ConfirmedInvoice</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKeyPrefix {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    <span class="kw">type </span>Key = ConfirmedInvoiceKey;
+    <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Encodable</span>, <span class="ident">Decodable</span>)]</span>
-<span class="kw">pub</span> <span class="kw">struct</span> <span class="ident">LightningGatewayKey</span>;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
+<span class="kw">pub struct </span>LightningGatewayKey;
 
-<span class="kw">impl</span> <span class="ident">DatabaseKeyPrefixConst</span> <span class="kw">for</span> <span class="ident">LightningGatewayKey</span> {
-    <span class="kw">const</span> <span class="ident">DB_PREFIX</span>: <span class="ident">u8</span> = <span class="ident">DB_PREFIX_LIGHTNING_GATEWAY</span>;
-    <span class="kw">type</span> <span class="ident">Key</span> = <span class="self">Self</span>;
-    <span class="kw">type</span> <span class="ident">Value</span> = <span class="ident">LightningGateway</span>;
+<span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
+    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    <span class="kw">type </span>Key = <span class="self">Self</span>;
+    <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>

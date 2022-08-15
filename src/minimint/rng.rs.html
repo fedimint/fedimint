@@ -7,14 +7,14 @@
 <span id="7">7</span>
 <span id="8">8</span>
 <span id="9">9</span>
-</pre><pre class="rust"><code><span class="kw">use</span> <span class="ident">rand</span>::{<span class="ident">CryptoRng</span>, <span class="ident">RngCore</span>};
+</pre><pre class="rust"><code><span class="kw">use </span>rand::{CryptoRng, RngCore};
 
-<span class="doccomment">/// Cheaply generates a new random number generator. Since these need to be generated often to avoid</span>
-<span class="doccomment">/// locking them when used by different threads the construction should be rather cheap.</span>
-<span class="kw">pub</span> <span class="kw">trait</span> <span class="ident">RngGenerator</span>: <span class="ident">Sync</span> + <span class="ident">Send</span> {
-    <span class="kw">type</span> <span class="ident">Rng</span>: <span class="ident">RngCore</span> + <span class="ident">CryptoRng</span>;
+<span class="doccomment">/// Cheaply generates a new random number generator. Since these need to be generated often to avoid
+/// locking them when used by different threads the construction should be rather cheap.
+</span><span class="kw">pub trait </span>RngGenerator: Sync + Send {
+    <span class="kw">type </span>Rng: RngCore + CryptoRng;
 
-    <span class="kw">fn</span> <span class="ident">get_rng</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="ident"><span class="self">Self</span>::Rng</span>;
+    <span class="kw">fn </span>get_rng(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Rng;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (f22819bcc 2022-08-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="minimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (801821d15 2022-08-14)" ></div></body></html>
