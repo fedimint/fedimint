@@ -52,9 +52,16 @@
 <span id="52">52</span>
 <span id="53">53</span>
 <span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>clientd::call;
+<span class="kw">use </span>clientd::{call, WaitBlockHeightPayload};
 <span class="kw">use </span>minimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>serde::Serialize;
 
@@ -76,6 +83,9 @@
     </span>Pending,
     <span class="doccomment">/// rpc-method: pegin_address()
     </span>NewPegInAddress,
+    <span class="doccomment">/// rpc-method: wait_block_height()
+    </span><span class="attribute">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]</span>
+    WaitBlockHeight { height: u64 },
 }
 <span class="attribute">#[tokio::main]</span>
 <span class="kw">async fn </span>main() {
@@ -90,6 +100,10 @@
         }
         Commands::NewPegInAddress =&gt; {
             print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, args.raw_json);
+        }
+        Commands::WaitBlockHeight { height } =&gt; {
+            <span class="kw">let </span>params = WaitBlockHeightPayload { height };
+            print_json(call(<span class="kw-2">&amp;</span>params, <span class="string">&quot;/wait_block_height&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
     }
 }

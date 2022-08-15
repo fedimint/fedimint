@@ -94,6 +94,11 @@
 <span id="94">94</span>
 <span id="95">95</span>
 <span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>minimint_api::{Amount, OutPoint};
@@ -107,6 +112,11 @@
     Success(serde_json::Value),
     <span class="attribute">#[serde(rename = <span class="string">&quot;failure&quot;</span>)]</span>
     Failure(serde_json::Value),
+}
+<span class="doccomment">/// struct to process wait_block_height request payload
+</span><span class="attribute">#[derive(Deserialize, Serialize)]</span>
+<span class="kw">pub struct </span>WaitBlockHeightPayload {
+    <span class="kw">pub </span>height: u64,
 }
 
 <span class="attribute">#[derive(Serialize)]</span>
