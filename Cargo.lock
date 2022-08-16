@@ -2893,7 +2893,7 @@ dependencies = [
 [[package]]
 name = "threshold_crypto"
 version = "0.4.0"
-source = "git+https://github.com/fedimint/threshold_crypto#a7fbfa4522835010b6037fb45388c7b04ee14194"
+source = "git+https://github.com/fedimint/threshold_crypto#3d2c6ade0c1e4f6dbd412e28d4626f626d12b76f"
 dependencies = [
  "byteorder",
  "ff 0.6.0",
