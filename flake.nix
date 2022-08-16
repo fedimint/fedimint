@@ -220,6 +220,7 @@
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
           version = "0.4.14";
+          buildInputs = commonArgs.buildInputs;
 
           src = pkgs.fetchCrate {
             inherit pname version;
