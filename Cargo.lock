@@ -395,6 +395,7 @@ name = "clientd"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "bitcoin",
  "bitcoin_hashes",
@@ -408,6 +409,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sled",
+ "thiserror",
  "tokio",
  "tower",
  "tower-http",
