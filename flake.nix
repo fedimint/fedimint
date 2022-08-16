@@ -217,28 +217,6 @@
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
         });
 
-        cargo-udeps = with pkgs; craneLib.buildPackage rec {
-          pname = "cargo-udeps";
-          version = "0.1.30";
-          nativeBuildInputs = [ pkg-config ];
-
-          # TODO figure out how to use provided curl instead of compiling curl from curl-sys
-          buildInputs = [ openssl ]
-            ++ lib.optionals stdenv.isDarwin [ CoreServices Security libiconv SystemConfiguration ];
-
-          src = pkgs.fetchCrate {
-            inherit pname version;
-            sha256 = "sha256-KF4nZ2qhjh7nytDu4npovvCkl22bOqQZo14/o8uj5p8=";
-          };
-          doCheck = false;
-        };
-
-        cargoUdeps = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "${cargo-udeps}/bin/cargo-udeps udeps --workspace --all-targets --release";
-          doInstallCargoArtifacts = false;
-        });
-
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
           version = "0.4.14";
@@ -357,7 +335,6 @@
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
           workspaceCov = llvmCovWorkspace;
-          cargoUdeps = cargoUdeps;
 
           cli-test = {
             latency = cliTestLatency;
