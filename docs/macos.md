@@ -6,7 +6,7 @@ If you have trouble setting up a Nix environment directly on Mac, try one of the
 
 # Multipass
 
-[Multipass](https://multipass.run/) is a CLI from Canonical for managing Ubuntu VMs.
+[Multipass](https://multipass.run/) is a [CLI](https://multipass.run/docs/multipass-cli-commands) from Canonical for managing Ubuntu VMs.
 
 ### Setup
 
@@ -16,8 +16,8 @@ If you have trouble setting up a Nix environment directly on Mac, try one of the
  
 ```shell
 % brew install --cask multipass
-# pick appropriate resource allocation for your device
-% multipass launch 22.04 --name fedidev --cpus 8 --mem 6G --disk 12G 
+# pick appropriate resource allocation for your device, disk should be >= 20G
+% multipass launch 22.04 --name fedidev --cpus 8 --mem 6G --disk 20G 
 % multipass shell fedidev
 $ sudo apt-get install build-essential
 $ sh <(curl -L https://nixos.org/nix/install) --daemon
@@ -30,8 +30,24 @@ $ ./scripts/tmuxinator.sh
 
 ### Editor Support
 
- - [VScode to ssh remotely](https://dev.to/josuebustos/vs-code-remote-ssh-multipass-dn8)
- - IntelliJ also has this feature
+#### [VScode](https://dev.to/josuebustos/vs-code-remote-ssh-multipass-dn8): remote SSH setup
+
+ ```shell
+% multipass info fedidev  # write down the IPv4 address of VM
+% nano ~/.ssh/config
+# update mac ssh config with vm info:
+#  Host [alias for VM]
+#    HostName [IPv4 address of VM]
+#    User ubuntu
+
+% pbcopy < ~/.ssh/id_rsa.pub  # get your mac pubkey, may be in different file
+$ nano ~/.ssh/authorized_keys  # paste mac pubkey in this file on vm
+
+# install VSCode extension Remote - SSH 
+# follow instructions in "Connect to a VM Instance in VS Code" section of https://dev.to/josuebustos/vs-code-remote-ssh-multipass-dn8
+ ```
+ 
+ #### IntelliJ
 
 # Devcontainers
 
