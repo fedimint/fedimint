@@ -2,9 +2,9 @@ pub mod account;
 pub mod incoming;
 pub mod outgoing;
 
+use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
@@ -103,13 +103,13 @@ impl Contract {
 }
 
 impl Encodable for ContractId {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.as_inner().consensus_encode(writer)
     }
 }
 
 impl Decodable for ContractId {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         Ok(ContractId::from_inner(Decodable::consensus_decode(d)?))
     }
 }
@@ -154,7 +154,7 @@ impl EncryptedPreimage {
 }
 
 impl Encodable for EncryptedPreimage {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         // TODO: get rid of bincode
         let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
         bytes.consensus_encode(writer)
@@ -162,7 +162,7 @@ impl Encodable for EncryptedPreimage {
 }
 
 impl Decodable for EncryptedPreimage {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let bytes = Vec::<u8>::consensus_decode(d)?;
         Ok(EncryptedPreimage(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
@@ -171,7 +171,7 @@ impl Decodable for EncryptedPreimage {
 }
 
 impl Encodable for PreimageDecryptionShare {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         // TODO: get rid of bincode
         let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
         bytes.consensus_encode(writer)
@@ -179,7 +179,7 @@ impl Encodable for PreimageDecryptionShare {
 }
 
 impl Decodable for PreimageDecryptionShare {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let bytes = Vec::<u8>::consensus_decode(d)?;
         Ok(PreimageDecryptionShare(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,

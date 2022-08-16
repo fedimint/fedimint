@@ -47,8 +47,7 @@ where
         let peers = (0..members)
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
-        let (server_cfg, client_cfg) =
-            C::trusted_dealer_gen(&peers, params, rand::rngs::OsRng::new().unwrap());
+        let (server_cfg, client_cfg) = C::trusted_dealer_gen(&peers, params, rand::rngs::OsRng);
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {
@@ -98,7 +97,7 @@ where
     ) where
         <M as FederationModule>::TxInput: Send + Sync,
     {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = rand::rngs::OsRng;
         let fake_ic = FakeInterconnect::new_block_height_responder(self.block_height.clone());
 
         // TODO: only include some of the proposals for realism

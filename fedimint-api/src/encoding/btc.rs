@@ -7,7 +7,7 @@ macro_rules! impl_encode_decode_bridge {
         impl crate::encoding::Encodable for $btc_type {
             fn consensus_encode<W: std::io::Write>(
                 &self,
-                writer: W,
+                writer: &mut W,
             ) -> Result<usize, std::io::Error> {
                 bitcoin::consensus::Encodable::consensus_encode(self, writer)
             }
@@ -15,7 +15,7 @@ macro_rules! impl_encode_decode_bridge {
 
         impl crate::encoding::Decodable for $btc_type {
             fn consensus_decode<D: std::io::Read>(
-                d: D,
+                d: &mut D,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 bitcoin::consensus::Decodable::consensus_decode(d)
                     .map_err(crate::encoding::DecodeError::from_err)
@@ -34,45 +34,45 @@ impl_encode_decode_bridge!(bitcoin::util::merkleblock::PartialMerkleTree);
 impl_encode_decode_bridge!(bitcoin::util::psbt::PartiallySignedTransaction);
 
 impl Encodable for bitcoin::Amount {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, std::io::Error> {
-        self.as_sat().consensus_encode(writer)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        self.to_sat().consensus_encode(writer)
     }
 }
 
 impl Decodable for bitcoin::Amount {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         Ok(bitcoin::Amount::from_sat(u64::consensus_decode(d)?))
     }
 }
 
 impl Encodable for bitcoin::Address {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += self.network.magic().consensus_encode(&mut writer)?;
+        len += self.network.magic().consensus_encode(writer)?;
         len += self.script_pubkey().consensus_encode(writer)?;
         Ok(len)
     }
 }
 
 impl Decodable for bitcoin::Address {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(mut d: &mut D) -> Result<Self, DecodeError> {
         let network = bitcoin::Network::from_magic(u32::consensus_decode(&mut d)?)
             .ok_or_else(|| DecodeError::from_str("Unknown network"))?;
         let script_pk = bitcoin::Script::consensus_decode(&mut d)?;
 
         bitcoin::Address::from_script(&script_pk, network)
-            .ok_or_else(|| DecodeError::from_str("Unknown script type"))
+            .map_err(|e| DecodeError::new_custom(e.into()))
     }
 }
 
 impl Encodable for bitcoin::hashes::sha256::Hash {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.into_inner().consensus_encode(writer)
     }
 }
 
 impl Decodable for bitcoin::hashes::sha256::Hash {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         Ok(bitcoin::hashes::sha256::Hash::from_inner(
             Decodable::consensus_decode(d)?,
         ))
@@ -92,7 +92,7 @@ mod tests {
         let mut encoded = Vec::new();
         hash.consensus_encode(&mut encoded).unwrap();
         let hash_decoded =
-            bitcoin::hashes::sha256::Hash::consensus_decode(Cursor::new(encoded)).unwrap();
+            bitcoin::hashes::sha256::Hash::consensus_decode(&mut Cursor::new(encoded)).unwrap();
         assert_eq!(hash, hash_decoded);
     }
 
@@ -114,9 +114,9 @@ mod tests {
             address
                 .consensus_encode(&mut encoding)
                 .expect("Encoding to vec can't fail");
-            let cursor = Cursor::new(encoding);
+            let mut cursor = Cursor::new(encoding);
             let parsed_address =
-                bitcoin::Address::consensus_decode(cursor).expect("Decoding address failed");
+                bitcoin::Address::consensus_decode(&mut cursor).expect("Decoding address failed");
 
             assert_eq!(address, parsed_address);
         }

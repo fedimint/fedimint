@@ -358,10 +358,7 @@ async fn main() {
             .or_terminate(CliErrorKind::IOError, "could not open transaction db")
             .into();
 
-        let rng = rand::rngs::OsRng::new().or_terminate(
-            CliErrorKind::OSError,
-            "failed to acquire random number generator from OS",
-        );
+        let rng = rand::rngs::OsRng;
 
         let client = Client::new(cfg.clone(), db, Default::default());
 

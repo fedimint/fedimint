@@ -340,7 +340,7 @@ where
 
         let reconnect_at = {
             let scaling_factor = disconnect_count as f64;
-            let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor, 4.0 * scaling_factor);
+            let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
             debug!(delay, "Scheduling reopening of connection");
             Instant::now() + Duration::from_secs_f64(delay)
         };

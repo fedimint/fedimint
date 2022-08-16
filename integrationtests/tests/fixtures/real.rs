@@ -121,7 +121,7 @@ impl BitcoinTest for RealBitcoinTest {
             .client
             .get_raw_transaction(&id, None)
             .expect(Self::ERROR);
-        let proof = TxOutProof::consensus_decode(Cursor::new(
+        let proof = TxOutProof::consensus_decode(&mut Cursor::new(
             self.client
                 .get_tx_out_proof(&[id], None)
                 .expect(Self::ERROR),

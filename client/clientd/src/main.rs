@@ -56,7 +56,7 @@ async fn main() {
 
     let client = Arc::new(Client::new(cfg.clone(), db, Default::default()));
     let (tx, mut rx) = mpsc::channel(1024);
-    let rng = OsRng::new().unwrap();
+    let rng = OsRng;
 
     let shared_state = Arc::new(State {
         client: Arc::clone(&client),
@@ -115,7 +115,7 @@ async fn new_peg_in_address(
     Extension(state): Extension<Arc<State>>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    let mut rng = state.rng.clone();
+    let mut rng = state.rng;
     json_success!(PegInAddressResponse {
         peg_in_address: client.get_new_pegin_address(&mut rng)
     })
@@ -136,7 +136,7 @@ async fn peg_in(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     let fetch_signal = &state.fetch_tx;
-    let mut rng = state.rng.clone();
+    let mut rng = state.rng;
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
@@ -153,7 +153,7 @@ async fn spend(
     payload: JsonExtract<SpendPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    let rng = state.rng.clone();
+    let rng = state.rng;
 
     let notes = client.spend_ecash(payload.0.amount, rng).await?;
     json_success!(SpendResponse { notes })

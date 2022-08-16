@@ -4,9 +4,9 @@ use crate::net::connect::TlsConfig;
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
 use crate::{ReconnectPeerConnections, TlsTcpConnector};
 use async_trait::async_trait;
+use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 use fedimint_api::{Amount, NumPeers, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -87,11 +87,10 @@ impl GenerateConfig for ServerConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
+        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
             .expect("Could not generate HBBFT netinfo");
-        let epochinfo =
-            hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
-                .expect("Could not generate HBBFT netinfo");
+        let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
+            .expect("Could not generate HBBFT netinfo");
 
         let peer0 = &params[&PeerId::from(0)];
         let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(

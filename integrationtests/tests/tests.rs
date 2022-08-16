@@ -569,7 +569,7 @@ async fn receive_lightning_payment_valid_preimage() {
         .unwrap();
 
     // Check that the preimage matches user pubkey & lightning invoice preimage
-    let pubkey = invoice.keypair.public_key();
+    let pubkey = invoice.keypair.x_only_public_key().0;
     assert_eq!(pubkey, preimage.to_public_key().unwrap());
     assert_eq!(&sha256(&pubkey.serialize()), invoice.invoice.payment_hash());
 
@@ -605,7 +605,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     let offer_output = user.client.ln_client().create_offer_output(
         payment_amount,
         payment_hash,
-        Preimage(kp.public_key().serialize()),
+        Preimage(kp.x_only_public_key().0.serialize()),
         None,
     );
     let mut builder = TransactionBuilder::default();

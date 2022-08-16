@@ -24,8 +24,8 @@ pub trait DynEncodable {
 }
 
 impl Encodable for dyn DynEncodable {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
-        self.consensus_encode_dyn(&mut writer)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        self.consensus_encode_dyn(writer)
     }
 }
 
@@ -35,15 +35,15 @@ where
 {
     fn consensus_encode_dyn(
         &self,
-        writer: &mut dyn std::io::Write,
+        mut writer: &mut dyn std::io::Write,
     ) -> Result<usize, std::io::Error> {
-        <Self as Encodable>::consensus_encode(self, writer)
+        <Self as Encodable>::consensus_encode(self, &mut writer)
     }
 }
 
 impl Encodable for Box<dyn DynEncodable> {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
-        (**self).consensus_encode_dyn(&mut writer)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
+        (**self).consensus_encode_dyn(writer)
     }
 }
 
@@ -53,23 +53,23 @@ pub trait Encodable {
     /// Returns the number of bytes written on success.
     ///
     /// The only errors returned are errors propagated from the writer.
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, std::io::Error>;
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error>;
 }
 
 /// Data which can be encoded in a consensus-consistent way
 pub trait Decodable: Sized {
     /// Decode an object with a well-defined format
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError>;
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError>;
 }
 
 impl Encodable for Url {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
-        self.to_string().consensus_encode(&mut writer)
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.to_string().consensus_encode(writer)
     }
 }
 
 impl Decodable for Url {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         String::consensus_decode(d)?
             .parse::<Url>()
             .map_err(DecodeError::from_err)
@@ -88,7 +88,7 @@ impl DecodeError {
 macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {
         impl Encodable for $num_type {
-            fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
                 let bytes = self.to_le_bytes();
                 writer.write_all(&bytes[..])?;
                 Ok(bytes.len())
@@ -97,7 +97,7 @@ macro_rules! impl_encode_decode_num {
 
         impl Decodable for $num_type {
             fn consensus_decode<D: std::io::Read>(
-                mut d: D,
+                d: &mut D,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
                 d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
@@ -116,18 +116,18 @@ macro_rules! impl_encode_decode_tuple {
     ($($x:ident),*) => (
         #[allow(non_snake_case)]
         impl <$($x: Encodable),*> Encodable for ($($x),*) {
-            fn consensus_encode<W: std::io::Write>(&self, mut s: W) -> Result<usize, std::io::Error> {
+            fn consensus_encode<W: std::io::Write>(&self, s: &mut W) -> Result<usize, std::io::Error> {
                 let &($(ref $x),*) = self;
                 let mut len = 0;
-                $(len += $x.consensus_encode(&mut s)?;)*
+                $(len += $x.consensus_encode(s)?;)*
                 Ok(len)
             }
         }
 
         #[allow(non_snake_case)]
         impl<$($x: Decodable),*> Decodable for ($($x),*) {
-            fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-                Ok(($({let $x = Decodable::consensus_decode(&mut d)?; $x }),*))
+            fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+                Ok(($({let $x = Decodable::consensus_decode(d)?; $x }),*))
             }
         }
     );
@@ -141,11 +141,11 @@ impl<T> Encodable for &[T]
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let mut len = 0;
-        len += (self.len() as u64).consensus_encode(&mut writer)?;
+        len += (self.len() as u64).consensus_encode(writer)?;
         for item in self.iter() {
-            len += item.consensus_encode(&mut writer)?;
+            len += item.consensus_encode(writer)?;
         }
         Ok(len)
     }
@@ -155,7 +155,7 @@ impl<T> Encodable for Vec<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         (self as &[T]).consensus_encode(writer)
     }
 }
@@ -164,9 +164,9 @@ impl<T> Decodable for Vec<T>
 where
     T: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-        let len = u64::consensus_decode(&mut d)?;
-        (0..len).map(|_| T::consensus_decode(&mut d)).collect()
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+        let len = u64::consensus_decode(d)?;
+        (0..len).map(|_| T::consensus_decode(d)).collect()
     }
 }
 
@@ -174,10 +174,10 @@ impl<T, const SIZE: usize> Encodable for [T; SIZE]
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
         for item in self.iter() {
-            len += item.consensus_encode(&mut writer)?;
+            len += item.consensus_encode(writer)?;
         }
         Ok(len)
     }
@@ -187,11 +187,11 @@ impl<T, const SIZE: usize> Decodable for [T; SIZE]
 where
     T: Decodable + Debug + Default + Copy,
 {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         // todo: impl without copy
         let mut data = [T::default(); SIZE];
         for item in data.iter_mut() {
-            *item = T::consensus_decode(&mut d)?;
+            *item = T::consensus_decode(d)?;
         }
         Ok(data)
     }
@@ -201,13 +201,13 @@ impl<T> Encodable for Option<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
         if let Some(inner) = self {
-            len += 1u8.consensus_encode(&mut writer)?;
-            len += inner.consensus_encode(&mut writer)?;
+            len += 1u8.consensus_encode(writer)?;
+            len += inner.consensus_encode(writer)?;
         } else {
-            len += 0u8.consensus_encode(&mut writer)?;
+            len += 0u8.consensus_encode(writer)?;
         }
         Ok(len)
     }
@@ -217,11 +217,11 @@ impl<T> Decodable for Option<T>
 where
     T: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-        let flag = u8::consensus_decode(&mut d)?;
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+        let flag = u8::consensus_decode(d)?;
         match flag {
             0 => Ok(None),
-            1 => Ok(Some(T::consensus_decode(&mut d)?)),
+            1 => Ok(Some(T::consensus_decode(d)?)),
             _ => Err(DecodeError::from_str(
                 "Invalid flag for option enum, expected 0 or 1",
             )),
@@ -233,7 +233,7 @@ impl<T> Encodable for Box<T>
 where
     T: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.as_ref().consensus_encode(writer)
     }
 }
@@ -242,43 +242,46 @@ impl<T> Decodable for Box<T>
 where
     T: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         Ok(Box::new(T::consensus_decode(d)?))
     }
 }
 
 impl Encodable for () {
-    fn consensus_encode<W: std::io::Write>(&self, _writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(
+        &self,
+        _writer: &mut W,
+    ) -> Result<usize, std::io::Error> {
         Ok(0)
     }
 }
 
 impl Decodable for () {
-    fn consensus_decode<D: std::io::Read>(_d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(_d: &mut D) -> Result<Self, DecodeError> {
         Ok(())
     }
 }
 
 impl Encodable for String {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.as_bytes().consensus_encode(writer)
     }
 }
 
 impl Decodable for String {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         String::from_utf8(Decodable::consensus_decode(d)?).map_err(DecodeError::from_err)
     }
 }
 
 impl Encodable for lightning_invoice::Invoice {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.to_string().consensus_encode(writer)
     }
 }
 
 impl Decodable for lightning_invoice::Invoice {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         String::consensus_decode(d)?
             .parse::<lightning_invoice::Invoice>()
             .map_err(DecodeError::from_err)
@@ -286,7 +289,7 @@ impl Decodable for lightning_invoice::Invoice {
 }
 
 impl Encodable for bool {
-    fn consensus_encode<W: Write>(&self, mut writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let bool_as_u8 = if *self { 1 } else { 0 };
         writer.write_all(&[bool_as_u8])?;
         Ok(1)
@@ -294,7 +297,7 @@ impl Encodable for bool {
 }
 
 impl Decodable for bool {
-    fn consensus_decode<D: Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut bool_as_u8 = [0u8];
         d.read_exact(&mut bool_as_u8)
             .map_err(DecodeError::from_err)?;
