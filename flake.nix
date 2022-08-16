@@ -38,7 +38,7 @@
           "llvm-tools-preview"
         ]);
 
-        fenix-channel = fenix.packages.${system}.complete;
+        fenix-channel = fenix.packages.${system}.stable;
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
 
@@ -217,12 +217,6 @@
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
         });
 
-        cargoUdeps = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "${pkgs.cargo-udeps}/bin/cargo-udeps udeps --workspace --all-targets --release";
-          doInstallCargoArtifacts = false;
-        });
-
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
           version = "0.4.14";
@@ -236,7 +230,7 @@
 
         llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --all-features --workspace --lcov --output-path $out/lcov.info";
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
           doCheck = true;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
@@ -341,7 +335,6 @@
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
           workspaceCov = llvmCovWorkspace;
-          cargoUdeps = cargoUdeps;
 
           cli-test = {
             latency = cliTestLatency;
