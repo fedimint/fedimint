@@ -38,7 +38,7 @@
           "llvm-tools-preview"
         ]);
 
-        fenix-channel = fenix.packages.${system}.complete;
+        fenix-channel = fenix.packages.${system}.stable;
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
 
@@ -230,7 +230,7 @@
 
         llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --all-features --workspace --lcov --output-path $out/lcov.info";
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
           doCheck = true;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
