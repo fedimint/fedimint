@@ -19,7 +19,7 @@ use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
-use ln::db::LightningGatewayKey;
+use ln::db::ActiveLightningGatewaysKey;
 use minimint_api::task::sleep;
 use minimint_api::{
     db::{
@@ -106,6 +106,15 @@ impl From<GatewayClientConfig> for LightningGateway {
             api: config.api,
         }
     }
+}
+
+#[derive(Debug)]
+pub enum GatewaySelection {
+    /// Select all gateways registered with the mint
+    Registered,
+    /// Select all gateways saved in the client database.
+    /// These are always a subset of the registered gateways.
+    Active,
 }
 
 pub struct Client<C> {
@@ -435,29 +444,61 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 }
 
 impl Client<UserClientConfig> {
-    pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
-        // fetch gateway from db
-        if let Some(gateway) = self
-            .context
-            .db
-            .get_value(&LightningGatewayKey)
-            .expect("DB error")
-        {
-            return Ok(gateway);
-        }
+    pub async fn select_gateways(
+        &self,
+        selection: GatewaySelection,
+    ) -> Result<Vec<LightningGateway>> {
+        match selection {
+            GatewaySelection::Active => {
+                if let Some(active_gateways) = self
+                    .context
+                    .db
+                    .get_value(&ActiveLightningGatewaysKey)
+                    .expect("DB error")
+                {
+                    if !active_gateways.is_empty() {
+                        return Ok(active_gateways);
+                    }
+                }
 
-        // if db is empty, fetch from federation and save to db
-        let gateways = self.context.api.fetch_gateways().await?;
-        if gateways.is_empty() {
-            return Err(ClientError::NoGateways);
-        };
-        let gateway = gateways[0].clone();
-        self.context
-            .db
-            .insert_entry(&LightningGatewayKey, &gateway)
-            .expect("DB error");
-        Ok(gateway)
+                return Err(ClientError::NoActiveGateways);
+            }
+            GatewaySelection::Registered => {
+                let registered_gateways = self.context.api.fetch_gateways().await?;
+                if registered_gateways.is_empty() {
+                    return Err(ClientError::NoRegisteredGateways);
+                };
+                return Ok(registered_gateways);
+            }
+        }
     }
+
+    pub async fn activate_gateway(&self, _gateway: LightningGateway) -> Result<()> {
+        // TODO: match proposed gateway with currently active gateways in db. Append it if necessary
+
+        // TODO: confirm proposed gateway is registered. If necessary, register it with the federation.
+        unimplemented!()
+    }
+
+    async fn fetch_gateway(&self) -> Result<LightningGateway> {
+        let gateways = match self.select_gateways(GatewaySelection::Active).await {
+            Ok(gateways) => gateways,
+            // if no active gateways are found, select and activate any registered gateways
+            Err(_) => {
+                let registered_gateways = self
+                    .select_gateways(GatewaySelection::Registered)
+                    .await
+                    .unwrap();
+
+                // TODO: activate the registered gateways
+
+                registered_gateways
+            }
+        };
+
+        Ok(gateways[0].clone())
+    }
+
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
         invoice: Invoice,
@@ -930,8 +971,10 @@ pub enum ClientError {
     InvalidTransaction(String),
     #[error("Invalid preimage")]
     InvalidPreimage,
-    #[error("Federation has no lightning gateways")]
-    NoGateways,
+    #[error("Federation has no registered gateways")]
+    NoRegisteredGateways,
+    #[error("Federation client has no active gateways in database")]
+    NoActiveGateways,
     #[error("HTTP Error {0}")]
     HttpError(#[from] reqwest::Error),
     #[error("Outgoing payment timeout")]

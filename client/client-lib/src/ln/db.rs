@@ -11,7 +11,7 @@ const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x23;
 const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x24;
 const DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = 0x25;
 const DB_PREFIX_CONFIRMED_INVOICE: u8 = 0x26;
-const DB_PREFIX_LIGHTNING_GATEWAY: u8 = 0x28;
+const DB_PREFIX_ACTIVE_LIGHTNING_GATEWAYS: u8 = 0x28;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKey(pub ContractId);
@@ -86,10 +86,10 @@ impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
 }
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct LightningGatewayKey;
+pub struct ActiveLightningGatewaysKey;
 
-impl DatabaseKeyPrefixConst for LightningGatewayKey {
-    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+impl DatabaseKeyPrefixConst for ActiveLightningGatewaysKey {
+    const DB_PREFIX: u8 = DB_PREFIX_ACTIVE_LIGHTNING_GATEWAYS;
     type Key = Self;
-    type Value = LightningGateway;
+    type Value = Vec<LightningGateway>;
 }
