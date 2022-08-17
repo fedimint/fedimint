@@ -170,9 +170,9 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.59.2"
+version = "0.60.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd2a9a458e8f4304c52c43ebb0cfbd520289f8379a52e329a38afda99bf8eb8"
+checksum = "062dddbc1ba4aca46de6338e2bf87771414c335f7b2f2036e8f3e9befebf88e6"
 dependencies = [
  "bitflags",
  "cexpr",
@@ -1338,8 +1338,9 @@ checksum = "da83a57f3f5ba3680950aa3cbc806fc297bc0b289d42e8942ed528ace71b8145"
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.7.0+7.1.2"
-source = "git+https://github.com/fedimint/rust-rocksdb?branch=minimint#8b9868b7b44db337cbc7421b657533c59aa8c712"
+version = "0.8.0+7.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "611804e4666a25136fcc5f8cf425ab4d26c7f74ea245ffe92ea23b85b6420b5d"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -2433,8 +2434,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.18.0"
-source = "git+https://github.com/fedimint/rust-rocksdb?branch=minimint#8b9868b7b44db337cbc7421b657533c59aa8c712"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e9562ea1d70c0cc63a34a22d977753b50cca91cc6b6527750463bd5dd8697bc"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -3522,9 +3524,9 @@ checksum = "c394b5bd0c6f669e7275d9c20aa90ae064cb22e75a1cad54e1b34088034b149f"
 
 [[package]]
 name = "zstd-sys"
-version = "1.6.3+zstd.1.5.2"
+version = "2.0.1+zstd.1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc49afa5c8d634e75761feda8c592051e7eeb4683ba827211eb0d731d3402ea8"
+checksum = "9fd07cbbc53846d9145dbffdf6dd09a7a0aa52be46741825f5c97bdd4f73f12b"
 dependencies = [
  "cc",
  "libc",
