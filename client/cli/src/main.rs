@@ -79,7 +79,7 @@ enum Command {
     WaitBlockHeight { height: u64 },
 
     /// List gateways
-    ListGateways { active: bool },
+    Gateways { active: bool },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -208,7 +208,7 @@ async fn main() {
         Command::WaitBlockHeight { height } => {
             client.await_consensus_block_height(height).await;
         }
-        Command::ListGateways { active } => {
+        Command::Gateways { active } => {
             let gateways: Vec<LightningGateway>;
 
             if active {
