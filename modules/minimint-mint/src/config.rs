@@ -1,16 +1,19 @@
+use crate::tiered::coins::TieredMultiZip;
 use crate::Keys;
 use minimint_api::config::GenerateConfig;
 use minimint_api::{Amount, PeerId};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use tbs::{dealer_keygen, AggregatePublicKey};
+use std::iter::FromIterator;
+use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
     pub tbs_sks: Keys<tbs::SecretKeyShare>,
     pub peer_tbs_pks: BTreeMap<PeerId, Keys<tbs::PublicKeyShare>>,
     pub fee_consensus: FeeConsensus,
+    pub threshold: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -43,6 +46,7 @@ impl GenerateConfig for MintConfig {
             .iter()
             .map(|&peer| {
                 let config = MintConfig {
+                    threshold: tbs_threshold,
                     tbs_sks: params
                         .iter()
                         .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))
@@ -72,6 +76,25 @@ impl GenerateConfig for MintConfig {
         };
 
         (mint_cfg, client_cfg)
+    }
+
+    fn to_client_config(&self) -> Self::ClientConfig {
+        let pub_key: HashMap<Amount, AggregatePublicKey> = TieredMultiZip::new(
+            self.peer_tbs_pks
+                .iter()
+                .map(|(_, keys)| keys.iter())
+                .collect(),
+        )
+        .map(|(amt, keys)| {
+            // TODO: avoid this through better aggregation API allowing references or
+            let keys = keys.into_iter().copied().collect::<Vec<_>>();
+            (amt, keys.aggregate(self.threshold))
+        })
+        .collect();
+        MintClientConfig {
+            tbs_pks: Keys::from_iter(pub_key.into_iter()),
+            fee_consensus: self.fee_consensus.clone(),
+        }
     }
 }
 

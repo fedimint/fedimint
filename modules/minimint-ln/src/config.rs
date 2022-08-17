@@ -59,6 +59,13 @@ impl GenerateConfig for LightningModuleConfig {
 
         (server_cfg, client_cfg)
     }
+
+    fn to_client_config(&self) -> Self::ClientConfig {
+        LightningModuleClientConfig {
+            threshold_pub_key: self.threshold_pub_keys.public_key(),
+            fee_consensus: self.fee_consensus.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

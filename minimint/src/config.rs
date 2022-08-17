@@ -140,6 +140,22 @@ impl GenerateConfig for ServerConfig {
 
         (server_config, client_config)
     }
+
+    fn to_client_config(&self) -> Self::ClientConfig {
+        let api_endpoints: Vec<String> = self
+            .peers
+            .iter()
+            .map(|(_, peer)| peer.connection.api_addr.clone())
+            .collect();
+        let max_evil = hbbft::util::max_faulty(self.peers.len());
+        ClientConfig {
+            api_endpoints,
+            max_evil,
+            mint: self.mint.to_client_config(),
+            wallet: self.wallet.to_client_config(),
+            ln: self.ln.to_client_config(),
+        }
+    }
 }
 
 impl ServerConfig {

@@ -3,13 +3,13 @@ use crate::config::ServerConfig;
 use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
 use minimint_api::{
+    config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
 use minimint_core::epoch::EpochHistory;
 use minimint_core::outcome::TransactionStatus;
 use std::fmt::Formatter;
-use std::iter::FromIterator;
 use std::sync::Arc;
 use tracing::debug;
 
@@ -19,10 +19,6 @@ use jsonrpsee::{
     RpcModule,
 };
 use minimint_core::config::ClientConfig;
-use minimint_core::modules::ln::config::LightningModuleClientConfig;
-use minimint_core::modules::mint::config::MintClientConfig;
-use minimint_core::modules::mint::Keys;
-use minimint_wallet::config::WalletClientConfig;
 
 #[derive(Clone)]
 struct State {
@@ -142,28 +138,8 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
         api_endpoint! {
             "/config",
             async |minimint: &MinimintConsensus<rand::rngs::OsRng>, _v: ()| -> ClientConfig {
-                let api_endpoints: Vec<String> = minimint
-                    .cfg
-                    .peers
-                    .iter()
-                    .map(|(_, peer)| peer.connection.api_addr.clone())
-                    .collect();
-                let max_evil = hbbft::util::max_faulty(minimint.cfg.peers.len());
-                let mint = MintClientConfig {
-                    tbs_pks: Keys::from_iter(minimint.mint.pub_key().into_iter()),
-                    fee_consensus: minimint.cfg.mint.fee_consensus.clone()
-                };
-                let wallet = WalletClientConfig {
-                    peg_in_descriptor: minimint.cfg.wallet.peg_in_descriptor.clone(),
-                    network: minimint.cfg.wallet.network,
-                    fee_consensus: minimint.cfg.wallet.fee_consensus.clone(),
-                    finality_delay: minimint.cfg.wallet.finality_delay,
-                };
-                let ln = LightningModuleClientConfig {
-                    threshold_pub_key: minimint.cfg.ln.threshold_pub_keys.public_key(),
-                    fee_consensus: minimint.cfg.ln.fee_consensus.clone(),
-                };
-                Ok(ClientConfig { api_endpoints, mint, wallet, ln, max_evil }) }
+                Ok(minimint.cfg.to_client_config())
+            }
         },
     ];
 

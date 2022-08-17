@@ -462,7 +462,7 @@ mod tests {
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
                 1,
-                |cfg, db| async { Mint::new(cfg, 3, Arc::new(db)) },
+                |cfg, db| async { Mint::new(cfg, Arc::new(db)) },
                 &[Amount::from_sat(1), Amount::from_sat(10)][..],
             )
             .await,

@@ -43,10 +43,10 @@ pub mod tiered;
 
 /// Federated mint member mint
 pub struct Mint {
+    cfg: MintConfig,
     sec_key: Keys<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Keys<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
-    threshold: usize, // TODO: move to cfg
     db: Arc<dyn Database>,
 }
 
@@ -400,7 +400,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, threshold: usize, db: Arc<dyn Database>) -> Mint {
+    pub fn new(cfg: MintConfig, db: Arc<dyn Database>) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -436,15 +436,15 @@ impl Mint {
         .map(|(amt, keys)| {
             // TODO: avoid this through better aggregation API allowing references or
             let keys = keys.into_iter().copied().collect::<Vec<_>>();
-            (amt, keys.aggregate(threshold))
+            (amt, keys.aggregate(cfg.threshold))
         })
         .collect();
 
         Mint {
+            cfg: cfg.clone(),
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            threshold,
             db,
         }
     }
@@ -469,11 +469,11 @@ impl Mint {
         partial_sigs: Vec<(PeerId, PartialSigResponse)>,
     ) -> (Result<SigResponse, CombineError>, MintShareErrors) {
         // Terminate early if there are not enough shares
-        if partial_sigs.len() < self.threshold {
+        if partial_sigs.len() < self.cfg.threshold {
             return (
                 Err(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, _)| peer).cloned().collect(),
-                    self.threshold,
+                    self.cfg.threshold,
                 )),
                 MintShareErrors(vec![]),
             );
@@ -563,11 +563,11 @@ impl Mint {
                 .collect::<Vec<_>>();
 
             // Check that there are still sufficient
-            if valid_sigs.len() < self.threshold {
+            if valid_sigs.len() < self.cfg.threshold {
                 return Err(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    self.threshold,
+                    self.cfg.threshold,
                 ));
             }
 
@@ -575,7 +575,7 @@ impl Mint {
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                self.threshold,
+                self.cfg.threshold,
             );
 
             Ok((amt, sig))
@@ -751,7 +751,7 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config, MINTS - THRESHOLD, Arc::new(MemDatabase::new())))
+            .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
             .collect::<Vec<_>>();
 
         let agg_pk = *client_cfg.tbs_pks.keys.get(&Amount::from_sat(1)).unwrap();
@@ -909,11 +909,11 @@ mod test {
 
         Mint::new(
             MintConfig {
+                threshold: THRESHOLD,
                 tbs_sks: mint_server_cfg1[0].tbs_sks.clone(),
                 peer_tbs_pks: mint_server_cfg2[0].peer_tbs_pks.clone(),
                 fee_consensus: FeeConsensus::default(),
             },
-            THRESHOLD,
             Arc::new(MemDatabase::new()),
         );
     }
