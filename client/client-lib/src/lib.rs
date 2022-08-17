@@ -7,6 +7,7 @@ pub mod wallet;
 
 use std::{sync::Arc, time::Duration};
 
+use futures::future::join_all;
 use futures::StreamExt;
 
 use bitcoin::util::key::KeyPair;
@@ -113,7 +114,6 @@ pub enum GatewaySelection {
     /// Select all gateways registered with the mint
     Registered,
     /// Select all gateways saved in the client database.
-    /// These are always a subset of the registered gateways.
     Active,
 }
 
@@ -450,34 +450,42 @@ impl Client<UserClientConfig> {
     ) -> Result<Vec<LightningGateway>> {
         match selection {
             GatewaySelection::Active => {
-                if let Some(active_gateways) = self
+                match self
                     .context
                     .db
                     .get_value(&ActiveLightningGatewaysKey)
                     .expect("DB error")
                 {
-                    if !active_gateways.is_empty() {
-                        return Ok(active_gateways);
-                    }
+                    Some(gateways) => Ok(gateways),
+                    None => Err(ClientError::NoActiveGateways),
                 }
-
-                return Err(ClientError::NoActiveGateways);
             }
             GatewaySelection::Registered => {
                 let registered_gateways = self.context.api.fetch_gateways().await?;
                 if registered_gateways.is_empty() {
-                    return Err(ClientError::NoRegisteredGateways);
+                    Err(ClientError::NoRegisteredGateways)
                 };
-                return Ok(registered_gateways);
+                Ok(registered_gateways)
             }
         }
     }
 
-    pub async fn activate_gateway(&self, _gateway: LightningGateway) -> Result<()> {
-        // TODO: match proposed gateway with currently active gateways in db. Append it if necessary
+    pub async fn activate_gateway(&self, gateway: LightningGateway) -> Result<()> {
+        let gateways = match self.select_gateways(GatewaySelection::Active).await {
+            Ok(mut active_gateways) => {
+                if !active_gateways.contains(&gateway) {
+                    active_gateways.push(gateway);
+                }
+                active_gateways
+            }
+            Err(_) => vec![gateway],
+        };
 
-        // TODO: confirm proposed gateway is registered. If necessary, register it with the federation.
-        unimplemented!()
+        self.context
+            .db
+            .insert_entry(&ActiveLightningGatewaysKey, &gateways)
+            .expect("DB error");
+        Ok(())
     }
 
     async fn fetch_gateway(&self) -> Result<LightningGateway> {
@@ -490,8 +498,13 @@ impl Client<UserClientConfig> {
                     .await
                     .unwrap();
 
-                // TODO: activate the registered gateways
-
+                join_all(
+                    registered_gateways
+                        .clone()
+                        .iter()
+                        .map(|gateway| self.activate_gateway(gateway.clone())),
+                )
+                .await;
                 registered_gateways
             }
         };
