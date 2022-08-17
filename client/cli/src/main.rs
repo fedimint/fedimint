@@ -3,6 +3,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use minimint_api::Amount;
 use minimint_core::config::load_from_file;
+use minimint_core::modules::ln::LightningGateway;
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 
@@ -10,7 +11,7 @@ use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
 };
-use mint_client::{Client, UserClientConfig};
+use mint_client::{Client, GatewaySelection, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing::{error, info};
@@ -76,6 +77,9 @@ enum Command {
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
+
+    /// List gateways
+    ListGateways { active: bool },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -203,6 +207,33 @@ async fn main() {
         }
         Command::WaitBlockHeight { height } => {
             client.await_consensus_block_height(height).await;
+        }
+        Command::ListGateways { active } => {
+            let gateways: Vec<LightningGateway>;
+
+            if active {
+                // List any gateways saved in the client database.
+                gateways = client
+                    .select_gateways(GatewaySelection::Active)
+                    .await
+                    .expect("Failed to fetch gateways");
+
+                println!("Found {} active gateways : ", gateways.len());
+            } else {
+                // List any gateways registered with the federation.
+                gateways = client
+                    .select_gateways(GatewaySelection::Registered)
+                    .await
+                    .expect("Failed to fetch gateways");
+                println!("Found {} registered gateways : ", gateways.len());
+            }
+
+            for (i, gateway) in gateways.iter().enumerate() {
+                println!(
+                    "{}: mint_pub_key: {}, node_pub_key: {}",
+                    i, gateway.mint_pub_key, gateway.node_pub_key
+                );
+            }
         }
     }
 }
