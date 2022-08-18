@@ -161,7 +161,7 @@
         # all the dependencies (as dir) to help limit the
         # amount of things that need to rebuild when some
         # file change
-        pkg = { name ? null, dir, extraDirs ? [ ] }: rec {
+        pkg = { name ? null, dir, port ? 8000, extraDirs ? [ ] }: rec {
           package = craneLib.buildPackage (commonArgs // {
             cargoArtifacts = workspaceDeps;
 
@@ -173,6 +173,19 @@
             pname = name;
             cargoExtraArgs = "--bin ${name}";
           });
+
+          container = pkgs.dockerTools.buildLayeredImage {
+            name = name;
+            contents = [ package ];
+            config = {
+              Cmd = [
+                "${package}/bin/${name}"
+              ];
+              ExposedPorts = {
+                "${builtins.toString port}/tcp" = { };
+              };
+            };
+          };
         };
 
         workspaceBuild = craneLib.cargoBuild (commonArgs // {
@@ -326,11 +339,13 @@
       {
         packages = {
           default = minimint.package;
+
           minimint = minimint.package;
           minimint-tests = minimint-tests.package;
           ln-gateway = ln-gateway.package;
           clientd = clientd.package;
           mint-client-cli = mint-client-cli.package;
+
           deps = workspaceDeps;
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
@@ -342,6 +357,10 @@
             cli = cliTestCli;
             clientd = cliTestClientd;
             rust-tests = cliRustTests;
+          };
+
+          container = {
+            minimint = minimint.container;
           };
         };
 
