@@ -9,9 +9,11 @@ use fedimint_api::{
 };
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
+use futures::FutureExt;
 use std::fmt::Formatter;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, error};
 
 use fedimint_core::config::ClientConfig;
 use jsonrpsee::{
@@ -86,8 +88,21 @@ fn attach_endpoints<M>(
             .register_async_method(path, move |params, state| {
                 Box::pin(async move {
                     let params = params.one::<serde_json::Value>()?;
-                    (endpoint.handler)((*state.fedimint).as_ref(), params)
+                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                    // end up with an inconsistent state in theory. In practice most API functions
+                    // are only reading and the few that do write anything are atomic. Lastly, this
+                    // is only the last line of defense
+                    AssertUnwindSafe((endpoint.handler)((*state.fedimint).as_ref(), params))
+                        .catch_unwind()
                         .await
+                        .map_err(|_| {
+                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                500,
+                                "API handler panicked",
+                                None::<()>,
+                            )))
+                        })?
                         .map_err(|e| {
                             jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                                 e.code, e.message, None::<()>,
