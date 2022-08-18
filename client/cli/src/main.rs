@@ -220,6 +220,7 @@ async fn main() {
 
             if active {
                 // List any gateways saved in the client database.
+                println!("Looking up gateways in database...");
                 gateways = client
                     .select_gateways(GatewaySelection::Active)
                     .await
@@ -228,6 +229,7 @@ async fn main() {
                 println!("Found {} active gateways : ", gateways.len());
             } else {
                 // List any gateways registered with the federation.
+                println!("Fetching gateways from federation...");
                 gateways = client
                     .select_gateways(GatewaySelection::Registered)
                     .await
@@ -235,11 +237,8 @@ async fn main() {
                 println!("Found {} registered gateways : ", gateways.len());
             }
 
-            for (i, gateway) in gateways.iter().enumerate() {
-                println!(
-                    "{}: mint_pub_key: {}, node_pub_key: {}",
-                    i, gateway.mint_pub_key, gateway.node_pub_key
-                );
+            for (_, gateway) in gateways.iter().enumerate() {
+                println!("{}", serde_json::to_string(&gateway).unwrap());
             }
         }
         Command::GatewaysActivate { gateway } => {
