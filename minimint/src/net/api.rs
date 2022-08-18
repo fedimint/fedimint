@@ -105,13 +105,13 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
             async |minimint: &MinimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
-                let string = serde_json::to_string(&transaction).expect("encoding error");
+                let string = serde_json::to_string(&transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let transaction: Transaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let tx_id = transaction.tx_hash();
 
                 minimint
                     .submit_transaction(transaction)
-                    .expect("Could not submit sign request to consensus");
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 Ok(tx_id)
             }
