@@ -360,7 +360,7 @@
           };
 
           container = {
-            minimint = minimint.container;
+            fedimint = minimint.container;
           };
         };
 
