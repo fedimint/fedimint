@@ -379,6 +379,7 @@
               buildInputs = workspaceDeps.buildInputs;
               nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
                 fenix-toolchain
+                fenix.packages.${system}.rust-analyzer
                 cargo-llvm-cov
                 cargo-udeps
 
