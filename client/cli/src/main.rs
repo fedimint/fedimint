@@ -87,6 +87,12 @@ enum Command {
         #[clap(parse(try_from_str = parse_lightning_gateway))]
         gateway: LightningGateway,
     },
+
+    /// Deactivate a gateway
+    GatewaysDeactivate {
+        #[clap(parse(try_from_str = parse_lightning_gateway))]
+        gateway: LightningGateway,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -246,6 +252,12 @@ async fn main() {
                 .activate_gateway(gateway)
                 .await
                 .expect("Failed to activate gateway");
+        }
+        Command::GatewaysDeactivate { gateway } => {
+            client
+                .deactivate_gateway(gateway)
+                .await
+                .expect("Failed to deactivate gateway");
         }
     }
 }

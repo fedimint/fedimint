@@ -488,6 +488,22 @@ impl Client<UserClientConfig> {
         Ok(())
     }
 
+    pub async fn deactivate_gateway(&self, gateway: LightningGateway) -> Result<()> {
+        let gateways = match self.select_gateways(GatewaySelection::Active).await {
+            Ok(mut active_gateways) => {
+                active_gateways.retain(|g| g != &gateway);
+                active_gateways
+            }
+            Err(_) => return Err(ClientError::NoActiveGateways),
+        };
+
+        self.context
+            .db
+            .insert_entry(&ActiveLightningGatewaysKey, &gateways)
+            .expect("DB error");
+        Ok(())
+    }
+
     async fn fetch_gateway(&self) -> Result<LightningGateway> {
         let gateways = match self.select_gateways(GatewaySelection::Active).await {
             Ok(gateways) => gateways,
