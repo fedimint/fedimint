@@ -9,7 +9,8 @@ use minimint_core::modules::wallet::txoproof::TxOutProof;
 
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
+    from_hex, parse_bitcoin_amount, parse_coins, parse_lightning_gateway, parse_minimint_amount,
+    serialize_coins,
 };
 use mint_client::{Client, GatewaySelection, UserClientConfig};
 use serde::{Deserialize, Serialize};
@@ -80,6 +81,12 @@ enum Command {
 
     /// List gateways
     Gateways { active: bool },
+
+    /// Activate a gateway
+    GatewaysActivate {
+        #[clap(parse(try_from_str = parse_lightning_gateway))]
+        gateway: LightningGateway,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -234,6 +241,12 @@ async fn main() {
                     i, gateway.mint_pub_key, gateway.node_pub_key
                 );
             }
+        }
+        Command::GatewaysActivate { gateway } => {
+            client
+                .activate_gateway(gateway)
+                .await
+                .expect("Failed to activate gateway");
         }
     }
 }

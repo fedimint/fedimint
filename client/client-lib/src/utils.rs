@@ -5,6 +5,7 @@ use lightning_invoice::Currency;
 use minimint_api::db::Database;
 use minimint_api::encoding::Decodable;
 use minimint_api::ParseAmountError;
+use minimint_core::modules::ln::{LightningGateway, LightningModuleError};
 use minimint_core::modules::mint::tiered::coins::Coins;
 
 pub fn parse_coins(s: &str) -> Coins<SpendableCoin> {
@@ -42,6 +43,14 @@ pub fn parse_minimint_amount(s: &str) -> Result<minimint_api::Amount, ParseAmoun
         //default to satoshi
         minimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
+}
+
+pub fn parse_lightning_gateway(s: &str) -> Result<LightningGateway, LightningModuleError> {
+    let gateway: LightningGateway = match serde_json::from_str(s) {
+        Ok(g) => g,
+        Err(_) => return Err(LightningModuleError::ParseGatewayError),
+    };
+    Ok(gateway)
 }
 
 pub struct BorrowedClientContext<'a, C> {

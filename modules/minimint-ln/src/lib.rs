@@ -671,4 +671,6 @@ pub enum LightningModuleError {
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
     NoOffer(secp256k1::hashes::sha256::Hash),
+    #[error("Error parsing string as LightningGateway")]
+    ParseGatewayError,
 }

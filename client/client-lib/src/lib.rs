@@ -463,7 +463,7 @@ impl Client<UserClientConfig> {
             GatewaySelection::Registered => {
                 let registered_gateways = self.context.api.fetch_gateways().await?;
                 if registered_gateways.is_empty() {
-                    Err(ClientError::NoRegisteredGateways)
+                    return Err(ClientError::NoRegisteredGateways);
                 };
                 Ok(registered_gateways)
             }
