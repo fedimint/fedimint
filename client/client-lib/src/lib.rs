@@ -419,6 +419,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 }
 
 impl Client<UserClientConfig> {
+    pub async fn fetch_registered_gateways(&self) -> Result<Vec<LightningGateway>> {
+        Ok(self.context.api.fetch_gateways().await?)
+    }
     pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
         // fetch gateway from db
         if let Some(gateway) = self
@@ -431,10 +434,7 @@ impl Client<UserClientConfig> {
         }
 
         // if db is empty, fetch from federation and save to db
-        let gateways = self.context.api.fetch_gateways().await?;
-        if gateways.is_empty() {
-            return Err(ClientError::NoGateways);
-        };
+        let gateways = self.fetch_registered_gateways().await?;
         let gateway = gateways[0].clone();
         self.context
             .db
