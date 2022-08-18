@@ -111,6 +111,15 @@
 <span id="111">111</span>
 <span id="112">112</span>
 <span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
@@ -222,6 +231,15 @@
         };
 
         (wallet_cfg, client_cfg)
+    }
+
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ClientConfig {
+        WalletClientConfig {
+            peg_in_descriptor: <span class="self">self</span>.peg_in_descriptor.clone(),
+            network: <span class="self">self</span>.network,
+            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+            finality_delay: <span class="self">self</span>.finality_delay,
+        }
     }
 }
 </code></pre></div>

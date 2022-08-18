@@ -587,6 +587,32 @@
 <span id="587">587</span>
 <span id="588">588</span>
 <span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
 </span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
@@ -603,6 +629,7 @@
 <span class="kw">use </span>minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 <span class="kw">use </span>minimint_core::transaction::Transaction;
 <span class="kw">use </span>minimint_core::CoreError;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{error, instrument, warn};
 
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]</span>
@@ -612,6 +639,7 @@
 <span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 
 <span class="kw">use </span>bitcoin::{Address, Amount};
+<span class="kw">use </span>minimint_core::config::ClientConfig;
 <span class="kw">use </span>minimint_core::epoch::EpochHistory;
 <span class="kw">use </span>minimint_core::modules::wallet::PegOutFees;
 <span class="kw">use </span>std::time::Duration;
@@ -748,6 +776,30 @@
     url: String,
     peer_id: PeerId,
     client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
+}
+
+<span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
+</span><span class="attribute">#[derive(Debug, Serialize, Deserialize)]</span>
+<span class="kw">pub struct </span>WsFederationConnect {
+    <span class="kw">pub </span>members: Vec&lt;(PeerId, String)&gt;,
+    <span class="kw">pub </span>max_evil: usize,
+}
+
+<span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>ClientConfig&gt; <span class="kw">for </span>WsFederationConnect {
+    <span class="kw">fn </span>from(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>max_evil = config.max_evil;
+        <span class="kw">let </span>members: Vec&lt;(PeerId, String)&gt; = config
+            .api_endpoints
+            .iter()
+            .enumerate()
+            .map(|(id, url)| {
+                <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
+                </span><span class="kw">let </span>url = url.parse().expect(<span class="string">&quot;Invalid URL in config&quot;</span>);
+                (peer_id, url)
+            })
+            .collect();
+        WsFederationConnect { members, max_evil }
+    }
 }
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;

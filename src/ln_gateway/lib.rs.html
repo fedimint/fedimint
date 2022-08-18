@@ -365,6 +365,8 @@
 <span id="365">365</span>
 <span id="366">366</span>
 <span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -384,6 +386,7 @@
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Deserializer};
 <span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::{
     io::Cursor,
     sync::Arc,
@@ -486,6 +489,7 @@
         ln_client: Box&lt;<span class="kw">dyn </span>LnRpc&gt;,
         sender: mpsc::Sender&lt;GatewayRequest&gt;,
         receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
+        bind_addr: SocketAddr,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt; = ln_client.into();
         <span class="comment">// Regster gateway with federation
@@ -494,7 +498,7 @@
             .<span class="kw">await
             </span>.expect(<span class="string">&quot;Failed to register with federation&quot;</span>);
         <span class="comment">// Run webserver asynchronously in tokio
-        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(sender));
+        </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(bind_addr, sender));
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             federation_client,
             ln_client,

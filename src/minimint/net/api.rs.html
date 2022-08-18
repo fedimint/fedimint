@@ -138,12 +138,19 @@
 <span id="138">138</span>
 <span id="139">139</span>
 <span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
-
 </span><span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::MinimintConsensus;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 <span class="kw">use </span>minimint_api::{
+    config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
@@ -158,6 +165,7 @@
     ws_server::WsServerBuilder,
     RpcModule,
 };
+<span class="kw">use </span>minimint_core::config::ClientConfig;
 
 <span class="attribute">#[derive(Clone)]</span>
 <span class="kw">struct </span>State {
@@ -272,6 +280,12 @@
             <span class="kw">async </span>|minimint: <span class="kw-2">&amp;</span>MinimintConsensus&lt;rand::rngs::OsRng&gt;, epoch: u64| -&gt; EpochHistory {
                 <span class="kw">let </span>epoch = minimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(epoch)
+            }
+        },
+        <span class="macro">api_endpoint!</span> {
+            <span class="string">&quot;/config&quot;</span>,
+            <span class="kw">async </span>|minimint: <span class="kw-2">&amp;</span>MinimintConsensus&lt;rand::rngs::OsRng&gt;, _v: ()| -&gt; ClientConfig {
+                <span class="prelude-val">Ok</span>(minimint.cfg.to_client_config())
             }
         },
     ];

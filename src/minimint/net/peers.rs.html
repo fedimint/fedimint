@@ -655,6 +655,9 @@
 <span id="655">655</span>
 <span id="656">656</span>
 <span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -758,8 +761,10 @@
 <span class="doccomment">/// Information needed to connect to one other federation member
 </span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
 <span class="kw">pub struct </span>ConnectionConfig {
-    <span class="doccomment">/// The peer&#39;s network address and port (e.g. `10.42.0.10:4000`)
-    </span><span class="kw">pub </span>addr: String,
+    <span class="doccomment">/// The peer&#39;s hbbft network address and port (e.g. `10.42.0.10:4000`)
+    </span><span class="kw">pub </span>hbbft_addr: String,
+    <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
+    </span><span class="kw">pub </span>api_addr: String,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -1155,7 +1160,7 @@
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Trying to reconnect&quot;</span>);
-        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.addr;
+        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.hbbft_addr;
         <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr.clone(), <span class="self">self</span>.peer).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer {
@@ -1274,7 +1279,8 @@
             .enumerate()
             .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
                 <span class="kw">let </span>cfg = ConnectionConfig {
-                    addr: peer.to_string(),
+                    hbbft_addr: peer.to_string(),
+                    api_addr: peer.to_string(),
                 };
                 (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
             })

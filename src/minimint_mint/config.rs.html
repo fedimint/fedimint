@@ -89,19 +89,45 @@
 <span id="89">89</span>
 <span id="90">90</span>
 <span id="91">91</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::Keys;
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::tiered::coins::TieredMultiZip;
+<span class="kw">use </span><span class="kw">crate</span>::Keys;
 <span class="kw">use </span>minimint_api::config::GenerateConfig;
 <span class="kw">use </span>minimint_api::{Amount, PeerId};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-<span class="kw">use </span>tbs::{dealer_keygen, AggregatePublicKey};
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey};
 
 <span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
 <span class="kw">pub struct </span>MintConfig {
     <span class="kw">pub </span>tbs_sks: Keys&lt;tbs::SecretKeyShare&gt;,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Keys&lt;tbs::PublicKeyShare&gt;&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
+    <span class="kw">pub </span>threshold: usize,
 }
 
 <span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
@@ -134,6 +160,7 @@
             .iter()
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>config = MintConfig {
+                    threshold: tbs_threshold,
                     tbs_sks: params
                         .iter()
                         .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">2</span>[peer.to_usize()]))
@@ -163,6 +190,25 @@
         };
 
         (mint_cfg, client_cfg)
+    }
+
+    <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ClientConfig {
+        <span class="kw">let </span>pub_key: HashMap&lt;Amount, AggregatePublicKey&gt; = TieredMultiZip::new(
+            <span class="self">self</span>.peer_tbs_pks
+                .iter()
+                .map(|(<span class="kw">_</span>, keys)| keys.iter())
+                .collect(),
+        )
+        .map(|(amt, keys)| {
+            <span class="comment">// TODO: avoid this through better aggregation API allowing references or
+            </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            (amt, keys.aggregate(<span class="self">self</span>.threshold))
+        })
+        .collect();
+        MintClientConfig {
+            tbs_pks: Keys::from_iter(pub_key.into_iter()),
+            fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
+        }
     }
 }
 

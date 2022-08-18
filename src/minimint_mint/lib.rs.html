@@ -914,6 +914,10 @@
 <span id="914">914</span>
 <span id="915">915</span>
 <span id="916">916</span>
+<span id="917">917</span>
+<span id="918">918</span>
+<span id="919">919</span>
+<span id="920">920</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
 </span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
 
@@ -959,11 +963,11 @@
 
 <span class="doccomment">/// Federated mint member mint
 </span><span class="kw">pub struct </span>Mint {
+    cfg: MintConfig,
     sec_key: Keys&lt;SecretKeyShare&gt;,
     pub_key_shares: BTreeMap&lt;PeerId, Keys&lt;PublicKeyShare&gt;&gt;,
     pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
-    threshold: usize, <span class="comment">// TODO: move to cfg
-    </span>db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+    db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]</span>
@@ -1316,7 +1320,7 @@
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    </span><span class="kw">pub fn </span>new(cfg: MintConfig, threshold: usize, db: Arc&lt;<span class="kw">dyn </span>Database&gt;) -&gt; Mint {
+    </span><span class="kw">pub fn </span>new(cfg: MintConfig, db: Arc&lt;<span class="kw">dyn </span>Database&gt;) -&gt; Mint {
         <span class="macro">assert!</span>(cfg.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
 
         <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -1352,17 +1356,21 @@
         .map(|(amt, keys)| {
             <span class="comment">// TODO: avoid this through better aggregation API allowing references or
             </span><span class="kw">let </span>keys = keys.into_iter().copied().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-            (amt, keys.aggregate(threshold))
+            (amt, keys.aggregate(cfg.threshold))
         })
         .collect();
 
         Mint {
+            cfg: cfg.clone(),
             sec_key: cfg.tbs_sks,
             pub_key_shares: cfg.peer_tbs_pks,
             pub_key: aggregate_pub_keys,
-            threshold,
             db,
         }
+    }
+
+    <span class="kw">pub fn </span>pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashMap&lt;Amount, AggregatePublicKey&gt; {
+        <span class="self">self</span>.pub_key.clone()
     }
 
     <span class="kw">fn </span>blind_sign(<span class="kw-2">&amp;</span><span class="self">self</span>, output: Coins&lt;BlindToken&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;PartialSigResponse, MintError&gt; {
@@ -1381,11 +1389,11 @@
         partial_sigs: Vec&lt;(PeerId, PartialSigResponse)&gt;,
     ) -&gt; (<span class="prelude-ty">Result</span>&lt;SigResponse, CombineError&gt;, MintShareErrors) {
         <span class="comment">// Terminate early if there are not enough shares
-        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.threshold {
+        </span><span class="kw">if </span>partial_sigs.len() &lt; <span class="self">self</span>.cfg.threshold {
             <span class="kw">return </span>(
                 <span class="prelude-val">Err</span>(CombineError::TooFewShares(
                     partial_sigs.iter().map(|(peer, <span class="kw">_</span>)| peer).cloned().collect(),
-                    <span class="self">self</span>.threshold,
+                    <span class="self">self</span>.cfg.threshold,
                 )),
                 MintShareErrors(<span class="macro">vec!</span>[]),
             );
@@ -1475,11 +1483,11 @@
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
             <span class="comment">// Check that there are still sufficient
-            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.threshold {
+            </span><span class="kw">if </span>valid_sigs.len() &lt; <span class="self">self</span>.cfg.threshold {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(CombineError::TooFewValidShares(
                     valid_sigs.len(),
                     partial_sigs.len(),
-                    <span class="self">self</span>.threshold,
+                    <span class="self">self</span>.cfg.threshold,
                 ));
             }
 
@@ -1487,7 +1495,7 @@
                 valid_sigs
                     .into_iter()
                     .map(|(peer, share)| (peer.to_usize(), share)),
-                <span class="self">self</span>.threshold,
+                <span class="self">self</span>.cfg.threshold,
             );
 
             <span class="prelude-val">Ok</span>((amt, sig))
@@ -1663,7 +1671,7 @@
         <span class="kw">let </span>(mint_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config, MINTS - THRESHOLD, Arc::new(MemDatabase::new())))
+            .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg.tbs_pks.keys.get(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap();
@@ -1821,11 +1829,11 @@
 
         Mint::new(
             MintConfig {
+                threshold: THRESHOLD,
                 tbs_sks: mint_server_cfg1[<span class="number">0</span>].tbs_sks.clone(),
                 peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>].peer_tbs_pks.clone(),
                 fee_consensus: FeeConsensus::default(),
             },
-            THRESHOLD,
             Arc::new(MemDatabase::new()),
         );
     }

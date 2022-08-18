@@ -238,9 +238,6 @@
 <span id="238">238</span>
 <span id="239">239</span>
 <span id="240">240</span>
-<span id="241">241</span>
-<span id="242">242</span>
-<span id="243">243</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>minimint_api;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -331,10 +328,7 @@
         );
         <span class="macro">assert_eq!</span>(cfg.peers.keys().min().copied(), <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)));
 
-        <span class="kw">let </span>threshold = cfg.peers.len() - cfg.max_faulty();
-
-        <span class="kw">let </span>mint =
-            minimint_core::modules::mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
+        <span class="kw">let </span>mint = minimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
 
         <span class="kw">let </span>wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
             .<span class="kw">await

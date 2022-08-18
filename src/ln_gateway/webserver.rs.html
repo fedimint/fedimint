@@ -44,8 +44,13 @@
 <span id="44">44</span>
 <span id="45">45</span>
 <span id="46">46</span>
-</pre><pre class="rust"><code><span class="kw">use </span>axum::{routing::post, Extension, Json, Router};
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
+<span class="kw">use </span>axum::{routing::post, Extension, Json, Router};
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
@@ -77,13 +82,16 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>run_webserver(sender: mpsc::Sender&lt;GatewayRequest&gt;) -&gt; axum::response::Result&lt;()&gt; {
+<span class="kw">pub async fn </span>run_webserver(
+    bind_addr: SocketAddr,
+    sender: mpsc::Sender&lt;GatewayRequest&gt;,
+) -&gt; axum::response::Result&lt;()&gt; {
     <span class="kw">let </span>app = Router::new()
         .route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice))
         .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
-    axum::Server::bind(<span class="kw-2">&amp;</span><span class="string">&quot;127.0.0.1:8080&quot;</span>.parse().unwrap())
+    axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr)
         .serve(app.into_make_service())
         .<span class="kw">await
         </span>.unwrap();

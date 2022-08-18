@@ -206,14 +206,42 @@
 <span id="206">206</span>
 <span id="207">207</span>
 <span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>minimint_api::Amount;
-<span class="kw">use </span>minimint_core::config::load_from_file;
+<span class="kw">use </span>minimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
 <span class="kw">use </span>minimint_core::modules::wallet::txoproof::TxOutProof;
 
+<span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
 <span class="kw">use </span>mint_client::mint::SpendableCoin;
 <span class="kw">use </span>mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
@@ -284,6 +312,12 @@
 
     <span class="doccomment">/// Wait for the fed to reach a consensus block height
     </span>WaitBlockHeight { height: u64 },
+
+    <span class="doccomment">/// Config enabling client to establish websocket connection to federation
+    </span>ConnectInfo,
+
+    <span class="doccomment">/// Join a federation using it&#39;s ConnectInfo
+    </span>JoinFederation { connect: String },
 }
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]</span>
@@ -294,6 +328,7 @@
 
 <span class="attribute">#[tokio::main]</span>
 <span class="kw">async fn </span>main() {
+    <span class="kw">let </span>opts = Options::parse();
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>)),
@@ -301,7 +336,21 @@
         .with_writer(std::io::stderr)
         .init();
 
-    <span class="kw">let </span>opts = Options::parse();
+    <span class="kw">if let </span>Command::JoinFederation { connect } = opts.command {
+        <span class="kw">let </span>connect: WsFederationConnect =
+            serde_json::from_str(<span class="kw-2">&amp;</span>connect).expect(<span class="string">&quot;Invalid connect info&quot;</span>);
+        <span class="kw">let </span>api = WsFederationApi::new(connect.max_evil, connect.members);
+        <span class="kw">let </span>cfg: ClientConfig = api
+            .request(<span class="string">&quot;/config&quot;</span>, ())
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Couldn&#39;t download config from peer&quot;</span>);
+        <span class="kw">let </span>cfg_path = opts.workdir.join(<span class="string">&quot;client.json&quot;</span>);
+        std::fs::create_dir_all(<span class="kw-2">&amp;</span>opts.workdir).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
+        <span class="kw">let </span>writer = std::fs::File::create(cfg_path).expect(<span class="string">&quot;Couldn&#39;t create config.json&quot;</span>);
+        serde_json::to_writer_pretty(writer, <span class="kw-2">&amp;</span>cfg).expect(<span class="string">&quot;couldn&#39;t write config&quot;</span>);
+        <span class="kw">return</span>;
+    };
+
     <span class="kw">let </span>cfg_path = opts.workdir.join(<span class="string">&quot;client.json&quot;</span>);
     <span class="kw">let </span>db_path = opts.workdir.join(<span class="string">&quot;client.db&quot;</span>);
     <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
@@ -412,6 +461,11 @@
         Command::WaitBlockHeight { height } =&gt; {
             client.await_consensus_block_height(height).<span class="kw">await</span>;
         }
+        Command::ConnectInfo =&gt; {
+            <span class="kw">let </span>info = WsFederationConnect::from(client.config().as_ref());
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string(<span class="kw-2">&amp;</span>info).unwrap());
+        }
+        Command::JoinFederation { .. } =&gt; <span class="macro">unreachable!</span>(),
     }
 }
 </code></pre></div>
