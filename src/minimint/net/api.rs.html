@@ -245,13 +245,13 @@
             <span class="kw">async </span>|minimint: <span class="kw-2">&amp;</span>MinimintConsensus&lt;rand::rngs::OsRng&gt;, transaction: serde_json::Value| -&gt; TransactionId {
                 <span class="comment">// deserializing Transaction from json Value always fails
                 // we need to convert it to string first
-                </span><span class="kw">let </span>string = serde_json::to_string(<span class="kw-2">&amp;</span>transaction).expect(<span class="string">&quot;encoding error&quot;</span>);
+                </span><span class="kw">let </span>string = serde_json::to_string(<span class="kw-2">&amp;</span>transaction).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
                 <span class="kw">let </span>transaction: Transaction = serde_json::from_str(<span class="kw-2">&amp;</span>string).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
                 <span class="kw">let </span>tx_id = transaction.tx_hash();
 
                 minimint
                     .submit_transaction(transaction)
-                    .expect(<span class="string">&quot;Could not submit sign request to consensus&quot;</span>);
+                    .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(tx_id)
             }
