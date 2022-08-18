@@ -113,9 +113,18 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Build minimint container
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#container.minimint
+      - name: Build fedimint container
+        run: |
+          nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#container.fedimint
+          echo "fedimint_container_tag=$(docker load < result | awk '{ print $2 }')" >> $GITHUB_ENV
+
+      - name: Login to Docker Hub
+        if: ${{ github.event.pull_request.merged }}
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_ACCESS_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Publish
-        # TODO: set up repository, login, tag and push
-        run: echo "$(docker load < result | awk '{ print $2 }')"
+        if: ${{ github.event.pull_request.merged }}
+        run: nix_tag={{ env.fedimint_container_tag }} && hub_tag="hub.docker.com/r/fedimint/fedimint:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag"  && docker push "$hub_tag"
