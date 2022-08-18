@@ -86,7 +86,8 @@ impl GenerateConfig for ServerConfig {
                 let id_u16: u16 = id.into();
                 let peer = Peer {
                     connection: ConnectionConfig {
-                        addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                        hbbft_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
+                        api_addr: format!("ws://127.0.0.1:{}", params.api_base_port + id_u16),
                     },
                     tls_cert: tls_keys[&id].0.clone(),
                 };
@@ -138,6 +139,22 @@ impl GenerateConfig for ServerConfig {
         };
 
         (server_config, client_config)
+    }
+
+    fn to_client_config(&self) -> Self::ClientConfig {
+        let api_endpoints: Vec<String> = self
+            .peers
+            .iter()
+            .map(|(_, peer)| peer.connection.api_addr.clone())
+            .collect();
+        let max_evil = hbbft::util::max_faulty(self.peers.len());
+        ClientConfig {
+            api_endpoints,
+            max_evil,
+            mint: self.mint.to_client_config(),
+            wallet: self.wallet.to_client_config(),
+            ln: self.ln.to_client_config(),
+        }
     }
 }
 

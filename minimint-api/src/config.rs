@@ -16,5 +16,5 @@ pub trait GenerateConfig: Sized {
         rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig);
 
-    // TODO: impl distributed config gen
+    fn to_client_config(&self) -> Self::ClientConfig;
 }

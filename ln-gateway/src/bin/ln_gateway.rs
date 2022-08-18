@@ -1,11 +1,9 @@
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
-use ln_gateway::{
-    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequestTrait, WithdrawPayload,
-};
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -14,13 +12,16 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
 
-use ln_gateway::{cln::HtlcAccepted, GatewayRequest, LnGateway, LnGatewayError};
+use ln_gateway::{
+    cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
+    GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
+};
 use minimint::config::load_from_file;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
 /// Create [`gateway.json`] config files
-async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
+async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &SocketAddr) {
     let client_cfg_path = workdir.join("client.json");
     let client_cfg: minimint::config::ClientConfig = load_from_file(&client_cfg_path);
 
@@ -46,7 +47,7 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc) {
         redeem_key: kp_fed,
         timelock_delta: 10,
         node_pub_key,
-        api: String::from("http://127.0.0.1:8080"), // FIXME: don't hard-code this
+        api: format!("http://{}", bind_addr),
     };
     let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
     let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
@@ -71,6 +72,17 @@ async fn initialize_gateway(
         }
         _ => unreachable!(),
     };
+    let host = match plugin.option("minimint-host") {
+        Some(options::Value::String(host)) => host,
+        _ => unreachable!(),
+    };
+    let port = match plugin.option("minimint-port") {
+        Some(options::Value::String(port)) => port,
+        _ => unreachable!(),
+    };
+    let bind_addr = format!("{}:{}", host, port)
+        .parse()
+        .expect("Invalid gateway bind address");
 
     // If no config exists, try to generate one
     let cfg_path = workdir.join("gateway.json");
@@ -80,7 +92,7 @@ async fn initialize_gateway(
         .await
         .expect("connect to ln_socket");
     if !Path::new(&cfg_path).is_file() {
-        generate_config(&workdir, &mut ln_client).await;
+        generate_config(&workdir, &mut ln_client, &bind_addr).await;
     }
 
     // Run the gateway
@@ -92,7 +104,7 @@ async fn initialize_gateway(
     let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx));
     let ln_client = Box::new(Mutex::new(ln_client));
 
-    LnGateway::new(federation_client, ln_client, sender, receiver)
+    LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
         .await
         .expect("Failed to register with federation")
 }
@@ -173,6 +185,16 @@ async fn main() -> Result<(), Error> {
             // FIXME: cln_plugin doesn't support parameters without defaults
             options::Value::String("default-dont-use".into()),
             "minimint config directory",
+        ))
+        .option(options::ConfigOption::new(
+            "minimint-host",
+            options::Value::String("127.0.0.1".into()),
+            "gateway hostname",
+        ))
+        .option(options::ConfigOption::new(
+            "minimint-port",
+            options::Value::String("8080".into()),
+            "gateway port",
         ))
         .rpcmethod("gw-balance", "Display ecash token balance", balance_rpc)
         .rpcmethod(

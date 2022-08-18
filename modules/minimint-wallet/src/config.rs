@@ -110,4 +110,13 @@ impl GenerateConfig for WalletConfig {
 
         (wallet_cfg, client_cfg)
     }
+
+    fn to_client_config(&self) -> Self::ClientConfig {
+        WalletClientConfig {
+            peg_in_descriptor: self.peg_in_descriptor.clone(),
+            network: self.network,
+            fee_consensus: self.fee_consensus.clone(),
+            finality_delay: self.finality_delay,
+        }
+    }
 }

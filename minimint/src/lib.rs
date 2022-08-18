@@ -88,10 +88,7 @@ impl MinimintServer {
         );
         assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::from(0)));
 
-        let threshold = cfg.peers.len() - cfg.max_faulty();
-
-        let mint =
-            minimint_core::modules::mint::Mint::new(cfg.mint.clone(), threshold, database.clone());
+        let mint = minimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
 
         let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
             .await

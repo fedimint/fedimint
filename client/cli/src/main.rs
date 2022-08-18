@@ -2,10 +2,11 @@ use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use minimint_api::Amount;
-use minimint_core::config::load_from_file;
+use minimint_core::config::{load_from_file, ClientConfig};
 use minimint_core::modules::mint::tiered::coins::Coins;
 use minimint_core::modules::wallet::txoproof::TxOutProof;
 
+use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
@@ -76,6 +77,12 @@ enum Command {
 
     /// Wait for the fed to reach a consensus block height
     WaitBlockHeight { height: u64 },
+
+    /// Config enabling client to establish websocket connection to federation
+    ConnectInfo,
+
+    /// Join a federation using it's ConnectInfo
+    JoinFederation { connect: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -86,6 +93,7 @@ struct PayRequest {
 
 #[tokio::main]
 async fn main() {
+    let opts = Options::parse();
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -93,7 +101,21 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    let opts = Options::parse();
+    if let Command::JoinFederation { connect } = opts.command {
+        let connect: WsFederationConnect =
+            serde_json::from_str(&connect).expect("Invalid connect info");
+        let api = WsFederationApi::new(connect.max_evil, connect.members);
+        let cfg: ClientConfig = api
+            .request("/config", ())
+            .await
+            .expect("Couldn't download config from peer");
+        let cfg_path = opts.workdir.join("client.json");
+        std::fs::create_dir_all(&opts.workdir).expect("Failed to create config directory");
+        let writer = std::fs::File::create(cfg_path).expect("Couldn't create config.json");
+        serde_json::to_writer_pretty(writer, &cfg).expect("couldn't write config");
+        return;
+    };
+
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path);
@@ -204,5 +226,10 @@ async fn main() {
         Command::WaitBlockHeight { height } => {
             client.await_consensus_block_height(height).await;
         }
+        Command::ConnectInfo => {
+            let info = WsFederationConnect::from(client.config().as_ref());
+            println!("{}", serde_json::to_string(&info).unwrap());
+        }
+        Command::JoinFederation { .. } => unreachable!(),
     }
 }

@@ -14,6 +14,7 @@ use minimint_core::modules::ln::{ContractAccount, LightningGateway};
 use minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use minimint_core::transaction::Transaction;
 use minimint_core::CoreError;
+use serde::{Deserialize, Serialize};
 use tracing::{error, instrument, warn};
 
 #[cfg(not(target_family = "wasm"))]
@@ -23,6 +24,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
 use bitcoin::{Address, Amount};
+use minimint_core::config::ClientConfig;
 use minimint_core::epoch::EpochHistory;
 use minimint_core::modules::wallet::PegOutFees;
 use std::time::Duration;
@@ -159,6 +161,30 @@ struct FederationMember<C> {
     url: String,
     peer_id: PeerId,
     client: RwLock<Option<C>>,
+}
+
+/// Information required for client to construct [`WsFederationApi`] instance
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WsFederationConnect {
+    pub members: Vec<(PeerId, String)>,
+    pub max_evil: usize,
+}
+
+impl From<&ClientConfig> for WsFederationConnect {
+    fn from(config: &ClientConfig) -> Self {
+        let max_evil = config.max_evil;
+        let members: Vec<(PeerId, String)> = config
+            .api_endpoints
+            .iter()
+            .enumerate()
+            .map(|(id, url)| {
+                let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
+                let url = url.parse().expect("Invalid URL in config");
+                (peer_id, url)
+            })
+            .collect();
+        WsFederationConnect { members, max_evil }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, ApiError>;

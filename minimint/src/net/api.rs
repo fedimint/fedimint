@@ -1,9 +1,9 @@
 //! Implements the client API through which users interact with the federation
-
 use crate::config::ServerConfig;
 use crate::consensus::MinimintConsensus;
 use crate::transaction::Transaction;
 use minimint_api::{
+    config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
@@ -18,6 +18,7 @@ use jsonrpsee::{
     ws_server::WsServerBuilder,
     RpcModule,
 };
+use minimint_core::config::ClientConfig;
 
 #[derive(Clone)]
 struct State {
@@ -132,6 +133,12 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
             async |minimint: &MinimintConsensus<rand::rngs::OsRng>, epoch: u64| -> EpochHistory {
                 let epoch = minimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok(epoch)
+            }
+        },
+        api_endpoint! {
+            "/config",
+            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, _v: ()| -> ClientConfig {
+                Ok(minimint.cfg.to_client_config())
             }
         },
     ];
