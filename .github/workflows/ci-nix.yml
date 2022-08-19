@@ -9,6 +9,8 @@ on:
     branches: [ "main", "master", "devel" ]
   pull_request:
     branches: [ "main", "master", "devel" ]
+    types:
+      - closed
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
