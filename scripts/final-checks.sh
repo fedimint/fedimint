@@ -8,7 +8,7 @@ set -e
 cargo fmt --all
 cargo clippy --fix --lib --bins --tests --examples --workspace --allow-dirty
 
-export MINIMINT_DISABLE_FIXTURES=0
+export FM_TEST_DISABLE_MOCKS=0
 cargo test
 
 if [ "$1" == "nix" ]; then
