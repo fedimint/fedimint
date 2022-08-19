@@ -610,7 +610,13 @@
 <span id="610">610</span>
 <span id="611">611</span>
 <span id="612">612</span>
-</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
+
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;

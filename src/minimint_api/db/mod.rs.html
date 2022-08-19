@@ -304,7 +304,13 @@
 <span id="304">304</span>
 <span id="305">305</span>
 <span id="306">306</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
+
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>batch::DbBatch;
 <span class="kw">use </span>std::error::Error;

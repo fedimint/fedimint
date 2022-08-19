@@ -604,7 +604,13 @@
 <span id="604">604</span>
 <span id="605">605</span>
 <span id="606">606</span>
-</pre><pre class="rust"><code><span class="kw">pub mod </span>db;
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
+
+<span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;

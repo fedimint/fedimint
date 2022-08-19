@@ -299,7 +299,13 @@
 <span id="299">299</span>
 <span id="300">300</span>
 <span id="301">301</span>
-</pre><pre class="rust"><code><span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+</pre><pre class="rust"><code><span class="comment">// TODO: unclear if people prefer this
+</span><span class="attribute">#![allow(clippy::assertions_on_result_states)]</span>
+
+<span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based one
 </span><span class="kw">use </span>bytes::{Buf, BufMut, BytesMut};
 <span class="kw">use </span>futures::{Sink, Stream};
 <span class="kw">use </span>std::convert::TryInto;
