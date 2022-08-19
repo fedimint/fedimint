@@ -1,6 +1,3 @@
-// TODO: unclear if people prefer this
-#![allow(clippy::assertions_on_result_states)]
-
 //! Adapter that implements a message based protocol on top of a stream based one
 use bytes::{Buf, BufMut, BytesMut};
 use futures::{Sink, Stream};
