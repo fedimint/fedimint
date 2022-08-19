@@ -4,7 +4,7 @@ use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
 use thiserror::Error;
-use tracing::trace;
+use tracing::{error, trace};
 
 pub mod batch;
 pub mod mem_impl;
@@ -45,7 +45,41 @@ pub trait Database: Send + Sync {
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<()>;
+    fn transaction<'a>(&'a self) -> Result<Box<dyn Transaction<'a>>>;
+}
+
+pub trait Transaction<'a>: 'a {
+    fn raw_insert_entry(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+
+    fn raw_insert_new_entry(&mut self, key: &[u8], value: Vec<u8>) -> Result<()> {
+        if self.raw_insert_entry(key, value)?.is_some() {
+            error!("Database replaced element! This should not happen!");
+            trace!("Problematic key: {:?}", element.key);
+        }
+        Ok(())
+    }
+
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()> {
+        if self.raw_remove_entry(key)?.is_none() {
+            error!("Database deleted absent element! This should not happen!");
+            trace!("Problematic key: {:?}", key);
+        }
+        Ok(())
+    }
+
+    fn raw_maybe_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
+
+    fn checkpoint(self) -> Result<()>;
+
+    fn rollback(self) -> Result<(), anyhow::Error>;
+
+    fn abort(self) -> Result<()>;
+
+    fn commit(self) -> Result<(), anyhow::Error>;
 }
 
 impl<'a> dyn Database + 'a {
@@ -124,8 +158,129 @@ impl<'a> dyn Database + 'a {
         })
     }
 
-    pub fn apply_batch(&self, batch: DbBatch) -> Result<()> {
-        self.raw_apply_batch(batch)
+    pub fn transaction<'a>(&'a self) -> Result<Box<dyn Transaction<'a>>> {
+        self.transaction()
+    }
+}
+
+impl<'a> dyn Transaction<'a> {
+    pub fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        match self.raw_insert_entry(&key.to_bytes(), value.to_bytes())? {
+            Some(old_val_bytes) => {
+                trace!(
+                    "insert_entry: Decoding {} from bytes {:?}",
+                    std::any::type_name::<K::Value>(),
+                    old_val_bytes
+                );
+                Ok(Some(K::Value::from_bytes(&old_val_bytes)?))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<()>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        self.raw_insert_new_entry(&key.to_bytes(), value.to_bytes())?;
+
+        trace!(
+            "insert_new_entry: Decoding {} from bytes {:?}",
+            std::any::type_name::<K::Value>(),
+            old_val_bytes
+        );
+        Ok(())
+    }
+
+    pub fn get_value<K>(&self, key: &K) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.raw_get_value(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        trace!(
+            "get_value: Decoding {} from bytes {:?}",
+            std::any::type_name::<K::Value>(),
+            value_bytes
+        );
+        Ok(Some(K::Value::from_bytes(&value_bytes)?))
+    }
+
+    pub fn remove_entry<K>(&mut self, key: &K) -> Result<()>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        self.raw_remove_entry(&key.to_bytes())?;
+
+        trace!(
+            "remove_entry: Decoding {} from bytes {:?}",
+            std::any::type_name::<K::Value>(),
+            value_bytes
+        );
+        Ok(())
+    }
+
+    pub fn maybe_remove_entry<K>(&mut self, key: &K) -> Result<Option<K::Value>>
+    where
+        K: DatabaseKey + DatabaseKeyPrefixConst,
+    {
+        let key_bytes = key.to_bytes();
+        let value_bytes = match self.raw_maybe_remove_entry(&key_bytes)? {
+            Some(value) => value,
+            None => return Ok(None),
+        };
+
+        trace!(
+            "maybe_remove_entry: Decoding {} from bytes {:?}",
+            std::any::type_name::<K::Value>(),
+            value_bytes
+        );
+        Ok(Some(K::Value::from_bytes(&value_bytes)?))
+    }
+
+    pub fn find_by_prefix<KP>(
+        &self,
+        key_prefix: &KP,
+    ) -> impl Iterator<Item = Result<(KP::Key, KP::Value)>> + '_
+    where
+        KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst,
+    {
+        let prefix_bytes = key_prefix.to_bytes();
+        self.raw_find_by_prefix(&prefix_bytes).map(|res| {
+            res.and_then(|(key_bytes, value_bytes)| {
+                let key = KP::Key::from_bytes(&key_bytes)?;
+                trace!(
+                    "find by prefix: Decoding {} from bytes {:?}",
+                    std::any::type_name::<KP::Value>(),
+                    value_bytes
+                );
+                let value = KP::Value::from_bytes(&value_bytes)?;
+                Ok((key, value))
+            })
+        })
+    }
+
+    fn checkpoint(self) -> Result<()> {
+        self.checkpoint()
+    }
+
+    fn rollback(self) -> Result<(), anyhow::Error> {
+        self.rollback()
+    }
+
+    pub fn abort(self) -> Result<()> {
+        self.abort()
+    }
+
+    pub fn commit(self) -> Result<(), anyhow::Error> {
+        self.commit()
     }
 }
 
