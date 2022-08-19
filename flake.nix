@@ -28,7 +28,9 @@
           NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
         });
 
-        fenix-toolchain = (fenix.packages.${system}.complete.withComponents [
+        fenix-channel = fenix.packages.${system}.stable;
+
+        fenix-toolchain = (fenix-channel.withComponents [
           "rustc"
           "cargo"
           "clippy"
@@ -37,8 +39,6 @@
           "rustfmt"
           "llvm-tools-preview"
         ]);
-
-        fenix-channel = fenix.packages.${system}.stable;
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
 

@@ -1,6 +1,3 @@
-// TODO: unclear if people prefer this
-#![allow(clippy::assertions_on_result_states)]
-
 use bitcoin_hashes::Hash as BitcoinHash;
 use minimint_api::module::testing::FakeFed;
 use minimint_api::{Amount, OutPoint};

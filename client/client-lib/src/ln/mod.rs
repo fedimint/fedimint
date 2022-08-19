@@ -1,6 +1,3 @@
-// TODO: unclear if people prefer this
-#![allow(clippy::assertions_on_result_states)]
-
 // TODO: once user and mint client are merged, make this private again
 pub mod db;
 pub mod incoming;
