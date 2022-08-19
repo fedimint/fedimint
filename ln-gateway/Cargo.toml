@@ -23,7 +23,7 @@ cln-plugin = "0.1"
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.17.0"
-minimint = { path = "../minimint" }
+fedimint = { path = "../fedimint/" }
 minimint-api = { path = "../minimint-api", features = ["rocksdb"] }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6"

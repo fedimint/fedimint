@@ -1,5 +1,5 @@
 [package]
-name = "minimint"
+name = "fedimint"
 version = "0.1.0"
 authors = ["elsirion <elsirion@protonmail.com>"]
 edition = "2018"
@@ -14,8 +14,8 @@ name = "minimint"
 path = "src/lib.rs"
 
 [[bin]]
-name = "minimint"
-path = "src/bin/minimint.rs"
+name = "fedimintd"
+path = "src/bin/fedimintd.rs"
 
 [[bin]]
 name = "configgen"

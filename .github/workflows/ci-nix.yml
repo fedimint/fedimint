@@ -114,10 +114,10 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Build fedimint container
+      - name: Build fedimintd container
         run: |
-          nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#container.fedimint
-          echo "fedimint_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+          nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#container.fedimintd
+          echo "fedimintd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
         if: github.ref == 'refs/heads/master'
@@ -128,4 +128,4 @@ jobs:
 
       - name: Publish
         if: github.ref == 'refs/heads/master'
-        run: nix_tag=${{ env.fedimint_container_tag }} && hub_tag="fedimint/fedimint:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+        run: nix_tag=${{ env.fedimint_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"

@@ -250,9 +250,9 @@
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
-        minimint = pkg {
-          name = "minimint";
-          dir = "minimint";
+        fedimintd = pkg {
+          name = "fedimintd";
+          dir = "fedimint";
           extraDirs = [
             "client/cli"
             "client/client-lib"
@@ -277,7 +277,7 @@
             "client/clientd"
             "client/cli"
             "modules/minimint-ln"
-            "minimint"
+            "fedimint"
             "minimint-api"
             "minimint-core"
             "minimint-derive"
@@ -327,7 +327,7 @@
             "client/clientd"
             "crypto/tbs"
             "ln-gateway"
-            "minimint"
+            "fedimint"
             "minimint-api"
             "minimint-core"
             "minimint-derive"
@@ -339,9 +339,9 @@
       in
       {
         packages = {
-          default = minimint.package;
+          default = fedimintd.package;
 
-          minimint = minimint.package;
+          fedimintd = fedimintd.package;
           minimint-tests = minimint-tests.package;
           ln-gateway = ln-gateway.package;
           clientd = clientd.package;
@@ -361,7 +361,7 @@
           };
 
           container = {
-            fedimint = minimint.container;
+            fedimintd = fedimintd.container;
           };
         };
 

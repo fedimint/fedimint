@@ -19,7 +19,7 @@ itertools = "0.10.0"
 lightning-invoice = "0.17.0"
 ln-gateway = { path = "../ln-gateway" }
 lightning = "0.0.109"
-minimint = { path = "../minimint" }
+fedimint = { path = "../fedimint/" }
 minimint-api = { path = "../minimint-api" }
 minimint-ln = { path = "../modules/minimint-ln" }
 minimint-mint = { path = "../modules/minimint-mint" }
