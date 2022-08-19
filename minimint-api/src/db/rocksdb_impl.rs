@@ -1,7 +1,8 @@
 use super::batch::{BatchItem, DbBatch};
 use super::Database;
-use crate::db::PrefixIter;
+use crate::db::{PrefixIter, Transaction};
 use anyhow::Result;
+use rocksdb::DB;
 use tracing::{error, trace};
 
 impl Database for rocksdb::OptimisticTransactionDB {
@@ -36,40 +37,88 @@ impl Database for rocksdb::OptimisticTransactionDB {
         )
     }
 
-    fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
-        let batch: Vec<_> = batch.into();
-        let tx = self.transaction();
+    // fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
+    //     let batch: Vec<_> = batch.into();
+    //     let tx = self.transaction();
+    //
+    //     for change in batch.iter() {
+    //         match change {
+    //             BatchItem::InsertNewElement(element) => {
+    //                 if tx.get(element.key.to_bytes()).unwrap().is_some() {
+    //                     tx.put(element.key.to_bytes(), element.value.to_bytes())?;
+    //                     error!("Database replaced element! This should not happen!");
+    //                     trace!("Problematic key: {:?}", element.key);
+    //                 } else {
+    //                     tx.put(element.key.to_bytes(), element.value.to_bytes())?;
+    //                 }
+    //             }
+    //             BatchItem::InsertElement(element) => {
+    //                 tx.put(element.key.to_bytes(), element.value.to_bytes())?;
+    //             }
+    //             BatchItem::DeleteElement(key) => {
+    //                 if tx.get(key.to_bytes()).unwrap().is_none() {
+    //                     tx.delete(key.to_bytes())?;
+    //                     error!("Database deleted absent element! This should not happen!");
+    //                     trace!("Problematic key: {:?}", key);
+    //                 } else {
+    //                     tx.delete(key.to_bytes())?;
+    //                 }
+    //             }
+    //             BatchItem::MaybeDeleteElement(key) => {
+    //                 tx.delete(key.to_bytes())?;
+    //             }
+    //         }
+    //     }
+    //     tx.commit()?;
+    //     Ok(())
+    // }
 
-        for change in batch.iter() {
-            match change {
-                BatchItem::InsertNewElement(element) => {
-                    if tx.get(element.key.to_bytes()).unwrap().is_some() {
-                        tx.put(element.key.to_bytes(), element.value.to_bytes())?;
-                        error!("Database replaced element! This should not happen!");
-                        trace!("Problematic key: {:?}", element.key);
-                    } else {
-                        tx.put(element.key.to_bytes(), element.value.to_bytes())?;
-                    }
-                }
-                BatchItem::InsertElement(element) => {
-                    tx.put(element.key.to_bytes(), element.value.to_bytes())?;
-                }
-                BatchItem::DeleteElement(key) => {
-                    if tx.get(key.to_bytes()).unwrap().is_none() {
-                        tx.delete(key.to_bytes())?;
-                        error!("Database deleted absent element! This should not happen!");
-                        trace!("Problematic key: {:?}", key);
-                    } else {
-                        tx.delete(key.to_bytes())?;
-                    }
-                }
-                BatchItem::MaybeDeleteElement(key) => {
-                    tx.delete(key.to_bytes())?;
-                }
-            }
-        }
-        tx.commit()?;
-        Ok(())
+    fn transaction<'a>(&'a self) -> Result<Box<dyn Transaction<'a>>> {
+        Ok(Box::new(self.transaction()))
+    }
+}
+
+impl Transaction for rocksdb::Transaction<DB> {
+    fn raw_insert_entry(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let val = self.get(key).unwrap();
+        self.put(key, value)?;
+        Ok(val)
+    }
+
+    fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Ok(self.get(key)?)
+    }
+
+    fn raw_maybe_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let val = self.get(key).unwrap();
+        self.delete(key)?;
+        Ok(val)
+    }
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        let prefix = key_prefix.to_vec();
+        Box::new(
+            self.prefix_iterator(prefix.clone())
+                .map_while(move |res| res.0.starts_with(&prefix).then(|| res))
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map(Ok),
+        )
+    }
+
+    fn checkpoint(self) -> Result<()> {
+        Ok(self.set_savepoint())
+    }
+
+    fn rollback(self) -> Result<(), anyhow::Error> {
+        self.rollback_to_savepoint().map_err(|e| anyhow::Error)
+    }
+
+    fn abort(self) -> Result<()> {
+        self.abort()
+    }
+
+    fn commit(self) -> Result<(), anyhow::Error> {
+        self.commit().map_err(|e| anyhow::Error)
     }
 }
 
