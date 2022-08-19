@@ -3,7 +3,7 @@
 members = [
     "crypto/tbs",
     "ln-gateway",
-    "minimint",
+    "fedimint",
     "minimint-core",
     "minimint-derive",
     "minimint-api",
