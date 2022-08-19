@@ -49,6 +49,10 @@ $ nano ~/.ssh/authorized_keys  # paste mac pubkey in this file on vm
  
  #### IntelliJ
 
-# Devcontainers
+# Development Container
 
-TODO ...
+Some modern IDEs can use docker containers as development environments. Which means that anyone can quickly get started with development in a predictable isolated environment.
+
+This project includes a development container which has been tested with [VSCode](https://code.visualstudio.com). More information on VSCode development containers can be found [here](https://code.visualstudio.com/docs/remote/containers). More information on this project's development container can be found [here](../.devcontainer/README.md).
+
+To get started, simply open the project with VSCode and follow its prompt to use the development container. You may also wish to consider [these](https://code.visualstudio.com/docs/remote/containers#_installation) instructions.

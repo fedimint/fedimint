@@ -1,2 +1,5 @@
-# Ignore cargo build directory.
-target
+# Cargo build directory.
+/target
+
+# Nix build directory.
+/result
