@@ -116,7 +116,7 @@ pub async fn fixtures(
     let (server_config, client_config) =
         ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
 
-    match env::var("MINIMINT_DISABLE_FIXTURES") {
+    match env::var("MINIMINT_TEST_REAL") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");

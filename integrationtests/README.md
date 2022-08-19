@@ -31,7 +31,7 @@ Tests run by default with fake Lightning and Bitcoin services for fast concurren
 
 To run the tests in parallel against fake versions of Lightning and Bitcoin:
 ```shell
-export MINIMINT_DISABLE_FIXTURES=0
+export MINIMINT_TEST_REAL=0
 cargo test -p minimint-tests
 ```
 
@@ -63,7 +63,7 @@ source ./scripts/setup-tests.sh
 You can now run the integration tests against real instances of Bitcoin and Lightning nodes, using one thread to avoid concurrency issues:
 
 ```shell
-export MINIMINT_DISABLE_FIXTURES=1
+export MINIMINT_TEST_REAL=1
 cargo test -p minimint-tests -- --test-threads=1
 ```
 
