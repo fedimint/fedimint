@@ -57,3 +57,4 @@ tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 tracing-opentelemetry = { version = "0.17.2", optional = true}
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+portpicker = "0.1.1"

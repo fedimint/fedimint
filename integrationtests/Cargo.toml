@@ -32,3 +32,4 @@ tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 hbbft = { git = "https://github.com/fedimint/hbbft" }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+portpicker = "0.1.1"

@@ -245,7 +245,7 @@
         llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
           cargoArtifacts = workspaceDeps;
           # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
+          cargoBuildCommand = "mkdir -p $out && cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
           doCheck = true;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });

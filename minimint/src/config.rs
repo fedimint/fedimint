@@ -54,6 +54,7 @@ pub struct ServerConfigParams {
     pub hbbft_base_port: u16,
     pub api_base_port: u16,
     pub amount_tiers: Vec<minimint_api::Amount>,
+    // pub random_ports: bool,
 }
 
 impl GenerateConfig for ServerConfig {
@@ -80,14 +81,23 @@ impl GenerateConfig for ServerConfig {
             })
             .collect::<HashMap<_, _>>();
 
+        let hbbft_ports: Vec<u16> = peers
+            .iter()
+            .map(|_| portpicker::pick_unused_port().expect("No ports free"))
+            .collect();
+        let api_ports: Vec<u16> = peers
+            .iter()
+            .map(|_| portpicker::pick_unused_port().expect("No ports free"))
+            .collect();
+
         let cfg_peers = netinfo
             .iter()
             .map(|(&id, _)| {
                 let id_u16: u16 = id.into();
                 let peer = Peer {
                     connection: ConnectionConfig {
-                        hbbft_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
-                        api_addr: format!("ws://127.0.0.1:{}", params.api_base_port + id_u16),
+                        hbbft_addr: format!("127.0.0.1:{}", hbbft_ports[id_u16 as usize]),
+                        api_addr: format!("ws://127.0.0.1:{}", api_ports[id_u16 as usize]),
                     },
                     tls_cert: tls_keys[&id].0.clone(),
                 };
@@ -110,8 +120,8 @@ impl GenerateConfig for ServerConfig {
                 let epoch_keys = epochinfo.get(&id).unwrap();
                 let config = ServerConfig {
                     identity: id,
-                    hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
-                    api_bind_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
+                    hbbft_bind_addr: format!("127.0.0.1:{}", hbbft_ports[id_u16 as usize]),
+                    api_bind_addr: format!("127.0.0.1:{}", api_ports[id_u16 as usize]),
                     tls_cert: tls_keys[&id].0.clone(),
                     tls_key: tls_keys[&id].1.clone(),
                     peers: cfg_peers.clone(),
@@ -131,7 +141,7 @@ impl GenerateConfig for ServerConfig {
             max_evil,
             api_endpoints: peers
                 .iter()
-                .map(|&peer| format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer)))
+                .map(|&peer| format!("ws://127.0.0.1:{}", api_ports[u16::from(peer) as usize]))
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,

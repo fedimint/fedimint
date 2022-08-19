@@ -228,7 +228,8 @@ impl GatewayTest {
             config: user_cfg,
         };
 
-        let bind_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let bind_port = portpicker::pick_unused_port().expect("No ports free");
+        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
         let gw_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
