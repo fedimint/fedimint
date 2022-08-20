@@ -1,7 +1,7 @@
 use clap::Parser;
-use minimint::config::{ServerConfig, ServerConfigParams};
-use minimint_api::config::GenerateConfig;
-use minimint_api::{Amount, PeerId};
+use fedimint::config::{ServerConfig, ServerConfigParams};
+use fedimint_api::config::GenerateConfig;
+use fedimint_api::{Amount, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 

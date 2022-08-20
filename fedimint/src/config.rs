@@ -1,13 +1,13 @@
-use minimint_api::rand::Rand07Compat;
-pub use minimint_core::config::*;
+use fedimint_api::rand::Rand07Compat;
+pub use fedimint_core::config::*;
 
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
+use fedimint_api::config::GenerateConfig;
+use fedimint_api::PeerId;
+use fedimint_core::modules::ln::config::LightningModuleConfig;
+use fedimint_core::modules::mint::config::MintConfig;
+use fedimint_core::modules::wallet::config::WalletConfig;
 use hbbft::crypto::serde_impl::SerdeSecret;
-use minimint_api::config::GenerateConfig;
-use minimint_api::PeerId;
-use minimint_core::modules::ln::config::LightningModuleConfig;
-use minimint_core::modules::mint::config::MintConfig;
-use minimint_core::modules::wallet::config::WalletConfig;
 use rand::{CryptoRng, RngCore};
 
 use serde::{Deserialize, Serialize};
@@ -53,7 +53,7 @@ pub struct Peer {
 pub struct ServerConfigParams {
     pub hbbft_base_port: u16,
     pub api_base_port: u16,
-    pub amount_tiers: Vec<minimint_api::Amount>,
+    pub amount_tiers: Vec<fedimint_api::Amount>,
 }
 
 impl GenerateConfig for ServerConfig {
@@ -191,8 +191,8 @@ impl ServerConfig {
         hbbft::util::max_faulty(self.peers.len())
     }
 
-    pub fn fee_consensus(&self) -> minimint_core::config::FeeConsensus {
-        minimint_core::config::FeeConsensus {
+    pub fn fee_consensus(&self) -> fedimint_core::config::FeeConsensus {
+        fedimint_core::config::FeeConsensus {
             wallet: self.wallet.fee_consensus.clone(),
             mint: self.mint.fee_consensus.clone(),
             ln: self.ln.fee_consensus.clone(),

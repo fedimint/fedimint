@@ -1,5 +1,5 @@
 use clap::Parser;
-use minimint_api::PeerId;
+use fedimint_api::PeerId;
 use mint_client::api::WsFederationApi;
 
 #[derive(Parser)]

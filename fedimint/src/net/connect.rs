@@ -2,8 +2,8 @@
 
 use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 use async_trait::async_trait;
+use fedimint_api::PeerId;
 use futures::Stream;
-use minimint_api::PeerId;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
@@ -219,8 +219,8 @@ pub mod mock {
     use crate::net::connect::{ConnectResult, Connector};
     use crate::net::framed::{BidiFramed, FramedTransport};
     use anyhow::Error;
+    use fedimint_api::PeerId;
     use futures::{FutureExt, SinkExt, Stream, StreamExt};
-    use minimint_api::PeerId;
     use std::collections::HashMap;
     use std::fmt::Debug;
     use std::future::Future;
@@ -403,8 +403,8 @@ mod tests {
     use crate::net::connect::{ConnectionListener, TlsConfig};
     use crate::net::framed::AnyFramedTransport;
     use crate::{Connector, TlsTcpConnector};
+    use fedimint_api::PeerId;
     use futures::{SinkExt, StreamExt};
-    use minimint_api::PeerId;
 
     fn gen_connector_config(count: usize) -> Vec<TlsConfig> {
         let peer_keys = (0..count)

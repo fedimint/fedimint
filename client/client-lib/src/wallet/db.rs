@@ -1,6 +1,6 @@
 use bitcoin::Script;
-use minimint_api::db::DatabaseKeyPrefixConst;
-use minimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::encoding::{Decodable, Encodable};
 
 pub const DB_PREFIX_PEG_IN: u8 = 0x22;
 

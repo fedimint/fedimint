@@ -1,28 +1,28 @@
 //! Implements the client API through which users interact with the federation
 use crate::config::ServerConfig;
-use crate::consensus::MinimintConsensus;
+use crate::consensus::FedimintConsensus;
 use crate::transaction::Transaction;
-use minimint_api::{
+use fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
-use minimint_core::epoch::EpochHistory;
-use minimint_core::outcome::TransactionStatus;
+use fedimint_core::epoch::EpochHistory;
+use fedimint_core::outcome::TransactionStatus;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use tracing::debug;
 
+use fedimint_core::config::ClientConfig;
 use jsonrpsee::{
     types::{error::CallError, ErrorObject},
     ws_server::WsServerBuilder,
     RpcModule,
 };
-use minimint_core::config::ClientConfig;
 
 #[derive(Clone)]
 struct State {
-    minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>,
+    fedimint: Arc<FedimintConsensus<rand::rngs::OsRng>>,
 }
 
 impl std::fmt::Debug for State {
@@ -31,27 +31,27 @@ impl std::fmt::Debug for State {
     }
 }
 
-pub async fn run_server(cfg: ServerConfig, minimint: Arc<MinimintConsensus<rand::rngs::OsRng>>) {
+pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus<rand::rngs::OsRng>>) {
     let state = State {
-        minimint: minimint.clone(),
+        fedimint: fedimint.clone(),
     };
     let mut rpc_module = RpcModule::new(state);
 
     attach_endpoints(&mut rpc_module, server_endpoints(), None);
     attach_endpoints(
         &mut rpc_module,
-        minimint.wallet.api_endpoints(),
-        Some(minimint.wallet.api_base_name()),
+        fedimint.wallet.api_endpoints(),
+        Some(fedimint.wallet.api_base_name()),
     );
     attach_endpoints(
         &mut rpc_module,
-        minimint.mint.api_endpoints(),
-        Some(minimint.mint.api_base_name()),
+        fedimint.mint.api_endpoints(),
+        Some(fedimint.mint.api_base_name()),
     );
     attach_endpoints(
         &mut rpc_module,
-        minimint.ln.api_endpoints(),
-        Some(minimint.ln.api_base_name()),
+        fedimint.ln.api_endpoints(),
+        Some(fedimint.ln.api_base_name()),
     );
 
     let server = WsServerBuilder::new()
@@ -70,7 +70,7 @@ fn attach_endpoints<M>(
     endpoints: &'static [ApiEndpoint<M>],
     base_name: Option<&str>,
 ) where
-    MinimintConsensus<rand::rngs::OsRng>: AsRef<M>,
+    FedimintConsensus<rand::rngs::OsRng>: AsRef<M>,
     M: Sync,
 {
     for endpoint in endpoints {
@@ -86,7 +86,7 @@ fn attach_endpoints<M>(
             .register_async_method(path, move |params, state| {
                 Box::pin(async move {
                     let params = params.one::<serde_json::Value>()?;
-                    (endpoint.handler)((*state.minimint).as_ref(), params)
+                    (endpoint.handler)((*state.fedimint).as_ref(), params)
                         .await
                         .map_err(|e| {
                             jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
@@ -99,18 +99,18 @@ fn attach_endpoints<M>(
     }
 }
 
-fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] {
-    const ENDPOINTS: &[ApiEndpoint<MinimintConsensus<rand::rngs::OsRng>>] = &[
+fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus<rand::rngs::OsRng>>] {
+    const ENDPOINTS: &[ApiEndpoint<FedimintConsensus<rand::rngs::OsRng>>] = &[
         api_endpoint! {
             "/transaction",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
+            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 let string = serde_json::to_string(&transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let transaction: Transaction = serde_json::from_str(&string).map_err(|e| ApiError::bad_request(e.to_string()))?;
                 let tx_id = transaction.tx_hash();
 
-                minimint
+                fedimint
                     .submit_transaction(transaction)
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
@@ -119,10 +119,10 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
         },
         api_endpoint! {
             "/fetch_transaction",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
-                let tx_status = minimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
+                let tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
 
                 debug!(transaction = %tx_hash, "Sending outcome");
                 Ok(tx_status)
@@ -130,15 +130,15 @@ fn server_endpoints() -> &'static [ApiEndpoint<MinimintConsensus<rand::rngs::OsR
         },
         api_endpoint! {
             "/fetch_epoch_history",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, epoch: u64| -> EpochHistory {
-                let epoch = minimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
+            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, epoch: u64| -> EpochHistory {
+                let epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok(epoch)
             }
         },
         api_endpoint! {
             "/config",
-            async |minimint: &MinimintConsensus<rand::rngs::OsRng>, _v: ()| -> ClientConfig {
-                Ok(minimint.cfg.to_client_config())
+            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, _v: ()| -> ClientConfig {
+                Ok(fedimint.cfg.to_client_config())
             }
         },
     ];

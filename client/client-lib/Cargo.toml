@@ -21,8 +21,8 @@ hex = "0.4.3"
 lightning-invoice = "0.17.0"
 lightning = "0.0.109"
 miniscript = "7.0.0"
-minimint-core = { path = "../../minimint-core" }
-minimint-api = { path = "../../minimint-api" }
+fedimint-core = { path = "../../fedimint-core" }
+fedimint-api = { path = "../../fedimint-api" }
 rand = "0.6.5"
 reqwest = { version = "0.11.0", features = [ "json" ], default-features = false }
 secp256k1-zkp = { version = "0.6.0", features = [ "serde", "bitcoin_hashes" ] }

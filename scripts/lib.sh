@@ -33,7 +33,7 @@ function await_server_on_port() {
 }
 
 # Function for killing processes stored in FM_PID_FILE
-function kill_minimint_processes {
+function kill_fedimint_processes {
   # shellcheck disable=SC2046
   kill $(cat $FM_PID_FILE | sed '1!G;h;$!d') #sed reverses the order here
   pkill "ln_gateway" || true;
@@ -41,7 +41,7 @@ function kill_minimint_processes {
 }
 
 function start_gateway() {
-  $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway minimint-cfg=$FM_CFG_DIR &
+  $FM_LN1 -k plugin subcommand=start plugin=$FM_BIN_DIR/ln_gateway fedimint-cfg=$FM_CFG_DIR &
   sleep 1 # wait for plugin to start
 }
 

@@ -1,19 +1,19 @@
-use crate::consensus::MinimintConsensus;
+use crate::consensus::FedimintConsensus;
 use async_trait::async_trait;
 
-use minimint_api::module::interconnect::ModuleInterconect;
-use minimint_api::module::ApiError;
-use minimint_api::FederationModule;
+use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::module::ApiError;
+use fedimint_api::FederationModule;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use serde_json::Value;
 
-pub struct MinimintInterconnect<'a, R: RngCore + CryptoRng> {
-    pub minimint: &'a MinimintConsensus<R>,
+pub struct FedimintInterconnect<'a, R: RngCore + CryptoRng> {
+    pub fedimint: &'a FedimintConsensus<R>,
 }
 
 #[async_trait]
-impl<'a, R> ModuleInterconect for MinimintInterconnect<'a, R>
+impl<'a, R> ModuleInterconect for FedimintInterconnect<'a, R>
 where
     R: RngCore + CryptoRng,
 {
@@ -24,9 +24,9 @@ where
         data: Value,
     ) -> Result<Value, ApiError> {
         match module {
-            "wallet" => call_internal(&self.minimint.wallet, path, data).await,
-            "mint" => call_internal(&self.minimint.mint, path, data).await,
-            "ln" => call_internal(&self.minimint.ln, path, data).await,
+            "wallet" => call_internal(&self.fedimint.wallet, path, data).await,
+            "mint" => call_internal(&self.fedimint.mint, path, data).await,
+            "ln" => call_internal(&self.fedimint.ln, path, data).await,
             _ => Err(ApiError::not_found(String::from("Module not found"))),
         }
     }

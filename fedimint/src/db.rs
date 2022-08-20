@@ -1,9 +1,9 @@
 use crate::consensus::AcceptedTransaction;
 use crate::transaction::Transaction;
-use minimint_api::db::DatabaseKeyPrefixConst;
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::{PeerId, TransactionId};
-use minimint_core::epoch::EpochHistory;
+use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::{PeerId, TransactionId};
+use fedimint_core::epoch::EpochHistory;
 use std::fmt::Debug;
 
 pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;

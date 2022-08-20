@@ -17,9 +17,9 @@ user_client.submit_tx_with_change(tx);
 Using a public key tweak instead of querying the federation for a new address avoids an unnecessary request to the federation and allows a client to prove they sent bitcoin by signing a message.
 
 ### Pegging In - Federation
-- [Wallet::validate_input](../modules/minimint-wallet/src/lib.rs) - verifies that the `PegInProof` is in a block and is spendable by the federation's multisig.
-- [Wallet::apply_input](../modules/minimint-wallet/src/lib.rs) - stores the `SpendableUTXO` containing the transaction details and tweak key in the federation's wallet database.
-- [Wallet::begin_consensus_epoch](../modules/minimint-wallet/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finality_delay` of 10 blocks after which peg-ins accepted.
+- [Wallet::validate_input](../modules/fedimint-wallet/src/lib.rs) - verifies that the `PegInProof` is in a block and is spendable by the federation's multisig.
+- [Wallet::apply_input](../modules/fedimint-wallet/src/lib.rs) - stores the `SpendableUTXO` containing the transaction details and tweak key in the federation's wallet database.
+- [Wallet::begin_consensus_epoch](../modules/fedimint-wallet/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finality_delay` of 10 blocks after which peg-ins accepted.
 
 ### Pegging Out - User Client
 - [Client::new_peg_out_with_fees](../client/client-lib/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 10 blocks.
@@ -33,11 +33,11 @@ if (peg_out.fees < user_configured_amount) {
 ```
 
 ### Pegging Out - Federation
-- [Wallet::validate_output](../modules/minimint-wallet/src/lib.rs) - verifies the address is valid, the fees are high enough, and the federation has enough `SpendableUTXO` to create the transaction.
-- [Wallet::apply_output](../modules/minimint-wallet/src/lib.rs) - generates a PSBT (partially signed bitcoin transaction) with a signature and removes UTXOs so they are not double-spent.
-- [Wallet::consensus_proposal](../modules/minimint-wallet/src/lib.rs) - proposes the PSBT and the `RoundConsensus` containing the block height, peg-out fees, and randomness beacon (tweak for receiving peg-out change) as new consensus items.
-- [Wallet::end_consensus_epoch](../modules/minimint-wallet/src/lib.rs) - if all peers behave properly they will have submitted PSBT signatures which can be combined into a final `PendingTransaction`.
-- [run_broadcast_pending_tx](../modules/minimint-wallet/src/lib.rs) - is a thread that will periodically look broadcast any pending transactions.
+- [Wallet::validate_output](../modules/fedimint-wallet/src/lib.rs) - verifies the address is valid, the fees are high enough, and the federation has enough `SpendableUTXO` to create the transaction.
+- [Wallet::apply_output](../modules/fedimint-wallet/src/lib.rs) - generates a PSBT (partially signed bitcoin transaction) with a signature and removes UTXOs so they are not double-spent.
+- [Wallet::consensus_proposal](../modules/fedimint-wallet/src/lib.rs) - proposes the PSBT and the `RoundConsensus` containing the block height, peg-out fees, and randomness beacon (tweak for receiving peg-out change) as new consensus items.
+- [Wallet::end_consensus_epoch](../modules/fedimint-wallet/src/lib.rs) - if all peers behave properly they will have submitted PSBT signatures which can be combined into a final `PendingTransaction`.
+- [run_broadcast_pending_tx](../modules/fedimint-wallet/src/lib.rs) - is a thread that will periodically look broadcast any pending transactions.
 
 ### Future
 In the future there are a number of improvements we could make:

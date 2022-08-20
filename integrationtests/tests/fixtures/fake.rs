@@ -13,11 +13,11 @@ use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
 use rand::rngs::OsRng;
 
+use fedimint_api::Amount;
+use fedimint_wallet::bitcoind::BitcoindRpc;
+use fedimint_wallet::txoproof::TxOutProof;
+use fedimint_wallet::Feerate;
 use ln_gateway::ln::{LightningError, LnRpc};
-use minimint_api::Amount;
-use minimint_wallet::bitcoind::BitcoindRpc;
-use minimint_wallet::txoproof::TxOutProof;
-use minimint_wallet::Feerate;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 

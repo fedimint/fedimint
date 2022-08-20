@@ -6,7 +6,7 @@ mod interconnect;
 
 use crate::config::ServerConfig;
 use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::consensus::interconnect::MinimintInterconnect;
+use crate::consensus::interconnect::FedimintInterconnect;
 use crate::db::{
     AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
     ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
@@ -14,18 +14,18 @@ use crate::db::{
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
+use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
+use fedimint_api::db::Database;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::audit::Audit;
+use fedimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
+use fedimint_core::epoch::*;
+use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
+use fedimint_core::modules::mint::{Mint, MintError};
+use fedimint_core::modules::wallet::{Wallet, WalletError};
+use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
-use minimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
-use minimint_api::db::Database;
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::module::audit::Audit;
-use minimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
-use minimint_core::epoch::*;
-use minimint_core::modules::ln::{LightningModule, LightningModuleError};
-use minimint_core::modules::mint::{Mint, MintError};
-use minimint_core::modules::wallet::{Wallet, WalletError};
-use minimint_core::outcome::TransactionStatus;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -64,7 +64,7 @@ pub struct ConsensusProposal {
     pub drop_peers: Vec<PeerId>,
 }
 
-pub struct MinimintConsensus<R>
+pub struct FedimintConsensus<R>
 where
     R: RngCore + CryptoRng,
 {
@@ -98,7 +98,7 @@ struct VerificationCaches {
     ln: <LightningModule as FederationModule>::VerificationCache,
 }
 
-impl<R> MinimintConsensus<R>
+impl<R> FedimintConsensus<R>
 where
     R: RngCore + CryptoRng,
 {
@@ -618,31 +618,31 @@ where
         audit
     }
 
-    fn build_interconnect(&self) -> MinimintInterconnect<R> {
-        MinimintInterconnect { minimint: self }
+    fn build_interconnect(&self) -> FedimintInterconnect<R> {
+        FedimintInterconnect { fedimint: self }
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Wallet> for MinimintConsensus<R> {
+impl<R: RngCore + CryptoRng> AsRef<Wallet> for FedimintConsensus<R> {
     fn as_ref(&self) -> &Wallet {
         &self.wallet
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Mint> for MinimintConsensus<R> {
+impl<R: RngCore + CryptoRng> AsRef<Mint> for FedimintConsensus<R> {
     fn as_ref(&self) -> &Mint {
         &self.mint
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<LightningModule> for MinimintConsensus<R> {
+impl<R: RngCore + CryptoRng> AsRef<LightningModule> for FedimintConsensus<R> {
     fn as_ref(&self) -> &LightningModule {
         &self.ln
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<MinimintConsensus<R>> for MinimintConsensus<R> {
-    fn as_ref(&self) -> &MinimintConsensus<R> {
+impl<R: RngCore + CryptoRng> AsRef<FedimintConsensus<R>> for FedimintConsensus<R> {
+    fn as_ref(&self) -> &FedimintConsensus<R> {
         self
     }
 }

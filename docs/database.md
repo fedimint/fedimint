@@ -1,6 +1,6 @@
 # Database
 
-MiniMint uses a simple key-value store as its database. In theory any such KV store with the following features can be used:
+Fedimint uses a simple key-value store as its database. In theory any such KV store with the following features can be used:
 
 * insert, update, delete actions
 * transactions
@@ -55,7 +55,7 @@ The Database is split into different key spaces based on prefixing that can be u
 | Offers                           | `0x41` | payment hash (sha256)               | `IncomingContractOffer`      |
 | Our Decryption Shares            | `0x42` | contract id (sha256)                | `DecryptionShare`            |
 | Consensus Decryption Shares      | `0x43` | contract id (sha256), peer id (u16) | `DecryptionShare`            |
-| Contract Update (output outcome) | `0x44` | out point (sha256, out idx)         | `minimint_ln::OutputOutcome` |
+| Contract Update (output outcome) | `0x44` | out point (sha256, out idx)         | `fedimint_ln::OutputOutcome` |
 | Lightning Gateways               | `0x45` | Node Pubkey (PublicKey)             | `LightningGateway`                |
 
 ## Client DB Layout

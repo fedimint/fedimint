@@ -1,5 +1,5 @@
 # Integration Testing
-The Rust integration tests allow developers to test the interactions between the Minimint Federation, LN gateway, Clients, Lightning and Bitcoin.
+The Rust integration tests allow developers to test the interactions between the Fedimint Federation, LN gateway, Clients, Lightning and Bitcoin.
 
 [Scripts](../scripts/README.md) exist for running the integration tests manually or as part of GitHub actions.
 
@@ -12,7 +12,7 @@ let (fed, user, bitcoin, gateway, ln) = fixtures(2, &[sats(100), sats(1000)]).aw
 
 Initialization will spawn API and HBBFT consensus threads for federation nodes starting at port `4000` then give you access to the following:
 - `fed`- control and inspect federation nodes and consensus
-- `user`- calls functions in the user client API to simulate minimint users
+- `user`- calls functions in the user client API to simulate fedimint users
 - `bitcoin`- manipulate the shared Bitcoin network
 - `gateway`- calls functions in the gateway client API to simulate a gateway node
 - `lightning`- manipulate the gateway LN node and another connected LN node
@@ -32,7 +32,7 @@ Tests run by default with fake Lightning and Bitcoin services for fast concurren
 To run the tests in parallel against fake versions of Lightning and Bitcoin:
 ```shell
 export FM_TEST_DISABLE_MOCKS=0
-cargo test -p minimint-tests
+cargo test -p fedimint-tests
 ```
 
 When integration tests run they will output a debug log for each epoch:
@@ -49,8 +49,8 @@ When integration tests run they will output a debug log for each epoch:
       +5000.000|UTXOKey(OutPoint { txid: dd482519fcb1955732cbf55e730e65d6f9987e758f5a19a754732b595705a3fc, vout: 1 })
          +0.000|Total sats
 ```
-which can be very useful for debugging what the minimint consensus is doing.
-You may wish to run `cargo test -p minimint-tests <test-name>` to prevent concurrent debug output.
+which can be very useful for debugging what the fedimint consensus is doing.
+You may wish to run `cargo test -p fedimint-tests <test-name>` to prevent concurrent debug output.
 
 ## Running with real services
 Make sure you've [installed](https://nixos.org/manual/nix/stable/quick-start.html) Nix in order to run the correct versions of bitcoind and lightningd.
@@ -64,10 +64,10 @@ You can now run the integration tests against real instances of Bitcoin and Ligh
 
 ```shell
 export FM_TEST_DISABLE_MOCKS=1
-cargo test -p minimint-tests -- --test-threads=1
+cargo test -p fedimint-tests -- --test-threads=1
 ```
 
 If you wish to clean-up the services you either exit the nix-shell or run:
 ```shell
-kill_minimint_processes
+kill_fedimint_processes
 ```

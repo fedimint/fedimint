@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bitcoin::hashes::hex::ToHex;
-use minimint_api::{Amount, OutPoint};
-use minimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_api::{Amount, OutPoint};
+use fedimint_core::modules::mint::tiered::coins::Coins;
 use mint_client::mint::{CoinFinalizationData, SpendableCoin};
 use serde::{Deserialize, Serialize};
 
@@ -80,7 +80,7 @@ pub struct CoinsByTier {
 /// Holds a pending transaction with the txid, the quantity of coins and the value
 ///
 /// e.g { txid: xxx, qty: 10, value: 1 } is a pending transaction 'worth' 10btc
-/// notice that this are ALL pending transactions not only the ['Accepted'](minimint_core::outcome::TransactionStatus) ones !
+/// notice that this are ALL pending transactions not only the ['Accepted'](fedimint_core::outcome::TransactionStatus) ones !
 #[derive(Serialize)]
 pub struct PendingTransaction {
     txid: String,

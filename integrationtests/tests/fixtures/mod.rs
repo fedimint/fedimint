@@ -19,12 +19,12 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use hbbft::honey_badger::Message;
 
+use fedimint_api::task::spawn;
+use fedimint_ln::LightningGateway;
+use fedimint_wallet::bitcoincore_rpc;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::GatewayRequest;
-use minimint_api::task::spawn;
-use minimint_ln::LightningGateway;
-use minimint_wallet::bitcoincore_rpc;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -32,28 +32,28 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use fake::{FakeBitcoinTest, FakeLightningTest};
+use fedimint::config::ServerConfigParams;
+use fedimint::config::{ClientConfig, ServerConfig};
+use fedimint::consensus::{ConsensusOutcome, ConsensusProposal};
+use fedimint::epoch::ConsensusItem;
+use fedimint::net::connect::mock::MockNetwork;
+use fedimint::net::connect::{Connector, TlsTcpConnector};
+use fedimint::net::peers::PeerConnector;
+use fedimint::transaction::Output;
+use fedimint::{consensus, FedimintServer};
+use fedimint_api::config::GenerateConfig;
+use fedimint_api::db::batch::DbBatch;
+use fedimint_api::db::mem_impl::MemDatabase;
+use fedimint_api::db::Database;
 use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
-use minimint::config::ServerConfigParams;
-use minimint::config::{ClientConfig, ServerConfig};
-use minimint::consensus::{ConsensusOutcome, ConsensusProposal};
-use minimint::epoch::ConsensusItem;
-use minimint::net::connect::mock::MockNetwork;
-use minimint::net::connect::{Connector, TlsTcpConnector};
-use minimint::net::peers::PeerConnector;
-use minimint::transaction::Output;
-use minimint::{consensus, MinimintServer};
-use minimint_api::config::GenerateConfig;
-use minimint_api::db::batch::DbBatch;
-use minimint_api::db::mem_impl::MemDatabase;
-use minimint_api::db::Database;
 
-use minimint_api::{Amount, FederationModule, OutPoint, PeerId};
-use minimint_wallet::bitcoind::BitcoindRpc;
-use minimint_wallet::config::WalletConfig;
-use minimint_wallet::db::UTXOKey;
-use minimint_wallet::txoproof::TxOutProof;
-use minimint_wallet::SpendableUTXO;
+use fedimint_api::{Amount, FederationModule, OutPoint, PeerId};
+use fedimint_wallet::bitcoind::BitcoindRpc;
+use fedimint_wallet::config::WalletConfig;
+use fedimint_wallet::db::UTXOKey;
+use fedimint_wallet::txoproof::TxOutProof;
+use fedimint_wallet::SpendableUTXO;
 use mint_client::api::WsFederationApi;
 
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
@@ -100,7 +100,7 @@ pub async fn fixtures(
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,minimint::consensus=warn")),
+                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
             )
             .init();
     }
@@ -340,7 +340,7 @@ pub struct FederationTest {
 }
 
 struct ServerTest {
-    minimint: MinimintServer,
+    fedimint: FedimintServer,
     last_consensus: Vec<ConsensusOutcome>,
     bitcoin_rpc: Box<dyn BitcoindRpc>,
     database: Arc<dyn Database>,
@@ -363,12 +363,12 @@ impl FederationTest {
             .collect()
     }
 
-    /// Sends a custom proposal, ignoring whatever is in MinimintConsensus
+    /// Sends a custom proposal, ignoring whatever is in FedimintConsensus
     /// Useful for simulating malicious federation nodes
     pub fn override_proposal(&self, items: Vec<ConsensusItem>) {
         for server in &self.servers {
             let mut epoch_sig =
-                block_on(server.borrow().minimint.consensus.get_consensus_proposal())
+                block_on(server.borrow().fedimint.consensus.get_consensus_proposal())
                     .items
                     .into_iter()
                     .filter(|item| matches!(item, ConsensusItem::EpochInfo(_)))
@@ -386,12 +386,12 @@ impl FederationTest {
         }
     }
 
-    /// Submit a minimint transaction to all federation servers
-    pub fn submit_transaction(&self, transaction: minimint::transaction::Transaction) {
+    /// Submit a fedimint transaction to all federation servers
+    pub fn submit_transaction(&self, transaction: fedimint::transaction::Transaction) {
         for server in &self.servers {
             server
                 .borrow_mut()
-                .minimint
+                .fedimint
                 .consensus
                 .submit_transaction(transaction.clone())
                 .unwrap();
@@ -410,7 +410,7 @@ impl FederationTest {
             servers: self
                 .servers
                 .iter()
-                .filter(|s| peers.contains(&s.as_ref().borrow().minimint.cfg.identity))
+                .filter(|s| peers.contains(&s.as_ref().borrow().fedimint.cfg.identity))
                 .map(Rc::clone)
                 .collect(),
             wallet: self.wallet.clone(),
@@ -479,7 +479,7 @@ impl FederationTest {
     pub fn has_dropped_peer(&self, peer: u16) -> bool {
         for server in &self.servers {
             let mut s = server.borrow_mut();
-            let proposal = block_on(s.minimint.consensus.get_consensus_proposal());
+            let proposal = block_on(s.fedimint.consensus.get_consensus_proposal());
             s.dropped_peers.append(&mut proposal.drop_peers.clone());
             if !s.dropped_peers.contains(&PeerId::from(peer)) {
                 return false;
@@ -500,15 +500,15 @@ impl FederationTest {
                 for server in &self.servers {
                     let mut batch = DbBatch::new();
                     let mut batch_tx = batch.transaction();
-                    let transaction = minimint::transaction::Transaction {
+                    let transaction = fedimint::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![Output::Mint(tokens.clone())],
                         signature: None,
                     };
 
                     batch_tx.append_insert(
-                        minimint::db::AcceptedTransactionKey(out_point.txid),
-                        minimint::consensus::AcceptedTransaction {
+                        fedimint::db::AcceptedTransactionKey(out_point.txid),
+                        fedimint::consensus::AcceptedTransaction {
                             epoch: 0,
                             transaction,
                         },
@@ -517,7 +517,7 @@ impl FederationTest {
                     batch_tx.commit();
                     server
                         .borrow_mut()
-                        .minimint
+                        .fedimint
                         .consensus
                         .mint
                         .apply_output(batch.transaction(), &tokens, out_point)
@@ -533,7 +533,7 @@ impl FederationTest {
     /// transactions will only get broadcast every 10 seconds.
     pub async fn broadcast_transactions(&self) {
         for server in &self.servers {
-            block_on(minimint_wallet::broadcast_pending_tx(
+            block_on(fedimint_wallet::broadcast_pending_tx(
                 &server.borrow().database,
                 server.borrow().bitcoin_rpc.as_ref(),
             ));
@@ -552,7 +552,7 @@ impl FederationTest {
                 let proposals: Vec<ConsensusProposal> = self
                     .servers
                     .iter()
-                    .map(|s| block_on(s.borrow().minimint.consensus.get_consensus_proposal()))
+                    .map(|s| block_on(s.borrow().fedimint.consensus.get_consensus_proposal()))
                     .collect();
                 panic!("Timed out waiting for consensus, try reducing epochs if proposals are empty: {:?}", proposals);
             }
@@ -582,7 +582,7 @@ impl FederationTest {
     async fn consensus_epoch(server: Rc<RefCell<ServerTest>>, delay: Duration) {
         tokio::time::sleep(delay).await;
         let mut s = server.borrow_mut();
-        let consensus = s.minimint.consensus.clone();
+        let consensus = s.fedimint.consensus.clone();
 
         let overrider = s.override_proposal.clone();
         let proposal = async { overrider.unwrap_or(consensus.get_consensus_proposal().await) };
@@ -590,7 +590,7 @@ impl FederationTest {
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
         s.last_consensus = s
-            .minimint
+            .fedimint
             .run_consensus_epoch(proposal, &mut OsRng::new().unwrap())
             .await;
 
@@ -612,7 +612,7 @@ impl FederationTest {
             .first()
             .unwrap()
             .borrow()
-            .minimint
+            .fedimint
             .consensus
             .audit();
 
@@ -634,7 +634,7 @@ impl FederationTest {
             let bitcoin_rpc = bitcoin_gen();
             let database = Arc::new(MemDatabase::new());
 
-            let minimint = MinimintServer::new_with(
+            let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 database.clone(),
                 bitcoin_gen,
@@ -642,13 +642,13 @@ impl FederationTest {
             )
             .await;
 
-            spawn(minimint::net::api::run_server(
+            spawn(fedimint::net::api::run_server(
                 cfg.clone(),
-                minimint.consensus.clone(),
+                fedimint.consensus.clone(),
             ));
 
             Rc::new(RefCell::new(ServerTest {
-                minimint,
+                fedimint,
                 bitcoin_rpc,
                 database,
                 last_consensus: vec![],

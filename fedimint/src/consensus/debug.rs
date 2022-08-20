@@ -1,9 +1,9 @@
 use crate::{ConsensusItem, ConsensusOutcome};
-use minimint_core::modules::ln::contracts::Contract;
-use minimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
-use minimint_core::modules::mint::PartiallySignedRequest;
-use minimint_core::transaction::{Input, Output, Transaction};
-use minimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
+use fedimint_core::modules::ln::contracts::Contract;
+use fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
+use fedimint_core::modules::mint::PartiallySignedRequest;
+use fedimint_core::transaction::{Input, Output, Transaction};
+use fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
 use std::fmt::Write;
 
 /// outputs a useful debug message for epochs indicating what happened

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Checks to run before opening a PR, should be run from minimint source root dir
+# Checks to run before opening a PR, should be run from fedimint source root dir
 # See tests/README.md for information on setting up Bitcoin / Lightning so the integration tests can complete
 
 set -e

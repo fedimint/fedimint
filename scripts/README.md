@@ -1,5 +1,5 @@
 # Shell Scripts
-Here you can find scripts for running and testing Minimint:
+Here you can find scripts for running and testing Fedimint:
 * `build.sh` - Builds the rust executables and sets environment variables
 * `setup-tests.sh` - Starts Bitcoin and 2 LN nodes, opening a channel between the LN nodes
 * `start-fed.sh` - Generates the configs and starts the federation nodes
@@ -9,4 +9,4 @@ Here you can find scripts for running and testing Minimint:
 * `cli-test.sh` - Runs a CLI-based integration test (required for PRs)
 * `final-checks.sh` - Checks to run before opening a PR
 * `tmux-user-shell.sh` - Helper script that prepares the tmuxinator setup (generate some blocks, fund wallet, …)
-* `tmuxinator.sh` - Sets up a complete minimint federation with Lightning gateway in tmux
+* `tmuxinator.sh` - Sets up a complete fedimint federation with Lightning gateway in tmux

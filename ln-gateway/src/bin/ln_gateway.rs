@@ -12,18 +12,18 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
 
+use fedimint::config::load_from_file;
 use ln_gateway::{
     cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
     GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
 };
-use minimint::config::load_from_file;
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
 /// Create [`gateway.json`] config files
 async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &SocketAddr) {
     let client_cfg_path = workdir.join("client.json");
-    let client_cfg: minimint::config::ClientConfig = load_from_file(&client_cfg_path);
+    let client_cfg: fedimint::config::ClientConfig = load_from_file(&client_cfg_path);
 
     let mut rng = thread_rng();
     let ctx = secp256k1::Secp256k1::new();
@@ -61,22 +61,22 @@ async fn initialize_gateway(
     sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
 ) -> LnGateway {
-    let workdir = match plugin.option("minimint-cfg") {
+    let workdir = match plugin.option("fedimint-cfg") {
         Some(options::Value::String(workdir)) => {
             // FIXME: cln_plugin doesn't yet support optional parameters
             if &workdir == "default-dont-use" {
-                panic!("minimint-cfg option missing")
+                panic!("fedimint-cfg option missing")
             } else {
                 PathBuf::from(workdir)
             }
         }
         _ => unreachable!(),
     };
-    let host = match plugin.option("minimint-host") {
+    let host = match plugin.option("fedimint-host") {
         Some(options::Value::String(host)) => host,
         _ => unreachable!(),
     };
-    let port = match plugin.option("minimint-port") {
+    let port = match plugin.option("fedimint-port") {
         Some(options::Value::String(port)) => port,
         _ => unreachable!(),
     };
@@ -181,18 +181,18 @@ async fn main() -> Result<(), Error> {
     // Register this plugin with core-lightning
     if let Some(plugin) = Builder::new(state, stdin(), stdout())
         .option(options::ConfigOption::new(
-            "minimint-cfg",
+            "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
             options::Value::String("default-dont-use".into()),
-            "minimint config directory",
+            "fedimint config directory",
         ))
         .option(options::ConfigOption::new(
-            "minimint-host",
+            "fedimint-host",
             options::Value::String("127.0.0.1".into()),
             "gateway hostname",
         ))
         .option(options::ConfigOption::new(
-            "minimint-port",
+            "fedimint-port",
             options::Value::String("8080".into()),
             "gateway port",
         ))

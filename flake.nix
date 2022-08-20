@@ -153,7 +153,7 @@
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
           src = filterWorkspaceDepsBuildFiles ./.;
-          pname = "minimint-dependencies";
+          pname = "fedimint-dependencies";
           doCheck = false;
         });
 
@@ -259,12 +259,12 @@
             "client/clientd"
             "crypto/tbs"
             "ln-gateway"
-            "minimint-api"
-            "minimint-core"
-            "minimint-derive"
-            "modules/minimint-ln"
-            "modules/minimint-mint"
-            "modules/minimint-wallet"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
           ];
         };
 
@@ -276,13 +276,13 @@
             "client/client-lib"
             "client/clientd"
             "client/cli"
-            "modules/minimint-ln"
+            "modules/fedimint-ln"
             "fedimint"
-            "minimint-api"
-            "minimint-core"
-            "minimint-derive"
-            "modules/minimint-mint"
-            "modules/minimint-wallet"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
           ];
         };
 
@@ -293,12 +293,12 @@
             "client/clientd"
             "client/client-lib"
             "crypto/tbs"
-            "minimint-api"
-            "minimint-core"
-            "minimint-derive"
-            "modules/minimint-ln"
-            "modules/minimint-mint"
-            "modules/minimint-wallet"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
           ];
         };
 
@@ -310,16 +310,16 @@
             "client/client-lib"
             "client/clientd"
             "crypto/tbs"
-            "minimint-api"
-            "minimint-core"
-            "minimint-derive"
-            "modules/minimint-ln"
-            "modules/minimint-mint"
-            "modules/minimint-wallet"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
           ];
         };
 
-        minimint-tests = pkg {
+        fedimint-tests = pkg {
           dir = "integrationtests";
           extraDirs = [
             "client/cli"
@@ -328,12 +328,12 @@
             "crypto/tbs"
             "ln-gateway"
             "fedimint"
-            "minimint-api"
-            "minimint-core"
-            "minimint-derive"
-            "modules/minimint-ln"
-            "modules/minimint-mint"
-            "modules/minimint-wallet"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
           ];
         };
       in
@@ -342,7 +342,7 @@
           default = fedimintd.package;
 
           fedimintd = fedimintd.package;
-          minimint-tests = minimint-tests.package;
+          fedimint-tests = fedimint-tests.package;
           ln-gateway = ln-gateway.package;
           clientd = clientd.package;
           mint-client-cli = mint-client-cli.package;
@@ -419,8 +419,8 @@
                 tmux
                 tmuxinator
 
-                minimint.package
-                minimint-tests.package
+                fedimint.package
+                fedimint-tests.package
                 ln-gateway.package
                 mint-client-cli.package
                 clientd.package

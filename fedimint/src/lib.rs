@@ -1,13 +1,13 @@
-extern crate minimint_api;
+extern crate fedimint_api;
 
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use fedimint_api::rand::Rand07Compat;
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::NetworkInfo;
-use minimint_api::rand::Rand07Compat;
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use tokio::sync::Notify;
@@ -15,16 +15,16 @@ use tokio::task::spawn;
 use tracing::warn;
 
 use config::ServerConfig;
-use minimint_api::db::Database;
-use minimint_api::PeerId;
-use minimint_core::modules::ln::LightningModule;
-use minimint_core::modules::wallet::bitcoind::BitcoindRpc;
-use minimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
+use fedimint_api::db::Database;
+use fedimint_api::PeerId;
+use fedimint_core::modules::ln::LightningModule;
+use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
+use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
-use minimint_core::epoch::ConsensusItem;
-pub use minimint_core::*;
+use fedimint_core::epoch::ConsensusItem;
+pub use fedimint_core::*;
 
-use crate::consensus::{ConsensusOutcome, ConsensusProposal, MinimintConsensus};
+use crate::consensus::{ConsensusOutcome, ConsensusProposal, FedimintConsensus};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{
     AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
@@ -40,7 +40,7 @@ pub mod db;
 /// Networking for mint-to-mint and client-to-mint communiccation
 pub mod net;
 
-/// MiniMint toplevel config
+/// Fedimint toplevel config
 pub mod config;
 
 /// Some abstractions to handle randomness
@@ -48,21 +48,21 @@ mod rng;
 
 type PeerMessage = (PeerId, Message<PeerId>);
 
-pub struct MinimintServer {
-    pub consensus: Arc<MinimintConsensus<OsRng>>,
+pub struct FedimintServer {
+    pub consensus: Arc<FedimintConsensus<OsRng>>,
     pub connections: AnyPeerConnections<Message<PeerId>>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<ConsensusItem>, PeerId>,
 }
 
 /// Start all the components of the mint and plug them together
-pub async fn run_minimint(cfg: ServerConfig, db_path: PathBuf) {
-    let server = MinimintServer::new(cfg.clone(), db_path.clone()).await;
+pub async fn run_fedimint(cfg: ServerConfig, db_path: PathBuf) {
+    let server = FedimintServer::new(cfg.clone(), db_path.clone()).await;
     spawn(net::api::run_server(cfg, server.consensus.clone()));
     server.run_consensus().await;
 }
 
-impl MinimintServer {
+impl FedimintServer {
     pub async fn new(cfg: ServerConfig, db_path: PathBuf) -> Self {
         let connector: PeerConnector<Message<PeerId>> =
             TlsTcpConnector::new(cfg.tls_config()).to_any();
@@ -88,7 +88,7 @@ impl MinimintServer {
         );
         assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::from(0)));
 
-        let mint = minimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
+        let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
 
         let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
             .await
@@ -96,7 +96,7 @@ impl MinimintServer {
 
         let ln = LightningModule::new(cfg.ln.clone(), database.clone());
 
-        let consensus = Arc::new(MinimintConsensus {
+        let consensus = Arc::new(FedimintConsensus {
             rng_gen: Box::new(OsRngGen),
             cfg: cfg.clone(),
             mint,
@@ -120,7 +120,7 @@ impl MinimintServer {
         let hbbft: HoneyBadger<Vec<ConsensusItem>, _> =
             HoneyBadger::builder(Arc::new(net_info)).build();
 
-        MinimintServer {
+        FedimintServer {
             connections,
             hbbft,
             consensus,

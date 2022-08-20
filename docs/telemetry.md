@@ -1,6 +1,6 @@
 # Telemetry
 
-Minimint uses [opentelemetry] and [jaeger] for telemetry.
+Fedimint uses [opentelemetry] and [jaeger] for telemetry.
 
 ## Running Server with telemetry
 

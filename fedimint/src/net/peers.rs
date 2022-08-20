@@ -7,10 +7,10 @@ use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 use async_trait::async_trait;
+use fedimint_api::PeerId;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
-use minimint_api::PeerId;
 use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -588,9 +588,9 @@ mod tests {
     use crate::net::peers::{
         ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
     };
+    use fedimint_api::PeerId;
     use futures::Future;
     use hbbft::Target;
-    use minimint_api::PeerId;
     use std::collections::{BTreeSet, HashMap};
     use std::iter::FromIterator;
     use std::time::Duration;
@@ -608,7 +608,7 @@ mod tests {
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,minimint::net=trace")),
+                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::net=trace")),
             )
             .init();
 

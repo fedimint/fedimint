@@ -1,15 +1,15 @@
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use minimint_api::Amount;
-use minimint_core::config::{load_from_file, ClientConfig};
-use minimint_core::modules::mint::tiered::coins::Coins;
-use minimint_core::modules::wallet::txoproof::TxOutProof;
+use fedimint_api::Amount;
+use fedimint_core::config::{load_from_file, ClientConfig};
+use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::wallet::txoproof::TxOutProof;
 
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_coins, parse_minimint_amount, serialize_coins,
+    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, serialize_coins,
 };
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
@@ -45,7 +45,7 @@ enum Command {
 
     /// Prepare coins to send to a third party as a payment
     Spend {
-        #[clap(parse(try_from_str = parse_minimint_amount))]
+        #[clap(parse(try_from_str = parse_fedimint_amount))]
         amount: Amount,
     },
 
@@ -67,7 +67,7 @@ enum Command {
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(parse(try_from_str = parse_minimint_amount))]
+        #[clap(parse(try_from_str = parse_fedimint_amount))]
         amount: Amount,
         description: String,
     },
@@ -219,7 +219,7 @@ async fn main() {
                 .await
                 .expect("Timeout waiting for invoice payment");
             println!(
-                "Paid in minimint transaction {}. Call 'fetch' to get your coins.",
+                "Paid in fedimint transaction {}. Call 'fetch' to get your coins.",
                 outpoint.txid
             );
         }

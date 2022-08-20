@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use minimint::config::{load_from_file, ServerConfig};
-use minimint::run_minimint;
+use fedimint::config::{load_from_file, ServerConfig};
+use fedimint::run_fedimint;
 
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -31,7 +31,7 @@ async fn main() {
         #[cfg(feature = "telemetry")]
         if opts.with_telemetry {
             let tracer = opentelemetry_jaeger::new_pipeline()
-                .with_service_name("minimint")
+                .with_service_name("fedimint")
                 .install_simple()
                 .unwrap();
 
@@ -48,7 +48,7 @@ async fn main() {
 
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
     let db_path = opts.db_path;
-    run_minimint(cfg, db_path).await;
+    run_fedimint(cfg, db_path).await;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();

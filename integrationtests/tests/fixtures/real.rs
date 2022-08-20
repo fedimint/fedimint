@@ -9,13 +9,13 @@ use bitcoincore_rpc::Client;
 use bitcoincore_rpc::{Auth, RpcApi};
 
 use clightningrpc::LightningRPC;
+use fedimint_api::Amount;
 use lightning_invoice::Invoice;
-use minimint_api::Amount;
 use serde::Serialize;
 
-use minimint_api::encoding::Decodable;
-use minimint_wallet::config::WalletConfig;
-use minimint_wallet::txoproof::TxOutProof;
+use fedimint_api::encoding::Decodable;
+use fedimint_wallet::config::WalletConfig;
+use fedimint_wallet::txoproof::TxOutProof;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
