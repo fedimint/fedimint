@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use crate::api::FederationApi;
 use crate::mint::SpendableCoin;
-use bitcoin::Network;
+use bitcoin::{secp256k1, Network};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::ParseAmountError;
@@ -43,6 +45,11 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_api::Amount, ParseAmoun
         fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
+
+pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Error> {
+    secp256k1::PublicKey::from_str(s)
+}
+
 pub struct ClientContext {
     pub db: Box<dyn Database>,
     pub api: Box<dyn FederationApi>,
