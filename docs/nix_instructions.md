@@ -14,7 +14,7 @@ sh <(curl -L https://nixos.org/nix/install) --darwin-use-unencrypted-nix-store-v
 
 Clone the repository:
 ```
-git clone git@github.com:fedimint/minimint.git
+git clone git@github.com:fedimint/fedimint.git
 ```
 Enter development shell: 
 ```nix
@@ -31,11 +31,11 @@ nix-shell --command ./scripts/integrationtest.sh
 
 ### nix-flakes:
 
-Minimint can be installed without cloning the repository using nix-flakes by running: 
+Fedimint can be installed without cloning the repository using nix-flakes by running: 
 ```nix
-nix run github:fedimint/minimint
+nix run github:fedimint/fedimint
 ```
 To build a specific branch:
 ```nix
-nix run github:fedimint/minimint/branch_name
+nix run github:fedimint/fedimint/branch_name
 ```

@@ -47,4 +47,4 @@ alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 alias clientd="\$FM_CLIENTD"
 alias clientd-cli="\$FM_CLIENTD_CLI"
 
-trap kill_minimint_processes EXIT
+trap kill_fedimint_processes EXIT

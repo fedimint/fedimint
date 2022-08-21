@@ -1,8 +1,8 @@
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::Amount;
-use minimint_core::modules::ln::contracts::outgoing::{OutgoingContract, Preimage};
-use minimint_core::modules::ln::contracts::IdentifyableContract;
-use minimint_core::modules::ln::ContractInput;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::Amount;
+use fedimint_core::modules::ln::contracts::outgoing::{OutgoingContract, Preimage};
+use fedimint_core::modules::ln::contracts::IdentifyableContract;
+use fedimint_core::modules::ln::ContractInput;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingContractData {

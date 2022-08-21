@@ -1,8 +1,8 @@
 use crate::ln::outgoing::OutgoingContractData;
-use minimint_api::db::DatabaseKeyPrefixConst;
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_core::modules::ln::contracts::ContractId;
-use minimint_core::modules::ln::LightningGateway;
+use fedimint_api::db::DatabaseKeyPrefixConst;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_core::modules::ln::contracts::ContractId;
+use fedimint_core::modules::ln::LightningGateway;
 
 use super::incoming::ConfirmedInvoice;
 use super::outgoing::OutgoingContractAccount;

@@ -1,10 +1,10 @@
 use bitcoin::secp256k1::KeyPair;
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::Amount;
+use fedimint_core::modules::ln::contracts::incoming::IncomingContract;
+use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+use fedimint_core::modules::ln::ContractInput;
 use lightning_invoice::Invoice;
-use minimint_api::encoding::{Decodable, Encodable};
-use minimint_api::Amount;
-use minimint_core::modules::ln::contracts::incoming::IncomingContract;
-use minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-use minimint_core::modules::ln::ContractInput;
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct IncomingContractAccount {

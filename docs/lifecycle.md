@@ -15,14 +15,14 @@ pub struct Transaction {
 }
 …
 pub enum Input {
-    Mint(<minimint_mint::Mint as FederationModule>::TxInput),
-    Wallet(<minimint_wallet::Wallet as FederationModule>::TxInput),
-    LN(<minimint_ln::LightningModule as FederationModule>::TxInput),
+    Mint(<fedimint_mint::Mint as FederationModule>::TxInput),
+    Wallet(<fedimint_wallet::Wallet as FederationModule>::TxInput),
+    LN(<fedimint_ln::LightningModule as FederationModule>::TxInput),
 }
 ```
 
 # Transaction Creation
-* [One client module for each federation module](https://github.com/fedimint/minimint/tree/master/client/client-lib/src)
+* [One client module for each federation module](https://github.com/fedimint/fedimint/tree/master/client/client-lib/src)
 * There are specialized user and gateway clients that use these to construct transactions
 * [E.g. deposit](https://github.com/fedimint/minimint/blob/563c600287decd47e89e15e29ab478648395f378/client/client-lib/src/clients/user.rs#L103-L125)
 

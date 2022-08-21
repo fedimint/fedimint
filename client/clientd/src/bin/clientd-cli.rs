@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use clientd::{call, WaitBlockHeightPayload};
-use minimint_api::module::__reexports::serde_json;
+use fedimint_api::module::__reexports::serde_json;
 use serde::Serialize;
 
 #[derive(Parser)]

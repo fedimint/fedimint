@@ -1,11 +1,11 @@
 use crate::api::FederationApi;
 use crate::mint::SpendableCoin;
 use bitcoin::Network;
+use fedimint_api::db::Database;
+use fedimint_api::encoding::Decodable;
+use fedimint_api::ParseAmountError;
+use fedimint_core::modules::mint::tiered::coins::Coins;
 use lightning_invoice::Currency;
-use minimint_api::db::Database;
-use minimint_api::encoding::Decodable;
-use minimint_api::ParseAmountError;
-use minimint_core::modules::mint::tiered::coins::Coins;
 
 pub fn parse_coins(s: &str) -> Coins<SpendableCoin> {
     let bytes = base64::decode(s).unwrap();
@@ -34,13 +34,13 @@ pub fn parse_bitcoin_amount(
     }
 }
 
-pub fn parse_minimint_amount(s: &str) -> Result<minimint_api::Amount, ParseAmountError> {
+pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_api::Amount, ParseAmountError> {
     if let Some(i) = s.find(char::is_alphabetic) {
         let (amt, denom) = s.split_at(i);
-        minimint_api::Amount::from_str_in(amt, denom.parse()?)
+        fedimint_api::Amount::from_str_in(amt, denom.parse()?)
     } else {
         //default to satoshi
-        minimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+        fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
 

@@ -6,7 +6,7 @@ use clap::Parser;
 use clientd::{
     InfoResponse, PegInAddressResponse, PendingResponse, RpcResult, WaitBlockHeightPayload,
 };
-use minimint_core::config::load_from_file;
+use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
 use serde_json::json;

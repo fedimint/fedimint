@@ -3,16 +3,16 @@
 members = [
     "crypto/tbs",
     "ln-gateway",
-    "minimint",
-    "minimint-core",
-    "minimint-derive",
-    "minimint-api",
+    "fedimint",
+    "fedimint-core",
+    "fedimint-derive",
+    "fedimint-api",
     "client/cli",
     "client/client-lib",
     "client/clientd",
-    "modules/minimint-mint",
-    "modules/minimint-ln",
-    "modules/minimint-wallet",
+    "modules/fedimint-mint",
+    "modules/fedimint-ln",
+    "modules/fedimint-wallet",
     "integrationtests",
 ]
 resolver = "2"

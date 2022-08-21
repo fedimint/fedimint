@@ -4,21 +4,21 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
+use fedimint::consensus::ConsensusOutcomeConversion;
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
-use minimint::consensus::ConsensusOutcomeConversion;
 use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
-use minimint::epoch::{ConsensusItem, EpochVerifyError};
-use minimint::transaction::Output;
-use minimint_api::db::batch::DbBatch;
-use minimint_ln::contracts::incoming::PreimageDecryptionShare;
-use minimint_ln::DecryptionShareCI;
-use minimint_mint::tiered::coins::Coins;
-use minimint_mint::{PartialSigResponse, PartiallySignedRequest};
-use minimint_wallet::WalletConsensusItem::PegOutSignature;
+use fedimint::epoch::{ConsensusItem, EpochVerifyError};
+use fedimint::transaction::Output;
+use fedimint_api::db::batch::DbBatch;
+use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
+use fedimint_ln::DecryptionShareCI;
+use fedimint_mint::tiered::coins::Coins;
+use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
+use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
 

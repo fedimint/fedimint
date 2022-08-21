@@ -1,8 +1,8 @@
-use minimint_api::Amount;
+use fedimint_api::Amount;
 use serde::{Deserialize, Deserializer};
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
-fn as_minimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>
+fn as_fedimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -15,7 +15,7 @@ where
 // TODO: upstream these structs to cln-plugin
 #[derive(Clone, Deserialize, Debug)]
 pub struct Htlc {
-    #[serde(deserialize_with = "as_minimint_amount")]
+    #[serde(deserialize_with = "as_fedimint_amount")]
     pub amount: Amount,
     pub cltv_expiry: u32,
     pub cltv_expiry_relative: u32,
@@ -28,7 +28,7 @@ pub struct Onion {
     #[serde(rename = "type")]
     pub type_: String,
     pub short_channel_id: String,
-    #[serde(deserialize_with = "as_minimint_amount")]
+    #[serde(deserialize_with = "as_fedimint_amount")]
     pub forward_amount: Amount,
     pub outgoing_cltv_value: u32,
     pub shared_secret: bitcoin_hashes::sha256::Hash,

@@ -25,7 +25,7 @@ windows:
           - fg
         - ln1:
           - sleep 1 # wait for bitcoind
-          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --minimint-cfg=$FM_CFG_DIR &
+          - lightningd --dev-fast-gossip --dev-bitcoind-poll=1 --network regtest --bitcoin-rpcuser=bitcoin --bitcoin-rpcpassword=bitcoin --lightning-dir=$FM_LN1_DIR --addr=127.0.0.1:9000 --plugin=$FM_BIN_DIR/ln_gateway --fedimint-cfg=$FM_CFG_DIR &
           - echo $! >> $FM_PID_FILE
           - fg
         - ln2:
