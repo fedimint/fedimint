@@ -128,4 +128,4 @@ jobs:
 
       - name: Publish
         if: github.ref == 'refs/heads/master'
-        run: nix_tag=${{ env.fedimint_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+        run: nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
