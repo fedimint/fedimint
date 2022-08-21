@@ -1710,6 +1710,7 @@ dependencies = [
  "fedimint-core",
  "futures",
  "hex",
+ "js-sys",
  "jsonrpsee-core",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
