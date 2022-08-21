@@ -25,7 +25,13 @@ use mint_client::ClientError;
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {
     let peg_in_amount: u64 = 5000;
-    let peg_out_amount: u64 = 1200; // amount requires minted change
+
+    // amount requires minted change
+    // as this test checks for exact amounts, and minited coins can only be of specific
+    // denominations, we need a peg-out amount that can create a minimint mint change without
+    // a remainder
+    let peg_out_amount: u64 = 1209;
+
     let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
 
     let peg_in_address = user.client.get_new_pegin_address(rng());
@@ -81,9 +87,11 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
+    let peg_out_amount = 1009_u64;
+
     fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
-    let fees = user.peg_out(1000, &address1).await;
-    user.peg_out(1000, &address2).await;
+    let fees = user.peg_out(peg_out_amount, &address1).await;
+    user.peg_out(peg_out_amount, &address2).await;
 
     fed.run_consensus_epochs(2).await;
     fed.broadcast_transactions().await;
@@ -91,10 +99,11 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
     let received1 = bitcoin.mine_block_and_get_received(&address1);
     let received2 = bitcoin.mine_block_and_get_received(&address2);
 
-    assert_eq!(received1 + received2, sats(1000));
+    assert_eq!(received1 + received2, sats(peg_out_amount));
     user.client.reissue_pending_coins(rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // reissue the coins from the tx that failed
-    user.assert_total_coins(sats(5000 - 1000) - fees).await;
+    user.assert_total_coins(sats(5000 - peg_out_amount) - fees)
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -103,25 +112,34 @@ async fn peg_outs_must_wait_for_available_utxos() {
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
+    let peg_out_amount1 = 1009_u64;
+    let peg_out_amount2 = 2009_u64;
+
     fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
-    user.peg_out(1000, &address1).await;
+    user.peg_out(peg_out_amount1, &address1).await;
 
     fed.run_consensus_epochs(2).await;
     fed.broadcast_transactions().await;
-    assert_eq!(bitcoin.mine_block_and_get_received(&address1), sats(1000));
+    assert_eq!(
+        bitcoin.mine_block_and_get_received(&address1),
+        sats(peg_out_amount1)
+    );
 
     // The change UTXO is still finalizing
     let response = user
         .client
-        .new_peg_out_with_fees(Amount::from_sat(2000), address2.clone());
+        .new_peg_out_with_fees(Amount::from_sat(peg_out_amount2), address2.clone());
     assert_matches!(response.await, Err(ClientError::PegOutWaitingForUTXOs));
 
     bitcoin.mine_blocks(100);
     fed.run_consensus_epochs(1).await;
-    user.peg_out(2000, &address2).await;
+    user.peg_out(peg_out_amount2, &address2).await;
     fed.run_consensus_epochs(2).await;
     fed.broadcast_transactions().await;
-    assert_eq!(bitcoin.mine_block_and_get_received(&address2), sats(2000));
+    assert_eq!(
+        bitcoin.mine_block_and_get_received(&address2),
+        sats(peg_out_amount2)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

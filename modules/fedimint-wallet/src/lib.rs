@@ -5,6 +5,7 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use crate::bitcoind::BitcoindRpc;
+use crate::coin_select::{CoinSelector, CoinSelectorOpt, WeightedValue};
 use crate::config::WalletConfig;
 use crate::db::{
     BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
@@ -46,6 +47,7 @@ use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 pub mod bitcoind;
+mod coin_select;
 pub mod config;
 pub mod db;
 pub mod keys;
@@ -887,89 +889,138 @@ impl<'a> StatelessWallet<'a> {
         fee_rate: Feerate,
         change_tweak: &[u8],
     ) -> Option<UnsignedTransaction> {
-        // When building a transaction we need to take care of two things:
-        //  * We need enough input amount to fund all outputs
-        //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
-        // We then go on to calculate the base size of the transaction `total_weight` and the
-        // maximum weight per added input which we will add every time we select an input.
-        let change_script = self.derive_script(change_tweak);
-        let out_weight = (destination.len() * 4 + 1 + 32
-            // Add change script weight, it's very likely to be needed if not we just overpay in fees
-            + 1 // script len varint, 1 byte for all addresses we accept
-            + change_script.len() * 4 // script len
-            + 32) as u64; // value
-        let mut total_weight = (16 + // version
-            12 + // up to 2**16-1 inputs
-            12 + // up to 2**16-1 outputs
-            out_weight + // weight of all outputs
-            16) as u64; // lock time
-        let max_input_weight = (self
-            .descriptor
-            .max_satisfaction_weight()
-            .expect("is satisfyable") +
-            128 + // TxOutHash
-            16 + // TxOutIndex
-            16) as u64; // sequence
+        utxos.sort_by_key(|(_, utxo)| std::cmp::Reverse(utxo.amount));
 
-        // Finally we initialize our accumulator for selected input amounts
-        let mut total_selected_value = bitcoin::Amount::from_sat(0);
-        let mut selected_utxos: Vec<(UTXOKey, SpendableUTXO)> = vec![];
-        let mut fees = fee_rate.calculate_fee(total_weight);
+        let dest_txo = TxOut {
+            value: peg_out_amount.as_sat(),
+            script_pubkey: destination,
+        };
 
-        // When selecting UTXOs we select from largest to smallest amounts
-        utxos.sort_by_key(|(_, utxo)| utxo.amount);
-        while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
-            match utxos.pop() {
-                Some((utxo_key, utxo)) => {
-                    total_selected_value += utxo.amount;
-                    total_weight += max_input_weight;
-                    fees = fee_rate.calculate_fee(total_weight);
-                    selected_utxos.push((utxo_key, utxo));
-                }
-                _ => return None, // Not enough UTXOs
+        let mut change_txo = TxOut {
+            value: 0, // put in the actual change amount later on
+            script_pubkey: self.derive_script(change_tweak),
+        };
+
+        let candidate_utxos = {
+            let input_satisfaction_weight = (self
+                .descriptor
+                .max_satisfaction_weight()
+                .expect("is satisfiable")) as u32; // sequence
+
+            utxos
+                .iter()
+                .map(|(_, utxo)| WeightedValue {
+                    value: utxo.amount.as_sat(),
+                    satisfaction_weight: input_satisfaction_weight,
+                    is_segwit: true,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let mut selector = CoinSelector::new(
+            candidate_utxos,
+            CoinSelectorOpt {
+                target_feerate: fee_rate.sats_per_kvb as f32 / 4000_f32,
+                ..CoinSelectorOpt::fund_outputs(&[dest_txo.clone()], &change_txo)
+            },
+        );
+
+        // do coin selection
+        let selection = loop {
+            // TODO: propogate error
+            let selection = selector.select_until_finished().ok()?;
+
+            // break when we have a drain output
+            if selection.use_drain {
+                break selection;
             }
-        }
 
-        // We always pay ourselves change back to ensure that we don't lose anything due to dust
-        let change = total_selected_value - fees - peg_out_amount;
-        let output: Vec<TxOut> = vec![
-            TxOut {
-                value: peg_out_amount.as_sat(),
-                script_pubkey: destination,
-            },
-            TxOut {
-                value: change.as_sat(),
-                script_pubkey: change_script,
-            },
-        ];
+            // find next avaliable to select
+            match selector.unselected().first() {
+                Some(&index) => selector.select(index),
+                None => return None,
+            }
+        };
+
+        // update change txout value
+        change_txo.value = selection.excess;
+
+        let selected_utxos = selection
+            .filter_selected(&utxos)
+            .cloned()
+            .collect::<Vec<_>>();
+
+        let unsigned_tx_inputs = selected_utxos
+            .iter()
+            .map(|(utxo_key, _)| TxIn {
+                previous_output: utxo_key.0,
+                script_sig: Default::default(),
+                sequence: 0xFFFFFFFF,
+                witness: bitcoin::Witness::new(),
+            })
+            .collect::<Vec<_>>();
+
+        let psbt_inputs = selected_utxos
+            .iter()
+            .map(|(_, utxo)| {
+                let tweaked_desc = self.descriptor.tweak(&utxo.tweak, self.secp);
+                Input {
+                    non_witness_utxo: None,
+                    witness_utxo: Some(TxOut {
+                        value: utxo.amount.as_sat(),
+                        script_pubkey: tweaked_desc.script_pubkey(),
+                    }),
+                    sighash_type: None,
+                    redeem_script: None,
+                    witness_script: Some(
+                        tweaked_desc
+                            .script_code()
+                            .expect("failed to obtain script code"),
+                    ),
+                    final_script_sig: None,
+                    final_script_witness: None,
+                    proprietary: vec![(proprietary_tweak_key(), utxo.tweak.to_vec())]
+                        .into_iter()
+                        .collect(),
+                    ..Default::default()
+                }
+            })
+            .collect::<Vec<_>>();
+
         let mut change_out = bitcoin::util::psbt::Output::default();
         change_out
             .proprietary
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
 
+        let input_sats = selected_utxos
+            .iter()
+            .map(|(_, utxo)| utxo.amount.as_sat())
+            .sum::<u64>();
+
         info!(
             inputs = selected_utxos.len(),
-            input_sats = total_selected_value.as_sat(),
+            input_sats,
             peg_out_sats = peg_out_amount.as_sat(),
-            fees_sats = fees.as_sat(),
+            fees_sats = selection.fee,
             fee_rate = fee_rate.sats_per_kvb,
-            change_sats = change.as_sat(),
-            "Creating peg-out tx",
+            change_sats = selection.excess,
+            total_weight = selection.total_weight,
+            "Parameters for peg-out tx",
+        );
+
+        assert_eq!(
+            selection.fee,
+            fee_rate
+                .calculate_fee(selection.total_weight.into())
+                .as_sat(),
+            "unexpected: selection fee is not the same as calculated"
         );
 
         let transaction = Transaction {
             version: 2,
             lock_time: 0,
-            input: selected_utxos
-                .iter()
-                .map(|(utxo_key, _utxo)| TxIn {
-                    previous_output: utxo_key.0,
-                    script_sig: Default::default(),
-                    sequence: 0xFFFFFFFF,
-                    witness: bitcoin::Witness::new(),
-                })
-                .collect(),
-            output,
+            input: unsigned_tx_inputs,
+            output: vec![dest_txo, change_txo],
         };
         info!(txid = %transaction.txid(), "Creating peg-out tx");
 
@@ -980,58 +1031,17 @@ impl<'a> StatelessWallet<'a> {
             xpub: Default::default(),
             proprietary: Default::default(),
             unknown: Default::default(),
-            inputs: selected_utxos
-                .into_iter()
-                .map(|(_utxo_key, utxo)| {
-                    let script_pubkey = self
-                        .descriptor
-                        .tweak(&utxo.tweak, self.secp)
-                        .script_pubkey();
-                    Input {
-                        non_witness_utxo: None,
-                        witness_utxo: Some(TxOut {
-                            value: utxo.amount.as_sat(),
-                            script_pubkey,
-                        }),
-                        partial_sigs: Default::default(),
-                        sighash_type: None,
-                        redeem_script: None,
-                        witness_script: Some(
-                            self.descriptor
-                                .tweak(&utxo.tweak, self.secp)
-                                .script_code()
-                                .expect("Failed to tweak descriptor"),
-                        ),
-                        bip32_derivation: Default::default(),
-                        final_script_sig: None,
-                        final_script_witness: None,
-                        ripemd160_preimages: Default::default(),
-                        sha256_preimages: Default::default(),
-                        hash160_preimages: Default::default(),
-                        hash256_preimages: Default::default(),
-                        proprietary: vec![(proprietary_tweak_key(), utxo.tweak.to_vec())]
-                            .into_iter()
-                            .collect(),
-                        tap_key_sig: Default::default(),
-                        tap_script_sigs: Default::default(),
-                        tap_scripts: Default::default(),
-                        tap_key_origins: Default::default(),
-                        tap_internal_key: Default::default(),
-                        tap_merkle_root: Default::default(),
-                        unknown: Default::default(),
-                    }
-                })
-                .collect(),
+            inputs: psbt_inputs,
             outputs: vec![Default::default(), change_out],
         };
 
         Some(UnsignedTransaction {
             psbt,
             signatures: vec![],
-            change,
+            change: bitcoin::Amount::from_sat(selection.excess),
             fees: PegOutFees {
                 fee_rate,
-                total_weight,
+                total_weight: selection.total_weight as u64,
             },
         })
     }
@@ -1162,7 +1172,11 @@ pub async fn broadcast_pending_tx(db: &Arc<dyn Database>, rpc: &dyn BitcoindRpc)
 
 impl Feerate {
     pub fn calculate_fee(&self, weight: u64) -> bitcoin::Amount {
-        let sats = self.sats_per_kvb * weight / 1000;
+        let sats_per_byte = self.sats_per_kvb as f32 / 1000_f32;
+        let sats_per_weight_unit = sats_per_byte / 4_f32;
+        let sats = (sats_per_weight_unit * weight as f32).ceil() as u64;
+        info!(sats_per_byte, sats_per_weight_unit, sats, "calculate fee",);
+        // let sats = (self.sats_per_kvb as f32 / 4000_f32 * weight as f32) as u64;
         bitcoin::Amount::from_sat(sats)
     }
 }
