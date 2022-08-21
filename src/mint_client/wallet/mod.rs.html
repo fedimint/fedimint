@@ -344,11 +344,11 @@
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
-<span class="kw">use </span>minimint_api::db::batch::BatchTx;
-<span class="kw">use </span>minimint_api::Amount;
-<span class="kw">use </span>minimint_core::modules::wallet::config::WalletClientConfig;
-<span class="kw">use </span>minimint_core::modules::wallet::tweakable::Tweakable;
-<span class="kw">use </span>minimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
+<span class="kw">use </span>fedimint_api::db::batch::BatchTx;
+<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
+<span class="kw">use </span>fedimint_core::modules::wallet::tweakable::Tweakable;
+<span class="kw">use </span>fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 
 <span class="kw">use </span>miniscript::descriptor::DescriptorTrait;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -473,24 +473,24 @@
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::Address;
 
-    <span class="kw">use </span>minimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>minimint_api::module::testing::FakeFed;
-    <span class="kw">use </span>minimint_api::{OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
+    <span class="kw">use </span>fedimint_api::{OutPoint, TransactionId};
 
-    <span class="kw">use </span>minimint_core::epoch::EpochHistory;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::ContractId;
-    <span class="kw">use </span>minimint_core::modules::ln::{ContractAccount, LightningGateway};
-    <span class="kw">use </span>minimint_core::modules::wallet::bitcoind::test::{
+    <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+    <span class="kw">use </span>fedimint_core::modules::wallet::bitcoind::test::{
         FakeBitcoindRpc, FakeBitcoindRpcController,
     };
-    <span class="kw">use </span>minimint_core::modules::wallet::config::WalletClientConfig;
-    <span class="kw">use </span>minimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
-    <span class="kw">use </span>minimint_core::modules::wallet::{
+    <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
+    <span class="kw">use </span>fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
+    <span class="kw">use </span>fedimint_core::modules::wallet::{
         Feerate, PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet,
     };
-    <span class="kw">use </span>minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    <span class="kw">use </span>minimint_core::transaction::Transaction;
+    <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>std::str::FromStr;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
@@ -661,7 +661,7 @@
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 
         <span class="comment">// wait for broadcast
-        </span>minimint_api::task::sleep(Duration::from_secs(<span class="number">12</span>)).<span class="kw">await</span>;
+        </span>fedimint_api::task::sleep(Duration::from_secs(<span class="number">12</span>)).<span class="kw">await</span>;
         <span class="macro">assert!</span>(btc_rpc.is_btc_sent_to(amount, addr).<span class="kw">await</span>);
 
         <span class="kw">let </span>wallet_value = fed

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["OutgoingContract","Specialized smart contract for outgoing payments."],["Preimage","Preimage in the context of [`OutgoingContract`]s"]]};

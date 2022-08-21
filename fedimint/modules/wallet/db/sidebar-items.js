@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["BlockHashKey",""],["PegOutTxSignatureCI",""],["PegOutTxSignatureCIPrefix",""],["PendingTransactionKey",""],["PendingTransactionPrefixKey",""],["RoundConsensusKey",""],["UTXOKey",""],["UTXOPrefixKey",""],["UnsignedTransactionKey",""],["UnsignedTransactionPrefixKey",""]]};

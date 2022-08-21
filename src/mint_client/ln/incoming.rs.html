@@ -39,12 +39,12 @@
 <span id="39">39</span>
 <span id="40">40</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1::KeyPair;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContract;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+<span class="kw">use </span>fedimint_core::modules::ln::ContractInput;
 <span class="kw">use </span>lightning_invoice::Invoice;
-<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>minimint_api::Amount;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContract;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-<span class="kw">use </span>minimint_core::modules::ln::ContractInput;
 
 <span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
 <span class="kw">pub struct </span>IncomingContractAccount {

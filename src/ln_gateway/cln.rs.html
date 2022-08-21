@@ -40,11 +40,11 @@
 <span id="40">40</span>
 <span id="41">41</span>
 <span id="42">42</span>
-</pre><pre class="rust"><code><span class="kw">use </span>minimint_api::Amount;
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>serde::{Deserialize, Deserializer};
 
 <span class="doccomment">/// The core-lightning `htlc_accepted` event&#39;s `amount` field has a &quot;msat&quot; suffix
-</span><span class="kw">fn </span>as_minimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
+</span><span class="kw">fn </span>as_fedimint_amount&lt;<span class="lifetime">&#39;de</span>, D&gt;(amount: D) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, D::Error&gt;
 <span class="kw">where
     </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
 {
@@ -57,7 +57,7 @@
 <span class="comment">// TODO: upstream these structs to cln-plugin
 </span><span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
 <span class="kw">pub struct </span>Htlc {
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]</span>
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
@@ -70,7 +70,7 @@
     <span class="attribute">#[serde(rename = <span class="string">&quot;type&quot;</span>)]</span>
     <span class="kw">pub </span>type_: String,
     <span class="kw">pub </span>short_channel_id: String,
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_minimint_amount&quot;</span>)]</span>
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]</span>
     <span class="kw">pub </span>forward_amount: Amount,
     <span class="kw">pub </span>outgoing_cltv_value: u32,
     <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,

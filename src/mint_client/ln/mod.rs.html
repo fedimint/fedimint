@@ -428,18 +428,18 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 <span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
-<span class="kw">use </span>lightning_invoice::Invoice;
-<span class="kw">use </span>minimint_api::db::batch::BatchTx;
-<span class="kw">use </span>minimint_api::Amount;
-<span class="kw">use </span>minimint_core::modules::ln::config::LightningModuleClientConfig;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
-<span class="kw">use </span>minimint_core::modules::ln::contracts::outgoing::OutgoingContract;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::{
+<span class="kw">use </span>fedimint_api::db::batch::BatchTx;
+<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::{
     Contract, ContractId, FundedContract, IdentifyableContract,
 };
-<span class="kw">use </span>minimint_core::modules::ln::{
+<span class="kw">use </span>fedimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
 };
+<span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>thiserror::Error;
@@ -618,20 +618,20 @@
     <span class="kw">use </span><span class="kw">crate</span>::OwnedClientContext;
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::Address;
+    <span class="kw">use </span>fedimint_api::db::batch::DbBatch;
+    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
+    <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+    <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningModule};
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
+    <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
+    <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>lightning_invoice::Invoice;
-    <span class="kw">use </span>minimint_api::db::batch::DbBatch;
-    <span class="kw">use </span>minimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>minimint_api::module::testing::FakeFed;
-    <span class="kw">use </span>minimint_api::{Amount, OutPoint, TransactionId};
-    <span class="kw">use </span>minimint_core::epoch::EpochHistory;
-    <span class="kw">use </span>minimint_core::modules::ln::config::LightningModuleClientConfig;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
-    <span class="kw">use </span>minimint_core::modules::ln::{ContractAccount, LightningModule};
-    <span class="kw">use </span>minimint_core::modules::ln::{ContractOrOfferOutput, LightningGateway};
-    <span class="kw">use </span>minimint_core::modules::wallet::PegOutFees;
-    <span class="kw">use </span>minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    <span class="kw">use </span>minimint_core::transaction::Transaction;
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">type </span>Fed = FakeFed&lt;LightningModule, LightningModuleClientConfig&gt;;

@@ -2,6 +2,14 @@ var sourcesIndex = JSON.parse('{\
 "clientd":["",[],["lib.rs"]],\
 "clientd_cli":["",[],["clientd-cli.rs"]],\
 "configgen":["",[],["configgen.rs"]],\
+"fedimint":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
+"fedimint_api":["",[["db",[],["batch.rs","mem_impl.rs","mod.rs","rocksdb_impl.rs","sled_impl.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","testing.rs"]]],["config.rs","lib.rs","rand.rs","task.rs"]],\
+"fedimint_core":["",[],["config.rs","epoch.rs","lib.rs","outcome.rs","transaction.rs"]],\
+"fedimint_derive":["",[],["lib.rs"]],\
+"fedimint_ln":["",[["contracts",[],["account.rs","incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
+"fedimint_mint":["",[["tiered",[],["coins.rs","keys.rs","mod.rs"]]],["config.rs","db.rs","lib.rs"]],\
+"fedimint_wallet":["",[],["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
+"fedimintd":["",[],["fedimintd.rs"]],\
 "ln_gateway":["",[],["cln.rs","lib.rs","ln.rs","webserver.rs"]],\
 "minimint":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
 "minimint_api":["",[["db",[],["batch.rs","mem_impl.rs","mod.rs","rocksdb_impl.rs","sled_impl.rs"]],["encoding",[],["btc.rs","mod.rs","secp256k1.rs","tbs.rs"]],["module",[],["audit.rs","interconnect.rs","mod.rs","testing.rs"]]],["config.rs","lib.rs","rand.rs","task.rs"]],\

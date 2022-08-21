@@ -86,11 +86,11 @@
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableCoin;
 <span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::encoding::Decodable;
+<span class="kw">use </span>fedimint_api::ParseAmountError;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
 <span class="kw">use </span>lightning_invoice::Currency;
-<span class="kw">use </span>minimint_api::db::Database;
-<span class="kw">use </span>minimint_api::encoding::Decodable;
-<span class="kw">use </span>minimint_api::ParseAmountError;
-<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
 
 <span class="kw">pub fn </span>parse_coins(s: <span class="kw-2">&amp;</span>str) -&gt; Coins&lt;SpendableCoin&gt; {
     <span class="kw">let </span>bytes = base64::decode(s).unwrap();
@@ -119,13 +119,13 @@
     }
 }
 
-<span class="kw">pub fn </span>parse_minimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;minimint_api::Amount, ParseAmountError&gt; {
+<span class="kw">pub fn </span>parse_fedimint_amount(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::Amount, ParseAmountError&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
         <span class="kw">let </span>(amt, denom) = s.split_at(i);
-        minimint_api::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
+        fedimint_api::Amount::from_str_in(amt, denom.parse()<span class="question-mark">?</span>)
     } <span class="kw">else </span>{
         <span class="comment">//default to satoshi
-        </span>minimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
+        </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
 

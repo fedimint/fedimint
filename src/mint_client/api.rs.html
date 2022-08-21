@@ -612,17 +612,17 @@
 <span id="612">612</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
+<span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
+<span class="kw">use </span>fedimint_api::{OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
+<span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+<span class="kw">use </span>fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
+<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::CoreError;
 <span class="kw">use </span>jsonrpsee_core::client::ClientT;
 <span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
 <span class="kw">use </span>jsonrpsee_types::error::CallError <span class="kw">as </span>RpcCallError;
-<span class="kw">use </span>minimint_api::task::{RwLock, RwLockWriteGuard};
-<span class="kw">use </span>minimint_api::{OutPoint, PeerId, TransactionId};
-<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::ContractId;
-<span class="kw">use </span>minimint_core::modules::ln::{ContractAccount, LightningGateway};
-<span class="kw">use </span>minimint_core::outcome::{TransactionStatus, TryIntoOutcome};
-<span class="kw">use </span>minimint_core::transaction::Transaction;
-<span class="kw">use </span>minimint_core::CoreError;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{error, instrument, warn};
 
@@ -633,9 +633,9 @@
 <span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 
 <span class="kw">use </span>bitcoin::{Address, Amount};
-<span class="kw">use </span>minimint_core::config::ClientConfig;
-<span class="kw">use </span>minimint_core::epoch::EpochHistory;
-<span class="kw">use </span>minimint_core::modules::wallet::PegOutFees;
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+<span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>thiserror::Error;
 
@@ -705,12 +705,12 @@
             <span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
     </span>}
@@ -725,12 +725,12 @@
             <span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
     </span>}
@@ -745,12 +745,12 @@
             <span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.fetch_contract(contract_id).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; minimint_api::task::sleep(interval).<span class="kw">await</span>,
+                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
                 }
             }
         };
-        minimint_api::task::timeout(timeout, poll())
+        fedimint_api::task::timeout(timeout, poll())
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
     </span>}

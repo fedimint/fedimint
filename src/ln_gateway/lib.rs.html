@@ -377,10 +377,10 @@
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash;
 <span class="kw">use </span>cln::HtlcAccepted;
+<span class="kw">use </span>fedimint::modules::ln::contracts::{incoming::Preimage, ContractId};
+<span class="kw">use </span>fedimint::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>futures::Future;
-<span class="kw">use </span>minimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-<span class="kw">use </span>minimint::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>minimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>mint_client::mint::MintClientError;
 <span class="kw">use </span>mint_client::{ClientError, GatewayClient};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -692,7 +692,7 @@
                 }
             }
 
-            minimint_api::task::sleep_until(least_wait_until).<span class="kw">await</span>;
+            fedimint_api::task::sleep_until(least_wait_until).<span class="kw">await</span>;
         }
     }
 }

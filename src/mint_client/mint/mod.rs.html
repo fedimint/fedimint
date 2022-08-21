@@ -611,17 +611,17 @@
 <span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-<span class="kw">use </span>futures::stream::FuturesUnordered;
-<span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>minimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
-<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>minimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>minimint_core::config::FeeConsensus;
-<span class="kw">use </span>minimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
-<span class="kw">use </span>minimint_core::modules::mint::{
+<span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::config::FeeConsensus;
+<span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::{
     BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
 };
+<span class="kw">use </span>futures::stream::FuturesUnordered;
+<span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{Secp256k1, Signing};
@@ -799,7 +799,7 @@
                         <span class="comment">// TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
                         </span><span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; {
                             <span class="macro">trace!</span>(<span class="string">&quot;Mint returned retryable error: {:?}&quot;</span>, e);
-                            minimint_api::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
+                            fedimint_api::task::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
                         </span>}
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">warn!</span>(<span class="string">&quot;Mint returned error: {:?}&quot;</span>, e);
@@ -972,21 +972,21 @@
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
+    <span class="kw">use </span>fedimint_api::db::batch::DbBatch;
+    <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
+    <span class="kw">use </span>fedimint_api::db::Database;
+    <span class="kw">use </span>fedimint_api::module::testing::FakeFed;
+    <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+    <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
+    <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
+    <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+    <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
+    <span class="kw">use </span>fedimint_core::modules::mint::Mint;
+    <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
+    <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
+    <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>futures::executor::block_on;
-    <span class="kw">use </span>minimint_api::db::batch::DbBatch;
-    <span class="kw">use </span>minimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>minimint_api::db::Database;
-    <span class="kw">use </span>minimint_api::module::testing::FakeFed;
-    <span class="kw">use </span>minimint_api::{Amount, OutPoint, TransactionId};
-    <span class="kw">use </span>minimint_core::epoch::EpochHistory;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
-    <span class="kw">use </span>minimint_core::modules::ln::contracts::ContractId;
-    <span class="kw">use </span>minimint_core::modules::ln::{ContractAccount, LightningGateway};
-    <span class="kw">use </span>minimint_core::modules::mint::config::MintClientConfig;
-    <span class="kw">use </span>minimint_core::modules::mint::Mint;
-    <span class="kw">use </span>minimint_core::modules::wallet::PegOutFees;
-    <span class="kw">use </span>minimint_core::outcome::{OutputOutcome, TransactionStatus};
-    <span class="kw">use </span>minimint_core::transaction::Transaction;
     <span class="kw">use </span>std::sync::Arc;
 
     <span class="kw">type </span>Fed = FakeFed&lt;Mint, MintClientConfig&gt;;

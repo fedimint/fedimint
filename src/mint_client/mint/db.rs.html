@@ -66,11 +66,11 @@
 <span id="66">66</span>
 <span id="67">67</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::mint::{CoinFinalizationData, SpendableCoin};
-<span class="kw">use </span>minimint_api::db::DatabaseKeyPrefixConst;
-<span class="kw">use </span>minimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>minimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
-<span class="kw">use </span>minimint_core::modules::mint::CoinNonce;
+<span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::CoinNonce;
 
 <span class="kw">pub const </span>DB_PREFIX_COIN: u8 = <span class="number">0x20</span>;
 <span class="kw">pub const </span>DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = <span class="number">0x21</span>;

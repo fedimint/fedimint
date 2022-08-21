@@ -170,12 +170,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::mint::CoinFinalizationData;
 <span class="kw">use crate</span>::{MintClientError, SpendableCoin};
 <span class="kw">use </span>bitcoin::KeyPair;
-<span class="kw">use </span>minimint_api::db::batch::{BatchItem, BatchTx};
-<span class="kw">use </span>minimint_api::{Amount, OutPoint};
-<span class="kw">use </span>minimint_core::config::FeeConsensus;
-<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
-<span class="kw">use </span>minimint_core::modules::mint::{BlindToken, Coin, Keys};
-<span class="kw">use </span>minimint_core::transaction::{Input, Output, Transaction};
+<span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_core::config::FeeConsensus;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindToken, Coin, Keys};
+<span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>tbs::AggregatePublicKey;
 
 <span class="kw">pub struct </span>TransactionBuilder {
@@ -300,7 +300,7 @@
         <span class="kw">let </span>txid = <span class="self">self</span>.tx.tx_hash();
         <span class="kw">if </span>!<span class="self">self</span>.keys.is_empty() {
             <span class="kw">let </span>signature =
-                minimint_core::transaction::agg_sign(<span class="kw-2">&amp;</span><span class="self">self</span>.keys, txid.as_hash(), secp, <span class="kw-2">&amp;mut </span>rng);
+                fedimint_core::transaction::agg_sign(<span class="kw-2">&amp;</span><span class="self">self</span>.keys, txid.as_hash(), secp, <span class="kw-2">&amp;mut </span>rng);
             <span class="self">self</span>.tx.signature = <span class="prelude-val">Some</span>(signature);
         }
 

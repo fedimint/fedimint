@@ -954,29 +954,24 @@
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 
-<span class="kw">use </span>lightning::ln::PaymentSecret;
-<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
-<span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
-<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
-<span class="kw">use </span>ln::db::LightningGatewayKey;
-<span class="kw">use </span>minimint_api::task::sleep;
-<span class="kw">use </span>minimint_api::{
+<span class="kw">use </span>fedimint_api::task::sleep;
+<span class="kw">use </span>fedimint_api::{
     db::{
         batch::{Accumulator, BatchItem, DbBatch},
         Database,
     },
     Amount, OutPoint, PeerId, TransactionId,
 };
-<span class="kw">use </span>minimint_core::epoch::EpochHistory;
-<span class="kw">use </span>minimint_core::modules::ln::contracts::incoming::{
+<span class="kw">use </span>fedimint_core::epoch::EpochHistory;
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::{
     DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
 };
-<span class="kw">use </span>minimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-<span class="kw">use </span>minimint_core::modules::ln::{ContractOutput, LightningGateway};
-<span class="kw">use </span>minimint_core::modules::wallet::PegOut;
-<span class="kw">use </span>minimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>minimint_core::transaction::TransactionItem;
-<span class="kw">use </span>minimint_core::{
+<span class="kw">use </span>fedimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
+<span class="kw">use </span>fedimint_core::modules::ln::{ContractOutput, LightningGateway};
+<span class="kw">use </span>fedimint_core::modules::wallet::PegOut;
+<span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core::transaction::TransactionItem;
+<span class="kw">use </span>fedimint_core::{
     config::ClientConfig,
     modules::{
         ln::{
@@ -988,6 +983,11 @@
     },
     transaction::{Input, Output},
 };
+<span class="kw">use </span>lightning::ln::PaymentSecret;
+<span class="kw">use </span>lightning::routing::gossip::RoutingFees;
+<span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
+<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+<span class="kw">use </span>ln::db::LightningGatewayKey;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1263,7 +1263,7 @@
     /// public descriptor by tweaking it.
     /// - this function will write to the clients DB
     ///
-    /// read more on fedimints address derivation: &lt;https://fedimint.org/MiniMint/wallet/&gt;
+    /// read more on fedimints address derivation: &lt;https://fedimint.org/Fedimint/wallet/&gt;
     </span><span class="kw">pub fn </span>get_new_pegin_address&lt;R: RngCore + CryptoRng&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, rng: R) -&gt; Address {
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span>address = <span class="self">self
@@ -1546,7 +1546,7 @@
             .post(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/pay_invoice&quot;</span>, gateway.api))
             .json(<span class="kw-2">&amp;</span>contract_id)
             .send();
-        minimint_api::task::timeout(Duration::from_secs(<span class="number">15</span>), future)
+        fedimint_api::task::timeout(Duration::from_secs(<span class="number">15</span>), future)
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">??</span>;
         <span class="prelude-val">Ok</span>(())
@@ -1702,7 +1702,7 @@
             decrypted_preimage: DecryptedPreimage::Pending,
             gateway_key: our_pub_key,
         });
-        <span class="kw">let </span>incoming_output = minimint_core::transaction::Output::LN(
+        <span class="kw">let </span>incoming_output = fedimint_core::transaction::Output::LN(
             ContractOrOfferOutput::Contract(ContractOutput {
                 amount: <span class="kw-2">*</span>amount,
                 contract: contract.clone(),

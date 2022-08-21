@@ -101,8 +101,8 @@
 <span id="101">101</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
-<span class="kw">use </span>minimint_api::{Amount, OutPoint};
-<span class="kw">use </span>minimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
 <span class="kw">use </span>mint_client::mint::{CoinFinalizationData, SpendableCoin};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -181,7 +181,7 @@
 <span class="doccomment">/// Holds a pending transaction with the txid, the quantity of coins and the value
 ///
 /// e.g { txid: xxx, qty: 10, value: 1 } is a pending transaction &#39;worth&#39; 10btc
-/// notice that this are ALL pending transactions not only the [&#39;Accepted&#39;](minimint_core::outcome::TransactionStatus) ones !
+/// notice that this are ALL pending transactions not only the [&#39;Accepted&#39;](fedimint_core::outcome::TransactionStatus) ones !
 </span><span class="attribute">#[derive(Serialize)]</span>
 <span class="kw">pub struct </span>PendingTransaction {
     txid: String,
