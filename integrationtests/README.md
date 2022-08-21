@@ -50,7 +50,7 @@ When integration tests run they will output a debug log for each epoch:
          +0.000|Total sats
 ```
 which can be very useful for debugging what the minimint consensus is doing.
-You may wish to run `cargo test -p minimint <test-name>` to prevent concurrent debug output.
+You may wish to run `cargo test -p minimint-tests <test-name>` to prevent concurrent debug output.
 
 ## Running with real services
 Make sure you've [installed](https://nixos.org/manual/nix/stable/quick-start.html) Nix in order to run the correct versions of bitcoind and lightningd.
