@@ -97,10 +97,9 @@ impl<'c> WalletClient<'c> {
         peg_in_proof
             .verify(self.context.secp, &self.context.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)?;
-        let sats = peg_in_proof.tx_output().value;
 
-        let amount =
-            Amount::from_sat(sats).saturating_sub(self.context.config.fee_consensus.peg_in_abs);
+        let amount = Amount::from_sat(peg_in_proof.tx_output().value)
+            .saturating_sub(self.context.config.fee_consensus.peg_in_abs);
         if amount == Amount::ZERO {
             return Err(WalletClientError::PegInAmountTooSmall);
         }
