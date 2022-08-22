@@ -116,58 +116,92 @@ pub async fn fixtures(
     let (server_config, client_config) =
         ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
 
-    match env::var("FM_TEST_DISABLE_MOCKS") {
-        Ok(s) if s == "1" => {
+    let env_disable_mocks = env::var("FM_TEST_DISABLE_MOCKS").unwrap_or_default();
+    match env_disable_mocks.as_str() {
+        "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
-            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-            let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
-            let bitcoin = RealBitcoinTest::new(wallet_config);
-            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let lightning_rpc = Mutex::new(
-                ClnRpc::new(socket_gateway.clone())
-                    .await
-                    .expect("connect to ln_socket"),
-            );
-            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers);
-            user.client.await_consensus_block_height(0).await;
-            let gateway = GatewayTest::new(
-                Box::new(lightning_rpc),
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-            )
-            .await;
-
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            real_fixtures(peers, server_config, client_config).await
+        }
+        "2" => {
+            info!("Testing with REAL Bitcoin and Lightning services that are initiated in rust");
+            todo!()
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
-            let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
-            let lightning = FakeLightningTest::new();
-            let net = MockNetwork::new();
-            let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
-            let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers);
-            user.client.await_consensus_block_height(0).await;
-            let gateway = GatewayTest::new(
-                Box::new(lightning.clone()),
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-            )
-            .await;
-
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            fake_fixtures(peers, server_config, client_config).await
         }
     }
+}
+
+/// Fixtures for real services.
+async fn real_fixtures(
+    peers: Vec<PeerId>,
+    server_config: BTreeMap<PeerId, ServerConfig>,
+    client_config: ClientConfig,
+) -> (
+    FederationTest,
+    UserTest,
+    Box<dyn BitcoinTest>,
+    GatewayTest,
+    Box<dyn LightningTest>,
+) {
+    let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+    let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
+    let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
+    let bitcoin = RealBitcoinTest::new(wallet_config);
+    let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
+    let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");
+    let lightning = RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
+    let lightning_rpc = Mutex::new(
+        ClnRpc::new(socket_gateway.clone())
+            .await
+            .expect("connect to ln_socket"),
+    );
+    let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+    let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+    let user_cfg = UserClientConfig(client_config.clone());
+    let user = UserTest::new(user_cfg.clone(), peers);
+    user.client.await_consensus_block_height(0).await;
+    let gateway = GatewayTest::new(
+        Box::new(lightning_rpc),
+        client_config.clone(),
+        lightning.gateway_node_pub_key,
+    )
+    .await;
+
+    (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+}
+
+/// Fixtures for fake services.
+async fn fake_fixtures(
+    peers: Vec<PeerId>,
+    server_config: BTreeMap<PeerId, ServerConfig>,
+    client_config: ClientConfig,
+) -> (
+    FederationTest,
+    UserTest,
+    Box<dyn BitcoinTest>,
+    GatewayTest,
+    Box<dyn LightningTest>,
+) {
+    let bitcoin = FakeBitcoinTest::new();
+    let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
+    let lightning = FakeLightningTest::new();
+    let net = MockNetwork::new();
+    let net_ref = &net;
+    let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+    let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+    let user_cfg = UserClientConfig(client_config.clone());
+    let user = UserTest::new(user_cfg.clone(), peers);
+    user.client.await_consensus_block_height(0).await;
+    let gateway = GatewayTest::new(
+        Box::new(lightning.clone()),
+        client_config.clone(),
+        lightning.gateway_node_pub_key,
+    )
+    .await;
+
+    (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
 }
 
 pub trait BitcoinTest {
