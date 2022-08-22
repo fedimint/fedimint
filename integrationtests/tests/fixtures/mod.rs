@@ -31,12 +31,11 @@ use tokio::time::timeout;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
-use fake::{FakeBitcoinTest, FakeLightningTest};
+use fake::FakeLightningTest;
 use fedimint::config::ServerConfigParams;
 use fedimint::config::{ClientConfig, ServerConfig};
 use fedimint::consensus::{ConsensusOutcome, ConsensusProposal};
 use fedimint::epoch::ConsensusItem;
-use fedimint::net::connect::mock::MockNetwork;
 use fedimint::net::connect::{Connector, TlsTcpConnector};
 use fedimint::net::peers::PeerConnector;
 use fedimint::transaction::Output;
@@ -59,6 +58,8 @@ use mint_client::api::WsFederationApi;
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use real::{RealBitcoinTest, RealLightningTest};
 
+#[cfg(feature = "bitcoind")]
+mod bitcoind_service;
 mod fake;
 mod real;
 
@@ -119,18 +120,81 @@ pub async fn fixtures(
     let env_disable_mocks = env::var("FM_TEST_DISABLE_MOCKS").unwrap_or_default();
     match env_disable_mocks.as_str() {
         "1" => {
-            info!("Testing with REAL Bitcoin and Lightning services");
+            #[cfg(not(feature = "bitcoind"))]
+            info!("Testing with EXTERNAL bitcoind and EXTERNAL cln");
+            #[cfg(feature = "bitcoind")]
+            info!("Testing with INTERNAL bitcoind and EXTERNAL cln");
+
             real_fixtures(peers, server_config, client_config).await
         }
-        "2" => {
-            info!("Testing with REAL Bitcoin and Lightning services that are initiated in rust");
-            todo!()
-        }
         _ => {
-            info!("Testing with FAKE Bitcoin and Lightning services");
+            #[cfg(not(feature = "bitcoind"))]
+            info!("Testing with FAKE bitcoind and FAKE cln");
+            #[cfg(feature = "bitcoind")]
+            info!("Testing with INTERNAL bitcoind and FAKE cln");
+
             fake_fixtures(peers, server_config, client_config).await
         }
     }
+}
+
+/// Uses externally-ran bitcoind service.
+#[cfg(not(feature = "bitcoind"))]
+fn new_real_bitcoin_test() -> (Box<dyn BitcoinTest>, impl Fn() -> Box<dyn BitcoindRpc>) {
+    const RPC_URL: &str = "127.0.0.1:18443";
+    let auth = ::bitcoincore_rpc::Auth::UserPass("bitcoin".to_string(), "bitcoin".to_string());
+
+    let bitcoin_test = RealBitcoinTest::from_client(
+        ::bitcoincore_rpc::Client::new(RPC_URL, auth.clone())
+            .expect("failed to create bitcoin core JSON-RPC client"),
+    );
+
+    let client_gen = bitcoincore_rpc::bitcoind_gen_from_raw(RPC_URL.to_string(), auth);
+
+    (Box::new(bitcoin_test), client_gen)
+}
+
+/// Uses fake bitcoind service.
+#[cfg(not(feature = "bitcoind"))]
+fn new_fake_bitcoin_test() -> (Box<dyn BitcoinTest>, impl Fn() -> Box<dyn BitcoindRpc>) {
+    let bitcoin_test = fake::FakeBitcoinTest::new();
+    let client_gen = {
+        let bitcoin_test = bitcoin_test.clone();
+        move || Box::new(bitcoin_test.clone()) as Box<dyn BitcoindRpc>
+    };
+    (Box::new(bitcoin_test), client_gen)
+}
+
+/// Uses bitcoind service ran as child process.
+#[cfg(feature = "bitcoind")]
+fn new_bitcoin_test(
+    server_config: &BTreeMap<PeerId, ServerConfig>,
+) -> (
+    Box<dyn BitcoinTest>,
+    impl Fn() -> Box<dyn BitcoindRpc>,
+    BTreeMap<PeerId, ServerConfig>,
+) {
+    let bitcoind = bitcoind_service::new();
+    let rpc_url = bitcoind.rpc_url_with_wallet("default");
+    let auth = ::bitcoincore_rpc::Auth::UserPass("bitcoin".to_string(), "bitcoin".to_string());
+
+    // modify server configs to connect to bitcoind child process
+    let server_config = server_config
+        .iter()
+        .map(|(id, conf)| {
+            let mut conf = conf.clone();
+            conf.wallet.btc_rpc_address = rpc_url.clone();
+            conf.wallet.btc_rpc_user = "bitcoin".to_string();
+            conf.wallet.btc_rpc_pass = "bitcoin".to_string();
+
+            (*id, conf)
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let bitcoin_test = RealBitcoinTest::from_service(bitcoind);
+    let client_gen = bitcoincore_rpc::bitcoind_gen_from_raw(rpc_url, auth);
+
+    (Box::new(bitcoin_test), client_gen, server_config)
 }
 
 /// Fixtures for real services.
@@ -146,9 +210,12 @@ async fn real_fixtures(
     Box<dyn LightningTest>,
 ) {
     let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-    let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-    let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
-    let bitcoin = RealBitcoinTest::new(wallet_config);
+
+    #[cfg(feature = "bitcoind")]
+    let (bitcoin_test, bitcoin_rpc, server_config) = new_bitcoin_test(&server_config);
+    #[cfg(not(feature = "bitcoind"))]
+    let (bitcoin_test, bitcoin_rpc) = new_real_bitcoin_test();
+
     let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
     let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");
     let lightning = RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
@@ -169,7 +236,7 @@ async fn real_fixtures(
     )
     .await;
 
-    (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+    (fed, user, bitcoin_test, gateway, Box::new(lightning))
 }
 
 /// Fixtures for fake services.
@@ -184,12 +251,13 @@ async fn fake_fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let bitcoin = FakeBitcoinTest::new();
-    let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
+    #[cfg(feature = "bitcoind")]
+    let (bitcoin_test, bitcoin_rpc, server_config) = new_bitcoin_test(&server_config);
+    #[cfg(not(feature = "bitcoind"))]
+    let (bitcoin_test, bitcoin_rpc) = new_fake_bitcoin_test();
+
     let lightning = FakeLightningTest::new();
-    let net = MockNetwork::new();
-    let net_ref = &net;
-    let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+    let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
     let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
     let user_cfg = UserClientConfig(client_config.clone());
     let user = UserTest::new(user_cfg.clone(), peers);
@@ -201,7 +269,7 @@ async fn fake_fixtures(
     )
     .await;
 
-    (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+    (fed, user, bitcoin_test, gateway, Box::new(lightning))
 }
 
 pub trait BitcoinTest {

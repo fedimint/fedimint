@@ -86,6 +86,7 @@ pub struct FakeBitcoinTest {
 }
 
 impl FakeBitcoinTest {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         FakeBitcoinTest {
             blocks: Arc::new(Mutex::new(vec![])),

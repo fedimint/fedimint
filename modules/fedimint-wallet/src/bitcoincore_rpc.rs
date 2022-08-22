@@ -18,6 +18,21 @@ pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
     }
 }
 
+pub fn bitcoind_gen_from_raw(
+    url: String,
+    auth: Auth,
+) -> impl Fn() -> Box<dyn BitcoindRpc> + 'static {
+    move || -> Box<dyn BitcoindRpc> {
+        let url = url.to_string();
+        let auth = auth.clone();
+
+        Box::new(
+            bitcoincore_rpc::Client::new(url.as_str(), auth)
+                .expect("Could not connect to bitcoind"),
+        )
+    }
+}
+
 #[async_trait]
 impl BitcoindRpc for bitcoincore_rpc::Client {
     async fn get_network(&self) -> Network {

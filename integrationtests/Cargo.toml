@@ -7,6 +7,12 @@ edition = "2018"
 name = "fedimint-tests"
 path = "tests/tests.rs"
 
+[dependencies]
+bitcoind = { version = "0.26.1", features = [ "23_0" ], optional = true }
+
+[features]
+bitcoind = ["bitcoind/23_0"]
+
 [dev-dependencies]
 assert_matches = "1.5.0"
 async-trait = "0.1.42"

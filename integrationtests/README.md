@@ -71,3 +71,15 @@ If you wish to clean-up the services you either exit the nix-shell or run:
 ```shell
 kill_fedimint_processes
 ```
+
+## Spawn `bitcoind` service from Rust
+When the `bitcoind` cargo feature is set, `bitcoind` is run by the Rust integration tests instead of the mock implementation (with `FM_TEST_DISABLE_MOCKS` not set as `1`) or an external `bitcoind` service (with `FM_TEST_DISABLE_MOCKS=1`).
+
+The `BITCOIN_EXE` can be defined to the local location of a `bitcoind` binary. If `BITCOIN_EXE` is not set, the binary will be downloaded.
+
+```shell
+# Run integration tests with internally-ran bitcoind and mock core lightning node
+export FM_TEST_DISABLE_MOCKS=0
+export BITCOIN_EXE=$(which bitcoind) # We use our own bitcoind binary
+cargo test -p fedimint-tests --features=bitcoind -- --test-threads=1
+```

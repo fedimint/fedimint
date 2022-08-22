@@ -6,7 +6,7 @@ use std::str::FromStr;
 use bitcoin::secp256k1;
 use bitcoin::{Address, Transaction};
 use bitcoincore_rpc::Client;
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::RpcApi;
 
 use clightningrpc::LightningRPC;
 use fedimint_api::Amount;
@@ -14,7 +14,6 @@ use lightning_invoice::Invoice;
 use serde::Serialize;
 
 use fedimint_api::encoding::Decodable;
-use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::txoproof::TxOutProof;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
@@ -81,30 +80,37 @@ struct FundChannelFixed<'a> {
     pub amount: u64,
 }
 
-pub struct RealBitcoinTest {
-    client: Client,
+pub enum RealBitcoinTest {
+    ClientOnly(Client),
+    #[cfg(feature = "bitcoind")]
+    WithService(bitcoind::BitcoinD),
 }
 
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(wallet_config: WalletConfig) -> Self {
-        let client = Client::new(
-            &(wallet_config.btc_rpc_address),
-            Auth::UserPass(
-                wallet_config.btc_rpc_user.clone(),
-                wallet_config.btc_rpc_pass.clone(),
-            ),
-        )
-        .expect(Self::ERROR);
+    #[allow(dead_code)]
+    pub fn from_client(client: ::bitcoincore_rpc::Client) -> Self {
+        Self::ClientOnly(client)
+    }
 
-        Self { client }
+    #[cfg(feature = "bitcoind")]
+    pub fn from_service(service: bitcoind::BitcoinD) -> Self {
+        Self::WithService(service)
+    }
+
+    fn client(&self) -> &::bitcoincore_rpc::Client {
+        match self {
+            RealBitcoinTest::ClientOnly(client) => client,
+            #[cfg(feature = "bitcoind")]
+            RealBitcoinTest::WithService(bitcoind) => &bitcoind.client,
+        }
     }
 }
 
 impl BitcoinTest for RealBitcoinTest {
     fn mine_blocks(&self, block_num: u64) {
-        self.client
+        self.client()
             .generate_to_address(block_num, &self.get_new_address())
             .expect(Self::ERROR);
     }
@@ -115,17 +121,17 @@ impl BitcoinTest for RealBitcoinTest {
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
         let id = self
-            .client
+            .client()
             .send_to_address(address, amount, None, None, None, None, None, None)
             .expect(Self::ERROR);
         self.mine_blocks(1);
 
         let tx = self
-            .client
+            .client()
             .get_raw_transaction(&id, None)
             .expect(Self::ERROR);
         let proof = TxOutProof::consensus_decode(Cursor::new(
-            self.client
+            self.client()
                 .get_tx_out_proof(&[id], None)
                 .expect(Self::ERROR),
         ))
@@ -135,12 +141,14 @@ impl BitcoinTest for RealBitcoinTest {
     }
 
     fn get_new_address(&self) -> Address {
-        self.client.get_new_address(None, None).expect(Self::ERROR)
+        self.client()
+            .get_new_address(None, None)
+            .expect(Self::ERROR)
     }
 
     fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.mine_blocks(1);
-        self.client
+        self.client()
             .get_received_by_address(address, None)
             .expect(Self::ERROR)
             .into()
