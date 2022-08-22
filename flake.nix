@@ -419,7 +419,7 @@
                 tmux
                 tmuxinator
 
-                fedimint.package
+                fedimintd.package
                 fedimint-tests.package
                 ln-gateway.package
                 mint-client-cli.package
