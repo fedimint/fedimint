@@ -199,12 +199,6 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)?;
 
-        let amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(self.context.config.as_ref().wallet.fee_consensus.peg_in_abs);
-        if amount == Amount::ZERO {
-            return Err(ClientError::PegInAmountTooSmall);
-        }
-
         tx.input(&mut vec![peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
 
         self.submit_tx_with_change(tx, DbBatch::new(), &mut rng)
