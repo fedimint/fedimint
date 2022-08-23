@@ -56,3 +56,9 @@ and set up in `nix develop` shell, it doesn't exist from team's perspective.
 To use a different shell for `nix develop`, try `nix develop -c zsh`. You can alias it if
 don't want to remember about it. That's the recommended way to use a different shell
 for `nix develop`.
+
+After running `nix develop` a env variable will be set indicating it was succesful
+```
+$ echo $IN_NIX_SHELL
+impure
+```
