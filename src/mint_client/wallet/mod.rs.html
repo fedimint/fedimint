@@ -339,7 +339,6 @@
 <span id="339">339</span>
 <span id="340">340</span>
 <span id="341">341</span>
-<span id="342">342</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
@@ -439,10 +438,9 @@
         peg_in_proof
             .verify(<span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)<span class="question-mark">?</span>;
-        <span class="kw">let </span>sats = peg_in_proof.tx_output().value;
 
-        <span class="kw">let </span>amount =
-            Amount::from_sat(sats).saturating_sub(<span class="self">self</span>.context.config.fee_consensus.peg_in_abs);
+        <span class="kw">let </span>amount = Amount::from_sat(peg_in_proof.tx_output().value)
+            .saturating_sub(<span class="self">self</span>.context.config.fee_consensus.peg_in_abs);
         <span class="kw">if </span>amount == Amount::ZERO {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletClientError::PegInAmountTooSmall);
         }

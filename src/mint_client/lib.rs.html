@@ -941,12 +941,6 @@
 <span id="941">941</span>
 <span id="942">942</span>
 <span id="943">943</span>
-<span id="944">944</span>
-<span id="945">945</span>
-<span id="946">946</span>
-<span id="947">947</span>
-<span id="948">948</span>
-<span id="949">949</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1147,12 +1141,6 @@
         <span class="kw">let </span>(peg_in_key, peg_in_proof) = <span class="self">self
             </span>.wallet_client()
             .create_pegin_input(txout_proof, btc_transaction)<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(<span class="self">self</span>.context.config.as_ref().wallet.fee_consensus.peg_in_abs);
-        <span class="kw">if </span>amount == Amount::ZERO {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::PegInAmountTooSmall);
-        }
 
         tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[peg_in_key], Input::Wallet(Box::new(peg_in_proof)));
 
