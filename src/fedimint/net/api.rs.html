@@ -145,6 +145,21 @@
 <span id="145">145</span>
 <span id="146">146</span>
 <span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
@@ -156,9 +171,11 @@
 };
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>std::fmt::Formatter;
+<span class="kw">use </span>std::panic::AssertUnwindSafe;
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>tracing::debug;
+<span class="kw">use </span>tracing::{debug, error};
 
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>jsonrpsee::{
@@ -233,8 +250,21 @@
             .register_async_method(path, <span class="kw">move </span>|params, state| {
                 Box::pin(<span class="kw">async move </span>{
                     <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                    (endpoint.handler)((<span class="kw-2">*</span>state.fedimint).as_ref(), params)
+                    <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                    // end up with an inconsistent state in theory. In practice most API functions
+                    // are only reading and the few that do write anything are atomic. Lastly, this
+                    // is only the last line of defense
+                    </span>AssertUnwindSafe((endpoint.handler)((<span class="kw-2">*</span>state.fedimint).as_ref(), params))
+                        .catch_unwind()
                         .<span class="kw">await
+                        </span>.map_err(|<span class="kw">_</span>| {
+                            <span class="macro">error!</span>(path, <span class="string">&quot;API handler panicked, DO NOT IGNORE, FIX IT!!!&quot;</span>);
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                <span class="number">500</span>,
+                                <span class="string">&quot;API handler panicked&quot;</span>,
+                                <span class="prelude-val">None</span>::&lt;()&gt;,
+                            )))
+                        })<span class="question-mark">?
                         </span>.map_err(|e| {
                             jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
                                 e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;,
