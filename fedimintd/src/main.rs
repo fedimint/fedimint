@@ -1,10 +1,12 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use fedimint_server::config::{load_from_file, ServerConfig};
 use fedimint_server::FedimintServer;
 
+use fedimint_server::ui::run_ui;
 use fedimint_wallet::bitcoincore_rpc;
+use tokio::spawn;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -13,6 +15,8 @@ use tracing_subscriber::Layer;
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
     pub db_path: PathBuf,
+    #[arg(default_value = None)]
+    pub ui_port: Option<u32>,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -52,6 +56,21 @@ async fn main() -> anyhow::Result<()> {
         registry.with(layer).init();
     } else {
         registry.init();
+    }
+
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+
+    if let Some(ui_port) = opts.ui_port {
+        // Spawn UI, wait for it to finish
+        spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
+        receiver
+            .recv()
+            .await
+            .expect("failed to receive setup message");
+    }
+
+    if !Path::new(&opts.cfg_path).is_file() {
+        panic!("Config file not found, you can generate one with the webui by running with port as arg 3.");
     }
 
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);

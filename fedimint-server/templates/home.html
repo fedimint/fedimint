@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %} Fedimint {% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5 p-3">
+    {% if running %}
+    <h1>The {{ federation_name }} Federation is Running!</h1>
+    <div>Connect to it by scanning this QR Code</div>
+    <br>
+    <img src="/qr" alt="federation qr code" width="200" height="200" />
+    <div class="input-group mb-3 mt-3">
+        <input id="connection-string" type="text" class="form-control" value="{{ federation_connection_string }}"
+            aria-label="Connection String" readonly>
+        <div class="input-group-append">
+            <button class="btn btn-outline-primary" type="button" id="copy-button">Copy</button>
+        </div>
+    </div>
+    {% else %}
+    <br>
+    <h1 class="mt-3">Let's set up your federation.</h1>
+    <br>
+    <h4>Open-source community banking is just a few clicks away.</h4>
+    <br>
+    <div class="mt-2">
+        <a href="/url_connection" class="btn btn-primary" id="url_connection"> Get Started</a>
+    </div>
+    <div>
+        <a href="https://fedimint.org/docs/intro" class="btn btn-secondary m-1" id="docs">Learn More</a>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const set_url_connection = document.querySelector("#url_connection");
+    set_url_connection.addEventListener("click", function (e) {
+        location.href = "/url_connection";
+    });
+</script>
+{% endblock %}

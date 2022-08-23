@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %} Fedimint {% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+  <h3>Message this connection string to another Guardian in your Federation to get connected:</h3>
+  <div class="input-group mb-3">
+    <input id="connection-string" type="text" class="form-control" value="{{ connection_string }}"
+      aria-label="Connection String" readonly>
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary" type="button" id="copy-button">Copy</button>
+    </div>
+  </div>
+  <br>
+  <p>Another Guardian in the federation will send you back configuration files.</p>
+  <p>Paste them here to securely back them up and finish connecting to the federation.</p>
+  <form action="/player" method="post">
+    <label for="client_config">
+      Client Config:
+    </label>
+    <textarea class="form-control" type="text" name="client_config" required></textarea>
+    <div class="form-group">
+      <label for="server_config">
+        Server Config:
+      </label>
+      <textarea class="form-control" type="text" name="server_config" required></textarea>
+    </div>
+    <button class="btn btn-primary mt-3" type="submit">Download Configs</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const copyButton = document.querySelector("#copy-button");
+  copyButton.addEventListener("click", function (e) {
+    const connectionString = document.getElementById("connection-string");;
+    navigator.clipboard.writeText(connectionString.value);
+  });
+</script>
+
+{% endblock %}
