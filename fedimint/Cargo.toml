@@ -37,6 +37,7 @@ fedimint-api = { path = "../fedimint-api", features = ["rocksdb"] }
 fedimint-core = { path = "../fedimint-core" }
 fedimint-derive = { path = "../fedimint-derive" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
+fedimint-setup = { path = "../fedimint-setup" }
 opentelemetry = { version = "0.17.0", optional = true }
 opentelemetry-jaeger = { version = "0.16.0", optional = true }
 rand = "0.6.5"
