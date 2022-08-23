@@ -39,14 +39,15 @@ The Database is split into different key spaces based on prefixing that can be u
 
 ### Wallet
 
-| Name                      | Prefix | Key                                       | Value                                     |
-|---------------------------|--------|-------------------------------------------|-------------------------------------------|
-| Blocks                    | `0x30`   | block hash (32 bytes)                     | block height                              |
-| Our UTXOs                 | `0x31`   | OutPoint (32 bytes txid + 4 bytes output) | data necessary for spending               |
-| Round Consensus           | `0x32`   | none                                      | block height, fee rate, randomness beacon |
-| Unsigned transaction      | `0x34`   | bitcoin tx id (32 bytes)                  | PSBT                                      |
-| Pending transaction       | `0x35`   | bitcoin tx id (32 bytes)                  | consensus encoded tx, change tweak        |
-| Pending Peg Out Signature | `0x36`   | bitcoin tx id (32 bytes)                  | list of signatures (1 per input)          |
+| Name                        | Prefix | Key                                       | Value                                     |
+|-----------------------------|--------|-------------------------------------------|-------------------------------------------|
+| Blocks                      | `0x30` | block hash (32 bytes)                     | block height                              |
+| Our UTXOs                   | `0x31` | OutPoint (32 bytes txid + 4 bytes output) | data necessary for spending               |
+| Round Consensus             | `0x32` | none                                      | block height, fee rate, randomness beacon |
+| Unsigned transaction        | `0x34` | bitcoin tx id (32 bytes)                  | PSBT                                      |
+| Pending transaction         | `0x35` | bitcoin tx id (32 bytes)                  | consensus encoded tx, change tweak        |
+| Pending Peg Out Signature   | `0x36` | bitcoin tx id (32 bytes)                  | list of signatures (1 per input)          |
+| Peg Out Bitcoin Transaction | `0x37` | Fedimint out point                        | Bitcoin transaction id                    |
 
 ### Lightning
 

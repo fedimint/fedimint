@@ -128,12 +128,13 @@ mod tests {
     use crate::wallet::WalletClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
-    use bitcoin::Address;
+    use bitcoin::{Address, Txid};
 
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
 
+    use bitcoin_hashes::Hash;
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
@@ -144,7 +145,7 @@ mod tests {
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
-        Feerate, PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet,
+        Feerate, PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -168,7 +169,9 @@ mod tests {
         ) -> crate::api::Result<TransactionStatus> {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::Wallet(())],
+                outputs: vec![OutputOutcome::Wallet(PegOutOutcome(
+                    Txid::from_slice([0; 32].as_slice()).unwrap(),
+                ))],
             })
         }
 
