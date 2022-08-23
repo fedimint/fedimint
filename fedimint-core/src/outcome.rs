@@ -3,6 +3,7 @@ use fedimint_ln::contracts::incoming::{DecryptedPreimage, OfferId, Preimage};
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use fedimint_ln::LightningModule;
 use fedimint_mint::SigResponse;
+use fedimint_wallet::{PegOutOutcome, Wallet};
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
@@ -23,8 +24,7 @@ pub enum TransactionStatus {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum OutputOutcome {
     Mint(Option<SigResponse>),
-    // TODO: maybe include the transaction id eventually. But unclear how to propagate it cleanly right now.
-    Wallet(()),
+    Wallet(<Wallet as FederationModule>::TxOutputOutcome),
     LN(<LightningModule as FederationModule>::TxOutputOutcome),
 }
 
@@ -47,7 +47,7 @@ impl Final for OutputOutcome {
         match self {
             OutputOutcome::Mint(Some(_)) => true,
             OutputOutcome::Mint(None) => false,
-            OutputOutcome::Wallet(()) => true,
+            OutputOutcome::Wallet(_) => true,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { .. }) => true,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) => {
                 match outcome {
@@ -82,7 +82,7 @@ impl TryIntoOutcome for Option<SigResponse> {
     }
 }
 
-impl TryIntoOutcome for () {
+impl TryIntoOutcome for PegOutOutcome {
     fn try_into_outcome(common_outcome: OutputOutcome) -> Result<Self, CoreError> {
         match common_outcome {
             OutputOutcome::Mint(_) => Err(CoreError::MismatchingVariant("wallet", "mint")),

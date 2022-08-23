@@ -1,6 +1,5 @@
 use crate::utils::BorrowedClientContext;
-use bitcoin::Address;
-use bitcoin::KeyPair;
+use bitcoin::{Address, KeyPair};
 use db::PegInKey;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -8,6 +7,8 @@ use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 
+use crate::ApiError;
+use fedimint_core::modules::wallet::PegOutOutcome;
 use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
@@ -108,6 +109,20 @@ impl<'c> WalletClient<'c> {
 
         Ok((secret_tweak_key, peg_in_proof))
     }
+
+    pub async fn await_peg_out_outcome(
+        &self,
+        out_point: fedimint_api::OutPoint,
+    ) -> Result<bitcoin::Txid> {
+        // TODO: define timeout centrally
+        let timeout = std::time::Duration::from_secs(15);
+        let outcome: PegOutOutcome = self
+            .context
+            .api
+            .await_output_outcome(out_point, timeout)
+            .await?;
+        Ok(outcome.0)
+    }
 }
 
 type Result<T> = std::result::Result<T, WalletClientError>;
@@ -120,6 +135,8 @@ pub enum WalletClientError {
     PegInAmountTooSmall,
     #[error("Inconsistent peg-in proof: {0}")]
     PegInProofError(PegInProofError),
+    #[error("Mint API error: {0}")]
+    ApiError(#[from] ApiError),
 }
 
 #[cfg(test)]
@@ -128,12 +145,13 @@ mod tests {
     use crate::wallet::WalletClient;
     use crate::OwnedClientContext;
     use async_trait::async_trait;
-    use bitcoin::Address;
+    use bitcoin::{Address, Txid};
 
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
 
+    use bitcoin_hashes::Hash;
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
@@ -144,7 +162,7 @@ mod tests {
     use fedimint_core::modules::wallet::config::WalletClientConfig;
     use fedimint_core::modules::wallet::db::{RoundConsensusKey, UTXOKey};
     use fedimint_core::modules::wallet::{
-        Feerate, PegOut, PegOutFees, RoundConsensus, SpendableUTXO, Wallet,
+        Feerate, PegOut, PegOutFees, PegOutOutcome, RoundConsensus, SpendableUTXO, Wallet,
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
@@ -168,7 +186,9 @@ mod tests {
         ) -> crate::api::Result<TransactionStatus> {
             Ok(TransactionStatus::Accepted {
                 epoch: 0,
-                outputs: vec![OutputOutcome::Wallet(())],
+                outputs: vec![OutputOutcome::Wallet(PegOutOutcome(
+                    Txid::from_slice([0; 32].as_slice()).unwrap(),
+                ))],
             })
         }
 

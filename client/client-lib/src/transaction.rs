@@ -75,8 +75,9 @@ impl TransactionBuilder {
         self.tx.inputs.push(input);
     }
 
-    pub fn output(&mut self, output: Output) {
+    pub fn output(&mut self, output: Output) -> u64 {
         self.tx.outputs.push(output);
+        (self.tx.outputs.len() - 1) as u64
     }
 
     pub fn change_required(&self, fees: &FeeConsensus) -> Amount {

@@ -179,7 +179,13 @@ async fn main() {
                 .new_peg_out_with_fees(satoshis, address)
                 .await
                 .unwrap();
-            client.peg_out(peg_out, &mut rng).await.unwrap();
+            let out_point = client.peg_out(peg_out, &mut rng).await.unwrap();
+            let txid = client
+                .wallet_client()
+                .await_peg_out_outcome(out_point)
+                .await
+                .unwrap();
+            println!("Bitcoin transaction is about to be sent: {}", txid)
         }
         Command::LnPay { bolt11 } => {
             let (contract_id, outpoint) = client

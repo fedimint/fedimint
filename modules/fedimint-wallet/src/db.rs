@@ -1,5 +1,7 @@
-use crate::{PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction};
-use bitcoin::{BlockHash, OutPoint, Txid};
+use crate::{
+    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+};
+use bitcoin::{BlockHash, Txid};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use secp256k1::ecdsa::Signature;
@@ -10,6 +12,7 @@ const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
 const DB_PREFIX_UNSIGNED_TRANSACTION: u8 = 0x34;
 const DB_PREFIX_PENDING_TRANSACTION: u8 = 0x35;
 const DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = 0x36;
+const DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT: u8 = 0x37;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct BlockHashKey(pub BlockHash);
@@ -21,7 +24,7 @@ impl DatabaseKeyPrefixConst for BlockHashKey {
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct UTXOKey(pub OutPoint);
+pub struct UTXOKey(pub bitcoin::OutPoint);
 
 impl DatabaseKeyPrefixConst for UTXOKey {
     const DB_PREFIX: u8 = DB_PREFIX_UTXO;
@@ -99,4 +102,13 @@ impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
     type Key = PegOutTxSignatureCI;
     type Value = Vec<Signature>;
+}
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct PegOutBitcoinTransaction(pub fedimint_api::OutPoint);
+
+impl DatabaseKeyPrefixConst for PegOutBitcoinTransaction {
+    const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT;
+    type Key = Self;
+    type Value = PegOutOutcome;
 }

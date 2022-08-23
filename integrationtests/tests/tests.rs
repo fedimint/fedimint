@@ -18,6 +18,7 @@ use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
 use fedimint_ln::DecryptionShareCI;
 use fedimint_mint::tiered::coins::Coins;
 use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
+use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
@@ -38,13 +39,26 @@ async fn peg_in_and_peg_out_with_fees() {
     user.assert_total_coins(sats(peg_in_amount)).await;
 
     let peg_out_address = bitcoin.get_new_address();
-    let fees = user.peg_out(peg_out_amount, &peg_out_address).await;
+    let (fees, out_point) = user.peg_out(peg_out_amount, &peg_out_address).await;
     fed.run_consensus_epochs(2).await; // peg-out tx + peg out signing epoch
 
     assert_matches!(
         fed.last_consensus_items().first(),
         Some(ConsensusItem::Wallet(PegOutSignature(_)))
     );
+
+    let outcome_txid = user
+        .client
+        .wallet_client()
+        .await_peg_out_outcome(out_point)
+        .await
+        .unwrap();
+    assert!(matches!(
+            fed.last_consensus_items().first(), 
+            Some(ConsensusItem::Wallet(PegOutSignature(PegOutSignatureItem {
+                txid,
+             ..
+            }))) if *txid == outcome_txid));
 
     fed.broadcast_transactions().await;
     assert_eq!(
@@ -82,7 +96,7 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
     let address2 = bitcoin.get_new_address();
 
     fed.mine_and_mint(&user, &*bitcoin, sats(5000)).await;
-    let fees = user.peg_out(1000, &address1).await;
+    let (fees, _) = user.peg_out(1000, &address1).await;
     user.peg_out(1000, &address2).await;
 
     fed.run_consensus_epochs(2).await;

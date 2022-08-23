@@ -271,14 +271,14 @@ impl UserTest {
     }
 
     /// Helper to simplify the peg_out method calls
-    pub async fn peg_out(&self, amount: u64, address: &Address) -> Amount {
+    pub async fn peg_out(&self, amount: u64, address: &Address) -> (Amount, OutPoint) {
         let peg_out = self
             .client
             .new_peg_out_with_fees(bitcoin::Amount::from_sat(amount), address.clone())
             .await
             .unwrap();
-        self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
-        peg_out.fees.amount().into()
+        let out_point = self.client.peg_out(peg_out.clone(), rng()).await.unwrap();
+        (peg_out.fees.amount().into(), out_point)
     }
 
     /// Returns the amount denominations of all coins from lowest to highest

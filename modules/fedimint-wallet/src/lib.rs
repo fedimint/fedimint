@@ -7,9 +7,9 @@ use std::sync::Arc;
 use crate::bitcoind::BitcoindRpc;
 use crate::config::WalletConfig;
 use crate::db::{
-    BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
+    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
+    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
 };
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::Tweakable;
@@ -164,13 +164,17 @@ pub struct PegOut {
     pub fees: PegOutFees,
 }
 
+/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct PegOutOutcome(pub bitcoin::Txid);
+
 #[async_trait(?Send)]
 impl FederationModule for Wallet {
     type Error = WalletError;
     type TxInput = Box<PegInProof>;
     type TxOutput = PegOut;
     // TODO: implement outcome
-    type TxOutputOutcome = ();
+    type TxOutputOutcome = PegOutOutcome;
     type ConsensusItem = WalletConsensusItem;
     type VerificationCache = ();
 
@@ -366,7 +370,7 @@ impl FederationModule for Wallet {
         &'a self,
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
-        _out_point: fedimint_api::OutPoint,
+        out_point: fedimint_api::OutPoint,
     ) -> Result<fedimint_api::Amount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
@@ -421,6 +425,7 @@ impl FederationModule for Wallet {
 
         batch.append_insert_new(UnsignedTransactionKey(txid), tx);
         batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
+        batch.append_insert_new(PegOutBitcoinTransaction(out_point), PegOutOutcome(txid));
         batch.commit();
         Ok(amount)
     }
@@ -484,9 +489,10 @@ impl FederationModule for Wallet {
         drop_peers
     }
 
-    fn output_status(&self, _out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
-        // TODO: return BTC tx id once included in peg-out tx
-        Some(())
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::TxOutputOutcome> {
+        self.db
+            .get_value(&PegOutBitcoinTransaction(out_point))
+            .expect("DB error")
     }
 
     fn audit(&self, audit: &mut Audit) {
