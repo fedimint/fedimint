@@ -3,8 +3,7 @@
 {
 	"name": "fedimint-dev",
 	"context": "..",
-	// TODO: Host image on Fedimint user account.
-	"image": "docker.io/rndhouse/fedimint-dev:latest",
+	"image": "docker.io/fedimint/fedimint-dev:latest",
 	// Facilitate Rust ptrace-based debugger
 	"runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
 	"containerUser": "nonroot",
