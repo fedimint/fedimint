@@ -56,6 +56,14 @@ $ mint-client-cli spend 400000
 AQAAAAAAAABAQg8AAA...
 ```
 
+The `validate` subcommand checks the validity of the signatures without claiming the tokens. It does not check if the nonce is unspent.
+
+```shell
+$ mint-client-cli validate AQAAAAAAAABAQg8AAA...
+
+All tokens have valid signatures
+```
+
 A receiving client can now reissue these coins to claim them and avoid double spends:
 
 ```shell
@@ -154,17 +162,21 @@ OPTIONS:
     -h, --help    Print help information
 
 SUBCOMMANDS:
+    connect-info      Config enabling client to establish websocket connection to federation
     fetch             Fetch (re-)issued coins and finalize issuance process
     help              Print this message or the help of the given subcommand(s)
     info              Display wallet info (holdings, tiers)
-    ln-pay            Pay a lightning invoice via a gateway
+    join-federation   Join a federation using it's ConnectInfo
     ln-invoice        Create a lightning invoice to receive payment via gateway
+    ln-pay            Pay a lightning invoice via a gateway
     peg-in            Issue tokens in exchange for a peg-in proof (not yet implemented, just
                           creates coins)
     peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed
     peg-out           Withdraw funds from the federation
     reissue           Reissue tokens received from a third party to avoid double spends
     spend             Prepare coins to send to a third party as a payment
-    wait-block-height    Wait for the fed to reach a consensus block height
+    validate          Validate tokens without claiming them (only checks if signatures valid,
+                          does not check if nonce unspent)
+    wait-block-height Wait for the fed to reach a consensus block height
     wait-invoice      Wait for incoming invoice to be paid
 ```
