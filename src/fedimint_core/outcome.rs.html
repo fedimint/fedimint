@@ -162,6 +162,7 @@
 <span class="kw">use </span>fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 <span class="kw">use </span>fedimint_ln::LightningModule;
 <span class="kw">use </span>fedimint_mint::SigResponse;
+<span class="kw">use </span>fedimint_wallet::{PegOutOutcome, Wallet};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::CoreError;
@@ -182,8 +183,7 @@
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 </span><span class="kw">pub enum </span>OutputOutcome {
     Mint(<span class="prelude-ty">Option</span>&lt;SigResponse&gt;),
-    <span class="comment">// TODO: maybe include the transaction id eventually. But unclear how to propagate it cleanly right now.
-    </span>Wallet(()),
+    Wallet(&lt;Wallet <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
     LN(&lt;LightningModule <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome),
 }
 
@@ -206,7 +206,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             OutputOutcome::Mint(<span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="bool-val">true</span>,
             OutputOutcome::Mint(<span class="prelude-val">None</span>) =&gt; <span class="bool-val">false</span>,
-            OutputOutcome::Wallet(()) =&gt; <span class="bool-val">true</span>,
+            OutputOutcome::Wallet(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Offer { .. }) =&gt; <span class="bool-val">true</span>,
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) =&gt; {
                 <span class="kw">match </span>outcome {
@@ -241,7 +241,7 @@
     }
 }
 
-<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>() {
+<span class="kw">impl </span>TryIntoOutcome <span class="kw">for </span>PegOutOutcome {
     <span class="kw">fn </span>try_into_outcome(common_outcome: OutputOutcome) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, CoreError&gt; {
         <span class="kw">match </span>common_outcome {
             OutputOutcome::Mint(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(CoreError::MismatchingVariant(<span class="string">&quot;wallet&quot;</span>, <span class="string">&quot;mint&quot;</span>)),

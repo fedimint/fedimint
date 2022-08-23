@@ -1234,6 +1234,12 @@
 <span id="1234">1234</span>
 <span id="1235">1235</span>
 <span id="1236">1236</span>
+<span id="1237">1237</span>
+<span id="1238">1238</span>
+<span id="1239">1239</span>
+<span id="1240">1240</span>
+<span id="1241">1241</span>
+<span id="1242">1242</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::TryInto;
 
@@ -1243,9 +1249,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::bitcoind::BitcoindRpc;
 <span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    BlockHashKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
+    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
+    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::Tweakable;
@@ -1400,13 +1406,17 @@
     <span class="kw">pub </span>fees: PegOutFees,
 }
 
+<span class="doccomment">/// Contains the Bitcoin transaction id of the transaction created by the withdraw request
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PegOutOutcome(<span class="kw">pub </span>bitcoin::Txid);
+
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Wallet {
     <span class="kw">type </span>Error = WalletError;
     <span class="kw">type </span>TxInput = Box&lt;PegInProof&gt;;
     <span class="kw">type </span>TxOutput = PegOut;
     <span class="comment">// TODO: implement outcome
-    </span><span class="kw">type </span>TxOutputOutcome = ();
+    </span><span class="kw">type </span>TxOutputOutcome = PegOutOutcome;
     <span class="kw">type </span>ConsensusItem = WalletConsensusItem;
     <span class="kw">type </span>VerificationCache = ();
 
@@ -1602,7 +1612,7 @@
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
-        _out_point: fedimint_api::OutPoint,
+        out_point: fedimint_api::OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::Amount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
@@ -1657,6 +1667,7 @@
 
         batch.append_insert_new(UnsignedTransactionKey(txid), tx);
         batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
+        batch.append_insert_new(PegOutBitcoinTransaction(out_point), PegOutOutcome(txid));
         batch.commit();
         <span class="prelude-val">Ok</span>(amount)
     }
@@ -1720,9 +1731,10 @@
         drop_peers
     }
 
-    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, _out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
-        <span class="comment">// TODO: return BTC tx id once included in peg-out tx
-        </span><span class="prelude-val">Some</span>(())
+    <span class="kw">fn </span>output_status(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::TxOutputOutcome&gt; {
+        <span class="self">self</span>.db
+            .get_value(<span class="kw-2">&amp;</span>PegOutBitcoinTransaction(out_point))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
     }
 
     <span class="kw">fn </span>audit(<span class="kw-2">&amp;</span><span class="self">self</span>, audit: <span class="kw-2">&amp;mut </span>Audit) {

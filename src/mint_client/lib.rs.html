@@ -941,6 +941,11 @@
 <span id="941">941</span>
 <span id="942">942</span>
 <span id="943">943</span>
+<span id="944">944</span>
+<span id="945">945</span>
+<span id="946">946</span>
+<span id="947">947</span>
+<span id="948">948</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1236,7 +1241,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peg_out: PegOut,
         <span class="kw-2">mut </span>rng: R,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
@@ -1250,10 +1255,15 @@
             + (peg_out.amount + peg_out.fees.amount()).into();
         <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(funding_amount)<span class="question-mark">?</span>;
         tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
-        tx.output(Output::Wallet(peg_out));
+        <span class="kw">let </span>peg_out_idx = tx.output(Output::Wallet(peg_out));
 
-        <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await
-    </span>}
+        <span class="kw">let </span>fedimint_tx_id = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(OutPoint {
+            txid: fedimint_tx_id,
+            out_idx: peg_out_idx,
+        })
+    }
 
     <span class="doccomment">/// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)
     ///

@@ -367,6 +367,7 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -647,6 +648,7 @@
             .peg_out(peg_out, rng)
             .<span class="kw">await
             </span>.map_err(LnGatewayError::ClientError)
+            .map(|out_point| out_point.txid)
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {

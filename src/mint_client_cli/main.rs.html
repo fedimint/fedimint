@@ -233,6 +233,12 @@
 <span id="233">233</span>
 <span id="234">234</span>
 <span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Parser;
@@ -414,7 +420,13 @@
                 .new_peg_out_with_fees(satoshis, address)
                 .<span class="kw">await
                 </span>.unwrap();
-            client.peg_out(peg_out, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>out_point = client.peg_out(peg_out, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>txid = client
+                .wallet_client()
+                .await_peg_out_outcome(out_point)
+                .<span class="kw">await
+                </span>.unwrap();
+            <span class="macro">println!</span>(<span class="string">&quot;Bitcoin transaction is about to be sent: {}&quot;</span>, txid)
         }
         Command::LnPay { bolt11 } =&gt; {
             <span class="kw">let </span>(contract_id, outpoint) = client

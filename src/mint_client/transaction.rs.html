@@ -164,6 +164,7 @@
 <span id="164">164</span>
 <span id="165">165</span>
 <span id="166">166</span>
+<span id="167">167</span>
 </pre><pre class="rust"><code><span class="kw">use </span>rand::{CryptoRng, RngCore};
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
@@ -241,8 +242,9 @@
         <span class="self">self</span>.tx.inputs.push(input);
     }
 
-    <span class="kw">pub fn </span>output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, output: Output) {
+    <span class="kw">pub fn </span>output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, output: Output) -&gt; u64 {
         <span class="self">self</span>.tx.outputs.push(output);
+        (<span class="self">self</span>.tx.outputs.len() - <span class="number">1</span>) <span class="kw">as </span>u64
     }
 
     <span class="kw">pub fn </span>change_required(<span class="kw-2">&amp;</span><span class="self">self</span>, fees: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; Amount {
