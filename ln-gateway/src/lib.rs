@@ -278,6 +278,7 @@ impl LnGateway {
             .peg_out(peg_out, rng)
             .await
             .map_err(LnGatewayError::ClientError)
+            .map(|out_point| out_point.txid)
     }
 
     pub async fn run(&mut self) -> Result<()> {

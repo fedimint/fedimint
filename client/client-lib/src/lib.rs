@@ -293,7 +293,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         &self,
         peg_out: PegOut,
         mut rng: R,
-    ) -> Result<TransactionId> {
+    ) -> Result<OutPoint> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
@@ -307,9 +307,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins, &self.context.secp)?;
-        tx.output(Output::Wallet(peg_out));
+        let peg_out_idx = tx.output(Output::Wallet(peg_out));
 
-        self.submit_tx_with_change(tx, batch, &mut rng).await
+        let fedimint_tx_id = self.submit_tx_with_change(tx, batch, &mut rng).await?;
+
+        Ok(OutPoint {
+            txid: fedimint_tx_id,
+            out_idx: peg_out_idx,
+        })
     }
 
     /// Returns a bitcoin address suited to perform a fedimint [peg-in](Self::peg_in)
