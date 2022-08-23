@@ -1,6 +1,5 @@
 use crate::utils::BorrowedClientContext;
-use bitcoin::Address;
-use bitcoin::KeyPair;
+use bitcoin::{Address, KeyPair};
 use db::PegInKey;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -8,6 +7,8 @@ use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
 
+use crate::ApiError;
+use fedimint_core::modules::wallet::PegOutOutcome;
 use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
@@ -108,6 +109,20 @@ impl<'c> WalletClient<'c> {
 
         Ok((secret_tweak_key, peg_in_proof))
     }
+
+    pub async fn await_peg_out_outcome(
+        &self,
+        out_point: fedimint_api::OutPoint,
+    ) -> Result<bitcoin::Txid> {
+        // TODO: define timeout centrally
+        let timeout = std::time::Duration::from_secs(15);
+        let outcome: PegOutOutcome = self
+            .context
+            .api
+            .await_output_outcome(out_point, timeout)
+            .await?;
+        Ok(outcome.0)
+    }
 }
 
 type Result<T> = std::result::Result<T, WalletClientError>;
@@ -120,6 +135,8 @@ pub enum WalletClientError {
     PegInAmountTooSmall,
     #[error("Inconsistent peg-in proof: {0}")]
     PegInProofError(PegInProofError),
+    #[error("Mint API error: {0}")]
+    ApiError(#[from] ApiError),
 }
 
 #[cfg(test)]
