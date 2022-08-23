@@ -368,10 +368,9 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         for request in requests {
             match request.await {
                 Ok(res) => {
-                    if successes == self.max_evil {
+                    successes += 1;
+                    if successes == 2 * self.max_evil + 1 {
                         return Ok(res);
-                    } else {
-                        successes += 1;
                     }
                 }
                 Err(e) => error = Some(e),

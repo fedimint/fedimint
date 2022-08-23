@@ -127,7 +127,7 @@ async fn peg_outs_must_wait_for_available_utxos() {
 #[tokio::test(flavor = "multi_thread")]
 async fn minted_coins_can_be_exchanged_between_users() {
     let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
-    let user_receive = user_send.new_client(&[0, 1]);
+    let user_receive = user_send.new_client(&[0, 1, 2]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
     assert_eq!(user_send.total_coins(), sats(5000));
