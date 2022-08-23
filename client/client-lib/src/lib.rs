@@ -110,7 +110,7 @@ impl From<GatewayClientConfig> for LightningGateway {
 }
 
 pub struct Client<C> {
-    context: Arc<OwnedClientContext<C>>,
+    inner: Arc<(C, OwnedClientContext)>,
 }
 
 impl AsRef<ClientConfig> for GatewayClientConfig {
@@ -127,31 +127,31 @@ impl AsRef<ClientConfig> for UserClientConfig {
 
 impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn ln_client(&self) -> LnClient {
+        let (config, context) = &*self.inner;
         LnClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().ln),
+            config: &config.as_ref().ln,
+            context,
         }
     }
 
     pub fn mint_client(&self) -> MintClient {
+        let (config, context) = &*self.inner;
         MintClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().mint),
+            config: &config.as_ref().mint,
+            context,
         }
     }
 
     pub fn wallet_client(&self) -> WalletClient {
+        let (config, context) = &*self.inner;
         WalletClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().wallet),
+            config: &config.as_ref().wallet,
+            context,
         }
     }
 
     pub fn config(&self) -> T {
-        self.context.config.clone()
+        self.inner.0.clone()
     }
 
     pub fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
@@ -178,13 +178,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         api: Box<dyn FederationApi>,
         secp: Secp256k1<All>,
     ) -> Client<T> {
-        let context = Arc::new(OwnedClientContext {
-            config,
-            db,
-            api,
-            secp,
-        });
-        Self { context }
+        let context = OwnedClientContext { db, api, secp };
+        Self {
+            inner: Arc::new((config, context)),
+        }
     }
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
@@ -213,12 +210,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         Ok(self
             .mint_client()
-            .submit_tx_with_change(
-                &self.context.config.as_ref().fee_consensus(),
-                tx,
-                batch,
-                rng,
-            )
+            .submit_tx_with_change(&self.inner.0.as_ref().fee_consensus(), tx, batch, rng)
             .await?)
     }
 
@@ -235,7 +227,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(coins, &self.inner.1.secp)?;
         let txid = self
             .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await?;
@@ -252,7 +244,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut tx = TransactionBuilder::default();
 
         let input_coins = self.mint_client().select_coins(coins.amount())?;
-        tx.input_coins(input_coins, &self.context.secp)?;
+        tx.input_coins(input_coins, &self.inner.1.secp)?;
         tx.output(Output::Mint(coins));
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
 
@@ -268,7 +260,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut batch = DbBatch::new();
         self.mint_client()
             .receive_coins(amount, batch.transaction(), rng, create_tx);
-        self.context.db.apply_batch(batch).expect("DB error");
+        self.inner.1.db.apply_batch(batch).expect("DB error");
     }
 
     pub async fn new_peg_out_with_fees(
@@ -277,7 +269,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         recipient: Address,
     ) -> Result<PegOut> {
         let fees = self
-            .context
+            .inner
+            .1
             .api
             .fetch_peg_out_fees(&recipient, &amount)
             .await?;
@@ -297,16 +290,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount = self
-            .context
-            .config
-            .as_ref()
-            .wallet
-            .fee_consensus
-            .peg_out_abs
+        let funding_amount = self.inner.0.as_ref().wallet.fee_consensus.peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(coins, &self.inner.1.secp)?;
         let peg_out_idx = tx.output(Output::Wallet(peg_out));
 
         let fedimint_tx_id = self.submit_tx_with_change(tx, batch, &mut rng).await?;
@@ -330,7 +317,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let address = self
             .wallet_client()
             .get_new_pegin_address(batch.transaction(), rng);
-        self.context.db.apply_batch(batch).expect("DB error");
+        self.inner.1.db.apply_batch(batch).expect("DB error");
         address
     }
 
@@ -347,7 +334,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             })
         }));
         tx.commit();
-        self.context.db.apply_batch(batch).expect("DB error");
+        self.inner.1.db.apply_batch(batch).expect("DB error");
         Ok(coins)
     }
 
@@ -359,7 +346,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.mint_client()
             .fetch_coins(batch.transaction(), outpoint)
             .await?;
-        self.context.db.apply_batch(batch).expect("DB error");
+        self.inner.1.db.apply_batch(batch).expect("DB error");
         Ok(())
     }
 
@@ -367,7 +354,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// inputs back.
     pub async fn reissue_pending_coins<R: RngCore + CryptoRng>(&self, rng: R) -> Result<OutPoint> {
         let pending = self
-            .context
+            .inner
+            .1
             .db
             .find_by_prefix(&PendingCoinsKeyPrefix)
             .map(|res| res.expect("DB error"));
@@ -375,7 +363,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let stream = pending
             .map(|(key, coins)| async move {
                 loop {
-                    match self.context.api.fetch_tx_outcome(key.0).await {
+                    match self.inner.1.api.fetch_tx_outcome(key.0).await {
                         Ok(TransactionStatus::Rejected(_)) => return (key, coins),
                         Ok(TransactionStatus::Accepted { .. }) => {
                             return (key, Coins::<SpendableCoin>::default())
@@ -394,14 +382,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             tx.append_delete(key);
         }
         tx.commit();
-        self.context.db.apply_batch(batch).unwrap();
+        self.inner.1.db.apply_batch(batch).unwrap();
 
         self.reissue(all_coins, rng).await
     }
 
     pub async fn await_consensus_block_height(&self, block_height: u64) -> u64 {
         loop {
-            match self.context.api.fetch_consensus_block_height().await {
+            match self.inner.1.api.fetch_consensus_block_height().await {
                 Ok(height) if height >= block_height => return height,
                 _ => sleep(Duration::from_millis(100)).await,
             }
@@ -426,7 +414,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     }
 
     pub async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory> {
-        self.context
+        self.inner
+            .1
             .api
             .fetch_epoch_history(epoch)
             .await
@@ -438,7 +427,8 @@ impl Client<UserClientConfig> {
     pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
         // fetch gateway from db
         if let Some(gateway) = self
-            .context
+            .inner
+            .1
             .db
             .get_value(&LightningGatewayKey)
             .expect("DB error")
@@ -447,12 +437,13 @@ impl Client<UserClientConfig> {
         }
 
         // if db is empty, fetch from federation and save to db
-        let gateways = self.context.api.fetch_gateways().await?;
+        let gateways = self.inner.1.api.fetch_gateways().await?;
         if gateways.is_empty() {
             return Err(ClientError::NoGateways);
         };
         let gateway = gateways[0].clone();
-        self.context
+        self.inner
+            .1
             .db
             .insert_entry(&LightningGatewayKey, &gateway)
             .expect("DB error");
@@ -467,7 +458,7 @@ impl Client<UserClientConfig> {
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let consensus_height = self.context.api.fetch_consensus_block_height().await?;
+        let consensus_height = self.inner.1.api.fetch_consensus_block_height().await?;
         let absolute_timelock = consensus_height + TIMELOCK;
 
         let contract = self.ln_client().create_outgoing_output(
@@ -487,7 +478,7 @@ impl Client<UserClientConfig> {
         let ln_output = Output::LN(contract);
 
         let coins = self.mint_client().select_coins(ln_output.amount())?;
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(coins, &self.inner.1.secp)?;
         tx.output(ln_output);
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
@@ -496,7 +487,8 @@ impl Client<UserClientConfig> {
     }
 
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
-        self.context
+        self.inner
+            .1
             .api
             .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(30))
             .await
@@ -511,13 +503,13 @@ impl Client<UserClientConfig> {
         mut rng: R,
     ) -> Result<ConfirmedInvoice> {
         let gateway = self.fetch_gateway().await?;
-        let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
+        let payment_keypair = KeyPair::new(&self.inner.1.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
 
         // Temporary lightning node pubkey
-        let (node_secret_key, node_public_key) = self.context.secp.generate_keypair(&mut rng);
+        let (node_secret_key, node_public_key) = self.inner.1.secp.generate_keypair(&mut rng);
 
         // Route hint instructing payer how to route to gateway
         let gateway_route_hint = RouteHint(vec![RouteHintHop {
@@ -541,21 +533,21 @@ impl Client<UserClientConfig> {
         let duration_since_epoch =
             Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
 
-        let invoice =
-            InvoiceBuilder::new(network_to_currency(self.context.config.0.wallet.network))
-                .amount_milli_satoshis(amount.milli_sat)
-                .description(description)
-                .payment_hash(payment_hash)
-                .payment_secret(payment_secret)
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry(18)
-                .payee_pub_key(node_public_key)
-                .private_route(gateway_route_hint)
-                .build_signed(|hash| {
-                    self.context
-                        .secp
-                        .sign_ecdsa_recoverable(hash, &node_secret_key)
-                })?;
+        let invoice = InvoiceBuilder::new(network_to_currency(self.inner.0 .0.wallet.network))
+            .amount_milli_satoshis(amount.milli_sat)
+            .description(description)
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .duration_since_epoch(duration_since_epoch)
+            .min_final_cltv_expiry(18)
+            .payee_pub_key(node_public_key)
+            .private_route(gateway_route_hint)
+            .build_signed(|hash| {
+                self.inner
+                    .1
+                    .secp
+                    .sign_ecdsa_recoverable(hash, &node_secret_key)
+            })?;
 
         let offer_output =
             self.ln_client()
@@ -572,7 +564,8 @@ impl Client<UserClientConfig> {
         // Await acceptance by the federation
         let timeout = std::time::Duration::from_secs(15);
         let outpoint = OutPoint { txid, out_idx: 0 };
-        self.context
+        self.inner
+            .1
             .api
             .await_output_outcome::<OfferId>(outpoint, timeout)
             .await?;
@@ -641,8 +634,7 @@ impl Client<GatewayClientConfig> {
         &self,
         account: &OutgoingContractAccount,
     ) -> Result<PaymentParameters> {
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.inner.0.redeem_key);
 
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
@@ -667,12 +659,12 @@ impl Client<GatewayClientConfig> {
         let max_fee_percent =
             (max_absolute_fee.milli_sat as f64) / (invoice_amount.milli_sat as f64);
 
-        let consensus_block_height = self.context.api.fetch_consensus_block_height().await?;
+        let consensus_block_height = self.inner.1.api.fetch_consensus_block_height().await?;
         // Calculate max delay taking into account current consensus block height and our safety
         // margin.
         let max_delay = (account.contract.timelock as u64)
             .checked_sub(consensus_block_height)
-            .and_then(|delta| delta.checked_sub(self.context.config.timelock_delta))
+            .and_then(|delta| delta.checked_sub(self.inner.0.timelock_delta))
             .ok_or(ClientError::TimeoutTooClose)?;
 
         Ok(PaymentParameters {
@@ -688,7 +680,8 @@ impl Client<GatewayClientConfig> {
     /// Note though that extended periods of staying offline will result in loss of funds anyway if
     /// the client can not claim the respective contract in time.
     pub fn save_outgoing_payment(&self, contract: OutgoingContractAccount) {
-        self.context
+        self.inner
+            .1
             .db
             .insert_entry(
                 &OutgoingContractAccountKey(contract.contract.contract_id()),
@@ -699,7 +692,8 @@ impl Client<GatewayClientConfig> {
 
     /// Lists all previously saved transactions that have not been driven to completion so far
     pub fn list_pending_outgoing(&self) -> Vec<OutgoingContractAccount> {
-        self.context
+        self.inner
+            .1
             .db
             .find_by_prefix(&OutgoingContractAccountKeyPrefix)
             .map(|res| res.expect("DB error").1)
@@ -709,7 +703,8 @@ impl Client<GatewayClientConfig> {
     /// Abort payment if our node can't route it
     pub fn abort_outgoing_payment(&self, contract_id: ContractId) {
         // FIXME: implement abort by gateway to give funds back to user prematurely
-        self.context
+        self.inner
+            .1
             .db
             .remove_entry(&OutgoingContractAccountKey(contract_id))
             .expect("DB error");
@@ -738,7 +733,7 @@ impl Client<GatewayClientConfig> {
             batch.append_insert(OutgoingPaymentClaimKey(contract_id), ());
         });
 
-        tx.input(&mut vec![self.context.config.redeem_key], input);
+        tx.input(&mut vec![self.inner.0.redeem_key], input);
         let txid = self.submit_tx_with_change(tx, batch, rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -761,11 +756,10 @@ impl Client<GatewayClientConfig> {
         // Inputs
         let mut builder = TransactionBuilder::default();
         let coins = self.mint_client().select_coins(offer.amount)?;
-        builder.input_coins(coins, &self.context.secp)?;
+        builder.input_coins(coins, &self.inner.1.secp)?;
 
         // Outputs
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.inner.0.redeem_key);
         let contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -801,7 +795,7 @@ impl Client<GatewayClientConfig> {
 
         // Input claims this contract
         builder.input(
-            &mut vec![self.context.config.redeem_key],
+            &mut vec![self.inner.0.redeem_key],
             Input::LN(contract_account.claim()),
         );
         let mint_tx_id = self.submit_tx_with_change(builder, batch, rng).await?;
@@ -811,7 +805,8 @@ impl Client<GatewayClientConfig> {
     /// Lists all claim transactions for outgoing contracts that we have submitted but were not part
     /// of the consensus yet.
     pub fn list_pending_claimed_outgoing(&self) -> Vec<ContractId> {
-        self.context
+        self.inner
+            .1
             .db
             .find_by_prefix(&OutgoingPaymentClaimKeyPrefix)
             .map(|res| res.expect("DB error").0 .0)
@@ -821,7 +816,8 @@ impl Client<GatewayClientConfig> {
     /// Wait for a lightning preimage gateway has purchased to be decrypted by the federation
     pub async fn await_preimage_decryption(&self, outpoint: OutPoint) -> Result<Preimage> {
         Ok(self
-            .context
+            .inner
+            .1
             .api
             .await_output_outcome::<Preimage>(outpoint, Duration::from_secs(10))
             .await?)
@@ -835,7 +831,8 @@ impl Client<GatewayClientConfig> {
         contract_id: ContractId,
         outpoint: OutPoint,
     ) -> Result<()> {
-        self.context
+        self.inner
+            .1
             .api
             .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(10))
             .await?;
@@ -844,7 +841,8 @@ impl Client<GatewayClientConfig> {
         // to fetch the blind signatures for the newly issued tokens, but as long as the
         // federation is honest as a whole they will produce the signatures, so we don't
         // have to worry
-        self.context
+        self.inner
+            .1
             .db
             .remove_entry(&OutgoingPaymentClaimKey(contract_id))
             .expect("DB error");
@@ -861,7 +859,8 @@ impl Client<GatewayClientConfig> {
 
     /// Register this gateway with the federation
     pub async fn register_with_federation(&self, config: LightningGateway) -> Result<()> {
-        self.context
+        self.inner
+            .1
             .api
             .register_gateway(config)
             .await

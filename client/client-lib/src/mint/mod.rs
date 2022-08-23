@@ -2,7 +2,7 @@ pub mod db;
 
 use crate::api::ApiError;
 use crate::transaction::TransactionBuilder;
-use crate::utils::BorrowedClientContext;
+use crate::utils::OwnedClientContext;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
@@ -28,7 +28,8 @@ use tracing::{debug, trace, warn};
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 pub struct MintClient<'c> {
-    pub context: BorrowedClientContext<'c, MintClientConfig>,
+    pub config: &'c MintClientConfig,
+    pub context: &'c OwnedClientContext,
 }
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
@@ -91,8 +92,8 @@ impl<'c> MintClient<'c> {
         let final_tx = tx.build(
             change_required,
             batch.transaction(),
-            self.context.secp,
-            &self.context.config.tbs_pks,
+            &self.context.secp,
+            &self.config.tbs_pks,
             rng,
         );
         let txid = final_tx.tx_hash();
@@ -115,12 +116,8 @@ impl<'c> MintClient<'c> {
     ) {
         let mut builder = TransactionBuilder::default();
 
-        let (finalization, coins) = builder.create_output_coins(
-            amount,
-            self.context.secp,
-            &self.context.config.tbs_pks,
-            rng,
-        );
+        let (finalization, coins) =
+            builder.create_output_coins(amount, &self.context.secp, &self.config.tbs_pks, rng);
         let out_point = create_tx(coins);
         tx.append_insert_new(OutputFinalizationKey(out_point), finalization);
         tx.commit();
@@ -143,7 +140,7 @@ impl<'c> MintClient<'c> {
             .await?
             .ok_or(MintClientError::OutputNotReadyYet(outpoint))?;
 
-        let coins = issuance.finalize(bsig, &self.context.config.tbs_pks)?;
+        let coins = issuance.finalize(bsig, &self.config.tbs_pks)?;
 
         batch.append_from_iter(
             coins
@@ -453,7 +450,8 @@ mod tests {
 
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
-        OwnedClientContext<MintClientConfig>,
+        MintClientConfig,
+        OwnedClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Mint, MintClientConfig>::new(
@@ -466,14 +464,15 @@ mod tests {
         ));
         let api = FakeApi { mint: fed.clone() };
 
+        let client_config = fed.lock().await.client_cfg().clone();
+
         let client_context = OwnedClientContext {
-            config: fed.lock().await.client_cfg().clone(),
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_context)
+        (fed, client_config, client_context)
     }
 
     async fn issue_tokens<'a, R: rand::RngCore + rand::CryptoRng>(
@@ -504,10 +503,11 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn create_output() {
         let mut rng = rand::rngs::OsRng::new().unwrap();
-        let (fed, client_context) = new_mint_and_client().await;
+        let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = MintClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: &client_config,
+            context: &client_context,
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
@@ -529,9 +529,10 @@ mod tests {
 
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
-        let (fed, client_context) = new_mint_and_client().await;
+        let (fed, client_config, client_context) = new_mint_and_client().await;
         let client = MintClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: &client_config,
+            context: &client_context,
         };
 
         issue_tokens(
@@ -546,8 +547,8 @@ mod tests {
         // Spending works
         let mut batch = DbBatch::new();
         let mut builder = TransactionBuilder::default();
-        let secp = client.context.secp;
-        let tbs_pks = &client.context.config.tbs_pks;
+        let secp = &client.context.secp;
+        let tbs_pks = &client.config.tbs_pks;
         let rng = rand::rngs::OsRng::new().unwrap();
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let (spend_keys, input) = builder
