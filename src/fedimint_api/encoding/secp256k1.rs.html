@@ -190,14 +190,14 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
     <span class="kw">use </span>secp256k1_zkp::hashes::Hash <span class="kw">as </span>BitcoinHash;
     <span class="kw">use </span>secp256k1_zkp::Message;
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_ecdsa_sig() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_ecdsa_sig() {
         <span class="kw">let </span>ctx = secp256k1_zkp::Secp256k1::new();
         <span class="kw">let </span>(sk, _pk) = ctx.generate_keypair(<span class="kw-2">&amp;mut </span>rand::thread_rng());
         <span class="kw">let </span>sig = ctx.sign_ecdsa(
@@ -208,8 +208,8 @@
         test_roundtrip(sig);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_schnorr_pub_key() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_schnorr_pub_key() {
         <span class="kw">let </span>ctx = secp256k1_zkp::global::SECP256K1;
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
         <span class="kw">let </span>sec_key = bitcoin::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
@@ -225,4 +225,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -95,12 +95,12 @@
 
 <span class="kw">use </span>thiserror::Error;
 
-<span class="attribute">#[derive(Debug, Error)]</span>
-<span class="attribute">#[error(<span class="string">&quot;deadline has elapsed&quot;</span>)]</span>
-<span class="kw">pub struct </span>Elapsed;
+<span class="attribute">#[derive(Debug, Error)]
+#[error(<span class="string">&quot;deadline has elapsed&quot;</span>)]
+</span><span class="kw">pub struct </span>Elapsed;
 
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]</span>
-<span class="kw">mod </span>imp {
+<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">mod </span>imp {
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="kw">pub use </span>tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -137,8 +137,8 @@
     }
 }
 
-<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]</span>
-<span class="kw">mod </span>imp {
+<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+</span><span class="kw">mod </span>imp {
     <span class="kw">use </span>futures::FutureExt;
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
@@ -174,7 +174,7 @@
         </span>T: Future,
     {
         <span class="macro">futures::pin_mut!</span>(future);
-        <span class="macro">futures::select_biased!</span> {
+        <span class="macro">futures::select_biased! </span>{
             value = future.fuse() =&gt; <span class="prelude-val">Ok</span>(value),
             <span class="kw">_ </span>= sleep(duration).fuse() =&gt; <span class="prelude-val">Err</span>(Elapsed),
         }
@@ -183,4 +183,4 @@
 
 <span class="kw">pub use </span>imp::<span class="kw-2">*</span>;
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

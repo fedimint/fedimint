@@ -639,8 +639,8 @@
 
 <span class="doccomment">/// Client side representation of one coin in an issuance request that keeps all necessary
 /// information to generate one spendable coin once the blind signature arrives.
-</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>CoinRequest {
+</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CoinRequest {
     <span class="doccomment">/// Spend key from which the coin nonce (corresponding public key) is derived
     </span>spend_key: [u8; <span class="number">32</span>], <span class="comment">// FIXME: either make KeyPair Serializable or add secret key newtype
     </span><span class="doccomment">/// Nonce belonging to the secret key
@@ -651,16 +651,16 @@
 
 <span class="doccomment">/// Client side representation of a coin reissuance that keeps all necessary information to
 /// generate spendable coins once the blind signatures arrive.
-</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>CoinFinalizationData {
+</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CoinFinalizationData {
     <span class="doccomment">/// Finalization data for all coin outputs in this request
     </span>coins: Coins&lt;CoinRequest&gt;,
 }
 
 <span class="doccomment">/// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
 /// belonging to the nonce.
-</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>SpendableCoin {
+</span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SpendableCoin {
     <span class="kw">pub </span>coin: Coin,
     <span class="kw">pub </span>spend_key: [u8; <span class="number">32</span>],
 }
@@ -914,36 +914,36 @@
 
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, MintClientError&gt;;
 
-<span class="attribute">#[derive(Error, Debug)]</span>
-<span class="kw">pub enum </span>CoinFinalizationError {
-    <span class="attribute">#[error(<span class="string">&quot;The returned answer does not fit the request&quot;</span>)]</span>
-    WrongMintAnswer,
-    <span class="attribute">#[error(<span class="string">&quot;The blind signature at index {0} is invalid&quot;</span>)]</span>
-    InvalidSignature(usize),
-    <span class="attribute">#[error(<span class="string">&quot;Expected signatures for issuance request {0}, got signatures for request {1}&quot;</span>)]</span>
-    InvalidIssuanceId(TransactionId, TransactionId),
-    <span class="attribute">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]</span>
-    InvalidAmountTier(Amount),
-    <span class="attribute">#[error(<span class="string">&quot;The client does not know this issuance&quot;</span>)]</span>
-    UnknownIssuance,
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>CoinFinalizationError {
+    <span class="attribute">#[error(<span class="string">&quot;The returned answer does not fit the request&quot;</span>)]
+    </span>WrongMintAnswer,
+    <span class="attribute">#[error(<span class="string">&quot;The blind signature at index {0} is invalid&quot;</span>)]
+    </span>InvalidSignature(usize),
+    <span class="attribute">#[error(<span class="string">&quot;Expected signatures for issuance request {0}, got signatures for request {1}&quot;</span>)]
+    </span>InvalidIssuanceId(TransactionId, TransactionId),
+    <span class="attribute">#[error(<span class="string">&quot;Invalid amount tier {0:?}&quot;</span>)]
+    </span>InvalidAmountTier(Amount),
+    <span class="attribute">#[error(<span class="string">&quot;The client does not know this issuance&quot;</span>)]
+    </span>UnknownIssuance,
 }
 
-<span class="attribute">#[derive(Error, Debug)]</span>
-<span class="kw">pub enum </span>MintClientError {
-    <span class="attribute">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]</span>
-    ApiError(<span class="attribute">#[from]</span> ApiError),
-    <span class="attribute">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]</span>
-    FinalizationError(<span class="attribute">#[from]</span> CoinFinalizationError),
-    <span class="attribute">#[error(<span class="string">&quot;The client&#39;s wallet has not enough coins or they are not in the right denomination&quot;</span>)]</span>
-    NotEnoughCoins,
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]</span>
-    OutputNotReadyYet(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint contains too few outputs (output {0})&quot;</span>)]</span>
-    InvalidOutcomeWrongStructure(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint has an invalid type (output {0})&quot;</span>)]</span>
-    InvalidOutcomeType(OutPoint),
-    <span class="attribute">#[error(<span class="string">&quot;One of the coins meant to be spent is unspendable&quot;</span>)]</span>
-    ReceivedUspendableCoin,
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>MintClientError {
+    <span class="attribute">#[error(<span class="string">&quot;Error querying federation: {0}&quot;</span>)]
+    </span>ApiError(<span class="attribute">#[from] </span>ApiError),
+    <span class="attribute">#[error(<span class="string">&quot;Could not finalize issuance request: {0}&quot;</span>)]
+    </span>FinalizationError(<span class="attribute">#[from] </span>CoinFinalizationError),
+    <span class="attribute">#[error(<span class="string">&quot;The client&#39;s wallet has not enough coins or they are not in the right denomination&quot;</span>)]
+    </span>NotEnoughCoins,
+    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome received from the mint did not contain a result for output {0} yet&quot;</span>)]
+    </span>OutputNotReadyYet(OutPoint),
+    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint contains too few outputs (output {0})&quot;</span>)]
+    </span>InvalidOutcomeWrongStructure(OutPoint),
+    <span class="attribute">#[error(<span class="string">&quot;The transaction outcome returned by the mint has an invalid type (output {0})&quot;</span>)]
+    </span>InvalidOutcomeType(OutPoint),
+    <span class="attribute">#[error(<span class="string">&quot;One of the coins meant to be spent is unspendable&quot;</span>)]
+    </span>ReceivedUspendableCoin,
 }
 
 <span class="kw">impl </span>MintClientError {
@@ -963,8 +963,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
 
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
@@ -995,8 +995,8 @@
         mint: Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
     }
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">impl </span>FederationApi <span class="kw">for </span>FakeApi {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">impl </span>FederationApi <span class="kw">for </span>FakeApi {
         <span class="kw">async fn </span>fetch_tx_outcome(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             tx: TransactionId,
@@ -1107,8 +1107,8 @@
         client.fetch_all_coins().<span class="kw">await</span>;
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]</span>
-    <span class="kw">async fn </span>create_output() {
+    <span class="attribute">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>create_output() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
         <span class="kw">let </span>(fed, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
@@ -1129,8 +1129,8 @@
         <span class="macro">assert_eq!</span>(client.coins().amount(), ISSUE_AMOUNT)
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]</span>
-    <span class="kw">async fn </span>create_input() {
+    <span class="attribute">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>create_input() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
 
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
@@ -1211,4 +1211,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

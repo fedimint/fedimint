@@ -964,46 +964,46 @@
     db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PartiallySignedRequest {
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PartiallySignedRequest {
     <span class="kw">pub </span>out_point: OutPoint,
     <span class="kw">pub </span>partial_signature: PartialSigResponse,
 }
 
 <span class="doccomment">/// Request to blind sign a certain amount of coins
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>Coins&lt;tbs::BlindedMessage&gt;);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>Coins&lt;tbs::BlindedMessage&gt;);
 
 <span class="comment">// FIXME: optimize out blinded msg by making the mint remember it
 </span><span class="doccomment">/// Blind signature share for a [`SignRequest`]
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>Coins&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>Coins&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
 
 <span class="doccomment">/// Blind signature for a [`SignRequest`]
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>Coins&lt;tbs::BlindedSignature&gt;);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>Coins&lt;tbs::BlindedSignature&gt;);
 
 <span class="doccomment">/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding secret spend key
 /// is required.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>Coin(<span class="kw">pub </span>CoinNonce, <span class="kw">pub </span>tbs::Signature);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>Coin(<span class="kw">pub </span>CoinNonce, <span class="kw">pub </span>tbs::Signature);
 
 <span class="doccomment">/// A unique coin nonce which is also a MuSig pub key so that transactions can be signed by the
 /// spent coin&#39;s spending keys to avoid mint frontrunning.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>CoinNonce(<span class="kw">pub </span>secp256k1_zkp::XOnlyPublicKey);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CoinNonce(<span class="kw">pub </span>secp256k1_zkp::XOnlyPublicKey);
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>BlindToken(<span class="kw">pub </span>tbs::BlindedMessage);
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>BlindToken(<span class="kw">pub </span>tbs::BlindedMessage);
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>VerificationCache {
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>VerificationCache {
     valid_coins: HashMap&lt;Coin, Amount&gt;,
 }
 
-<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]</span>
-<span class="kw">impl </span>FederationModule <span class="kw">for </span>Mint {
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Mint {
     <span class="kw">type </span>Error = MintError;
     <span class="kw">type </span>TxInput = Coins&lt;Coin&gt;;
     <span class="kw">type </span>TxOutput = Coins&lt;BlindToken&gt;;
@@ -1580,8 +1580,8 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]</span>
-<span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
+<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InvalidAmountTierError {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
@@ -1590,43 +1590,43 @@
 }
 
 <span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]</span>
-<span class="kw">pub struct </span>MintShareErrors(<span class="kw">pub </span>Vec&lt;(PeerId, PeerErrorType)&gt;);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+</span><span class="kw">pub struct </span>MintShareErrors(<span class="kw">pub </span>Vec&lt;(PeerId, PeerErrorType)&gt;);
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]</span>
-<span class="kw">pub enum </span>PeerErrorType {
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+</span><span class="kw">pub enum </span>PeerErrorType {
     InvalidSignature,
     DifferentStructureSigShare,
     DifferentNonce,
     InvalidAmountTier,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]</span>
-<span class="kw">pub enum </span>CombineError {
-    <span class="attribute">#[error(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]</span>
-    TooFewShares(Vec&lt;PeerId&gt;, usize),
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
+</span><span class="kw">pub enum </span>CombineError {
+    <span class="attribute">#[error(<span class="string">&quot;Too few shares to begin the combination: got {0:?} need {1}&quot;</span>)]
+    </span>TooFewShares(Vec&lt;PeerId&gt;, usize),
     <span class="attribute">#[error(
         <span class="string">&quot;Too few valid shares, only {0} of {1} (required minimum {2}) provided shares were valid&quot;
-    </span>)]</span>
-    TooFewValidShares(usize, usize, usize),
-    <span class="attribute">#[error(<span class="string">&quot;We could not find our own contribution in the provided shares, so we have no validation reference&quot;</span>)]</span>
-    NoOwnContribution,
-    <span class="attribute">#[error(<span class="string">&quot;Peer {0} contributed {1} shares, 1 expected&quot;</span>)]</span>
-    MultiplePeerContributions(PeerId, usize),
+    </span>)]
+    </span>TooFewValidShares(usize, usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;We could not find our own contribution in the provided shares, so we have no validation reference&quot;</span>)]
+    </span>NoOwnContribution,
+    <span class="attribute">#[error(<span class="string">&quot;Peer {0} contributed {1} shares, 1 expected&quot;</span>)]
+    </span>MultiplePeerContributions(PeerId, usize),
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]</span>
-<span class="kw">pub enum </span>MintError {
-    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins had an invalid mint signature&quot;</span>)]</span>
-    InvalidCoin,
-    <span class="attribute">#[error(<span class="string">&quot;Insufficient coin value: reissuing {0} but only got {1} in coins&quot;</span>)]</span>
-    TooFewCoins(Amount, Amount),
-    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins was already spent previously&quot;</span>)]</span>
-    SpentCoin,
-    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid amount not issued by the mint: {0:?}&quot;</span>)]</span>
-    InvalidAmountTier(Amount),
-    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid signature&quot;</span>)]</span>
-    InvalidSignature,
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error)]
+</span><span class="kw">pub enum </span>MintError {
+    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins had an invalid mint signature&quot;</span>)]
+    </span>InvalidCoin,
+    <span class="attribute">#[error(<span class="string">&quot;Insufficient coin value: reissuing {0} but only got {1} in coins&quot;</span>)]
+    </span>TooFewCoins(Amount, Amount),
+    <span class="attribute">#[error(<span class="string">&quot;One of the supplied coins was already spent previously&quot;</span>)]
+    </span>SpentCoin,
+    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid amount not issued by the mint: {0:?}&quot;</span>)]
+    </span>InvalidAmountTier(Amount),
+    <span class="attribute">#[error(<span class="string">&quot;One of the coins had an invalid signature&quot;</span>)]
+    </span>InvalidSignature,
 }
 
 <span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>MintError {
@@ -1635,8 +1635,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>test {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>test {
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
     <span class="kw">use crate</span>::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
     <span class="kw">use </span>fedimint_api::config::GenerateConfig;
@@ -1673,8 +1673,8 @@
         (agg_pk, mints)
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_issuance() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_issuance() {
         <span class="kw">let </span>(pk, <span class="kw-2">mut </span>mints) = build_mints();
 
         <span class="kw">let </span>nonce = Message::from_bytes(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
@@ -1815,9 +1815,9 @@
             </span>.contains(<span class="kw-2">&amp;</span>(PeerId::from(<span class="number">3</span>), PeerErrorType::DifferentNonce)));
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="attribute">#[should_panic(expected = <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]</span>
-    <span class="kw">fn </span>test_new_panic_without_own_pub_key() {
+    <span class="attribute">#[test_log::test]
+    #[should_panic(expected = <span class="string">&quot;Own key not found among pub keys.&quot;</span>)]
+    </span><span class="kw">fn </span>test_new_panic_without_own_pub_key() {
         <span class="kw">let </span>(mint_server_cfg1, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>(mint_server_cfg2, <span class="kw">_</span>) = build_configs();
 
@@ -1833,4 +1833,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

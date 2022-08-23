@@ -39,14 +39,14 @@
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::IdentifyableContract;
 <span class="kw">use </span>fedimint_core::modules::ln::ContractInput;
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContractData {
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContractData {
     <span class="kw">pub </span>recovery_key: bitcoin::KeyPair,
     <span class="kw">pub </span>contract_account: OutgoingContractAccount,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContractAccount {
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContractAccount {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>contract: OutgoingContract,
 }
@@ -69,4 +69,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

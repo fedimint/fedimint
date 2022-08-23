@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["Input",""],["Output",""],["TransactionError",""]],"fn":[["agg_keys","Aggregates a stream of public keys. Be aware that the order of the keys matters for the aggregation result."],["agg_sign",""],["new_pre_session",""]],"struct":[["Transaction",""]],"trait":[["TransactionItem","Common properties of transaction in- and outputs"]]};

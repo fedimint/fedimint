@@ -122,16 +122,16 @@
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey};
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>MintConfig {
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintConfig {
     <span class="kw">pub </span>tbs_sks: Keys&lt;tbs::SecretKeyShare&gt;,
     <span class="kw">pub </span>peer_tbs_pks: BTreeMap&lt;PeerId, Keys&lt;tbs::PublicKeyShare&gt;&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>threshold: usize,
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>MintClientConfig {
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>MintClientConfig {
     <span class="kw">pub </span>tbs_pks: Keys&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
@@ -212,8 +212,8 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>FeeConsensus {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>coin_issuance_abs: fedimint_api::Amount,
     <span class="kw">pub </span>coin_spend_abs: fedimint_api::Amount,
 }
@@ -227,4 +227,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -109,17 +109,17 @@
 <span class="kw">use </span>std::collections::VecDeque;
 <span class="kw">use </span>tracing::{debug, trace};
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq)]</span>
-<span class="kw">pub struct </span>MessageQueue&lt;M&gt; {
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq)]
+</span><span class="kw">pub struct </span>MessageQueue&lt;M&gt; {
     <span class="kw">pub</span>(<span class="kw">super</span>) queue: VecDeque&lt;UniqueMessage&lt;M&gt;&gt;,
     <span class="kw">pub</span>(<span class="kw">super</span>) next_id: MessageId,
 }
 
-<span class="attribute">#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]</span>
-<span class="kw">pub struct </span>MessageId(<span class="kw">pub </span>u64);
+<span class="attribute">#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+</span><span class="kw">pub struct </span>MessageId(<span class="kw">pub </span>u64);
 
-<span class="attribute">#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]</span>
-<span class="kw">pub struct </span>UniqueMessage&lt;M&gt; {
+<span class="attribute">#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd)]
+</span><span class="kw">pub struct </span>UniqueMessage&lt;M&gt; {
     <span class="kw">pub </span>id: MessageId,
     <span class="kw">pub </span>msg: M,
 }
@@ -173,12 +173,12 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue};
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>test_queue() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>test_queue() {
         <span class="kw">let </span><span class="kw-2">mut </span>queue = MessageQueue::default();
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>..<span class="number">10 </span>{
@@ -213,4 +213,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -76,8 +76,8 @@
 <span class="kw">pub const </span>DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = <span class="number">0x21</span>;
 <span class="kw">pub const </span>DB_PREFIX_PENDING_COINS: u8 = <span class="number">0x27</span>;
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>CoinKey {
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CoinKey {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>nonce: CoinNonce,
 }
@@ -88,8 +88,8 @@
     <span class="kw">type </span>Value = SpendableCoin;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>CoinKeyPrefix;
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>CoinKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>CoinKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_COIN;
@@ -97,8 +97,8 @@
     <span class="kw">type </span>Value = SpendableCoin;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PendingCoinsKey(<span class="kw">pub </span>TransactionId);
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PendingCoinsKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
@@ -106,8 +106,8 @@
     <span class="kw">type </span>Value = Coins&lt;SpendableCoin&gt;;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PendingCoinsKeyPrefix;
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PendingCoinsKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
@@ -115,8 +115,8 @@
     <span class="kw">type </span>Value = Coins&lt;SpendableCoin&gt;;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutputFinalizationKey(<span class="kw">pub </span>OutPoint);
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutputFinalizationKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
@@ -124,8 +124,8 @@
     <span class="kw">type </span>Value = CoinFinalizationData;
 }
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutputFinalizationKeyPrefix;
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutputFinalizationKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutputFinalizationKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
@@ -133,4 +133,4 @@
     <span class="kw">type </span>Value = CoinFinalizationData;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

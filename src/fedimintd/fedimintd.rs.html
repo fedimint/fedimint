@@ -63,17 +63,17 @@
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 <span class="kw">use </span>tracing_subscriber::Layer;
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="kw">pub struct </span>ServerOpts {
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">pub struct </span>ServerOpts {
     <span class="kw">pub </span>cfg_path: PathBuf,
     <span class="kw">pub </span>db_path: PathBuf,
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]</span>
-    <span class="attribute">#[clap(long)]</span>
-    <span class="kw">pub </span>with_telemetry: bool,
+    <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    #[clap(long)]
+    </span><span class="kw">pub </span>with_telemetry: bool,
 }
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>opts = ServerOpts::parse();
     <span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer();
     <span class="kw">let </span>filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>));
@@ -83,8 +83,8 @@
         .with(fmt_layer);
 
     <span class="kw">let </span>telemetry_layer = || -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>Layer&lt;<span class="kw">_</span>&gt; + Send + Sync + <span class="lifetime">&#39;static</span>&gt;&gt; {
-        <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]</span>
-        <span class="kw">if </span>opts.with_telemetry {
+        <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+        </span><span class="kw">if </span>opts.with_telemetry {
             <span class="kw">let </span>tracer = opentelemetry_jaeger::new_pipeline()
                 .with_service_name(<span class="string">&quot;fedimint&quot;</span>)
                 .install_simple()
@@ -105,8 +105,8 @@
     <span class="kw">let </span>db_path = opts.db_path;
     run_fedimint(cfg, db_path).<span class="kw">await</span>;
 
-    <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]</span>
-    opentelemetry::global::shutdown_tracer_provider();
+    <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
+    </span>opentelemetry::global::shutdown_tracer_provider();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

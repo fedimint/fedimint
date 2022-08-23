@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"derive":[["Decodable",""],["Encodable",""]],"macro":[["impl_encode_decode_num",""],["impl_encode_decode_tuple",""]],"mod":[["btc",""],["secp256k1",""],["tbs",""]],"struct":[["DecodeError",""]],"trait":[["Decodable","Data which can be encoded in a consensus-consistent way"],["Encodable","Data which can be encoded in a consensus-consistent way"]]};

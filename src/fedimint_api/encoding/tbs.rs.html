@@ -74,7 +74,7 @@
 <span id="74">74</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 
-<span class="macro">macro_rules!</span> impl_external_encode_bls {
+<span class="macro">macro_rules! </span>impl_external_encode_bls {
     (<span class="macro-nonterminal">$ext</span>:ident $(:: <span class="macro-nonterminal">$ext_path</span>:ident)<span class="kw-2">*</span>, <span class="macro-nonterminal">$group</span>:ty, <span class="macro-nonterminal">$byte_len</span>:expr) =&gt; {
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span><span class="macro-nonterminal">$ext </span>$(:: <span class="macro-nonterminal">$ext_path</span>)* {
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
@@ -129,22 +129,22 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
     <span class="kw">use </span>tbs::{BlindedMessage, BlindingKey};
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_message_macro() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_message_macro() {
         <span class="kw">let </span>bmsg = BlindedMessage(tbs::MessagePoint::generator());
         test_roundtrip(bmsg);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_bkey() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_bkey() {
         <span class="kw">let </span>bkey = BlindingKey::random();
         test_roundtrip(bkey);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

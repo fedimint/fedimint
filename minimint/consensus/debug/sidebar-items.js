@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":[["epoch_message","outputs a useful debug message for epochs indicating what happened"],["item_message",""]]};

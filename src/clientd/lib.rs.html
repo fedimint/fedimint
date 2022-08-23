@@ -106,21 +106,21 @@
 <span class="kw">use </span>mint_client::mint::{CoinFinalizationData, SpendableCoin};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
-<span class="attribute">#[derive(Deserialize, Serialize)]</span>
-<span class="kw">pub enum </span>RpcResult {
-    <span class="attribute">#[serde(rename = <span class="string">&quot;success&quot;</span>)]</span>
-    Success(serde_json::Value),
-    <span class="attribute">#[serde(rename = <span class="string">&quot;failure&quot;</span>)]</span>
-    Failure(serde_json::Value),
+<span class="attribute">#[derive(Deserialize, Serialize)]
+</span><span class="kw">pub enum </span>RpcResult {
+    <span class="attribute">#[serde(rename = <span class="string">&quot;success&quot;</span>)]
+    </span>Success(serde_json::Value),
+    <span class="attribute">#[serde(rename = <span class="string">&quot;failure&quot;</span>)]
+    </span>Failure(serde_json::Value),
 }
 <span class="doccomment">/// struct to process wait_block_height request payload
-</span><span class="attribute">#[derive(Deserialize, Serialize)]</span>
-<span class="kw">pub struct </span>WaitBlockHeightPayload {
+</span><span class="attribute">#[derive(Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>WaitBlockHeightPayload {
     <span class="kw">pub </span>height: u64,
 }
 
-<span class="attribute">#[derive(Serialize)]</span>
-<span class="kw">pub struct </span>InfoResponse {
+<span class="attribute">#[derive(Serialize)]
+</span><span class="kw">pub struct </span>InfoResponse {
     coins: Vec&lt;CoinsByTier&gt;,
     pending: PendingResponse,
 }
@@ -145,8 +145,8 @@
     }
 }
 
-<span class="attribute">#[derive(Serialize)]</span>
-<span class="kw">pub struct </span>PendingResponse {
+<span class="attribute">#[derive(Serialize)]
+</span><span class="kw">pub struct </span>PendingResponse {
     transactions: Vec&lt;PendingTransaction&gt;,
 }
 
@@ -164,16 +164,16 @@
     }
 }
 
-<span class="attribute">#[derive(Serialize)]</span>
-<span class="kw">pub struct </span>PegInAddressResponse {
+<span class="attribute">#[derive(Serialize)]
+</span><span class="kw">pub struct </span>PegInAddressResponse {
     <span class="kw">pub </span>peg_in_address: bitcoin::Address,
 }
 
 <span class="doccomment">/// Holds a e-cash tier (msat by convention) and a quantity of coins
 ///
 /// e.g { tier: 1000, quantity: 10 } means 10x coins worth 1000msat each
-</span><span class="attribute">#[derive(Serialize, Deserialize, Clone, Debug)]</span>
-<span class="kw">pub struct </span>CoinsByTier {
+</span><span class="attribute">#[derive(Serialize, Deserialize, Clone, Debug)]
+</span><span class="kw">pub struct </span>CoinsByTier {
     tier: u64,
     quantity: usize,
 }
@@ -182,8 +182,8 @@
 ///
 /// e.g { txid: xxx, qty: 10, value: 1 } is a pending transaction &#39;worth&#39; 10btc
 /// notice that this are ALL pending transactions not only the [&#39;Accepted&#39;](fedimint_core::outcome::TransactionStatus) ones !
-</span><span class="attribute">#[derive(Serialize)]</span>
-<span class="kw">pub struct </span>PendingTransaction {
+</span><span class="attribute">#[derive(Serialize)]
+</span><span class="kw">pub struct </span>PendingTransaction {
     txid: String,
     qty: usize,
     value: Amount,
@@ -201,4 +201,4 @@
     <span class="prelude-val">Ok</span>(response.json().<span class="kw">await</span><span class="question-mark">?</span>)
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

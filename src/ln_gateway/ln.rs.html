@@ -73,8 +73,8 @@
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, instrument};
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">pub trait </span>LnRpc: Send + Sync + <span class="lifetime">&#39;static </span>{
+<span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>LnRpc: Send + Sync + <span class="lifetime">&#39;static </span>{
     <span class="doccomment">/// Attempt to pay an invoice and block till it succeeds, fails or times out
     </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -84,13 +84,13 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], LightningError&gt;;
 }
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>LightningError(<span class="prelude-ty">Option</span>&lt;i32&gt;);
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>LightningError(<span class="prelude-ty">Option</span>&lt;i32&gt;);
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
-    <span class="attribute">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]</span>
-    <span class="kw">async fn </span>pay(
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
+    <span class="attribute">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
+    </span><span class="kw">async fn </span>pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: <span class="kw-2">&amp;</span>str,
         max_delay: u64,
@@ -135,4 +135,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

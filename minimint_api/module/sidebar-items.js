@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":[["audit",""],["interconnect",""],["testing",""]],"struct":[["ApiEndpoint","Definition of an API endpoint defined by a module `M`."],["ApiError",""],["InputMeta",""]],"trait":[["FederationModule",""],["TypedApiEndpoint",""]]};

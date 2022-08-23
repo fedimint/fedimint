@@ -99,8 +99,8 @@
 <span class="kw">pub const </span>DB_PREFIX_EPOCH_HISTORY: u8 = <span class="number">0x05</span>;
 <span class="kw">pub const </span>DB_PREFIX_LAST_EPOCH: u8 = <span class="number">0x06</span>;
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>ProposedTransactionKey(<span class="kw">pub </span>TransactionId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ProposedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
@@ -108,8 +108,8 @@
     <span class="kw">type </span>Value = Transaction;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>ProposedTransactionKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ProposedTransactionKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposedTransactionKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
@@ -117,8 +117,8 @@
     <span class="kw">type </span>Value = Transaction;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>AcceptedTransactionKey(<span class="kw">pub </span>TransactionId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AcceptedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AcceptedTransactionKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_ACCEPTED_TRANSACTION;
@@ -126,8 +126,8 @@
     <span class="kw">type </span>Value = AcceptedTransaction;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>RejectedTransactionKey(<span class="kw">pub </span>TransactionId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RejectedTransactionKey(<span class="kw">pub </span>TransactionId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RejectedTransactionKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_REJECTED_TRANSACTION;
@@ -135,8 +135,8 @@
     <span class="kw">type </span>Value = String;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>DropPeerKey(<span class="kw">pub </span>PeerId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DropPeerKey(<span class="kw">pub </span>PeerId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DropPeerKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
@@ -144,8 +144,8 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>DropPeerKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>DropPeerKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>DropPeerKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
@@ -153,8 +153,8 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>EpochHistoryKey(<span class="kw">pub </span>u64);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>EpochHistoryKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_EPOCH_HISTORY;
@@ -162,8 +162,8 @@
     <span class="kw">type </span>Value = EpochHistory;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>LastEpochKey;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LastEpochKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LastEpochKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LAST_EPOCH;
@@ -171,4 +171,4 @@
     <span class="kw">type </span>Value = EpochHistoryKey;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

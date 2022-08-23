@@ -261,15 +261,15 @@
 <span class="kw">pub type </span>DbBatch = Accumulator&lt;BatchItem&gt;;
 <span class="kw">pub type </span>BatchTx&lt;<span class="lifetime">&#39;a</span>&gt; = AccumulatorTx&lt;<span class="lifetime">&#39;a</span>, BatchItem&gt;;
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="doccomment">/// Database key-value pair
+<span class="attribute">#[derive(Debug)]
+</span><span class="doccomment">/// Database key-value pair
 </span><span class="kw">pub struct </span>Element {
     <span class="kw">pub </span>key: Box&lt;<span class="kw">dyn </span>DatabaseKeyPrefix + Send&gt;,
     <span class="kw">pub </span>value: Box&lt;<span class="kw">dyn </span>SerializableDatabaseValue + Send&gt;,
 }
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="doccomment">/// Database operation
+<span class="attribute">#[derive(Debug)]
+</span><span class="doccomment">/// Database operation
 </span><span class="kw">pub enum </span>BatchItem {
     <span class="doccomment">/// Inserts element, errors if it already exists
     </span>InsertNewElement(Element),
@@ -304,8 +304,8 @@
 ///
 /// Resetting happens automatically when a [`AccumulatorTx`] is dropped after going out of scope.
 /// To prevent this from happening [`AccumulatorTx::commit`] should be called before.
-</span><span class="attribute">#[derive(Debug, Clone)]</span>
-<span class="kw">pub struct </span>Accumulator&lt;T&gt; {
+</span><span class="attribute">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>Accumulator&lt;T&gt; {
     buffer: Vec&lt;T&gt;,
 }
 
@@ -477,12 +477,12 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>test {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>test {
     <span class="kw">use </span><span class="kw">super</span>::Accumulator;
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_transaction() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_transaction() {
         <span class="kw">let </span><span class="kw-2">mut </span>acc = Accumulator::&lt;u8&gt;::new();
         {
             <span class="kw">let </span><span class="kw-2">mut </span>tx = acc.transaction();
@@ -515,4 +515,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

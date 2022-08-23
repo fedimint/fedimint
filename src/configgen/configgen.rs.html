@@ -64,8 +64,8 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>std::path::PathBuf;
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="kw">struct </span>Options {
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">struct </span>Options {
     cfg_path: PathBuf,
     nodes: u16,
     hbbft_base_port: u16,
@@ -117,4 +117,4 @@
     serde_json::to_writer_pretty(client_cfg_file, <span class="kw-2">&amp;</span>client_cfg).unwrap();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

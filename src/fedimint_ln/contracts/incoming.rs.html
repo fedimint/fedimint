@@ -169,8 +169,8 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::io::Error;
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>IncomingContractOffer {
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>IncomingContractOffer {
     <span class="doccomment">/// Amount for which the user is willing to sell the preimage
     </span><span class="kw">pub </span>amount: fedimint_api::Amount,
     <span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
@@ -207,8 +207,8 @@
 ///   2. The decryption results in an invalid preimage, the gateway can claim back the money. For
 ///      this to work securely they have to specify a public key when creating the actual contract.
 </span><span class="comment">// TODO: don&#39;t duplicate offer, include id instead and fetch offer on mint side
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>IncomingContract {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>IncomingContract {
     <span class="doccomment">/// Payment hash which&#39;s corresponding preimage is being sold
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="doccomment">/// Encrypted preimage as specified in offer
@@ -224,8 +224,8 @@
 <span class="doccomment">/// The funded version of an [`IncomingContract`] contains the [`OutPoint`] of it&#39;s creation. Since
 /// this kind of contract can only be funded once this out point is unambiguous. The out point is
 /// used to update the output outcome once decryption finishes.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>FundedIncomingContract {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>FundedIncomingContract {
     <span class="kw">pub </span>contract: IncomingContract,
     <span class="doccomment">/// Incoming contracts are funded exactly once, so they have an associated out-point. We use it
     /// to report the outcome of the preimage decryption started by the funding in the output&#39;s
@@ -235,8 +235,8 @@
 }
 
 <span class="doccomment">/// Possible outcomes of preimage decryption
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub enum </span>DecryptedPreimage {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>DecryptedPreimage {
     <span class="doccomment">/// There aren&#39;t enough decryption shares yet
     </span>Pending,
     <span class="doccomment">/// The decrypted preimage was valid
@@ -254,16 +254,16 @@
 
 <span class="doccomment">/// A preimage in the context of incoming contracts. In this context it is a public key chosen
 /// by the creator of the [`IncomingContractOffer`].
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>secp256k1::XOnlyPublicKey);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>secp256k1::XOnlyPublicKey);
 
 <span class="doccomment">/// Threshold-encrypted [`Preimage`]
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]</span>
-<span class="kw">pub struct </span>EncryptedPreimage(<span class="kw">pub </span>threshold_crypto::Ciphertext);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>EncryptedPreimage(<span class="kw">pub </span>threshold_crypto::Ciphertext);
 
 <span class="doccomment">/// Share to decrypt an [`EncryptedPreimage`]
-</span><span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
+</span><span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
 
 <span class="kw">impl </span>EncryptedPreimage {
     <span class="kw">pub fn </span>new(preimage: [u8; <span class="number">32</span>], key: <span class="kw-2">&amp;</span>threshold_crypto::PublicKey) -&gt; EncryptedPreimage {
@@ -323,4 +323,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

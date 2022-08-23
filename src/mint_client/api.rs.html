@@ -626,11 +626,11 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{error, instrument, warn};
 
-<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]</span>
-<span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 
-<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]</span>
-<span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
+<span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
+</span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 
 <span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
@@ -639,9 +639,9 @@
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>thiserror::Error;
 
-<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]</span>
-<span class="attribute">#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]</span>
-<span class="kw">pub trait </span>FederationApi: Send + Sync {
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">pub trait </span>FederationApi: Send + Sync {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
 
@@ -759,22 +759,22 @@
 <span class="doccomment">/// Mint API client that will try to run queries against all `members` expecting equal
 /// results from at least `min_eq_results` of them. Members that return differing results are
 /// returned as a member faults list.
-</span><span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
+</span><span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     members: Vec&lt;FederationMember&lt;C&gt;&gt;,
     max_evil: usize,
 }
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="kw">struct </span>FederationMember&lt;C&gt; {
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">struct </span>FederationMember&lt;C&gt; {
     url: String,
     peer_id: PeerId,
     client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
 }
 
 <span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
-</span><span class="attribute">#[derive(Debug, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>WsFederationConnect {
+</span><span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WsFederationConnect {
     <span class="kw">pub </span>members: Vec&lt;(PeerId, String)&gt;,
     <span class="kw">pub </span>max_evil: usize,
 }
@@ -798,20 +798,20 @@
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, ApiError&gt;;
 
-<span class="attribute">#[derive(Debug, Error)]</span>
-<span class="kw">pub enum </span>ApiError {
-    <span class="attribute">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]</span>
-    RpcError(<span class="attribute">#[from]</span> JsonRpcError),
-    <span class="attribute">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]</span>
-    TransactionError(String),
-    <span class="attribute">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]</span>
-    TransactionRejected(String),
-    <span class="attribute">#[error(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]</span>
-    OutPointOutOfRange(usize, usize),
-    <span class="attribute">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]</span>
-    CoreError(<span class="attribute">#[from]</span> CoreError),
-    <span class="attribute">#[error(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]</span>
-    Timeout,
+<span class="attribute">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>ApiError {
+    <span class="attribute">#[error(<span class="string">&quot;Rpc error: {0}&quot;</span>)]
+    </span>RpcError(<span class="attribute">#[from] </span>JsonRpcError),
+    <span class="attribute">#[error(<span class="string">&quot;Error retrieving the transaction: {0}&quot;</span>)]
+    </span>TransactionError(String),
+    <span class="attribute">#[error(<span class="string">&quot;The transaction was rejected by consensus processing: {0}&quot;</span>)]
+    </span>TransactionRejected(String),
+    <span class="attribute">#[error(<span class="string">&quot;Out point out of range, transaction got {0} outputs, requested element {1}&quot;</span>)]
+    </span>OutPointOutOfRange(usize, usize),
+    <span class="attribute">#[error(<span class="string">&quot;Core error: {0}&quot;</span>)]
+    </span>CoreError(<span class="attribute">#[from] </span>CoreError),
+    <span class="attribute">#[error(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]
+    </span>Timeout,
 }
 
 <span class="kw">impl </span>ApiError {
@@ -825,9 +825,9 @@
     }
 }
 
-<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]</span>
-<span class="attribute">#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]</span>
-<span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; FederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]
+#[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; FederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
         <span class="self">self</span>.request(<span class="string">&quot;/fetch_transaction&quot;</span>, tx).<span class="kw">await
@@ -873,14 +873,14 @@
     </span>}
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
+<span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         WsClientBuilder::default().build(url).<span class="kw">await
     </span>}
@@ -915,8 +915,8 @@
 }
 
 <span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationMember&lt;C&gt; {
-    <span class="attribute">#[instrument(fields(peer = %<span class="self">self</span>.peer_id), skip_all, err)]</span>
-    <span class="kw">pub async fn </span>request&lt;R&gt;(
+    <span class="attribute">#[instrument(fields(peer = %<span class="self">self</span>.peer_id), skip_all, err)]
+    </span><span class="kw">pub async fn </span>request&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>[serde_json::Value],
@@ -996,8 +996,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span>anyhow::anyhow;
     <span class="kw">use </span>once_cell::sync::Lazy;
     <span class="kw">use </span>std::{
@@ -1012,8 +1012,8 @@
 
     <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T = ()&gt; = std::result::Result&lt;T, JsonRpcError&gt;;
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">trait </span>SimpleClient: Sized {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">trait </span>SimpleClient: Sized {
         <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
             <span class="bool-val">true
@@ -1024,8 +1024,8 @@
 
     <span class="kw">struct </span>Client&lt;C: SimpleClient&gt;(C);
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
             <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
@@ -1035,8 +1035,8 @@
         }
     }
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">impl</span>&lt;C: SimpleClient + Send + Sync&gt; ClientT <span class="kw">for </span>Client&lt;C&gt; {
         <span class="kw">async fn </span>request&lt;<span class="lifetime">&#39;a</span>, R&gt;(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             method: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>str,
@@ -1076,14 +1076,14 @@
         }
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]</span>
-    <span class="kw">async fn </span>test_connect() {
+    <span class="attribute">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>test_connect() {
         <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
         <span class="kw">static </span>CONNECTED: AtomicBool = AtomicBool::new(<span class="bool-val">true</span>);
         <span class="kw">struct </span>Client;
 
-        <span class="attribute">#[async_trait]</span>
-        <span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
+        <span class="attribute">#[async_trait]
+        </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
             <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
                 CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
                 <span class="prelude-val">Ok</span>(Client)
@@ -1130,15 +1130,15 @@
         </span>);
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]</span>
-    <span class="kw">async fn </span>concurrent_requests() {
+    <span class="attribute">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>concurrent_requests() {
         <span class="kw">static </span>CONNECTION_COUNT: AtomicUsize = AtomicUsize::new(<span class="number">0</span>);
         <span class="kw">static </span>FAIL: Lazy&lt;Mutex&lt;HashSet&lt;usize&gt;&gt;&gt; = Lazy::new(|| Mutex::new(HashSet::new()));
 
         <span class="kw">struct </span>Client(usize);
 
-        <span class="attribute">#[async_trait]</span>
-        <span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
+        <span class="attribute">#[async_trait]
+        </span><span class="kw">impl </span>SimpleClient <span class="kw">for </span>Client {
             <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
                 <span class="macro">tracing::error!</span>(<span class="string">&quot;connect&quot;</span>);
                 <span class="kw">let </span>id = CONNECTION_COUNT.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
@@ -1223,4 +1223,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

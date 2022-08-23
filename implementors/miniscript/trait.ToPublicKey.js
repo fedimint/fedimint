@@ -1,4 +1,3 @@
 (function() {var implementors = {
-"fedimint_wallet":[["impl ToPublicKey for <a class=\"struct\" href=\"fedimint_wallet/keys/struct.CompressedPublicKey.html\" title=\"struct fedimint_wallet::keys::CompressedPublicKey\">CompressedPublicKey</a>"]],
-"minimint_wallet":[["impl ToPublicKey for <a class=\"struct\" href=\"minimint_wallet/keys/struct.CompressedPublicKey.html\" title=\"struct minimint_wallet::keys::CompressedPublicKey\">CompressedPublicKey</a>"]]
+"fedimint_wallet":[["impl ToPublicKey for <a class=\"struct\" href=\"fedimint_wallet/keys/struct.CompressedPublicKey.html\" title=\"struct fedimint_wallet::keys::CompressedPublicKey\">CompressedPublicKey</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

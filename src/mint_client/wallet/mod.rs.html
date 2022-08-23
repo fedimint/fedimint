@@ -455,18 +455,18 @@
 
 <span class="kw">type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, WalletClientError&gt;;
 
-<span class="attribute">#[derive(Error, Debug)]</span>
-<span class="kw">pub enum </span>WalletClientError {
-    <span class="attribute">#[error(<span class="string">&quot;Could not find an ongoing matching peg-in&quot;</span>)]</span>
-    NoMatchingPegInFound,
-    <span class="attribute">#[error(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]</span>
-    PegInAmountTooSmall,
-    <span class="attribute">#[error(<span class="string">&quot;Inconsistent peg-in proof: {0}&quot;</span>)]</span>
-    PegInProofError(PegInProofError),
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>WalletClientError {
+    <span class="attribute">#[error(<span class="string">&quot;Could not find an ongoing matching peg-in&quot;</span>)]
+    </span>NoMatchingPegInFound,
+    <span class="attribute">#[error(<span class="string">&quot;Peg-in amount must be greater than peg-in fee&quot;</span>)]
+    </span>PegInAmountTooSmall,
+    <span class="attribute">#[error(<span class="string">&quot;Inconsistent peg-in proof: {0}&quot;</span>)]
+    </span>PegInProofError(PegInProofError),
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
     <span class="kw">use </span><span class="kw">crate</span>::OwnedClientContext;
@@ -503,8 +503,8 @@
         </span>_mint: SharedFed,
     }
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">impl </span>FederationApi <span class="kw">for </span>FakeApi {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">impl </span>FederationApi <span class="kw">for </span>FakeApi {
         <span class="kw">async fn </span>fetch_tx_outcome(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             _tx: TransactionId,
@@ -597,8 +597,8 @@
         (fed, client, btc_rpc_controller)
     }
 
-    <span class="attribute">#[test_log::test(tokio::test)]</span>
-    <span class="kw">async fn </span>create_output() {
+    <span class="attribute">#[test_log::test(tokio::test)]
+    </span><span class="kw">async fn </span>create_output() {
         <span class="kw">let </span>(fed, client_context, btc_rpc) = new_mint_and_client().<span class="kw">await</span>;
         <span class="kw">let </span>_client = WalletClient {
             context: client_context.borrow_with_module_config(|x| x),
@@ -683,4 +683,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

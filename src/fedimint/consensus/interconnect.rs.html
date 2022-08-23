@@ -59,8 +59,8 @@
     <span class="kw">pub </span>fedimint: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FedimintConsensus&lt;R&gt;,
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, R&gt; ModuleInterconect <span class="kw">for </span>FedimintInterconnect&lt;<span class="lifetime">&#39;a</span>, R&gt;
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>, R&gt; ModuleInterconect <span class="kw">for </span>FedimintInterconnect&lt;<span class="lifetime">&#39;a</span>, R&gt;
 <span class="kw">where
     </span>R: RngCore + CryptoRng,
 {
@@ -93,4 +93,4 @@
     (endpoint.handler)(module, data).<span class="kw">await
 </span>}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

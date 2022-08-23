@@ -101,8 +101,8 @@
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::ops::{Add, AddAssign, Mul, MulAssign};
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>Poly&lt;G, S&gt;
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>Poly&lt;G, S&gt;
 <span class="kw">where
     </span>G: Debug,
 {
@@ -172,10 +172,10 @@
         .expect(<span class="string">&quot;Elements may not be empty!&quot;</span>)
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>test_interpolate_simple() {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>test_interpolate_simple() {
         <span class="kw">use </span>bls12_381::Scalar;
 
         <span class="comment">// f(x) = 6 + 3x + 5x^2
@@ -191,4 +191,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

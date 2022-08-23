@@ -126,7 +126,7 @@
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>std::io::Error;
 
-<span class="macro">macro_rules!</span> impl_encode_decode_bridge {
+<span class="macro">macro_rules! </span>impl_encode_decode_bridge {
     (<span class="macro-nonterminal">$btc_type</span>:ty) =&gt; {
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span><span class="macro-nonterminal">$btc_type </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
@@ -203,15 +203,15 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
     <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::str::FromStr;
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>sha256_roundtrip() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>sha256_roundtrip() {
         <span class="kw">let </span>hash = bitcoin::hashes::sha256::Hash::hash(<span class="string">b&quot;Hello world!&quot;</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>encoded = Vec::new();
         hash.consensus_encode(<span class="kw-2">&amp;mut </span>encoded).unwrap();
@@ -220,8 +220,8 @@
         <span class="macro">assert_eq!</span>(hash, hash_decoded);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>address_roundtrip() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>address_roundtrip() {
         <span class="kw">let </span>addresses = [
             <span class="string">&quot;bc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps59h4z5&quot;</span>,
             <span class="string">&quot;mxMYaq5yWinZ9AKjCDcBEbiEwPJD9n2uLU&quot;</span>,
@@ -247,4 +247,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

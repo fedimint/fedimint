@@ -58,9 +58,9 @@
 <span class="kw">use </span>tbs::{PublicKeyShare, SecretKeyShare};
 
 <span class="doccomment">/// Represents all tiered keys belonging to a certain entity
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]</span>
-<span class="attribute">#[serde(transparent)]</span>
-<span class="kw">pub struct </span>Keys&lt;K&gt; {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+</span><span class="kw">pub struct </span>Keys&lt;K&gt; {
     <span class="kw">pub </span>keys: BTreeMap&lt;Amount, K&gt;,
 }
 
@@ -103,4 +103,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

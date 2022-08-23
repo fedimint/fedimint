@@ -1,5 +1,0 @@
-(function() {var implementors = {
-"minimint_ln":[["impl <a class=\"trait\" href=\"minimint_api/module/trait.FederationModule.html\" title=\"trait minimint_api::module::FederationModule\">FederationModule</a> for <a class=\"struct\" href=\"minimint_ln/struct.LightningModule.html\" title=\"struct minimint_ln::LightningModule\">LightningModule</a>"]],
-"minimint_mint":[["impl <a class=\"trait\" href=\"minimint_api/module/trait.FederationModule.html\" title=\"trait minimint_api::module::FederationModule\">FederationModule</a> for <a class=\"struct\" href=\"minimint_mint/struct.Mint.html\" title=\"struct minimint_mint::Mint\">Mint</a>"]],
-"minimint_wallet":[["impl <a class=\"trait\" href=\"minimint_api/module/trait.FederationModule.html\" title=\"trait minimint_api::module::FederationModule\">FederationModule</a> for <a class=\"struct\" href=\"minimint_wallet/struct.Wallet.html\" title=\"struct minimint_wallet::Wallet\">Wallet</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

@@ -394,10 +394,10 @@
     </span><span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;;
 }
 
-<span class="attribute">#[derive(Debug, Error)]</span>
-<span class="kw">pub struct </span>DecodeError(<span class="kw">pub</span>(<span class="kw">crate</span>) anyhow::Error);
+<span class="attribute">#[derive(Debug, Error)]
+</span><span class="kw">pub struct </span>DecodeError(<span class="kw">pub</span>(<span class="kw">crate</span>) anyhow::Error);
 
-<span class="macro">macro_rules!</span> impl_encode_decode_num {
+<span class="macro">macro_rules! </span>impl_encode_decode_num {
     (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
@@ -424,10 +424,10 @@
 <span class="macro">impl_encode_decode_num!</span>(u16);
 <span class="macro">impl_encode_decode_num!</span>(u8);
 
-<span class="macro">macro_rules!</span> impl_encode_decode_tuple {
+<span class="macro">macro_rules! </span>impl_encode_decode_tuple {
     ($(<span class="macro-nonterminal">$x</span>:ident),<span class="kw-2">*</span>) =&gt; (
-        <span class="attribute">#[allow(non_snake_case)]</span>
-        <span class="kw">impl </span>&lt;$(<span class="macro-nonterminal">$x</span>: Encodable),<span class="kw-2">*</span>&gt; Encodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
+        <span class="attribute">#[allow(non_snake_case)]
+        </span><span class="kw">impl </span>&lt;$(<span class="macro-nonterminal">$x</span>: Encodable),<span class="kw-2">*</span>&gt; Encodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>s: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
                 <span class="kw">let </span><span class="kw-2">&amp;</span>($(<span class="kw-2">ref </span><span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) = <span class="self">self</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
@@ -436,8 +436,8 @@
             }
         }
 
-        <span class="attribute">#[allow(non_snake_case)]</span>
-        <span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$x</span>: Decodable),<span class="kw-2">*</span>&gt; Decodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
+        <span class="attribute">#[allow(non_snake_case)]
+        </span><span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$x</span>: Decodable),<span class="kw-2">*</span>&gt; Decodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
             <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
                 <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
             }
@@ -599,10 +599,10 @@
 
 <span class="kw">impl </span>DecodeError {
     <span class="comment">// TODO: think about better name
-    </span><span class="attribute">#[allow(clippy::should_implement_trait)]</span>
-    <span class="kw">pub fn </span>from_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
-        <span class="attribute">#[derive(Debug)]</span>
-        <span class="kw">struct </span>StrError(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str);
+    </span><span class="attribute">#[allow(clippy::should_implement_trait)]
+    </span><span class="kw">pub fn </span>from_str(s: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str) -&gt; <span class="self">Self </span>{
+        <span class="attribute">#[derive(Debug)]
+        </span><span class="kw">struct </span>StrError(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str);
 
         <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>StrError {
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
@@ -626,8 +626,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::io::Cursor;
 
@@ -662,10 +662,10 @@
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_derive_struct() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]</span>
-        <span class="kw">struct </span>TestStruct {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_derive_struct() {
+        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        </span><span class="kw">struct </span>TestStruct {
             vec: Vec&lt;u8&gt;,
             num: u32,
         }
@@ -679,10 +679,10 @@
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_derive_tuple_struct() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]</span>
-        <span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_derive_tuple_struct() {
+        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        </span><span class="kw">struct </span>TestStruct(Vec&lt;u8&gt;, u32);
 
         <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
         <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>];
@@ -690,10 +690,10 @@
         test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_derive_enum() {
-        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]</span>
-        <span class="kw">enum </span>TestEnum {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_derive_enum() {
+        <span class="attribute">#[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
+        </span><span class="kw">enum </span>TestEnum {
             Foo(<span class="prelude-ty">Option</span>&lt;u64&gt;),
             Bar { bazz: Vec&lt;u8&gt; },
         }
@@ -717,8 +717,8 @@
         }
     }
 
-    <span class="attribute">#[test_log::test]</span>
-    <span class="kw">fn </span>test_invoice() {
+    <span class="attribute">#[test_log::test]
+    </span><span class="kw">fn </span>test_invoice() {
         <span class="kw">let </span>invoice_str = <span class="string">&quot;lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
 			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
 			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
@@ -735,4 +735,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

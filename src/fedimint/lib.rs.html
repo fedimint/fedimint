@@ -396,7 +396,7 @@
     ) -&gt; Vec&lt;ConsensusOutcome&gt; {
         <span class="comment">// for testing federations with one peer
         </span><span class="kw">if </span><span class="self">self</span>.cfg.peers.len() == <span class="number">1 </span>{
-            <span class="macro">tokio::select!</span> {
+            <span class="macro">tokio::select! </span>{
               () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; (),
               () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; (),
             }
@@ -442,7 +442,7 @@
     }
 
     <span class="kw">async fn </span>await_proposal_or_peer_message(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerMessage&gt; {
-        <span class="macro">tokio::select!</span> {
+        <span class="macro">tokio::select! </span>{
             () = <span class="self">self</span>.consensus.transaction_notify.notified() =&gt; <span class="prelude-val">None</span>,
             () = <span class="self">self</span>.consensus.await_consensus_proposal() =&gt; <span class="prelude-val">None</span>,
             msg = <span class="self">self</span>.connections.receive() =&gt; <span class="prelude-val">Some</span>(msg)
@@ -479,4 +479,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -46,8 +46,8 @@
 <span class="kw">use </span>fedimint_core::modules::ln::ContractInput;
 <span class="kw">use </span>lightning_invoice::Invoice;
 
-<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>IncomingContractAccount {
+<span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>IncomingContractAccount {
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>contract: IncomingContract,
 }
@@ -64,8 +64,8 @@
 
 <span class="comment">// TODO: should this have some kind of &quot;state&quot; enum - e.g. pending, paid, expired
 </span><span class="doccomment">/// Invoice whose &quot;offer&quot; has been accepted by federation
-</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>ConfirmedInvoice {
+</span><span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ConfirmedInvoice {
     <span class="doccomment">/// The invoice itself
     </span><span class="kw">pub </span>invoice: Invoice,
     <span class="doccomment">/// Keypair that will be able to sweep contract once it has received payment
@@ -79,4 +79,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

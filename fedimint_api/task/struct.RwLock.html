@@ -27,8 +27,8 @@ for the <code>write</code> methods) to allow access to the content of the lock.<
 <h2 id="examples"><a href="#examples">Examples</a></h2>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>lock = RwLock::new(<span class="number">5</span>);
 
     <span class="comment">// many reader locks can be held at once
@@ -89,8 +89,8 @@ the queue.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span>c_lock = lock.clone();
 
@@ -123,8 +123,8 @@ to call some (synchronous) function which performs one of these
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>rwlock = Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span><span class="kw-2">mut </span>write_lock = rwlock.write().<span class="kw">await</span>;
 
@@ -170,8 +170,8 @@ place in the queue.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span>c_lock = lock.clone();
 
@@ -195,8 +195,8 @@ when dropped.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span>c_lock = lock.clone();
 
@@ -225,8 +225,8 @@ as it keeps the <code>RwLock</code> alive by holding an <code>Arc</code>.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span>c_lock = lock.clone();
 
@@ -255,8 +255,8 @@ in the queue.</p>
 <h5 id="examples-10"><a href="#examples-10">Examples</a></h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
   <span class="kw">let </span>lock = RwLock::new(<span class="number">1</span>);
 
   <span class="kw">let </span><span class="kw-2">mut </span>n = lock.write().<span class="kw">await</span>;
@@ -279,8 +279,8 @@ to call some (synchronous) function which performs one of these
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::{sync::RwLock};
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>rwlock =  Arc::new(RwLock::new(<span class="number">1</span>));
     <span class="kw">let </span>read_lock = rwlock.read().<span class="kw">await</span>;
 
@@ -323,8 +323,8 @@ place in the queue.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
   <span class="kw">let </span>lock = Arc::new(RwLock::new(<span class="number">1</span>));
 
   <span class="kw">let </span><span class="kw-2">mut </span>n = lock.write_owned().<span class="kw">await</span>;
@@ -337,8 +337,8 @@ when dropped.</p>
 <h5 id="examples-13"><a href="#examples-13">Examples</a></h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>rw = RwLock::new(<span class="number">1</span>);
 
     <span class="kw">let </span>v = rw.read().<span class="kw">await</span>;
@@ -359,8 +359,8 @@ as it keeps the <code>RwLock</code> alive by holding an <code>Arc</code>.</p>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tokio::sync::RwLock;
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>rw = Arc::new(RwLock::new(<span class="number">1</span>));
 
     <span class="kw">let </span>v = Arc::clone(<span class="kw-2">&amp;</span>rw).read_owned().<span class="kw">await</span>;
@@ -462,4 +462,4 @@ builds. <a>Read more</a></p>
 <a href="https://docs.rs/tracing/0.1.36/tracing/instrument/struct.WithDispatch.html" title="WithDispatch"><code>WithDispatch</code></a> wrapper. <a href="https://docs.rs/tracing/0.1.36/tracing/instrument/trait.WithSubscriber.html#method.with_subscriber">Read more</a></p>
 </div></details><details class="rustdoc-toggle method-toggle" open><summary><section id="method.with_current_subscriber" class="method trait-impl has-srclink"><span class="rightside"><a class="srclink" href="https://docs.rs/tracing/0.1.36/src/tracing/instrument.rs.html#221">source</a></span><a href="#method.with_current_subscriber" class="anchor"></a><h4 class="code-header">fn <a href="https://docs.rs/tracing/0.1.36/tracing/instrument/trait.WithSubscriber.html#method.with_current_subscriber" class="fnname">with_current_subscriber</a>(self) -&gt; <a class="struct" href="https://docs.rs/tracing/0.1.36/tracing/instrument/struct.WithDispatch.html" title="struct tracing::instrument::WithDispatch">WithDispatch</a>&lt;Self&gt;</h4></section></summary><div class='docblock'><p>Attaches the current <a href="https://docs.rs/tracing/0.1.36/tracing/dispatcher/index.html#setting-the-default-subscriber">default</a> <a href="https://docs.rs/tracing-core/0.1.22/tracing_core/subscriber/trait.Subscriber.html"><code>Subscriber</code></a> to this type, returning a
 <a href="https://docs.rs/tracing/0.1.36/tracing/instrument/struct.WithDispatch.html" title="WithDispatch"><code>WithDispatch</code></a> wrapper. <a href="https://docs.rs/tracing/0.1.36/tracing/instrument/trait.WithSubscriber.html#method.with_current_subscriber">Read more</a></p>
-</div></details></div></details></div></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</div></details></div></details></div></section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

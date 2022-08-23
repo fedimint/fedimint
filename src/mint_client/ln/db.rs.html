@@ -108,8 +108,8 @@
 <span class="kw">const </span>DB_PREFIX_CONFIRMED_INVOICE: u8 = <span class="number">0x26</span>;
 <span class="kw">const </span>DB_PREFIX_LIGHTNING_GATEWAY: u8 = <span class="number">0x28</span>;
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
@@ -117,8 +117,8 @@
     <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingPaymentKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingPaymentKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
@@ -126,8 +126,8 @@
     <span class="kw">type </span>Value = OutgoingContractData;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
@@ -135,8 +135,8 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingPaymentClaimKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingPaymentClaimKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
@@ -144,8 +144,8 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
@@ -153,8 +153,8 @@
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContractAccountKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContractAccountKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
@@ -162,8 +162,8 @@
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
@@ -171,8 +171,8 @@
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>ConfirmedInvoiceKeyPrefix;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ConfirmedInvoiceKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
@@ -180,8 +180,8 @@
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
 
-<span class="attribute">#[derive(Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>LightningGatewayKey;
+<span class="attribute">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>LightningGatewayKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
@@ -189,4 +189,4 @@
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

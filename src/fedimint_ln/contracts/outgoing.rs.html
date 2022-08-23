@@ -44,8 +44,8 @@
 /// A user locks up funds that can be claimed by a lightning gateway if it pays the invoice and
 /// thus receives the preimage to the payment hash and can thereby prove the payment. If the gateway
 /// is not able to do so before the timelock expires the user can claim back the funds.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContract {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContract {
     <span class="doccomment">/// Hash that can be used to spend the output before the timelock expires
     </span><span class="kw">pub </span>hash: bitcoin_hashes::sha256::Hash,
     <span class="doccomment">/// Public key of the LN gateway allowed to claim the HTLC before the timelock expires
@@ -60,8 +60,8 @@
 }
 
 <span class="doccomment">/// Preimage in the context of [`OutgoingContract`]s
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
 
 <span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>OutgoingContract {
     <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
@@ -71,4 +71,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

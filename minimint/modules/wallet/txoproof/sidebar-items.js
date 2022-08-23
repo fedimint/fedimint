@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["PegInProofError",""]],"struct":[["PegInProof","A proof about a script owning a certain output. Verifyable using headers only."],["TxOutProof",""]]};

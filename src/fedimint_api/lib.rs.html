@@ -291,8 +291,8 @@
     Deserialize,
     Encodable,
     Decodable,
-)]</span>
-<span class="kw">pub struct </span>PeerId(u16);
+)]
+</span><span class="kw">pub struct </span>PeerId(u16);
 
 <span class="doccomment">/// Represents an amount of BTC inside the system. The base denomination is milli satoshi for now,
 /// this is also why the amount type from rust-bitcoin isn&#39;t used instead.
@@ -309,24 +309,24 @@
     Serialize,
     Encodable,
     Decodable,
-)]</span>
-<span class="attribute">#[serde(transparent)]</span>
-<span class="kw">pub struct </span>Amount {
+)]
+#[serde(transparent)]
+</span><span class="kw">pub struct </span>Amount {
     <span class="kw">pub </span>milli_sat: u64,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutPoint {
+<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutPoint {
     <span class="kw">pub </span>txid: TransactionId,
     <span class="kw">pub </span>out_idx: u64,
 }
 
-<span class="attribute">#[derive(Error, Debug)]</span>
-<span class="kw">pub enum </span>ParseAmountError {
-    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as integer: {0}&quot;</span>)]</span>
-    NotANumber(<span class="attribute">#[from]</span> ParseIntError),
-    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]</span>
-    WrongBitcoinAmount(<span class="attribute">#[from]</span> bitcoin::util::amount::ParseAmountError),
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>ParseAmountError {
+    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as integer: {0}&quot;</span>)]
+    </span>NotANumber(<span class="attribute">#[from] </span>ParseIntError),
+    <span class="attribute">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]
+    </span>WrongBitcoinAmount(<span class="attribute">#[from] </span>bitcoin::util::amount::ParseAmountError),
 }
 <span class="kw">impl </span>PeerId {
     <span class="kw">pub fn </span>to_usize(<span class="self">self</span>) -&gt; usize {
@@ -501,4 +501,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

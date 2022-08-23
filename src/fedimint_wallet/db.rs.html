@@ -113,8 +113,8 @@
 <span class="kw">const </span>DB_PREFIX_PENDING_TRANSACTION: u8 = <span class="number">0x35</span>;
 <span class="kw">const </span>DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = <span class="number">0x36</span>;
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>BlockHashKey(<span class="kw">pub </span>BlockHash);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>BlockHashKey(<span class="kw">pub </span>BlockHash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>BlockHashKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_BLOCK_HASH;
@@ -122,8 +122,8 @@
     <span class="kw">type </span>Value = ();
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>OutPoint);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
@@ -131,8 +131,8 @@
     <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>UTXOPrefixKey;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>UTXOPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOPrefixKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
@@ -140,8 +140,8 @@
     <span class="kw">type </span>Value = SpendableUTXO;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>RoundConsensusKey;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RoundConsensusKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RoundConsensusKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
@@ -149,8 +149,8 @@
     <span class="kw">type </span>Value = RoundConsensus;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>UnsignedTransactionKey(<span class="kw">pub </span>Txid);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>UnsignedTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
@@ -158,8 +158,8 @@
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>UnsignedTransactionPrefixKey;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>UnsignedTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionPrefixKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
@@ -167,8 +167,8 @@
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PendingTransactionKey(<span class="kw">pub </span>Txid);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PendingTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
@@ -176,8 +176,8 @@
     <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PendingTransactionPrefixKey;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PendingTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionPrefixKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
@@ -185,8 +185,8 @@
     <span class="kw">type </span>Value = PendingTransaction;
 }
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PegOutTxSignatureCI(<span class="kw">pub </span>Txid);
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PegOutTxSignatureCI(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCI {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
@@ -194,8 +194,8 @@
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;; <span class="comment">// TODO: define newtype
 </span>}
 
-<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>PegOutTxSignatureCIPrefix;
+<span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>PegOutTxSignatureCIPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCIPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
@@ -203,4 +203,4 @@
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

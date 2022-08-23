@@ -287,41 +287,41 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span>tokio_rustls::rustls;
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>ServerConfig {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ServerConfig {
     <span class="kw">pub </span>identity: PeerId,
     <span class="kw">pub </span>hbbft_bind_addr: String,
     <span class="kw">pub </span>api_bind_addr: String,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]</span>
-    <span class="kw">pub </span>tls_cert: rustls::Certificate,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]</span>
-    <span class="kw">pub </span>tls_key: rustls::PrivateKey,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_key&quot;</span>)]
+    </span><span class="kw">pub </span>tls_key: rustls::PrivateKey,
 
     <span class="kw">pub </span>peers: BTreeMap&lt;PeerId, Peer&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]</span>
-    <span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]</span>
-    <span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>hbbft_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>hbbft_pk_set: hbbft::crypto::PublicKeySet,
 
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]</span>
-    <span class="kw">pub </span>epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]</span>
-    <span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>epoch_sks: SerdeSecret&lt;hbbft::crypto::SecretKeyShare&gt;,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_binary_human_readable&quot;</span>)]
+    </span><span class="kw">pub </span>epoch_pk_set: hbbft::crypto::PublicKeySet,
 
     <span class="kw">pub </span>wallet: WalletConfig,
     <span class="kw">pub </span>mint: MintConfig,
     <span class="kw">pub </span>ln: LightningModuleConfig,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>Peer {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>Peer {
     <span class="kw">pub </span>connection: ConnectionConfig,
-    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]</span>
-    <span class="kw">pub </span>tls_cert: rustls::Certificate,
+    <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
+    </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
 }
 
-<span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>ServerConfigParams {
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>ServerConfigParams {
     <span class="kw">pub </span>hbbft_base_port: u16,
     <span class="kw">pub </span>api_base_port: u16,
     <span class="kw">pub </span>amount_tiers: Vec&lt;fedimint_api::Amount&gt;,
@@ -541,4 +541,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

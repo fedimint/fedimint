@@ -55,32 +55,32 @@
 }
 
 <span class="comment">// TODO: upstream these structs to cln-plugin
-</span><span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
-<span class="kw">pub struct </span>Htlc {
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]</span>
-    <span class="kw">pub </span>amount: Amount,
+</span><span class="attribute">#[derive(Clone, Deserialize, Debug)]
+</span><span class="kw">pub struct </span>Htlc {
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
+    </span><span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>cltv_expiry: u32,
     <span class="kw">pub </span>cltv_expiry_relative: u32,
     <span class="kw">pub </span>payment_hash: bitcoin_hashes::sha256::Hash,
 }
 
-<span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
-<span class="kw">pub struct </span>Onion {
+<span class="attribute">#[derive(Clone, Deserialize, Debug)]
+</span><span class="kw">pub struct </span>Onion {
     <span class="kw">pub </span>payload: String,
-    <span class="attribute">#[serde(rename = <span class="string">&quot;type&quot;</span>)]</span>
-    <span class="kw">pub </span>type_: String,
+    <span class="attribute">#[serde(rename = <span class="string">&quot;type&quot;</span>)]
+    </span><span class="kw">pub </span>type_: String,
     <span class="kw">pub </span>short_channel_id: String,
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]</span>
-    <span class="kw">pub </span>forward_amount: Amount,
+    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;as_fedimint_amount&quot;</span>)]
+    </span><span class="kw">pub </span>forward_amount: Amount,
     <span class="kw">pub </span>outgoing_cltv_value: u32,
     <span class="kw">pub </span>shared_secret: bitcoin_hashes::sha256::Hash,
     <span class="kw">pub </span>next_onion: String,
 }
 
-<span class="attribute">#[derive(Clone, Deserialize, Debug)]</span>
-<span class="kw">pub struct </span>HtlcAccepted {
+<span class="attribute">#[derive(Clone, Deserialize, Debug)]
+</span><span class="kw">pub struct </span>HtlcAccepted {
     <span class="kw">pub </span>htlc: Htlc,
     <span class="kw">pub </span>onion: Onion,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

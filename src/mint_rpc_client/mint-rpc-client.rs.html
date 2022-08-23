@@ -23,16 +23,16 @@
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>mint_client::api::WsFederationApi;
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="kw">struct </span>ApiCall {
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">struct </span>ApiCall {
     url: String,
     method: String,
-    <span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]</span>
-    arg: String,
+    <span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
+    </span>arg: String,
 }
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>call = ApiCall::parse();
     <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>call.arg).unwrap();
     <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), call.url)]);
@@ -41,4 +41,4 @@
     <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, formatted);
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

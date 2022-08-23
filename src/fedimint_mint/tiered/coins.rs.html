@@ -311,8 +311,8 @@
 /// **Attention:** care has to be taken when constructing this to avoid overflow when calculating
 /// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
 /// coin count per transaction this shouldn&#39;t be a problem in practice though.
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]</span>
-<span class="kw">pub struct </span>Coins&lt;C&gt; {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>Coins&lt;C&gt; {
     <span class="kw">pub </span>coins: BTreeMap&lt;Amount, Vec&lt;C&gt;&gt;,
 }
 
@@ -554,13 +554,13 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>test {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>test {
     <span class="kw">use </span><span class="kw">crate</span>::Coins;
     <span class="kw">use </span>fedimint_api::Amount;
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>select_coins_returns_exact_amount() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>select_coins_returns_exact_amount() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[
             (Amount::from_sat(<span class="number">1</span>), <span class="number">5</span>),
             (Amount::from_sat(<span class="number">5</span>), <span class="number">5</span>),
@@ -576,8 +576,8 @@
         );
     }
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>select_coins_uses_smaller_denominations() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>select_coins_uses_smaller_denominations() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">5</span>), <span class="number">5</span>), (Amount::from_sat(<span class="number">20</span>), <span class="number">5</span>)]);
 
         <span class="macro">assert_eq!</span>(
@@ -586,8 +586,8 @@
         );
     }
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>select_coins_returns_none_if_amount_is_too_large() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>select_coins_returns_none_if_amount_is_too_large() {
         <span class="kw">let </span>starting = coins(<span class="macro">vec!</span>[(Amount::from_sat(<span class="number">10</span>), <span class="number">1</span>)]);
 
         <span class="macro">assert_eq!</span>(starting.select_coins(Amount::from_sat(<span class="number">100</span>)), <span class="prelude-val">None</span>);
@@ -601,4 +601,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

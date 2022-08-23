@@ -182,8 +182,8 @@
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if if the bitcoind node is not reachable.
-</span><span class="attribute">#[async_trait]</span>
-<span class="kw">pub trait </span>BitcoindRpc: Send + Sync {
+</span><span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>BitcoindRpc: Send + Sync {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
     </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::Network;
 
@@ -219,8 +219,8 @@
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction);
 }
 
-<span class="attribute">#[allow(dead_code)]</span>
-<span class="kw">pub mod </span>test {
+<span class="attribute">#[allow(dead_code)]
+</span><span class="kw">pub mod </span>test {
     <span class="kw">use </span><span class="kw">crate</span>::bitcoind::BitcoindRpc;
     <span class="kw">use </span><span class="kw">crate</span>::Feerate;
     <span class="kw">use </span>async_trait::async_trait;
@@ -229,16 +229,16 @@
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
     <span class="kw">use </span>std::sync::{Arc, Mutex};
 
-    <span class="attribute">#[derive(Debug, Default)]</span>
-    <span class="kw">pub struct </span>FakeBitcoindRpcState {
+    <span class="attribute">#[derive(Debug, Default)]
+    </span><span class="kw">pub struct </span>FakeBitcoindRpcState {
         fee_rate: <span class="prelude-ty">Option</span>&lt;Feerate&gt;,
         block_height: u64,
         transactions: VecDeque&lt;Transaction&gt;,
         tx_in_blocks: HashMap&lt;BlockHash, Vec&lt;Transaction&gt;&gt;,
     }
 
-    <span class="attribute">#[derive(Clone, Default)]</span>
-    <span class="kw">pub struct </span>FakeBitcoindRpc {
+    <span class="attribute">#[derive(Clone, Default)]
+    </span><span class="kw">pub struct </span>FakeBitcoindRpc {
         state: Arc&lt;Mutex&lt;FakeBitcoindRpcState&gt;&gt;,
     }
 
@@ -246,8 +246,8 @@
         <span class="kw">pub </span>state: Arc&lt;Mutex&lt;FakeBitcoindRpcState&gt;&gt;,
     }
 
-    <span class="attribute">#[async_trait]</span>
-    <span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>FakeBitcoindRpc {
+    <span class="attribute">#[async_trait]
+    </span><span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>FakeBitcoindRpc {
         <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
             bitcoin::Network::Regtest
         }
@@ -336,8 +336,8 @@
         <span class="kw">pub async fn </span>add_pending_tx_to_block(<span class="kw-2">&amp;</span><span class="self">self</span>, block: u64) {
             <span class="kw">let </span>block_hash = height_hash(block);
             <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self</span>.state.lock().unwrap();
-            <span class="attribute">#[allow(clippy::needless_collect)]</span>
-            <span class="kw">let </span>txns = state.transactions.drain(..).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="attribute">#[allow(clippy::needless_collect)]
+            </span><span class="kw">let </span>txns = state.transactions.drain(..).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
             state
                 .tx_in_blocks
                 .entry(block_hash)
@@ -353,4 +353,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

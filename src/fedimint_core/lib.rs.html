@@ -40,12 +40,12 @@
 <span class="kw">pub mod </span>outcome;
 <span class="kw">pub mod </span>transaction;
 
-<span class="attribute">#[derive(Debug, Error)]</span>
-<span class="kw">pub enum </span>CoreError {
-    <span class="attribute">#[error(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]</span>
-    MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str),
-    <span class="attribute">#[error(<span class="string">&quot;Pending preimage decryption&quot;</span>)]</span>
-    PendingPreimage,
+<span class="attribute">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>CoreError {
+    <span class="attribute">#[error(<span class="string">&quot;Mismatching outcome variant: expected {0}, got {1}&quot;</span>)]
+    </span>MismatchingVariant(<span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str, <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str),
+    <span class="attribute">#[error(<span class="string">&quot;Pending preimage decryption&quot;</span>)]
+    </span>PendingPreimage,
 }
 
 <span class="kw">impl </span>CoreError {
@@ -55,4 +55,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

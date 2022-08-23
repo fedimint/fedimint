@@ -86,8 +86,8 @@
     }
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>bitcoincore_rpc::Client {
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>bitcoincore_rpc::Client {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
         <span class="kw">let </span>network = fedimint_api::task::block_in_place(|| <span class="self">self</span>.get_blockchain_info())
             .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>);
@@ -135,4 +135,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

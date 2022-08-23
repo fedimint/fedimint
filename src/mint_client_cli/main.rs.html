@@ -252,43 +252,43 @@
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="kw">struct </span>Options {
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">struct </span>Options {
     workdir: PathBuf,
-    <span class="attribute">#[clap(subcommand)]</span>
-    command: Command,
+    <span class="attribute">#[clap(subcommand)]
+    </span>command: Command,
 }
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="kw">enum </span>Command {
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">enum </span>Command {
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
     </span>PegInAddress,
 
     <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
     </span>PegIn {
-        <span class="attribute">#[clap(parse(try_from_str = from_hex))]</span>
-        txout_proof: TxOutProof,
-        <span class="attribute">#[clap(parse(try_from_str = from_hex))]</span>
-        transaction: Transaction,
+        <span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span>txout_proof: TxOutProof,
+        <span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span>transaction: Transaction,
     },
 
     <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends
     </span>Reissue {
-        <span class="attribute">#[clap(parse(from_str = parse_coins))]</span>
-        coins: Coins&lt;SpendableCoin&gt;,
+        <span class="attribute">#[clap(parse(from_str = parse_coins))]
+        </span>coins: Coins&lt;SpendableCoin&gt;,
     },
 
     <span class="doccomment">/// Prepare coins to send to a third party as a payment
     </span>Spend {
-        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]</span>
-        amount: Amount,
+        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]
+        </span>amount: Amount,
     },
 
     <span class="doccomment">/// Withdraw funds from the federation
     </span>PegOut {
         address: Address,
-        <span class="attribute">#[clap(parse(try_from_str = parse_bitcoin_amount))]</span>
-        satoshis: bitcoin::Amount,
+        <span class="attribute">#[clap(parse(try_from_str = parse_bitcoin_amount))]
+        </span>satoshis: bitcoin::Amount,
     },
 
     <span class="doccomment">/// Pay a lightning invoice via a gateway
@@ -302,8 +302,8 @@
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]</span>
-        amount: Amount,
+        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]
+        </span>amount: Amount,
         description: String,
     },
 
@@ -320,14 +320,14 @@
     </span>JoinFederation { connect: String },
 }
 
-<span class="attribute">#[derive(Debug, Serialize, Deserialize)]</span>
-<span class="kw">struct </span>PayRequest {
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">struct </span>PayRequest {
     coins: Coins&lt;SpendableCoin&gt;,
     invoice: String,
 }
 
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>opts = Options::parse();
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -469,4 +469,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -350,15 +350,15 @@
 /// Wraps a stream `S` and allows sending packetized data of type `T` over it. Data items are
 /// encoded using [`bincode`] and the bytes are sent over the stream prepended with a length field.
 /// `BidiFramed` implements `Sink&lt;T&gt;` and `Stream&lt;Item=Result&lt;T, _&gt;&gt;`.
-</span><span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>BidiFramed&lt;T, WH, RH&gt; {
+</span><span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>BidiFramed&lt;T, WH, RH&gt; {
     sink: FramedSink&lt;WH, T&gt;,
     stream: FramedStream&lt;RH, T&gt;,
 }
 
 <span class="doccomment">/// Framed codec that uses [`bincode`] to encode structs with [`serde`] support
-</span><span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>BincodeCodec&lt;T&gt; {
+</span><span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>BincodeCodec&lt;T&gt; {
     _pd: PhantomData&lt;T&gt;,
 }
 
@@ -526,18 +526,18 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::BidiFramed;
     <span class="kw">use </span>futures::{SinkExt, StreamExt};
     <span class="kw">use </span>serde::{Deserialize, Serialize};
     <span class="kw">use </span>std::time::Duration;
     <span class="kw">use </span>tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>test_roundtrip() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]</span>
-        <span class="kw">enum </span>TestEnum {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>test_roundtrip() {
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
         }
@@ -564,10 +564,10 @@
         <span class="macro">assert!</span>(framed_recipient.next().<span class="kw">await</span>.is_none());
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>test_not_try_parse_partial() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]</span>
-        <span class="kw">enum </span>TestEnum {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>test_not_try_parse_partial() {
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
         }
@@ -601,4 +601,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

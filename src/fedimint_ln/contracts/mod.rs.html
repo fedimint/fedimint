@@ -139,18 +139,18 @@
 
 <span class="doccomment">/// A contract before execution as found in transaction outputs
 </span><span class="comment">// TODO: investigate if this is actually a problem
-</span><span class="attribute">#[allow(clippy::large_enum_variant)]</span>
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub enum </span>Contract {
+</span><span class="attribute">#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>Contract {
     Account(account::AccountContract),
     Incoming(incoming::IncomingContract),
     Outgoing(outgoing::OutgoingContract),
 }
 
 <span class="doccomment">/// A contract after execution as saved in the database
-</span><span class="attribute">#[allow(clippy::large_enum_variant)]</span>
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]</span>
-<span class="kw">pub enum </span>FundedContract {
+</span><span class="attribute">#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>FundedContract {
     Account(account::AccountContract),
     Incoming(incoming::FundedIncomingContract),
     Outgoing(outgoing::OutgoingContract),
@@ -158,18 +158,18 @@
 
 <span class="doccomment">/// Outcome of a contract. Only incoming contracts currently need to communicate anything back to
 /// the user (the decrypted preimage).
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub enum </span>ContractOutcome {
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub enum </span>ContractOutcome {
     Account(AccountContractOutcome),
     Incoming(incoming::DecryptedPreimage),
     Outgoing(OutgoingContractOutcome),
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>AccountContractOutcome {}
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>AccountContractOutcome {}
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutgoingContractOutcome {}
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutgoingContractOutcome {}
 
 <span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>Contract {
     <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
@@ -227,4 +227,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

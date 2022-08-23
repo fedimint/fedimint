@@ -704,8 +704,8 @@
 ///
 /// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
 /// The thus disconnected peer will need to rejoin the consensus at a later time.  
-</span><span class="attribute">#[async_trait]</span>
-<span class="kw">pub trait </span>PeerConnections&lt;T&gt;
+</span><span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>PeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: Serialize + DeserializeOwned + Unpin + Send,
 {
@@ -748,8 +748,8 @@
 }
 
 <span class="doccomment">/// Specifies the network configuration for federation-internal communication
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>NetworkConfig {
+</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>NetworkConfig {
     <span class="doccomment">/// Our federation member&#39;s identity
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="doccomment">/// Our listen address for incoming connections from other federation members
@@ -759,8 +759,8 @@
 }
 
 <span class="doccomment">/// Information needed to connect to one other federation member
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>ConnectionConfig {
+</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ConnectionConfig {
     <span class="doccomment">/// The peer&#39;s hbbft network address and port (e.g. `10.42.0.10:4000`)
     </span><span class="kw">pub </span>hbbft_addr: String,
     <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
@@ -769,8 +769,8 @@
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
 /// public interface.
-</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>PeerMessage&lt;M&gt; {
+</span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>PeerMessage&lt;M&gt; {
     msg: UniqueMessage&lt;M&gt;,
     ack: <span class="prelude-ty">Option</span>&lt;MessageId&gt;,
 }
@@ -812,8 +812,8 @@
     <span class="doccomment">/// Creates a new `ReconnectPeerConnections` connection manager from a network config and a
     /// [`Connector`](crate::net::connect::Connector). See [`ReconnectPeerConnections`] for
     /// requirements on the `Connector`.
-    </span><span class="attribute">#[instrument(skip_all)]</span>
-    <span class="kw">pub async fn </span>new(cfg: NetworkConfig, connect: PeerConnector&lt;T&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="attribute">#[instrument(skip_all)]
+    </span><span class="kw">pub async fn </span>new(cfg: NetworkConfig, connect: PeerConnector&lt;T&gt;) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(<span class="string">&quot;Starting mint {}&quot;</span>, cfg.identity);
 
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
@@ -888,8 +888,8 @@
     }
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl</span>&lt;T&gt; PeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl</span>&lt;T&gt; PeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
@@ -972,7 +972,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         <span class="kw-2">mut </span>connected: ConnectedPeerConnectionState&lt;M&gt;,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">tokio::select!</span> {
+        <span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
                 <span class="kw">let </span>msg = maybe_msg.expect(<span class="string">&quot;Peer connection was dropped&quot;</span>);
                 <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
@@ -1111,7 +1111,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         disconnected: DisconnectedPeerConnectionState,
     ) -&gt; PeerConnectionState&lt;M&gt; {
-        <span class="macro">tokio::select!</span> {
+        <span class="macro">tokio::select! </span>{
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
                 <span class="kw">let </span>msg = maybe_msg.expect(<span class="string">&quot;Peer connection was dropped&quot;</span>);
                 <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await
@@ -1211,8 +1211,8 @@
         <span class="self">self</span>.incoming.recv().<span class="kw">await</span>.expect(<span class="string">&quot;io task died&quot;</span>)
     }
 
-    <span class="attribute">#[instrument(skip_all, fields(peer))]</span>
-    <span class="kw">async fn </span>run_io_thread(
+    <span class="attribute">#[instrument(skip_all, fields(peer))]
+    </span><span class="kw">async fn </span>run_io_thread(
         incoming: Sender&lt;M&gt;,
         outgoing: Receiver&lt;M&gt;,
         peer: PeerId,
@@ -1241,8 +1241,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
     <span class="kw">use </span><span class="kw">crate</span>::net::peers::{
@@ -1263,8 +1263,8 @@
         tokio::time::timeout(Duration::from_secs(<span class="number">100</span>), f).<span class="kw">await</span>.ok()
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>test_connect() {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>test_connect() {
         tracing_subscriber::fmt()
             .with_env_filter(
                 EnvFilter::try_from_default_env()
@@ -1319,4 +1319,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

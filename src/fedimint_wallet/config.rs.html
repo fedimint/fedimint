@@ -132,8 +132,8 @@
 
 <span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>WalletConfig {
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletConfig {
     <span class="kw">pub </span>network: Network,
     <span class="kw">pub </span>peg_in_descriptor: PegInDescriptor,
     <span class="kw">pub </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
@@ -146,8 +146,8 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>WalletClientConfig {
+<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WalletClientConfig {
     <span class="doccomment">/// The federations public peg-in-descriptor
     </span><span class="kw">pub </span>peg_in_descriptor: PegInDescriptor,
     <span class="doccomment">/// The bitcoin network the client will use
@@ -157,8 +157,8 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>FeeConsensus {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>peg_in_abs: fedimint_api::Amount,
     <span class="kw">pub </span>peg_out_abs: fedimint_api::Amount,
 }
@@ -243,4 +243,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

@@ -65,18 +65,18 @@
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
 <span class="kw">use </span>serde::Serialize;
 
-<span class="attribute">#[derive(Parser)]</span>
-<span class="attribute">#[clap(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]</span>
-<span class="kw">struct </span>Cli {
+<span class="attribute">#[derive(Parser)]
+#[clap(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]
+</span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// print unformatted json
-    </span><span class="attribute">#[clap(takes_value = <span class="bool-val">false</span>, long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]</span>
-    raw_json: bool,
+    </span><span class="attribute">#[clap(takes_value = <span class="bool-val">false</span>, long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]
+    </span>raw_json: bool,
     <span class="doccomment">/// call JSON-2.0 RPC method
-    </span><span class="attribute">#[clap(subcommand)]</span>
-    command: Commands,
+    </span><span class="attribute">#[clap(subcommand)]
+    </span>command: Commands,
 }
-<span class="attribute">#[derive(Subcommand)]</span>
-<span class="kw">enum </span>Commands {
+<span class="attribute">#[derive(Subcommand)]
+</span><span class="kw">enum </span>Commands {
     <span class="doccomment">/// rpc-method: info()
     </span>Info,
     <span class="doccomment">/// rpc-method: pending()
@@ -84,11 +84,11 @@
     <span class="doccomment">/// rpc-method: pegin_address()
     </span>NewPegInAddress,
     <span class="doccomment">/// rpc-method: wait_block_height()
-    </span><span class="attribute">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]</span>
-    WaitBlockHeight { height: u64 },
+    </span><span class="attribute">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]
+    </span>WaitBlockHeight { height: u64 },
 }
-<span class="attribute">#[tokio::main]</span>
-<span class="kw">async fn </span>main() {
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
     <span class="kw">let </span>args = Cli::parse();
 
     <span class="kw">match </span>args.command {
@@ -121,4 +121,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

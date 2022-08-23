@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":[["CoreError",""]],"mod":[["config","MiniMint toplevel config"],["epoch",""],["modules",""],["outcome",""],["transaction",""]]};

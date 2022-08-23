@@ -612,8 +612,8 @@
 ///
 /// Connections are message based ([`FramedTransport`]) and should be authenticated and encrypted
 /// for production deployments.
-</span><span class="attribute">#[async_trait]</span>
-<span class="kw">pub trait </span>Connector&lt;M&gt; {
+</span><span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>Connector&lt;M&gt; {
     <span class="doccomment">/// Connect to a `destination`
     </span><span class="kw">async fn </span>connect_framed(<span class="kw-2">&amp;</span><span class="self">self</span>, destination: String, peer: PeerId) -&gt; ConnectResult&lt;M&gt;;
 
@@ -630,8 +630,8 @@
 }
 
 <span class="doccomment">/// TCP connector with encryption and authentication
-</span><span class="attribute">#[derive(Debug)]</span>
-<span class="kw">pub struct </span>TlsTcpConnector {
+</span><span class="attribute">#[derive(Debug)]
+</span><span class="kw">pub struct </span>TlsTcpConnector {
     our_certificate: rustls::Certificate,
     our_private_key: rustls::PrivateKey,
     peer_certs: Arc&lt;PeerCertStore&gt;,
@@ -639,15 +639,15 @@
     </span>cert_store: RootCertStore,
 }
 
-<span class="attribute">#[derive(Debug, Clone)]</span>
-<span class="kw">pub struct </span>TlsConfig {
+<span class="attribute">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>TlsConfig {
     <span class="kw">pub </span>our_certificate: rustls::Certificate,
     <span class="kw">pub </span>our_private_key: rustls::PrivateKey,
     <span class="kw">pub </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone)]</span>
-<span class="kw">pub struct </span>PeerCertStore {
+<span class="attribute">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>PeerCertStore {
     peer_certificates: Vec&lt;(PeerId, rustls::Certificate)&gt;,
 }
 
@@ -725,8 +725,8 @@
     }
 }
 
-<span class="attribute">#[async_trait]</span>
-<span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
+<span class="attribute">#[async_trait]
+</span><span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>TlsTcpConnector
 <span class="kw">where
     </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
 {
@@ -794,8 +794,8 @@
 }
 
 <span class="doccomment">/// Fake network stack used in tests
-</span><span class="attribute">#[allow(unused_imports)]</span>
-<span class="kw">pub mod </span>mock {
+</span><span class="attribute">#[allow(unused_imports)]
+</span><span class="kw">pub mod </span>mock {
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectResult, Connector};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
     <span class="kw">use </span>anyhow::Error;
@@ -823,8 +823,8 @@
     }
 
     <span class="kw">impl </span>MockNetwork {
-        <span class="attribute">#[allow(clippy::new_without_default)]</span>
-        <span class="kw">pub fn </span>new() -&gt; MockNetwork {
+        <span class="attribute">#[allow(clippy::new_without_default)]
+        </span><span class="kw">pub fn </span>new() -&gt; MockNetwork {
             MockNetwork {
                 clients: Arc::new(Default::default()),
             }
@@ -838,8 +838,8 @@
         }
     }
 
-    <span class="attribute">#[async_trait::async_trait]</span>
-    <span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>MockConnector
+    <span class="attribute">#[async_trait::async_trait]
+    </span><span class="kw">impl</span>&lt;M&gt; Connector&lt;M&gt; <span class="kw">for </span>MockConnector
     <span class="kw">where
         </span>M: Debug + serde::Serialize + serde::de::DeserializeOwned + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
@@ -902,8 +902,8 @@
         <span class="prelude-val">Ok</span>(PeerId::from(u16::from_le_bytes(peer_id)))
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>test_mock_network() {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>test_mock_network() {
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -930,16 +930,16 @@
         <span class="macro">assert_eq!</span>(conn_b.next().<span class="kw">await</span>.unwrap().unwrap(), <span class="number">42</span>);
     }
 
-    <span class="attribute">#[allow(dead_code)]</span>
-    <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
+    <span class="attribute">#[allow(dead_code)]
+    </span><span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
     <span class="kw">where
         </span>F: Future&lt;Output = T&gt;,
     {
         tokio::time::timeout(Duration::from_secs(<span class="number">1</span>), f).<span class="kw">await</span>.ok()
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>test_large_messages() {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>test_large_messages() {
         <span class="kw">let </span>peer_a = PeerId::from(<span class="number">1</span>);
         <span class="kw">let </span>peer_b = PeerId::from(<span class="number">2</span>);
 
@@ -977,8 +977,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, TlsConfig};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
@@ -1008,8 +1008,8 @@
             .collect()
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>connect_success() {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>connect_success() {
         <span class="comment">// FIXME: don&#39;t actually bind here, probably requires yet another Box&lt;dyn Trait&gt; layer :(
         </span><span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7000&quot;</span>.to_owned();
         <span class="kw">let </span>connectors = gen_connector_config(<span class="number">5</span>)
@@ -1042,8 +1042,8 @@
         server_task.<span class="kw">await</span>.unwrap();
     }
 
-    <span class="attribute">#[tokio::test]</span>
-    <span class="kw">async fn </span>connect_reject() {
+    <span class="attribute">#[tokio::test]
+    </span><span class="kw">async fn </span>connect_reject() {
         <span class="kw">let </span>bind_addr = <span class="string">&quot;127.0.0.1:7001&quot;</span>.to_owned();
         <span class="kw">let </span>cfg = gen_connector_config(<span class="number">5</span>);
 
@@ -1159,4 +1159,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>

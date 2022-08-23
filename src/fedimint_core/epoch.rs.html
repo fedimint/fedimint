@@ -258,8 +258,8 @@
 
 <span class="attribute">#[derive(
     Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]</span>
-<span class="kw">pub enum </span>ConsensusItem {
+)]
+</span><span class="kw">pub enum </span>ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
     Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>FederationModule&gt;::ConsensusItem),
@@ -267,21 +267,21 @@
     LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>FederationModule&gt;::ConsensusItem),
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>EpochSignatureShare(<span class="kw">pub </span>SignatureShare);
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>EpochSignatureShare(<span class="kw">pub </span>SignatureShare);
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]</span>
-<span class="kw">pub struct </span>EpochSignature(<span class="kw">pub </span>Signature);
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>EpochSignature(<span class="kw">pub </span>Signature);
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>EpochHistory {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>EpochHistory {
     <span class="kw">pub </span>outcome: OutcomeHistory,
     <span class="kw">pub </span>hash: Sha256,
     <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;EpochSignature&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]</span>
-<span class="kw">pub struct </span>OutcomeHistory {
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>OutcomeHistory {
     <span class="kw">pub </span>epoch: u64,
     <span class="kw">pub </span>last_hash: <span class="prelude-ty">Option</span>&lt;Sha256&gt;,
     <span class="kw">pub </span>items: Vec&lt;(PeerId, Vec&lt;ConsensusItem&gt;)&gt;,
@@ -350,8 +350,8 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, PartialEq, Eq)]</span>
-<span class="kw">pub enum </span>EpochVerifyError {
+<span class="attribute">#[derive(Debug, PartialEq, Eq)]
+</span><span class="kw">pub enum </span>EpochVerifyError {
     MissingSignature,
     InvalidSignature,
     MissingPreviousEpoch,
@@ -389,8 +389,8 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]</span>
-<span class="kw">mod </span>tests {
+<span class="attribute">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::epoch::Sha256;
     <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
     <span class="kw">use </span>fedimint_api::PeerId;
@@ -425,8 +425,8 @@
         }
     }
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>verifies_hash() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>verifies_hash() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>pk = sk.public_key();
         <span class="kw">let </span>wrong_hash: Sha256 = Default::default();
@@ -445,8 +445,8 @@
         );
     }
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>verifies_merkle_tree() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>verifies_merkle_tree() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>pk = sk.public_key();
 
@@ -468,8 +468,8 @@
         );
     }
 
-    <span class="attribute">#[test]</span>
-    <span class="kw">fn </span>verifies_sigs() {
+    <span class="attribute">#[test]
+    </span><span class="kw">fn </span>verifies_sigs() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>pk = sk.public_key();
 
@@ -493,4 +493,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (878aef79d 2022-08-20)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (c0941dfb5 2022-08-21)" ></div></body></html>
