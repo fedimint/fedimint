@@ -155,6 +155,8 @@
           src = filterWorkspaceDepsBuildFiles ./.;
           pname = "fedimint-dependencies";
           doCheck = false;
+          # we do not care about running `cargo check`
+          cargoCheckCommand = "true";
         });
 
         # a function to define cargo&nix package, listing
