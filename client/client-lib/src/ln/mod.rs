@@ -7,7 +7,7 @@ use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::utils::OwnedClientContext;
+use crate::utils::ClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -30,7 +30,7 @@ use self::incoming::ConfirmedInvoice;
 
 pub struct LnClient<'c> {
     pub config: &'c LightningModuleClientConfig,
-    pub context: &'c OwnedClientContext,
+    pub context: &'c ClientContext,
 }
 
 #[allow(dead_code)]
@@ -197,7 +197,7 @@ pub enum LnClientError {
 mod tests {
     use crate::api::FederationApi;
     use crate::ln::LnClient;
-    use crate::OwnedClientContext;
+    use crate::ClientContext;
     use async_trait::async_trait;
     use bitcoin::Address;
     use fedimint_api::db::batch::DbBatch;
@@ -292,7 +292,7 @@ mod tests {
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         LightningModuleClientConfig,
-        OwnedClientContext,
+        ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
@@ -306,7 +306,7 @@ mod tests {
         let api = FakeApi { mint: fed.clone() };
         let client_config = fed.lock().await.client_cfg().clone();
 
-        let client_context = OwnedClientContext {
+        let client_context = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),

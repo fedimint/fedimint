@@ -64,7 +64,7 @@ use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::{CoinFinalizationData, MintClientError};
 use crate::transaction::TransactionBuilder;
-use crate::utils::{network_to_currency, OwnedClientContext};
+use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
     api::{ApiError, FederationApi},
@@ -110,7 +110,7 @@ impl From<GatewayClientConfig> for LightningGateway {
 }
 
 pub struct Client<C> {
-    inner: Arc<(C, OwnedClientContext)>,
+    inner: Arc<(C, ClientContext)>,
 }
 
 impl AsRef<ClientConfig> for GatewayClientConfig {
@@ -178,7 +178,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         api: Box<dyn FederationApi>,
         secp: Secp256k1<All>,
     ) -> Client<T> {
-        let context = OwnedClientContext { db, api, secp };
+        let context = ClientContext { db, api, secp };
         Self {
             inner: Arc::new((config, context)),
         }

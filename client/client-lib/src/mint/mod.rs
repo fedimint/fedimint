@@ -2,7 +2,7 @@ pub mod db;
 
 use crate::api::ApiError;
 use crate::transaction::TransactionBuilder;
-use crate::utils::OwnedClientContext;
+use crate::utils::ClientContext;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
@@ -29,7 +29,7 @@ use tracing::{debug, trace, warn};
 /// of the mint type.
 pub struct MintClient<'c> {
     pub config: &'c MintClientConfig,
-    pub context: &'c OwnedClientContext,
+    pub context: &'c ClientContext,
 }
 
 /// Client side representation of one coin in an issuance request that keeps all necessary
@@ -359,7 +359,7 @@ mod tests {
     use crate::api::FederationApi;
 
     use crate::mint::MintClient;
-    use crate::{OwnedClientContext, TransactionBuilder};
+    use crate::{ClientContext, TransactionBuilder};
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
@@ -451,7 +451,7 @@ mod tests {
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         MintClientConfig,
-        OwnedClientContext,
+        ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Mint, MintClientConfig>::new(
@@ -466,7 +466,7 @@ mod tests {
 
         let client_config = fed.lock().await.client_cfg().clone();
 
-        let client_context = OwnedClientContext {
+        let client_context = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),

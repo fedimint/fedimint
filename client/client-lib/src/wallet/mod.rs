@@ -1,4 +1,4 @@
-use crate::utils::OwnedClientContext;
+use crate::utils::ClientContext;
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
@@ -21,7 +21,7 @@ mod db;
 /// outputs of the wallet (on-chain) type.
 pub struct WalletClient<'c> {
     pub config: &'c WalletClientConfig,
-    pub context: &'c OwnedClientContext,
+    pub context: &'c ClientContext,
 }
 
 impl<'c> WalletClient<'c> {
@@ -144,7 +144,7 @@ pub enum WalletClientError {
 mod tests {
     use crate::api::FederationApi;
     use crate::wallet::WalletClient;
-    use crate::OwnedClientContext;
+    use crate::ClientContext;
     use async_trait::async_trait;
     use bitcoin::{Address, Txid};
 
@@ -239,7 +239,7 @@ mod tests {
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
         WalletClientConfig,
-        OwnedClientContext,
+        ClientContext,
         FakeBitcoindRpcController,
     ) {
         let btc_rpc = FakeBitcoindRpc::new();
@@ -267,7 +267,7 @@ mod tests {
         let api = FakeApi { _mint: fed.clone() };
         let client_config = fed.lock().await.client_cfg().clone();
 
-        let client = OwnedClientContext {
+        let client = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),

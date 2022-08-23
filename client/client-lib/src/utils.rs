@@ -43,7 +43,7 @@ pub fn parse_fedimint_amount(s: &str) -> Result<fedimint_api::Amount, ParseAmoun
         fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
-pub struct OwnedClientContext {
+pub struct ClientContext {
     pub db: Box<dyn Database>,
     pub api: Box<dyn FederationApi>,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
