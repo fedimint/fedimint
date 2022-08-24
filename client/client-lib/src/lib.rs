@@ -5,8 +5,8 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+use std::time::Duration;
 use std::time::SystemTime;
-use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
 
@@ -64,7 +64,7 @@ use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
 use crate::mint::{CoinFinalizationData, MintClientError};
 use crate::transaction::TransactionBuilder;
-use crate::utils::{network_to_currency, OwnedClientContext};
+use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
     api::{ApiError, FederationApi},
@@ -110,7 +110,8 @@ impl From<GatewayClientConfig> for LightningGateway {
 }
 
 pub struct Client<C> {
-    context: Arc<OwnedClientContext<C>>,
+    config: C,
+    context: ClientContext,
 }
 
 impl AsRef<ClientConfig> for GatewayClientConfig {
@@ -128,30 +129,27 @@ impl AsRef<ClientConfig> for UserClientConfig {
 impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn ln_client(&self) -> LnClient {
         LnClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().ln),
+            config: &self.config.as_ref().ln,
+            context: &self.context,
         }
     }
 
     pub fn mint_client(&self) -> MintClient {
         MintClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().mint),
+            config: &self.config.as_ref().mint,
+            context: &self.context,
         }
     }
 
     pub fn wallet_client(&self) -> WalletClient {
         WalletClient {
-            context: self
-                .context
-                .borrow_with_module_config(|cfg| &cfg.as_ref().wallet),
+            config: &self.config.as_ref().wallet,
+            context: &self.context,
         }
     }
 
     pub fn config(&self) -> T {
-        self.context.config.clone()
+        self.config.clone()
     }
 
     pub fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
@@ -178,13 +176,10 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         api: Box<dyn FederationApi>,
         secp: Secp256k1<All>,
     ) -> Client<T> {
-        let context = Arc::new(OwnedClientContext {
+        Self {
             config,
-            db,
-            api,
-            secp,
-        });
-        Self { context }
+            context: ClientContext { db, api, secp },
+        }
     }
 
     pub async fn peg_in<R: RngCore + CryptoRng>(
@@ -213,12 +208,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         Ok(self
             .mint_client()
-            .submit_tx_with_change(
-                &self.context.config.as_ref().fee_consensus(),
-                tx,
-                batch,
-                rng,
-            )
+            .submit_tx_with_change(&self.config.as_ref().fee_consensus(), tx, batch, rng)
             .await?)
     }
 
@@ -297,13 +287,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let funding_amount = self
-            .context
-            .config
-            .as_ref()
-            .wallet
-            .fee_consensus
-            .peg_out_abs
+        let funding_amount = self.config.as_ref().wallet.fee_consensus.peg_out_abs
             + (peg_out.amount + peg_out.fees.amount()).into();
         let coins = self.mint_client().select_coins(funding_amount)?;
         tx.input_coins(coins, &self.context.secp)?;
@@ -541,21 +525,20 @@ impl Client<UserClientConfig> {
         let duration_since_epoch =
             Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
 
-        let invoice =
-            InvoiceBuilder::new(network_to_currency(self.context.config.0.wallet.network))
-                .amount_milli_satoshis(amount.milli_sat)
-                .description(description)
-                .payment_hash(payment_hash)
-                .payment_secret(payment_secret)
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry(18)
-                .payee_pub_key(node_public_key)
-                .private_route(gateway_route_hint)
-                .build_signed(|hash| {
-                    self.context
-                        .secp
-                        .sign_ecdsa_recoverable(hash, &node_secret_key)
-                })?;
+        let invoice = InvoiceBuilder::new(network_to_currency(self.config.0.wallet.network))
+            .amount_milli_satoshis(amount.milli_sat)
+            .description(description)
+            .payment_hash(payment_hash)
+            .payment_secret(payment_secret)
+            .duration_since_epoch(duration_since_epoch)
+            .min_final_cltv_expiry(18)
+            .payee_pub_key(node_public_key)
+            .private_route(gateway_route_hint)
+            .build_signed(|hash| {
+                self.context
+                    .secp
+                    .sign_ecdsa_recoverable(hash, &node_secret_key)
+            })?;
 
         let offer_output =
             self.ln_client()
@@ -641,8 +624,7 @@ impl Client<GatewayClientConfig> {
         &self,
         account: &OutgoingContractAccount,
     ) -> Result<PaymentParameters> {
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key);
 
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
@@ -672,7 +654,7 @@ impl Client<GatewayClientConfig> {
         // margin.
         let max_delay = (account.contract.timelock as u64)
             .checked_sub(consensus_block_height)
-            .and_then(|delta| delta.checked_sub(self.context.config.timelock_delta))
+            .and_then(|delta| delta.checked_sub(self.config.timelock_delta))
             .ok_or(ClientError::TimeoutTooClose)?;
 
         Ok(PaymentParameters {
@@ -738,7 +720,7 @@ impl Client<GatewayClientConfig> {
             batch.append_insert(OutgoingPaymentClaimKey(contract_id), ());
         });
 
-        tx.input(&mut vec![self.context.config.redeem_key], input);
+        tx.input(&mut vec![self.config.redeem_key], input);
         let txid = self.submit_tx_with_change(tx, batch, rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -764,8 +746,7 @@ impl Client<GatewayClientConfig> {
         builder.input_coins(coins, &self.context.secp)?;
 
         // Outputs
-        let our_pub_key =
-            secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.context.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key);
         let contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -801,7 +782,7 @@ impl Client<GatewayClientConfig> {
 
         // Input claims this contract
         builder.input(
-            &mut vec![self.context.config.redeem_key],
+            &mut vec![self.config.redeem_key],
             Input::LN(contract_account.claim()),
         );
         let mint_tx_id = self.submit_tx_with_change(builder, batch, rng).await?;

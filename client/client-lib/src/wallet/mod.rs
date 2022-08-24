@@ -1,5 +1,6 @@
-use crate::utils::BorrowedClientContext;
-use bitcoin::{Address, KeyPair};
+use crate::utils::ClientContext;
+use bitcoin::Address;
+use bitcoin::KeyPair;
 use db::PegInKey;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -19,7 +20,8 @@ mod db;
 /// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 pub struct WalletClient<'c> {
-    pub context: BorrowedClientContext<'c, WalletClientConfig>,
+    pub config: &'c WalletClientConfig,
+    pub context: &'c ClientContext,
 }
 
 impl<'c> WalletClient<'c> {
@@ -37,19 +39,18 @@ impl<'c> WalletClient<'c> {
         mut batch: BatchTx<'_>,
         mut rng: R,
     ) -> Address {
-        let peg_in_keypair = bitcoin::KeyPair::new(self.context.secp, &mut rng);
+        let peg_in_keypair = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
         let peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&peg_in_keypair);
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
         let script = self
-            .context
             .config
             .peg_in_descriptor
-            .tweak(&peg_in_pub_key, self.context.secp)
+            .tweak(&peg_in_pub_key, &self.context.secp)
             .script_pubkey();
         debug!(?script);
-        let address = Address::from_script(&script, self.context.config.network)
+        let address = Address::from_script(&script, self.config.network)
             .expect("Script from descriptor should have an address");
 
         batch.append_insert_new(
@@ -84,7 +85,7 @@ impl<'c> WalletClient<'c> {
             })
             .ok_or(WalletClientError::NoMatchingPegInFound)?;
         let secret_tweak_key =
-            bitcoin::KeyPair::from_seckey_slice(self.context.secp, &secret_tweak_key_bytes)
+            bitcoin::KeyPair::from_seckey_slice(&self.context.secp, &secret_tweak_key_bytes)
                 .expect("sec key was generated and saved by us");
 
         let peg_in_proof = PegInProof::new(
@@ -96,11 +97,11 @@ impl<'c> WalletClient<'c> {
         .map_err(WalletClientError::PegInProofError)?;
 
         peg_in_proof
-            .verify(self.context.secp, &self.context.config.peg_in_descriptor)
+            .verify(&self.context.secp, &self.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)?;
 
         let amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(self.context.config.fee_consensus.peg_in_abs);
+            .saturating_sub(self.config.fee_consensus.peg_in_abs);
         if amount == Amount::ZERO {
             return Err(WalletClientError::PegInAmountTooSmall);
         }
@@ -143,7 +144,7 @@ pub enum WalletClientError {
 mod tests {
     use crate::api::FederationApi;
     use crate::wallet::WalletClient;
-    use crate::OwnedClientContext;
+    use crate::ClientContext;
     use async_trait::async_trait;
     use bitcoin::{Address, Txid};
 
@@ -237,7 +238,8 @@ mod tests {
 
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
-        OwnedClientContext<WalletClientConfig>,
+        WalletClientConfig,
+        ClientContext,
         FakeBitcoindRpcController,
     ) {
         let btc_rpc = FakeBitcoindRpc::new();
@@ -263,22 +265,23 @@ mod tests {
         ));
 
         let api = FakeApi { _mint: fed.clone() };
+        let client_config = fed.lock().await.client_cfg().clone();
 
-        let client = OwnedClientContext {
-            config: fed.lock().await.client_cfg().clone(),
+        let client = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client, btc_rpc_controller)
+        (fed, client_config, client, btc_rpc_controller)
     }
 
     #[test_log::test(tokio::test)]
     async fn create_output() {
-        let (fed, client_context, btc_rpc) = new_mint_and_client().await;
+        let (fed, client_config, client_context, btc_rpc) = new_mint_and_client().await;
         let _client = WalletClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: &client_config,
+            context: &client_context,
         };
 
         // generate fake UTXO
