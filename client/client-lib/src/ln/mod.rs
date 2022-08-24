@@ -7,7 +7,7 @@ use crate::api::ApiError;
 use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::utils::BorrowedClientContext;
+use crate::utils::ClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -29,7 +29,8 @@ use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
 
 pub struct LnClient<'c> {
-    pub context: BorrowedClientContext<'c, LightningModuleClientConfig>,
+    pub config: &'c LightningModuleClientConfig,
+    pub context: &'c ClientContext,
 }
 
 #[allow(dead_code)]
@@ -54,7 +55,7 @@ impl<'c> LnClient<'c> {
             Amount::from_msat(contract_amount_msat)
         };
 
-        let user_sk = bitcoin::KeyPair::new(self.context.secp, &mut rng);
+        let user_sk = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
 
         let contract = OutgoingContract {
             hash: *invoice.payment_hash(),
@@ -147,7 +148,7 @@ impl<'c> LnClient<'c> {
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
                 payment_secret,
-                &self.context.config.threshold_pub_key,
+                &self.config.threshold_pub_key,
             ),
         })
     }
@@ -196,7 +197,7 @@ pub enum LnClientError {
 mod tests {
     use crate::api::FederationApi;
     use crate::ln::LnClient;
-    use crate::OwnedClientContext;
+    use crate::ClientContext;
     use async_trait::async_trait;
     use bitcoin::Address;
     use fedimint_api::db::batch::DbBatch;
@@ -290,7 +291,8 @@ mod tests {
 
     async fn new_mint_and_client() -> (
         Arc<tokio::sync::Mutex<Fed>>,
-        OwnedClientContext<LightningModuleClientConfig>,
+        LightningModuleClientConfig,
+        ClientContext,
     ) {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
@@ -302,24 +304,25 @@ mod tests {
             .await,
         ));
         let api = FakeApi { mint: fed.clone() };
+        let client_config = fed.lock().await.client_cfg().clone();
 
-        let client_context = OwnedClientContext {
-            config: fed.lock().await.client_cfg().clone(),
+        let client_context = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_context)
+        (fed, client_config, client_context)
     }
 
     #[test_log::test(tokio::test)]
     async fn test_outgoing() {
         let mut rng = rand::thread_rng();
-        let (fed, client_context) = new_mint_and_client().await;
+        let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = LnClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: &client_config,
+            context: &client_context,
         };
 
         fed.lock().await.set_block_height(1);

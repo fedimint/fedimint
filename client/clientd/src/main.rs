@@ -1,10 +1,14 @@
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::{Extension, Json, Router, Server};
+use axum::Json as JsonRespond;
+use axum::{Extension, Router, Server};
 use bitcoin::secp256k1::rand;
+use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
+use clientd::Json as JsonExtract;
 use clientd::{
-    InfoResponse, PegInAddressResponse, PendingResponse, RpcResult, WaitBlockHeightPayload,
+    ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
+    PendingResponse, WaitBlockHeightPayload,
 };
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
@@ -14,7 +18,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tracing::{info, Level};
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -49,6 +53,7 @@ async fn main() {
         .route("/get_pending", post(pending))
         .route("/get_new_peg_in_address", post(new_peg_in_address))
         .route("/wait_block_height", post(wait_block_height))
+        .route("/peg_in", post(peg_in))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -67,35 +72,52 @@ async fn main() {
 }
 
 /// Handler for "get_info", returns all the clients holdings and pending transactions
-async fn info(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+async fn info(Extension(state): Extension<Arc<State>>) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Json(RpcResult::Success(json!(InfoResponse::new(
+    Ok(JsonRespond(json!(InfoResponse::new(
         client.coins(),
         client.list_active_issuances(),
     ))))
 }
 
 /// Handler for "get_pending", returns the clients pending transactions
-async fn pending(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+async fn pending(
+    Extension(state): Extension<Arc<State>>,
+) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Json(RpcResult::Success(json!(PendingResponse::new(
+    Ok(JsonRespond(json!(PendingResponse::new(
         client.list_active_issuances()
     ))))
 }
 
-async fn new_peg_in_address(Extension(state): Extension<Arc<State>>) -> impl IntoResponse {
+async fn new_peg_in_address(
+    Extension(state): Extension<Arc<State>>,
+) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     let mut rng = state.rng.clone();
-    Json(RpcResult::Success(json!(PegInAddressResponse {
+    Ok(JsonRespond(json!(PegInAddressResponse {
         peg_in_address: client.get_new_pegin_address(&mut rng),
     })))
 }
 
 async fn wait_block_height(
     Extension(state): Extension<Arc<State>>,
-    Json(payload): Json<WaitBlockHeightPayload>,
-) -> impl IntoResponse {
+    JsonExtract(payload): JsonExtract<WaitBlockHeightPayload>,
+) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     client.await_consensus_block_height(payload.height).await;
-    Json(RpcResult::Success(json!("")))
+    Ok(JsonRespond(json!("done")))
+}
+
+async fn peg_in(
+    Extension(state): Extension<Arc<State>>,
+    payload: JsonExtract<PegInPayload>,
+) -> Result<impl IntoResponse, ClientdError> {
+    let client = &state.client;
+    let mut rng = state.rng.clone();
+    let txout_proof = payload.0.txout_proof;
+    let transaction = payload.0.transaction;
+    let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
+    info!("Started peg-in {}", txid.to_hex());
+    Ok(JsonRespond(json!(PegInOutResponse { txid })))
 }

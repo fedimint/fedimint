@@ -1,8 +1,10 @@
 use anyhow::Result;
+use bitcoin::Transaction;
 use clap::{Parser, Subcommand};
-use clientd::{call, WaitBlockHeightPayload};
+use clientd::{call, PegInPayload, WaitBlockHeightPayload};
 use fedimint_api::module::__reexports::serde_json;
-use serde::Serialize;
+use fedimint_core::modules::wallet::txoproof::TxOutProof;
+use mint_client::utils::from_hex;
 
 #[derive(Parser)]
 #[clap(author, version, about = "a json-rpc cli application")]
@@ -25,6 +27,15 @@ enum Commands {
     /// rpc-method: wait_block_height()
     #[clap(arg_required_else_help = true)]
     WaitBlockHeight { height: u64 },
+    /// rpc-method peg_in()
+    PegIn {
+        /// The TxOutProof which was created from sending BTC to the pegin-address
+        #[clap(parse(try_from_str = from_hex))]
+        txout_proof: TxOutProof,
+        /// The Bitcoin Transaction
+        #[clap(parse(try_from_str = from_hex))]
+        transaction: Transaction,
+    },
 }
 #[tokio::main]
 async fn main() {
@@ -32,30 +43,40 @@ async fn main() {
 
     match args.command {
         Commands::Info => {
-            print_json(call("", "/get_info").await, args.raw_json);
+            print_response(call("", "/get_info").await, args.raw_json);
         }
         Commands::Pending => {
-            print_json(call("", "/get_pending").await, args.raw_json);
+            print_response(call("", "/get_pending").await, args.raw_json);
         }
         Commands::NewPegInAddress => {
-            print_json(call("", "/get_new_peg_in_address").await, args.raw_json);
+            print_response(call("", "/get_new_peg_in_address").await, args.raw_json);
         }
         Commands::WaitBlockHeight { height } => {
             let params = WaitBlockHeightPayload { height };
-            print_json(call(&params, "/wait_block_height").await, args.raw_json);
+            print_response(call(&params, "/wait_block_height").await, args.raw_json);
+        }
+        Commands::PegIn {
+            txout_proof,
+            transaction,
+        } => {
+            let params = PegInPayload {
+                txout_proof,
+                transaction,
+            };
+            print_response(call(&params, "/peg_in").await, args.raw_json);
         }
     }
 }
 
-fn print_json<T: Serialize>(result: Result<T>, raw: bool) {
-    match result {
-        Ok(p) => {
+fn print_response(response: Result<serde_json::Value>, raw: bool) {
+    match response {
+        Ok(json) => {
             if raw {
-                println!("{}", serde_json::to_string(&p).unwrap());
+                println!("{}", serde_json::to_string(&json).unwrap());
             } else {
-                println!("{}", serde_json::to_string_pretty(&p).unwrap());
+                println!("{}", serde_json::to_string_pretty(&json).unwrap());
             }
         }
-        Err(e) => eprintln!("{}", e),
+        Err(err) => eprintln!("{}", err),
     }
 }
