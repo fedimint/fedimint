@@ -236,16 +236,17 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Validate tokens without claiming them. This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    pub async fn validate_tokens(&self, coins: Coins<SpendableCoin>) -> Result<()> {
+    pub async fn validate_tokens(&self, coins: &Coins<SpendableCoin>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
         if coins
             .iter()
             .map(|(amt, coin)| coin.coin.verify(*tbs_pks.tier(&amt).unwrap()))
-            .all(|x| x) {
-                println!("All tokens have valid signatures")
-            } else {
-                println!("Found invalid signature")
-            }
+            .all(|x| x)
+        {
+            println!("All tokens have valid signatures")
+        } else {
+            println!("Found invalid signature")
+        }
         Ok(())
     }
 

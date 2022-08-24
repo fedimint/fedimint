@@ -167,7 +167,10 @@ async fn main() {
             info!(%id, "Started reissuance, please fetch the result later");
         }
         Command::Validate { coins } => {
-            client.validate_tokens(coins).await.expect("Invalid tokens");
+            client
+                .validate_tokens(&coins)
+                .await
+                .expect("Invalid tokens");
         }
         Command::Spend { amount } => {
             match client.select_and_spend_coins(amount) {
