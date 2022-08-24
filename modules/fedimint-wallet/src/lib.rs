@@ -27,9 +27,9 @@ use bitcoin::{
 use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::api_endpoint;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
+use fedimint_api::module::{api_endpoint, ApiError};
 use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use fedimint_derive::UnzipConsensus;
 use miniscript::psbt::PsbtExt;
@@ -353,16 +353,14 @@ impl FederationModule for Wallet {
                 output.recipient.network,
             ));
         }
-        let consensus_fee_rate = self.current_round_consensus().unwrap().fee_rate;
+        let consensus_fee_rate = self.current_round_consensus()?.fee_rate;
         if output.fees.fee_rate < consensus_fee_rate {
             return Err(WalletError::PegOutFeeRate(
                 output.fees.fee_rate,
                 consensus_fee_rate,
             ));
         }
-        if self.create_peg_out_tx(output).is_none() {
-            return Err(WalletError::NotEnoughSpendableUTXO);
-        }
+        self.create_peg_out_tx(output)?;
         Ok(output.amount.into())
     }
 
@@ -381,7 +379,7 @@ impl FederationModule for Wallet {
         let mut tx = self
             .create_peg_out_tx(output)
             .expect("Should have been validated");
-        self.offline_wallet().sign_psbt(&mut tx.psbt);
+        self.offline_wallet().sign_psbt(&mut tx.psbt)?;
         let txid = tx.psbt.unsigned_tx.txid();
         info!(
             %txid,
@@ -521,18 +519,17 @@ impl FederationModule for Wallet {
             },
             api_endpoint! {
                 "/peg_out_fees",
-                async |module: &Wallet, params: (Address, u64)| -> Option<PegOutFees> {
+                async |module: &Wallet, params: (Address, u64)| -> PegOutFees {
                     let (address, sats) = params;
-                    let consensus = module.current_round_consensus().unwrap();
+                    let consensus = module.current_round_consensus().map_err(|err| ApiError::new(400, err.to_string()))?;
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.script_pubkey(),
                         module.available_utxos(),
                         consensus.fee_rate,
                         &consensus.randomness_beacon
-                    );
-
-                    Ok(tx.map(|tx| tx.fees))
+                    ).map_err(|e|ApiError::new(400, e.to_string()))?;
+                Ok(tx.fees)
                 }
             },
         ];
@@ -656,7 +653,7 @@ impl Wallet {
             let tweaked_peer_key = peer_key.tweak(tweak, &self.secp);
             self.secp
                 .verify_ecdsa(
-                    &Message::from_slice(&tx_hash[..]).unwrap(),
+                    &Message::from_slice(&tx_hash[..])?,
                     signature,
                     &tweaked_peer_key.key,
                 )
@@ -744,8 +741,11 @@ impl Wallet {
         median_proposal
     }
 
-    pub fn current_round_consensus(&self) -> Option<RoundConsensus> {
-        self.db.get_value(&RoundConsensusKey).expect("DB error")
+    pub fn current_round_consensus(&self) -> Result<RoundConsensus, WalletError> {
+        self.db
+            .get_value(&RoundConsensusKey)
+            .expect("DB error")
+            .ok_or(WalletError::RoundConsensusNotFound)
     }
 
     pub async fn target_height(&self) -> u32 {
@@ -753,8 +753,8 @@ impl Wallet {
         our_network_height.saturating_sub(self.cfg.finality_delay)
     }
 
-    pub fn consensus_height(&self) -> Option<u32> {
-        self.current_round_consensus().map(|rc| rc.block_height)
+    pub fn consensus_height(&self) -> Result<u32, WalletError> {
+        Ok(self.current_round_consensus()?.block_height)
     }
 
     async fn sync_up_to_consensus_height(&self, mut batch: BatchTx<'_>, new_height: u32) {
@@ -846,8 +846,8 @@ impl Wallet {
             .is_some()
     }
 
-    fn create_peg_out_tx(&self, peg_out: &PegOut) -> Option<UnsignedTransaction> {
-        let change_tweak = self.current_round_consensus().unwrap().randomness_beacon;
+    fn create_peg_out_tx(&self, peg_out: &PegOut) -> Result<UnsignedTransaction, WalletError> {
+        let change_tweak = self.current_round_consensus()?.randomness_beacon;
         self.offline_wallet().create_tx(
             peg_out.amount,
             peg_out.recipient.script_pubkey(),
@@ -892,7 +892,7 @@ impl<'a> StatelessWallet<'a> {
         mut utxos: Vec<(UTXOKey, SpendableUTXO)>,
         fee_rate: Feerate,
         change_tweak: &[u8],
-    ) -> Option<UnsignedTransaction> {
+    ) -> Result<UnsignedTransaction, WalletError> {
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
         //  * We need to keep an eye on the tx weight so we can factor the fees into out calculation
@@ -932,7 +932,7 @@ impl<'a> StatelessWallet<'a> {
                     fees = fee_rate.calculate_fee(total_weight);
                     selected_utxos.push((utxo_key, utxo));
                 }
-                _ => return None, // Not enough UTXOs
+                _ => return Err(WalletError::NotEnoughSpendableUTXO),
             }
         }
 
@@ -1031,7 +1031,7 @@ impl<'a> StatelessWallet<'a> {
             outputs: vec![Default::default(), change_out],
         };
 
-        Some(UnsignedTransaction {
+        Ok(UnsignedTransaction {
             psbt,
             signatures: vec![],
             change,
@@ -1042,7 +1042,10 @@ impl<'a> StatelessWallet<'a> {
         })
     }
 
-    fn sign_psbt(&self, psbt: &mut PartiallySignedTransaction) {
+    fn sign_psbt(
+        &self,
+        psbt: &mut PartiallySignedTransaction,
+    ) -> Result<(), ProcessPegOutSigError> {
         let mut tx_hasher = SighashCache::new(&psbt.unsigned_tx);
 
         for (idx, (psbt_input, _tx_input)) in psbt
@@ -1090,7 +1093,7 @@ impl<'a> StatelessWallet<'a> {
 
             let signature = self
                 .secp
-                .sign_ecdsa(&Message::from_slice(&tx_hash[..]).unwrap(), &tweaked_secret);
+                .sign_ecdsa(&Message::from_slice(&tx_hash[..])?, &tweaked_secret);
 
             psbt_input.partial_sigs.insert(
                 bitcoin::PublicKey {
@@ -1100,6 +1103,7 @@ impl<'a> StatelessWallet<'a> {
                 EcdsaSig::sighash_all(signature),
             );
         }
+        Ok(())
     }
 
     fn derive_script(&self, tweak: &[u8]) -> Script {
@@ -1208,6 +1212,10 @@ pub enum WalletError {
     PegOutFeeRate(Feerate, Feerate),
     #[error("Not enough SpendableUTXO")]
     NotEnoughSpendableUTXO,
+    #[error("Unable to find round consensus in the DB")]
+    RoundConsensusNotFound,
+    #[error("There was some error proccessing the peg-out signature")]
+    ProcessPegOutSigError(#[from] ProcessPegOutSigError),
 }
 
 #[derive(Debug, Error)]
@@ -1218,8 +1226,8 @@ pub enum ProcessPegOutSigError {
     WrongSignatureCount(usize, usize),
     #[error("Bad Sighash")]
     SighashError,
-    #[error("Malformed signature: {0}")]
-    MalformedSignature(secp256k1::Error),
+    #[error("ECDSA error: {0}")]
+    ECDSAError(#[from] secp256k1::Error),
     #[error("Invalid signature")]
     InvalidSignature,
     #[error("Duplicate signature")]

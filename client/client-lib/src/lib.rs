@@ -270,13 +270,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .context
             .api
             .fetch_peg_out_fees(&recipient, &amount)
-            .await?;
-        fees.map(|fees| PegOut {
+            .await
+            .map_err(|_| ClientError::PegOutWaitingForUTXOs)?;
+        Ok(PegOut {
             recipient,
             amount,
             fees,
         })
-        .ok_or(ClientError::PegOutWaitingForUTXOs)
     }
 
     pub async fn peg_out<R: RngCore + CryptoRng>(

@@ -272,7 +272,7 @@ mod tests {
             &self,
             _address: &Address,
             _amount: &bitcoin::Amount,
-        ) -> crate::api::Result<Option<PegOutFees>> {
+        ) -> crate::api::Result<PegOutFees> {
             unimplemented!();
         }
 

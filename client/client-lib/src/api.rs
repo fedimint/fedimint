@@ -49,11 +49,7 @@ pub trait FederationApi: Send + Sync {
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
 
     /// Fetch the expected peg-out fees given a peg-out tx
-    async fn fetch_peg_out_fees(
-        &self,
-        address: &Address,
-        amount: &Amount,
-    ) -> Result<Option<PegOutFees>>;
+    async fn fetch_peg_out_fees(&self, address: &Address, amount: &Amount) -> Result<PegOutFees>;
 
     /// Fetch available lightning gateways
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>>;
@@ -239,11 +235,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request("/wallet/block_height", ()).await
     }
 
-    async fn fetch_peg_out_fees(
-        &self,
-        address: &Address,
-        amount: &Amount,
-    ) -> Result<Option<PegOutFees>> {
+    async fn fetch_peg_out_fees(&self, address: &Address, amount: &Amount) -> Result<PegOutFees> {
         self.request("/wallet/peg_out_fees", (address, amount.as_sat()))
             .await
     }
