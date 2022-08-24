@@ -14,7 +14,8 @@ jobs:
         build:
           - wasm32
           - macos
-          - android
+          # TODO: Needs clang and possibly other binaries
+          # - android
         include:
           - build: wasm32
             runs-on: buildjet-8vcpu-ubuntu-2004
@@ -24,10 +25,10 @@ jobs:
           - build: macos
             runs-on: macos-latest
             use-cross: false
-          - build: android
-            runs-on: ubuntu-latest
-            target: aarch64-linux-android
-            use-cross: true
+          # - build: android
+          #   runs-on: ubuntu-latest
+          #   target: aarch64-linux-android
+          #   use-cross: true
 
 
     runs-on: ${{ matrix.runs-on }}

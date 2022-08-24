@@ -5,6 +5,7 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
+#[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 use std::{sync::Arc, time::Duration};
 
