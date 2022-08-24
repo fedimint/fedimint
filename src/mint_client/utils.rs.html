@@ -57,32 +57,6 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
-<span id="60">60</span>
-<span id="61">61</span>
-<span id="62">62</span>
-<span id="63">63</span>
-<span id="64">64</span>
-<span id="65">65</span>
-<span id="66">66</span>
-<span id="67">67</span>
-<span id="68">68</span>
-<span id="69">69</span>
-<span id="70">70</span>
-<span id="71">71</span>
-<span id="72">72</span>
-<span id="73">73</span>
-<span id="74">74</span>
-<span id="75">75</span>
-<span id="76">76</span>
-<span id="77">77</span>
-<span id="78">78</span>
-<span id="79">79</span>
-<span id="80">80</span>
-<span id="81">81</span>
-<span id="82">82</span>
-<span id="83">83</span>
-<span id="84">84</span>
-<span id="85">85</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableCoin;
 <span class="kw">use </span>bitcoin::Network;
@@ -128,36 +102,10 @@
         </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
-
-<span class="kw">pub struct </span>BorrowedClientContext&lt;<span class="lifetime">&#39;a</span>, C&gt; {
-    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>C,
-    <span class="kw">pub </span>db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>Database,
-    <span class="kw">pub </span>api: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>FederationApi,
-    <span class="kw">pub </span>secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-}
-
-<span class="kw">pub struct </span>OwnedClientContext&lt;C&gt; {
-    <span class="kw">pub </span>config: C,
+<span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>db: Box&lt;<span class="kw">dyn </span>Database&gt;,
     <span class="kw">pub </span>api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-}
-
-<span class="kw">impl</span>&lt;CO&gt; OwnedClientContext&lt;CO&gt; {
-    <span class="kw">pub fn </span>borrow_with_module_config&lt;<span class="lifetime">&#39;c</span>, CB, F&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span><span class="self">self</span>,
-        to_cfg: F,
-    ) -&gt; BorrowedClientContext&lt;<span class="lifetime">&#39;c</span>, CB&gt;
-    <span class="kw">where
-        </span>F: FnOnce(<span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>CO) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>CB,
-    {
-        BorrowedClientContext {
-            config: to_cfg(<span class="kw-2">&amp;</span><span class="self">self</span>.config),
-            db: <span class="self">self</span>.db.as_ref(),
-            api: <span class="self">self</span>.api.as_ref(),
-            secp: <span class="kw-2">&amp;</span><span class="self">self</span>.secp,
-        }
-    }
 }
 
 <span class="kw">pub fn </span>network_to_currency(network: Network) -&gt; Currency {

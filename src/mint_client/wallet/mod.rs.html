@@ -359,8 +359,12 @@
 <span id="359">359</span>
 <span id="360">360</span>
 <span id="361">361</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
-<span class="kw">use </span>bitcoin::{Address, KeyPair};
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
+<span class="kw">use </span>bitcoin::Address;
+<span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
 <span class="kw">use </span>fedimint_api::db::batch::BatchTx;
 <span class="kw">use </span>fedimint_api::Amount;
@@ -380,7 +384,8 @@
 <span class="doccomment">/// Federation module client for the Wallet module. It can both create transaction inputs and
 /// outputs of the wallet (on-chain) type.
 </span><span class="kw">pub struct </span>WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
-    <span class="kw">pub </span>context: BorrowedClientContext&lt;<span class="lifetime">&#39;c</span>, WalletClientConfig&gt;,
+    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>WalletClientConfig,
+    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
@@ -398,19 +403,18 @@
         <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Address {
-        <span class="kw">let </span>peg_in_keypair = bitcoin::KeyPair::new(<span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>peg_in_keypair = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>peg_in_keypair);
 
         <span class="comment">// TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
         </span><span class="kw">let </span>script = <span class="self">self
-            </span>.context
-            .config
+            </span>.config
             .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>peg_in_pub_key, <span class="self">self</span>.context.secp)
+            .tweak(<span class="kw-2">&amp;</span>peg_in_pub_key, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)
             .script_pubkey();
         <span class="macro">debug!</span>(<span class="question-mark">?</span>script);
-        <span class="kw">let </span>address = Address::from_script(<span class="kw-2">&amp;</span>script, <span class="self">self</span>.context.config.network)
+        <span class="kw">let </span>address = Address::from_script(<span class="kw-2">&amp;</span>script, <span class="self">self</span>.config.network)
             .expect(<span class="string">&quot;Script from descriptor should have an address&quot;</span>);
 
         batch.append_insert_new(
@@ -445,7 +449,7 @@
             })
             .ok_or(WalletClientError::NoMatchingPegInFound)<span class="question-mark">?</span>;
         <span class="kw">let </span>secret_tweak_key =
-            bitcoin::KeyPair::from_seckey_slice(<span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span>secret_tweak_key_bytes)
+            bitcoin::KeyPair::from_seckey_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span>secret_tweak_key_bytes)
                 .expect(<span class="string">&quot;sec key was generated and saved by us&quot;</span>);
 
         <span class="kw">let </span>peg_in_proof = PegInProof::new(
@@ -457,11 +461,11 @@
         .map_err(WalletClientError::PegInProofError)<span class="question-mark">?</span>;
 
         peg_in_proof
-            .verify(<span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.peg_in_descriptor)
+            .verify(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.config.peg_in_descriptor)
             .map_err(WalletClientError::PegInProofError)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>amount = Amount::from_sat(peg_in_proof.tx_output().value)
-            .saturating_sub(<span class="self">self</span>.context.config.fee_consensus.peg_in_abs);
+            .saturating_sub(<span class="self">self</span>.config.fee_consensus.peg_in_abs);
         <span class="kw">if </span>amount == Amount::ZERO {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletClientError::PegInAmountTooSmall);
         }
@@ -504,7 +508,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
-    <span class="kw">use </span><span class="kw">crate</span>::OwnedClientContext;
+    <span class="kw">use </span><span class="kw">crate</span>::ClientContext;
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::{Address, Txid};
 
@@ -598,7 +602,8 @@
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
-        OwnedClientContext&lt;WalletClientConfig&gt;,
+        WalletClientConfig,
+        ClientContext,
         FakeBitcoindRpcController,
     ) {
         <span class="kw">let </span>btc_rpc = FakeBitcoindRpc::new();
@@ -624,22 +629,23 @@
         ));
 
         <span class="kw">let </span>api = FakeApi { _mint: fed.clone() };
+        <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
-        <span class="kw">let </span>client = OwnedClientContext {
-            config: fed.lock().<span class="kw">await</span>.client_cfg().clone(),
+        <span class="kw">let </span>client = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client, btc_rpc_controller)
+        (fed, client_config, client, btc_rpc_controller)
     }
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_output() {
-        <span class="kw">let </span>(fed, client_context, btc_rpc) = new_mint_and_client().<span class="kw">await</span>;
+        <span class="kw">let </span>(fed, client_config, client_context, btc_rpc) = new_mint_and_client().<span class="kw">await</span>;
         <span class="kw">let </span>_client = WalletClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: <span class="kw-2">&amp;</span>client_config,
+            context: <span class="kw-2">&amp;</span>client_context,
         };
 
         <span class="comment">// generate fake UTXO

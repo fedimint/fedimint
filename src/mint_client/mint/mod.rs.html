@@ -604,11 +604,12 @@
 <span id="604">604</span>
 <span id="605">605</span>
 <span id="606">606</span>
+<span id="607">607</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
-<span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
+<span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
@@ -634,7 +635,8 @@
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
 </span><span class="kw">pub struct </span>MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
-    <span class="kw">pub </span>context: BorrowedClientContext&lt;<span class="lifetime">&#39;c</span>, MintClientConfig&gt;,
+    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>MintClientConfig,
+    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
 }
 
 <span class="doccomment">/// Client side representation of one coin in an issuance request that keeps all necessary
@@ -697,8 +699,8 @@
         <span class="kw">let </span>final_tx = tx.build(
             change_required,
             batch.transaction(),
-            <span class="self">self</span>.context.secp,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.tbs_pks,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks,
             rng,
         );
         <span class="kw">let </span>txid = final_tx.tx_hash();
@@ -721,12 +723,8 @@
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
-        <span class="kw">let </span>(finalization, coins) = builder.create_output_coins(
-            amount,
-            <span class="self">self</span>.context.secp,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.tbs_pks,
-            rng,
-        );
+        <span class="kw">let </span>(finalization, coins) =
+            builder.create_output_coins(amount, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks, rng);
         <span class="kw">let </span>out_point = create_tx(coins);
         tx.append_insert_new(OutputFinalizationKey(out_point), finalization);
         tx.commit();
@@ -749,7 +747,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(MintClientError::OutputNotReadyYet(outpoint))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.tbs_pks)<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = issuance.finalize(bsig, <span class="kw-2">&amp;</span><span class="self">self</span>.config.tbs_pks)<span class="question-mark">?</span>;
 
         batch.append_from_iter(
             coins
@@ -968,7 +966,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
 
     <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
-    <span class="kw">use crate</span>::{OwnedClientContext, TransactionBuilder};
+    <span class="kw">use crate</span>::{ClientContext, TransactionBuilder};
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
@@ -1059,7 +1057,8 @@
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
-        OwnedClientContext&lt;MintClientConfig&gt;,
+        MintClientConfig,
+        ClientContext,
     ) {
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::&lt;Mint, MintClientConfig&gt;::new(
@@ -1072,14 +1071,15 @@
         ));
         <span class="kw">let </span>api = FakeApi { mint: fed.clone() };
 
-        <span class="kw">let </span>client_context = OwnedClientContext {
-            config: fed.lock().<span class="kw">await</span>.client_cfg().clone(),
+        <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
+
+        <span class="kw">let </span>client_context = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_context)
+        (fed, client_config, client_context)
     }
 
     <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>, R: rand::RngCore + rand::CryptoRng&gt;(
@@ -1110,10 +1110,11 @@
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_output() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
-        <span class="kw">let </span>(fed, client_context) = new_mint_and_client().<span class="kw">await</span>;
+        <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = MintClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: <span class="kw-2">&amp;</span>client_config,
+            context: <span class="kw-2">&amp;</span>client_context,
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
@@ -1135,9 +1136,10 @@
 
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
 
-        <span class="kw">let </span>(fed, client_context) = new_mint_and_client().<span class="kw">await</span>;
+        <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
         <span class="kw">let </span>client = MintClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: <span class="kw-2">&amp;</span>client_config,
+            context: <span class="kw-2">&amp;</span>client_context,
         };
 
         issue_tokens(
@@ -1152,8 +1154,8 @@
         <span class="comment">// Spending works
         </span><span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
-        <span class="kw">let </span>secp = client.context.secp;
-        <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>client.context.config.tbs_pks;
+        <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
+        <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
         <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
         <span class="kw">let </span>(spend_keys, input) = builder

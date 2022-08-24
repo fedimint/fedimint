@@ -417,6 +417,9 @@
 <span id="417">417</span>
 <span id="418">418</span>
 <span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -426,7 +429,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-<span class="kw">use </span><span class="kw">crate</span>::utils::BorrowedClientContext;
+<span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::db::batch::BatchTx;
 <span class="kw">use </span>fedimint_api::Amount;
@@ -448,7 +451,8 @@
 <span class="kw">use </span><span class="self">self</span>::incoming::ConfirmedInvoice;
 
 <span class="kw">pub struct </span>LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
-    <span class="kw">pub </span>context: BorrowedClientContext&lt;<span class="lifetime">&#39;c</span>, LightningModuleClientConfig&gt;,
+    <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>LightningModuleClientConfig,
+    <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
 }
 
 <span class="attribute">#[allow(dead_code)]
@@ -473,7 +477,7 @@
             Amount::from_msat(contract_amount_msat)
         };
 
-        <span class="kw">let </span>user_sk = bitcoin::KeyPair::new(<span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>user_sk = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
 
         <span class="kw">let </span>contract = OutgoingContract {
             hash: <span class="kw-2">*</span>invoice.payment_hash(),
@@ -566,7 +570,7 @@
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
                 payment_secret,
-                <span class="kw-2">&amp;</span><span class="self">self</span>.context.config.threshold_pub_key,
+                <span class="kw-2">&amp;</span><span class="self">self</span>.config.threshold_pub_key,
             ),
         })
     }
@@ -615,7 +619,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::ln::LnClient;
-    <span class="kw">use </span><span class="kw">crate</span>::OwnedClientContext;
+    <span class="kw">use </span><span class="kw">crate</span>::ClientContext;
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::Address;
     <span class="kw">use </span>fedimint_api::db::batch::DbBatch;
@@ -709,7 +713,8 @@
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
         Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;,
-        OwnedClientContext&lt;LightningModuleClientConfig&gt;,
+        LightningModuleClientConfig,
+        ClientContext,
     ) {
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::&lt;LightningModule, LightningModuleClientConfig&gt;::new(
@@ -721,24 +726,25 @@
             .<span class="kw">await</span>,
         ));
         <span class="kw">let </span>api = FakeApi { mint: fed.clone() };
+        <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
-        <span class="kw">let </span>client_context = OwnedClientContext {
-            config: fed.lock().<span class="kw">await</span>.client_cfg().clone(),
+        <span class="kw">let </span>client_context = ClientContext {
             db: Box::new(MemDatabase::new()),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
-        (fed, client_context)
+        (fed, client_config, client_context)
     }
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_outgoing() {
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::thread_rng();
-        <span class="kw">let </span>(fed, client_context) = new_mint_and_client().<span class="kw">await</span>;
+        <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = LnClient {
-            context: client_context.borrow_with_module_config(|x| x),
+            config: <span class="kw-2">&amp;</span>client_config,
+            context: <span class="kw-2">&amp;</span>client_context,
         };
 
         fed.lock().<span class="kw">await</span>.set_block_height(<span class="number">1</span>);
