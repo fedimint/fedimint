@@ -63,3 +63,9 @@ After running `nix develop` a env variable will be set indicating it was success
 $ echo $IN_NIX_SHELL
 impure
 ```
+
+Some enviroments indicate the curren status by prepending the name of the env in your prompt, such as python.
+
+For Nix, this can be accomplished by;
+
+`export PS1="$(test -n "$IN_NIX_SHELL" && echo "NX") $PS1"`
