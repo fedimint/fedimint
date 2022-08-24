@@ -59,11 +59,34 @@
 <span id="59">59</span>
 <span id="60">60</span>
 <span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>bitcoin::Transaction;
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>clientd::{call, WaitBlockHeightPayload};
+<span class="kw">use </span>clientd::{call, PegInPayload, WaitBlockHeightPayload};
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json;
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
+<span class="kw">use </span>mint_client::utils::from_hex;
 
 <span class="attribute">#[derive(Parser)]
 #[clap(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]
@@ -86,6 +109,15 @@
     <span class="doccomment">/// rpc-method: wait_block_height()
     </span><span class="attribute">#[clap(arg_required_else_help = <span class="bool-val">true</span>)]
     </span>WaitBlockHeight { height: u64 },
+    <span class="doccomment">/// rpc-method peg_in()
+    </span>PegIn {
+        <span class="doccomment">/// The TxOutProof which was created from sending BTC to the pegin-address
+        </span><span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span>txout_proof: TxOutProof,
+        <span class="doccomment">/// The Bitcoin Transaction
+        </span><span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span>transaction: Transaction,
+    },
 }
 <span class="attribute">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
@@ -93,32 +125,42 @@
 
     <span class="kw">match </span>args.command {
         Commands::Info =&gt; {
-            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_info&quot;</span>).<span class="kw">await</span>, args.raw_json);
+            print_response(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_info&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
         Commands::Pending =&gt; {
-            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_pending&quot;</span>).<span class="kw">await</span>, args.raw_json);
+            print_response(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_pending&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
         Commands::NewPegInAddress =&gt; {
-            print_json(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, args.raw_json);
+            print_response(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_new_peg_in_address&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
         Commands::WaitBlockHeight { height } =&gt; {
             <span class="kw">let </span>params = WaitBlockHeightPayload { height };
-            print_json(call(<span class="kw-2">&amp;</span>params, <span class="string">&quot;/wait_block_height&quot;</span>).<span class="kw">await</span>, args.raw_json);
+            print_response(call(<span class="kw-2">&amp;</span>params, <span class="string">&quot;/wait_block_height&quot;</span>).<span class="kw">await</span>, args.raw_json);
+        }
+        Commands::PegIn {
+            txout_proof,
+            transaction,
+        } =&gt; {
+            <span class="kw">let </span>params = PegInPayload {
+                txout_proof,
+                transaction,
+            };
+            print_response(call(<span class="kw-2">&amp;</span>params, <span class="string">&quot;/peg_in&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
     }
 }
 
-<span class="kw">fn </span>print_json&lt;T: Serialize&gt;(result: <span class="prelude-ty">Result</span>&lt;T&gt;, raw: bool) {
-    <span class="kw">match </span>result {
-        <span class="prelude-val">Ok</span>(p) =&gt; {
+<span class="kw">fn </span>print_response(response: <span class="prelude-ty">Result</span>&lt;serde_json::Value&gt;, raw: bool) {
+    <span class="kw">match </span>response {
+        <span class="prelude-val">Ok</span>(json) =&gt; {
             <span class="kw">if </span>raw {
-                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string(<span class="kw-2">&amp;</span>p).unwrap());
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string(<span class="kw-2">&amp;</span>json).unwrap());
             } <span class="kw">else </span>{
-                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>p).unwrap());
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).unwrap());
             }
         }
-        <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;{}&quot;</span>, e),
+        <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;{}&quot;</span>, err),
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (015a824f2 2022-08-22)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (060e47f74 2022-08-23)" ></div></body></html>
