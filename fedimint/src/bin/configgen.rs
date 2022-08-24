@@ -5,22 +5,46 @@ use fedimint_api::{Amount, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 
+/// Config generator for Fedimint Federation
+///
+/// Running this program will generate config
+/// files for federation member nodes in directory
+/// specified with `out-dir`
 #[derive(Parser)]
 struct Options {
-    cfg_path: PathBuf,
-    nodes: u16,
+    /// Directory to output all the generated config files
+    #[clap(long = "out-dir")]
+    dir_out_path: PathBuf,
+
+    /// Number of nodes in the federation
+    #[clap(long = "num-nodes")]
+    num_nodes: u16,
+
+    /// Base hbbft port
+    #[clap(long = "hbbft-base-port", default_value = "17240")]
     hbbft_base_port: u16,
+
+    /// Base api port
+    #[clap(long = "api-base-port", default_value = "17340")]
     api_base_port: u16,
-    amount_tiers: Vec<Amount>,
+
+    /// Available denominations of notes issues by the federation (comma separated)
+    #[clap(
+        long = "denominations",
+        value_delimiter = ',',
+        min_values = 1,
+        required = true
+    )]
+    denominations: Vec<Amount>,
 }
 
 fn main() {
     let Options {
-        cfg_path,
-        nodes,
+        dir_out_path: cfg_path,
+        num_nodes: nodes,
         hbbft_base_port,
         api_base_port,
-        amount_tiers,
+        denominations: amount_tiers,
     } = Options::parse();
     let mut rng = OsRng::new().unwrap();
 
