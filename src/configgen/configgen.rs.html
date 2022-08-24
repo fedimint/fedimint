@@ -57,6 +57,30 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
 </pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint::config::{ServerConfig, ServerConfigParams};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
@@ -64,22 +88,46 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>std::path::PathBuf;
 
-<span class="attribute">#[derive(Parser)]
+<span class="doccomment">/// Config generator for Fedimint Federation
+///
+/// Running this program will generate config
+/// files for federation member nodes in directory
+/// specified with `out-dir`
+</span><span class="attribute">#[derive(Parser)]
 </span><span class="kw">struct </span>Options {
-    cfg_path: PathBuf,
-    nodes: u16,
-    hbbft_base_port: u16,
-    api_base_port: u16,
-    amount_tiers: Vec&lt;Amount&gt;,
+    <span class="doccomment">/// Directory to output all the generated config files
+    </span><span class="attribute">#[clap(long = <span class="string">&quot;out-dir&quot;</span>)]
+    </span>dir_out_path: PathBuf,
+
+    <span class="doccomment">/// Number of nodes in the federation
+    </span><span class="attribute">#[clap(long = <span class="string">&quot;num-nodes&quot;</span>)]
+    </span>num_nodes: u16,
+
+    <span class="doccomment">/// Base hbbft port
+    </span><span class="attribute">#[clap(long = <span class="string">&quot;hbbft-base-port&quot;</span>, default_value = <span class="string">&quot;17240&quot;</span>)]
+    </span>hbbft_base_port: u16,
+
+    <span class="doccomment">/// Base api port
+    </span><span class="attribute">#[clap(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
+    </span>api_base_port: u16,
+
+    <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
+    </span><span class="attribute">#[clap(
+        long = <span class="string">&quot;denominations&quot;</span>,
+        value_delimiter = <span class="string">&#39;,&#39;</span>,
+        min_values = <span class="number">1</span>,
+        required = <span class="bool-val">true
+    </span>)]
+    </span>denominations: Vec&lt;Amount&gt;,
 }
 
 <span class="kw">fn </span>main() {
     <span class="kw">let </span>Options {
-        cfg_path,
-        nodes,
+        dir_out_path: cfg_path,
+        num_nodes: nodes,
         hbbft_base_port,
         api_base_port,
-        amount_tiers,
+        denominations: amount_tiers,
     } = Options::parse();
     <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
 
