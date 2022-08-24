@@ -57,7 +57,8 @@ To use a different shell for `nix develop`, try `nix develop -c zsh`. You can al
 don't want to remember about it. That's the recommended way to use a different shell
 for `nix develop`.
 
-After running `nix develop` a env variable will be set indicating it was succesful
+After running `nix develop` a env variable will be set indicating it was successful.
+
 ```
 $ echo $IN_NIX_SHELL
 impure
