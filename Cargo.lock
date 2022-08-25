@@ -809,6 +809,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -1620,6 +1621,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1733,6 +1735,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -3241,6 +3244,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

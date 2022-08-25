@@ -33,6 +33,7 @@ tracing ="0.1.22"
 jsonrpsee-types = "0.14.0"
 jsonrpsee-core = "0.14.0"
 serde_json = "1.0.82"
+url = { version = "2.2.2", features = ["serde"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = "0.14.0"

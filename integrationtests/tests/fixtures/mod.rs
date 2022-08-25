@@ -30,6 +30,7 @@ use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+use url::Url;
 
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint::config::ServerConfigParams;
@@ -233,7 +234,8 @@ impl GatewayTest {
             client_config: client_config.clone(),
             redeem_key: kp,
             timelock_delta: 10,
-            api: format!("http://{}", bind_addr),
+            api: Url::parse(format!("http://{}", bind_addr).as_str())
+                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             node_pub_key,
         };
         let client = Arc::new(GatewayClient::new(

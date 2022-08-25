@@ -55,6 +55,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use url::Url;
 
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
@@ -96,7 +97,7 @@ pub struct GatewayClientConfig {
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
-    pub api: String,
+    pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
 }
 
@@ -105,7 +106,7 @@ impl From<GatewayClientConfig> for LightningGateway {
         LightningGateway {
             mint_pub_key: config.redeem_key.public_key(),
             node_pub_key: config.node_pub_key,
-            api: config.api,
+            api: config.api.to_string(),
         }
     }
 }
