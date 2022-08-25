@@ -11,6 +11,7 @@ use serde_json::json;
 use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
+use url::Url;
 
 use fedimint::config::load_from_file;
 use ln_gateway::{
@@ -47,7 +48,7 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &Soc
         redeem_key: kp_fed,
         timelock_delta: 10,
         node_pub_key,
-        api: format!("http://{}", bind_addr),
+        api: Url::parse(format!("http://{}", bind_addr).as_str()).expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
     };
     let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
     let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
