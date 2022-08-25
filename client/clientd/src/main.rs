@@ -1,19 +1,17 @@
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::Json as JsonRespond;
 use axum::{Extension, Router, Server};
 use bitcoin::secp256k1::rand;
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use clientd::Json as JsonExtract;
 use clientd::{
-    ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
+    json_success, ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
     PendingResponse, WaitBlockHeightPayload,
 };
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
-use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -74,10 +72,10 @@ async fn main() {
 /// Handler for "get_info", returns all the clients holdings and pending transactions
 async fn info(Extension(state): Extension<Arc<State>>) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Ok(JsonRespond(json!(InfoResponse::new(
+    json_success!(InfoResponse::new(
         client.coins(),
         client.list_active_issuances(),
-    ))))
+    ))
 }
 
 /// Handler for "get_pending", returns the clients pending transactions
@@ -85,9 +83,7 @@ async fn pending(
     Extension(state): Extension<Arc<State>>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Ok(JsonRespond(json!(PendingResponse::new(
-        client.list_active_issuances()
-    ))))
+    json_success!(PendingResponse::new(client.list_active_issuances()))
 }
 
 async fn new_peg_in_address(
@@ -95,9 +91,9 @@ async fn new_peg_in_address(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     let mut rng = state.rng.clone();
-    Ok(JsonRespond(json!(PegInAddressResponse {
-        peg_in_address: client.get_new_pegin_address(&mut rng),
-    })))
+    json_success!(PegInAddressResponse {
+        peg_in_address: client.get_new_pegin_address(&mut rng)
+    })
 }
 
 async fn wait_block_height(
@@ -106,7 +102,7 @@ async fn wait_block_height(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     client.await_consensus_block_height(payload.height).await;
-    Ok(JsonRespond(json!("done")))
+    json_success!("done")
 }
 
 async fn peg_in(
@@ -119,5 +115,5 @@ async fn peg_in(
     let transaction = payload.0.transaction;
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}", txid.to_hex());
-    Ok(JsonRespond(json!(PegInOutResponse { txid })))
+    json_success!(PegInOutResponse { txid })
 }

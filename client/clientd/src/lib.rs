@@ -165,3 +165,25 @@ where
         }
     }
 }
+
+#[macro_export(local_inner_macros)]
+macro_rules! json_success {
+    () => {
+        {
+       let body = serde_json::json!({
+            "data": {}
+       });
+
+       Ok(axum::Json(body))
+        }
+    };
+    ($payload:expr) => {
+        {
+       let body = serde_json::json!({
+            "data": $payload
+       });
+
+       Ok(axum::Json(body))
+    }
+    };
+}
