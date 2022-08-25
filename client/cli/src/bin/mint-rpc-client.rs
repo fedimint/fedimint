@@ -1,10 +1,11 @@
 use clap::Parser;
 use fedimint_api::PeerId;
 use mint_client::api::WsFederationApi;
+use url::Url;
 
 #[derive(Parser)]
 struct ApiCall {
-    url: String,
+    url: Url,
     method: String,
     #[clap(default_value = "null")]
     arg: String,
