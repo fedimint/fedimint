@@ -41,6 +41,7 @@ use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
+use url::Url;
 
 use std::sync::Arc;
 use thiserror::Error;
@@ -124,7 +125,7 @@ pub enum OutputOutcome {
 pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
-    pub api: String,
+    pub api: Url,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]

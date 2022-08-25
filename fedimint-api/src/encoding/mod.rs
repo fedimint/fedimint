@@ -10,6 +10,7 @@ pub use fedimint_derive::{Decodable, Encodable};
 use std::fmt::{Debug, Formatter};
 use std::io::Error;
 use thiserror::Error;
+use url::Url;
 
 /// Data which can be encoded in a consensus-consistent way
 pub trait Encodable {
@@ -24,6 +25,20 @@ pub trait Encodable {
 pub trait Decodable: Sized {
     /// Decode an object with a well-defined format
     fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError>;
+}
+
+impl Encodable for Url {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        self.to_string().consensus_encode(writer)
+    }
+}
+
+impl Decodable for Url {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        String::consensus_decode(d)?
+            .parse::<Url>()
+            .map_err(DecodeError::from_err)
+    }
 }
 
 #[derive(Debug, Error)]
