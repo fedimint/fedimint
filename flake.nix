@@ -402,7 +402,7 @@
                 ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
 
                 # workaround https://github.com/rust-lang/cargo/issues/11020
-                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,add} 2>/dev/null) )
+                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
                 if (( ''${#cargo_cmd_bins[@]} != 0 )); then
                   echo "Warning: Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
                   echo "Warning: Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
