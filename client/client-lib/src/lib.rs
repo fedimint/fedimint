@@ -6,6 +6,7 @@ pub mod utils;
 pub mod wallet;
 
 use std::time::Duration;
+#[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
 use futures::StreamExt;

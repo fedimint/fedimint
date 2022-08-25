@@ -7,21 +7,55 @@ on:
 name: CI
 
 jobs:
-  build_wasm:
-    name: Build (wasm32)
-    runs-on: buildjet-8vcpu-ubuntu-2004
+  build:
+    name: Build ${{ matrix.build }}
+    strategy:
+      matrix:
+        build:
+          - wasm32
+          - macos
+          # TODO: Needs clang and possibly other binaries
+          # - android
+        include:
+          - build: wasm32
+            runs-on: buildjet-8vcpu-ubuntu-2004
+            target: wasm32-unknown-unknown
+            use-cross: false
+            extra-build-args: "--target wasm32-unknown-unknown --package mint-client"
+          - build: macos
+            runs-on: macos-latest
+            use-cross: false
+          # - build: android
+          #   runs-on: ubuntu-latest
+          #   target: aarch64-linux-android
+          #   use-cross: true
+
+
+    runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 30
+
     steps:
       - uses: actions/checkout@v2
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: ${{ matrix.target }}
           default: true
-          target: wasm32-unknown-unknown
           profile: minimal
-      - uses: Swatinem/rust-cache@v1
-      - name: Build modules/mint-client
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target wasm32-unknown-unknown --package mint-client
+          args: ${{ matrix.extra-build-args }}
+          use-cross: ${{ matrix.use-cross }}
+
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: ${{ matrix.extra-build-args }} -- --deny warnings
+          use-cross: ${{ matrix.use-cross }}
