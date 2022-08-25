@@ -72,9 +72,9 @@ fn print_response(response: Result<serde_json::Value>, raw: bool) {
     match response {
         Ok(json) => {
             if raw {
-                println!("{}", serde_json::to_string(&json).unwrap());
+                serde_json::to_writer(std::io::stdout(), &json).unwrap();
             } else {
-                println!("{}", serde_json::to_string_pretty(&json).unwrap());
+                serde_json::to_writer_pretty(std::io::stdout(), &json).unwrap();
             }
         }
         Err(err) => eprintln!("{}", err),
