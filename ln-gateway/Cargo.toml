@@ -2,7 +2,7 @@
 name = "ln-gateway"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "ln-gateway is a core lightning plugin which allows a Lightning node operator to receive or pay Lightning invoices on behalf of fedimint users."
 license = "MIT"
 license-file = "../LICENSE"

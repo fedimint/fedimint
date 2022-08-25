@@ -2,7 +2,7 @@
 name = "fedimint"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "fedimint is the main consensus code for processing transactions and REST API"
 license = "MIT"
 license-file = "../LICENSE"

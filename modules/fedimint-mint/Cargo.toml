@@ -2,7 +2,7 @@
 name = "fedimint-mint"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "fedimint-mint is a chaumian ecash mint module."
 license = "MIT"
 license-file = "../../LICENSE"

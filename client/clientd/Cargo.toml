@@ -2,7 +2,7 @@
 name = "clientd"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "clientd is the root client process for client-lib subprocesses to send/receive transactions."
 license = "MIT"
 license-file = "../LICENSE"

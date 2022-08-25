@@ -2,7 +2,7 @@
 name = "fedimint-derive"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "fedimint-derive provides helper macros for serialization."
 license = "MIT"
 license-file = "../LICENSE"

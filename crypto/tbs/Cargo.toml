@@ -2,7 +2,7 @@
 name = "tbs"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "tbs is a helper cryptography library for threshold blind signatures"
 license = "MIT"
 license-file = "../../LICENSE"

@@ -2,7 +2,7 @@
 name = "mint-client"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "mint-client provides a library for sending transactions to the federation."
 license = "MIT"
 license-file = "../LICENSE"

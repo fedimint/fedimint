@@ -2,7 +2,7 @@
 name = "mint-client-cli"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
-edition = "2018"
+edition = "2021"
 description = "mint-client-cli is a command line interface wrapper for the client library."
 license = "MIT"
 license-file = "../LICENSE"
