@@ -927,6 +927,7 @@
 <span id="927">927</span>
 <span id="928">928</span>
 <span id="929">929</span>
+<span id="930">930</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -935,7 +936,8 @@
 <span class="kw">pub mod </span>wallet;
 
 <span class="kw">use </span>std::time::Duration;
-<span class="kw">use </span>std::time::SystemTime;
+<span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
+</span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>futures::StreamExt;
 
