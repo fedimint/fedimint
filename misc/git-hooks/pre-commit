@@ -17,3 +17,22 @@ rustfmt --edition 2021 --check $(git ls-files | egrep '*.rs$')
 for path in $(git ls-files | egrep '*.sh$')  ; do
   shellcheck --severity=warning $path
 done
+
+errors=""
+for path in $(git ls-files | grep -v -E '.*\.ods'); do
+  # extra branches for clarity
+  if [ ! -s "$path" ]; then
+     # echo "$path is empty"
+     true
+  elif [ -z "$(tail -c 1 < "$path")" ]; then
+     # echo "$path ends with a newline or with a null byte"
+     true
+  else
+    echo "$path doesn't end with a newline" 1>&2
+    errors="true"
+  fi
+done
+
+if [ -n "$errors" ]; then
+  exit 1
+fi
