@@ -1,7 +1,11 @@
 [package]
 name = "clientd"
 version = "0.1.0"
-edition = "2021"
+authors = ["The Fedimint Developers"]
+edition = "2018"
+description = "clientd is the root client process for client-lib subprocesses to send/receive transactions."
+license = "MIT"
+license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

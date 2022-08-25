@@ -1,8 +1,11 @@
 [package]
 name = "fedimint"
 version = "0.1.0"
-authors = ["elsirion <elsirion@protonmail.com>"]
+authors = ["The Fedimint Developers"]
 edition = "2018"
+description = "fedimint is the main consensus code for processing transactions and REST API"
+license = "MIT"
+license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

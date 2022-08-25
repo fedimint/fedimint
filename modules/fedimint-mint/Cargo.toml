@@ -1,8 +1,11 @@
 [package]
 name = "fedimint-mint"
 version = "0.1.0"
-authors = ["elsirion <elsirion@protonmail.com>"]
+authors = ["The Fedimint Developers"]
 edition = "2018"
+description = "fedimint-mint is a chaumian ecash mint module."
+license = "MIT"
+license-file = "../../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
