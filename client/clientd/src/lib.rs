@@ -44,6 +44,11 @@ pub struct PegInPayload {
 }
 
 #[derive(Deserialize, Serialize)]
+pub struct SpendPayload {
+    pub amount: Amount,
+}
+
+#[derive(Deserialize, Serialize)]
 pub struct InfoResponse {
     coins: Vec<CoinsByTier>,
     pending: PendingResponse,
@@ -96,6 +101,11 @@ pub struct PegInAddressResponse {
 #[derive(Deserialize, Serialize)]
 pub struct PegInOutResponse {
     pub txid: TransactionId,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct SpendResponse {
+    pub coins: Coins<SpendableCoin>,
 }
 
 /// Holds a e-cash tier (msat by convention) and a quantity of coins

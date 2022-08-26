@@ -1,10 +1,10 @@
 use anyhow::Result;
 use bitcoin::Transaction;
 use clap::{Parser, Subcommand};
-use clientd::{call, PegInPayload, WaitBlockHeightPayload};
-use fedimint_api::module::__reexports::serde_json;
+use clientd::{call, PegInPayload, SpendPayload, WaitBlockHeightPayload};
+use fedimint_api::{module::__reexports::serde_json, Amount};
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
-use mint_client::utils::from_hex;
+use mint_client::utils::{from_hex, parse_fedimint_amount};
 
 #[derive(Parser)]
 #[clap(author, version, about = "a json-rpc cli application")]
@@ -36,6 +36,13 @@ enum Commands {
         #[clap(parse(try_from_str = from_hex))]
         transaction: Transaction,
     },
+    //TODO: Encode coins and/or give option (flag) to get them raw
+    /// rpc-method_ spend()
+    Spend {
+        /// A minimint (ecash) amount
+        #[clap(parse(try_from_str = parse_fedimint_amount))]
+        amount: Amount,
+    },
 }
 #[tokio::main]
 async fn main() {
@@ -64,6 +71,10 @@ async fn main() {
                 transaction,
             };
             print_response(call(&params, "/peg_in").await, args.raw_json);
+        }
+        Commands::Spend { amount } => {
+            let params = SpendPayload { amount };
+            print_response(call(&params, "/spend").await, args.raw_json);
         }
     }
 }

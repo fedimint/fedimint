@@ -4,11 +4,11 @@ use axum::{Extension, Router, Server};
 use bitcoin::secp256k1::rand;
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use clientd::Json as JsonExtract;
 use clientd::{
     json_success, ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
-    PendingResponse, WaitBlockHeightPayload,
+    PendingResponse, SpendResponse, WaitBlockHeightPayload,
 };
+use clientd::{Json as JsonExtract, SpendPayload};
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
@@ -52,6 +52,7 @@ async fn main() {
         .route("/get_new_peg_in_address", post(new_peg_in_address))
         .route("/wait_block_height", post(wait_block_height))
         .route("/peg_in", post(peg_in))
+        .route("/spend", post(spend))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -116,4 +117,14 @@ async fn peg_in(
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}", txid.to_hex());
     json_success!(PegInOutResponse { txid })
+}
+
+async fn spend(
+    Extension(state): Extension<Arc<State>>,
+    payload: JsonExtract<SpendPayload>,
+) -> Result<impl IntoResponse, ClientdError> {
+    let client = &state.client;
+
+    let coins = client.select_and_spend_coins(payload.0.amount)?;
+    json_success!(SpendResponse { coins })
 }

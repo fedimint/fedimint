@@ -7,6 +7,10 @@ export RUST_LOG=info
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 
+#this is a workaround to test the spend command (because we can't fetch with clientd yet)
+#TODO: remove this when implementing clientd fetching
+./scripts/pegin.sh 1000 # peg in user
+
 #start clientd
 $FM_CLIENTD $FM_CFG_DIR &
 echo $! >> $FM_PID_FILE
@@ -31,3 +35,7 @@ TRANSACTION="$($FM_BTC_CLIENT getrawtransaction $TX_ID)"
 
 #perform peg-in
 [[ $($FM_CLIENTD_CLI peg-in $TXOUT_PROOF $TRANSACTION| jq -r 'has("data")') = true ]]
+
+#spend
+ECASH=$($FM_CLIENTD_CLI spend 1000);
+[[ $(echo $ECASH | jq -r 'has("data")') = true ]]
