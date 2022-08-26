@@ -1,4 +1,4 @@
-use fedimint_setup::run_setup;
+use fedimint_setup::uploads::run_setup;
 
 #[tokio::main]
 async fn main() {

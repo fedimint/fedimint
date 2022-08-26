@@ -896,8 +896,11 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
+ "serde",
  "tokio",
  "tower",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fedimint</title>
+</head>
+<body>
+
+<button id="generate">Generate Config</button>
+<button id="upload">Upload Config</button>
+
+<script>
+    const generate = document.querySelector("#generate");
+    const upload = document.querySelector("#upload");
+
+    generate.addEventListener("click", function(e) {
+        location.href = "/generate";
+    });
+
+    upload.addEventListener("click", function(e) {
+        location.href = "/upload";
+    });
+</script>
+</body>
+</html>
+
