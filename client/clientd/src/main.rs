@@ -132,7 +132,10 @@ async fn peg_in(
     let transaction = payload.0.transaction;
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}", txid.to_hex());
-    fetch_signal.send(()).await.unwrap(); //TODO: handle 500 server error
+    fetch_signal
+        .send(())
+        .await
+        .map_err(|_| ClientdError::ServerError)?;
     json_success!(PegInOutResponse { txid })
 }
 

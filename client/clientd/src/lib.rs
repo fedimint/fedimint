@@ -21,12 +21,17 @@ use thiserror::Error;
 pub enum ClientdError {
     #[error("Client error: {0}")]
     ClientError(#[from] ClientError),
+    #[error("Fatal server error, action reqired")]
+    ServerError,
 }
 
 impl IntoResponse for ClientdError {
     fn into_response(self) -> Response {
         let payload = json!({ "error": self.to_string(), });
-        let code = StatusCode::BAD_REQUEST;
+        let code = match self {
+            ClientdError::ClientError(_) => StatusCode::BAD_REQUEST,
+            ClientdError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
         Result::<(), _>::Err((code, axum::Json(payload))).into_response()
     }
 }
