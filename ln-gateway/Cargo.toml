@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "ln-gateway is a core lightning plugin which allows a Lightning node operator to receive or pay Lightning invoices on behalf of fedimint users."
 license = "MIT"
-license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

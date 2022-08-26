@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "integrationtests contains end-to-end testing with interactions between users, lightning gateways, the blockchain, and federations, under expected, edge-case, and adversarial environments. See README for detailed instructions and examples."
 license = "MIT"
-license-file = "../LICENSE"
 
 [[test]]
 name = "fedimint-tests"

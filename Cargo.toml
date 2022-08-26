@@ -1,16 +1,3 @@
-name = "fedimint"
-version = "0.1.0"
-authors = ["The Fedimint Developers"]
-edition = "2021"
-description = "Fedimint is a prototype Federated Chaumian E-Cash Mint implementation, natively compatible with Bitcoin & the Lightning Network. This project is under heavy development, DO NOT USE WITH REAL FUNDS."
-documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
-readme = "README.md"
-homepage = "https://fedimint.org"
-repository = "https://github.com/fedimint/fedimint"
-license = "MIT"
-license-file = "LICENSE"
-keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
-
 [workspace]
 members = [
     "crypto/tbs",
@@ -28,6 +15,19 @@ members = [
     "integrationtests",
 ]
 resolver = "2"
+
+[workspace.metadata]
+name = "fedimint"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint is a prototype Federated Chaumian E-Cash Mint implementation, natively compatible with Bitcoin & the Lightning Network. This project is under heavy development, DO NOT USE WITH REAL FUNDS."
+documentation = "https://github.com/fedimint/fedimint/tree/master/docs"
+readme = "README.md"
+homepage = "https://fedimint.org"
+repository = "https://github.com/fedimint/fedimint"
+license-file = "LICENSE"
+keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [patch.crates-io]
 bitcoin_hashes = { version = "0.10.0", git = 'https://github.com/fedimint/bitcoin_hashes', branch = 'minimint' }
