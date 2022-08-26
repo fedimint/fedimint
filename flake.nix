@@ -250,6 +250,12 @@
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
+        workspaceDoc = craneLib.cargoBuild (commonArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
+          doCheck = false;
+        });
+
         fedimintd = pkg {
           name = "fedimintd";
           dir = "fedimint";
@@ -352,6 +358,7 @@
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
           workspaceCov = llvmCovWorkspace;
+          workspaceDoc = workspaceDoc;
 
           cli-test = {
             latency = cliTestLatency;
