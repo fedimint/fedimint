@@ -1,7 +1,11 @@
 [package]
 name = "fedimint-core"
-version = "0.0.0"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
 edition = "2021"
+description = "fedimint-core provides common code used by both client and server. Can't be in fedimint-api because it depends on modules."
+license = "MIT"
+license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
