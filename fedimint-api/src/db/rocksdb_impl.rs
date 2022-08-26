@@ -29,7 +29,7 @@ impl Database for rocksdb::OptimisticTransactionDB {
                     let (key_bytes, value_bytes) = res.expect("DB error");
                     key_bytes
                         .starts_with(&prefix)
-                        .then_some((key_bytes, value_bytes))
+                        .then(|| (key_bytes, value_bytes))
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map(Ok),
