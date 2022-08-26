@@ -23,7 +23,7 @@ await_server_on_port 8081
 ADDR=$($FM_CLIENTD_CLI new-peg-in-address | jq -r '.data.peg_in_address');
 
 #for peg-in we need the TxOutProof and a Transaction
-TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR 0.001)"
+TX_ID="$($FM_BTC_CLIENT sendtoaddress $ADDR 0.00001)"
 $FM_BTC_CLIENT generatetoaddress 11 "$($FM_BTC_CLIENT getnewaddress)"
 
 #wait until valid (also test the wait-block-height endpoint)
