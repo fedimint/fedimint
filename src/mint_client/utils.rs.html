@@ -57,9 +57,18 @@
 <span id="57">57</span>
 <span id="58">58</span>
 <span id="59">59</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+
+<span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::mint::SpendableCoin;
-<span class="kw">use </span>bitcoin::Network;
+<span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::Decodable;
 <span class="kw">use </span>fedimint_api::ParseAmountError;
@@ -102,6 +111,11 @@
         </span>fedimint_api::Amount::from_str_in(s, bitcoin::Denomination::Satoshi)
     }
 }
+
+<span class="kw">pub fn </span>parse_node_pub_key(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;secp256k1::PublicKey, secp256k1::Error&gt; {
+    secp256k1::PublicKey::from_str(s)
+}
+
 <span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>db: Box&lt;<span class="kw">dyn </span>Database&gt;,
     <span class="kw">pub </span>api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,

@@ -928,6 +928,25 @@
 <span id="928">928</span>
 <span id="929">929</span>
 <span id="930">930</span>
+<span id="931">931</span>
+<span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
+<span id="936">936</span>
+<span id="937">937</span>
+<span id="938">938</span>
+<span id="939">939</span>
+<span id="940">940</span>
+<span id="941">941</span>
+<span id="942">942</span>
+<span id="943">943</span>
+<span id="944">944</span>
+<span id="945">945</span>
+<span id="946">946</span>
+<span id="947">947</span>
+<span id="948">948</span>
+<span id="949">949</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -942,7 +961,7 @@
 <span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
-<span class="kw">use </span>bitcoin::{Address, Transaction <span class="kw">as </span>BitcoinTransaction};
+<span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
@@ -1350,23 +1369,41 @@
 }
 
 <span class="kw">impl </span>Client&lt;UserClientConfig&gt; {
-    <span class="kw">pub async fn </span>fetch_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
-        <span class="comment">// fetch gateway from db
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
+    <span class="kw">pub async fn </span>fetch_registered_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.context.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+    <span class="kw">pub async fn </span>fetch_active_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway) = <span class="self">self
             </span>.context
             .db
             .get_value(<span class="kw-2">&amp;</span>LightningGatewayKey)
             .expect(<span class="string">&quot;DB error&quot;</span>)
         {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(gateway);
+            <span class="prelude-val">Ok</span>(gateway)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.switch_active_gateway(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>)
         }
-
-        <span class="comment">// if db is empty, fetch from federation and save to db
-        </span><span class="kw">let </span>gateways = <span class="self">self</span>.context.api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+    <span class="doccomment">/// Switches the clients active gateway to a registered gateway with the given node pubkey.
+    /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
+    /// This behavior is useful for scenarios where we don&#39;t know any registered gateways in advance.
+    </span><span class="kw">pub async fn </span>switch_active_gateway(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        node_pub_key: <span class="prelude-ty">Option</span>&lt;secp256k1::PublicKey&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;LightningGateway&gt; {
+        <span class="kw">let </span>gateways = <span class="self">self</span>.fetch_registered_gateways().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>gateways.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NoGateways);
         };
-        <span class="kw">let </span>gateway = gateways[<span class="number">0</span>].clone();
+        <span class="kw">let </span>gateway = <span class="kw">match </span>node_pub_key {
+            <span class="comment">// If a pubkey was provided, try to select and activate a gateway with that pubkey.
+            </span><span class="prelude-val">Some</span>(pub_key) =&gt; gateways
+                .into_iter()
+                .find(|g| g.node_pub_key == pub_key)
+                .ok_or(ClientError::GatewayNotFound)<span class="question-mark">?</span>,
+            <span class="comment">// Otherwise (no pubkey provided), select and activate the first registered gateway.
+            </span><span class="prelude-val">None </span>=&gt; gateways[<span class="number">0</span>].clone(),
+        };
         <span class="self">self</span>.context
             .db
             .insert_entry(<span class="kw-2">&amp;</span>LightningGatewayKey, <span class="kw-2">&amp;</span>gateway)
@@ -1378,7 +1415,7 @@
         invoice: Invoice,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(ContractId, OutPoint)&gt; {
-        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
@@ -1425,7 +1462,7 @@
         description: String,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
-        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>raw_payment_secret = payment_keypair.public_key().serialize();
         <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>raw_payment_secret);
@@ -1524,8 +1561,7 @@
     <span class="doccomment">/// Notify gateway that we&#39;ve escrowed tokens they can claim by routing our payment and wait
     /// for them to do so
     </span><span class="kw">pub async fn </span>await_outgoing_contract_execution(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
-
+        <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>future = reqwest::Client::new()
             .post(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}/pay_invoice&quot;</span>, gateway.api))
             .json(<span class="kw-2">&amp;</span>contract_id)
@@ -1853,6 +1889,8 @@
     </span>InvalidPreimage,
     <span class="attribute">#[error(<span class="string">&quot;Federation has no lightning gateways&quot;</span>)]
     </span>NoGateways,
+    <span class="attribute">#[error(<span class="string">&quot;Federation has no registered lightning gateway with the given node public key&quot;</span>)]
+    </span>GatewayNotFound,
     <span class="attribute">#[error(<span class="string">&quot;HTTP Error {0}&quot;</span>)]
     </span>HttpError(<span class="attribute">#[from] </span>reqwest::Error),
     <span class="attribute">#[error(<span class="string">&quot;Outgoing payment timeout&quot;</span>)]

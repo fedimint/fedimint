@@ -239,7 +239,63 @@
 <span id="239">239</span>
 <span id="240">240</span>
 <span id="241">241</span>
-</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{Address, Transaction};
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::hex::ToHex;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_api::Amount;
@@ -250,10 +306,12 @@
 <span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
 <span class="kw">use </span>mint_client::mint::SpendableCoin;
 <span class="kw">use </span>mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, serialize_coins,
+    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
+    serialize_coins,
 };
 <span class="kw">use </span>mint_client::{Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>serde_json::{json, to_string_pretty};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>tracing::{error, info};
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
@@ -324,6 +382,16 @@
 
     <span class="doccomment">/// Join a federation using it&#39;s ConnectInfo
     </span>JoinFederation { connect: String },
+
+    <span class="doccomment">/// List registered gateways
+    </span>ListGateways,
+
+    <span class="doccomment">/// Switch active gateway
+    </span>SwitchGateway {
+        <span class="doccomment">/// node public key for a gateway
+        </span><span class="attribute">#[clap(parse(try_from_str = parse_node_pub_key))]
+        </span>pubkey: secp256k1::PublicKey,
+    },
 }
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
@@ -477,7 +545,51 @@
             <span class="kw">let </span>info = WsFederationConnect::from(client.config().as_ref());
             <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, serde_json::to_string(<span class="kw-2">&amp;</span>info).unwrap());
         }
-        Command::JoinFederation { .. } =&gt; <span class="macro">unreachable!</span>(),
+        Command::JoinFederation { .. } =&gt; {
+            <span class="macro">unreachable!</span>()
+        }
+        Command::ListGateways {} =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;Fetching gateways from federation...&quot;</span>);
+            <span class="kw">let </span>gateways = client
+                .fetch_registered_gateways()
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Failed to fetch gateways&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">&quot;Found {} registered gateways : &quot;</span>, gateways.len());
+            <span class="kw">if </span>!gateways.is_empty() {
+                <span class="kw">let </span><span class="kw-2">mut </span>gateways_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateways);
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(active_gateway) = client.fetch_active_gateway().<span class="kw">await </span>{
+                    gateways_json
+                        .as_array_mut()
+                        .expect(<span class="string">&quot;gateways_json is not an array&quot;</span>)
+                        .iter_mut()
+                        .for_each(|gateway| {
+                            <span class="kw">if </span>gateway[<span class="string">&quot;node_pub_key&quot;</span>] == <span class="macro">json!</span>(active_gateway.node_pub_key) {
+                                gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
+                            } <span class="kw">else </span>{
+                                gateway[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">false</span>);
+                            }
+                        });
+                };
+                <span class="macro">println!</span>(
+                    <span class="string">&quot;{}&quot;</span>,
+                    to_string_pretty(<span class="kw-2">&amp;</span>gateways_json).expect(<span class="string">&quot;failed to deserialize gateways&quot;</span>)
+                );
+            }
+        }
+        Command::SwitchGateway { pubkey } =&gt; {
+            <span class="kw">let </span>gateway = client
+                .switch_active_gateway(<span class="prelude-val">Some</span>(pubkey))
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;Failed to switch active gateway&quot;</span>);
+            <span class="macro">println!</span>(<span class="string">&quot;Successfully switched to gateway with the following details&quot;</span>);
+            <span class="kw">let </span><span class="kw-2">mut </span>gateway_json = <span class="macro">json!</span>(<span class="kw-2">&amp;</span>gateway);
+            gateway_json[<span class="string">&quot;active&quot;</span>] = <span class="macro">json!</span>(<span class="bool-val">true</span>);
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{}&quot;</span>,
+                serde_json::to_string_pretty(<span class="kw-2">&amp;</span>gateway_json)
+                    .expect(<span class="string">&quot;Failed to deserialize activated gateway&quot;</span>)
+            );
+        }
     }
 }
 </code></pre></div>
