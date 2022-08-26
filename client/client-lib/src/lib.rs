@@ -41,7 +41,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::coins::Coins, BlindToken},
+        mint::{tiered::coins::Coins, BlindToken, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -240,8 +240,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
         if coins
             .iter()
-            .map(|(amt, coin)| coin.coin.verify(*tbs_pks.tier(&amt).unwrap()))
-            .all(|x| x)
+            .map(|(amt, coin)| {
+                if coin.coin.verify(*tbs_pks.tier(&amt)?) {
+                    Ok(())
+                } else {
+                    Err(ClientError::InvalidSignature)
+                }
+            })
+            .all(|x| x.is_ok())
         {
             println!("All tokens have valid signatures")
         } else {
@@ -962,4 +968,14 @@ pub enum ClientError {
     HttpError(#[from] reqwest::Error),
     #[error("Outgoing payment timeout")]
     OutgoingPaymentTimeout,
+    #[error("Invalid amount tier {0:?}")]
+    InvalidAmountTier(Amount),
+    #[error("Invalid signature")]
+    InvalidSignature,
+}
+
+impl From<InvalidAmountTierError> for ClientError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        ClientError::InvalidAmountTier(e.0)
+    }
 }
