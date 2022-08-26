@@ -9,6 +9,7 @@ name: CI
 jobs:
   build:
     name: Build ${{ matrix.build }}
+
     strategy:
       matrix:
         build:
@@ -22,9 +23,12 @@ jobs:
             target: wasm32-unknown-unknown
             use-cross: false
             extra-build-args: "--target wasm32-unknown-unknown --package mint-client"
+            build-in-pr: true
           - build: macos
             runs-on: macos-latest
             use-cross: false
+            # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
+            build-in-pr: false
           # - build: android
           #   runs-on: ubuntu-latest
           #   target: aarch64-linux-android
@@ -36,8 +40,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        # Note: making the whole job conditional w.r.t matrix, instead of every step
+        # is not supported and workarounds are very gnarly
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
 
       - uses: actions-rs/toolchain@v1
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         with:
           toolchain: stable
           target: ${{ matrix.target }}
@@ -45,8 +53,10 @@ jobs:
           profile: minimal
 
       - uses: Swatinem/rust-cache@v2
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
 
       - name: Build
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         uses: actions-rs/cargo@v1
         with:
           command: build
@@ -54,6 +64,7 @@ jobs:
           use-cross: ${{ matrix.use-cross }}
 
       - name: Clippy
+        if: github.ref == 'refs/heads/master' || matrix.build-in-pr
         uses: actions-rs/cargo@v1
         with:
           command: clippy
