@@ -1,4 +1,4 @@
-use bitcoin::{Address, Transaction};
+use bitcoin::{secp256k1, Address, Transaction};
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use fedimint_api::Amount;
@@ -9,10 +9,12 @@ use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableCoin;
 use mint_client::utils::{
-    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, serialize_coins,
+    from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
+    serialize_coins,
 };
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, to_string_pretty};
 use std::path::PathBuf;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
@@ -83,6 +85,16 @@ enum Command {
 
     /// Join a federation using it's ConnectInfo
     JoinFederation { connect: String },
+
+    /// List registered gateways
+    ListGateways,
+
+    /// Switch active gateway
+    SwitchGateway {
+        /// node public key for a gateway
+        #[clap(parse(try_from_str = parse_node_pub_key))]
+        pubkey: secp256k1::PublicKey,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -236,6 +248,50 @@ async fn main() {
             let info = WsFederationConnect::from(client.config().as_ref());
             println!("{}", serde_json::to_string(&info).unwrap());
         }
-        Command::JoinFederation { .. } => unreachable!(),
+        Command::JoinFederation { .. } => {
+            unreachable!()
+        }
+        Command::ListGateways {} => {
+            println!("Fetching gateways from federation...");
+            let gateways = client
+                .fetch_registered_gateways()
+                .await
+                .expect("Failed to fetch gateways");
+            println!("Found {} registered gateways : ", gateways.len());
+            if !gateways.is_empty() {
+                let mut gateways_json = json!(&gateways);
+                if let Ok(active_gateway) = client.fetch_active_gateway().await {
+                    gateways_json
+                        .as_array_mut()
+                        .expect("gateways_json is not an array")
+                        .iter_mut()
+                        .for_each(|gateway| {
+                            if gateway["node_pub_key"] == json!(active_gateway.node_pub_key) {
+                                gateway["active"] = json!(true);
+                            } else {
+                                gateway["active"] = json!(false);
+                            }
+                        });
+                };
+                println!(
+                    "{}",
+                    to_string_pretty(&gateways_json).expect("failed to deserialize gateways")
+                );
+            }
+        }
+        Command::SwitchGateway { pubkey } => {
+            let gateway = client
+                .switch_active_gateway(Some(pubkey))
+                .await
+                .expect("Failed to switch active gateway");
+            println!("Successfully switched to gateway with the following details");
+            let mut gateway_json = json!(&gateway);
+            gateway_json["active"] = json!(true);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&gateway_json)
+                    .expect("Failed to deserialize activated gateway")
+            );
+        }
     }
 }
