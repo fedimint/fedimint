@@ -14,6 +14,8 @@ use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::{info, Level};
@@ -24,7 +26,8 @@ struct Config {
     workdir: PathBuf,
 }
 struct State {
-    client: Client<UserClientConfig>,
+    client: Arc<Client<UserClientConfig>>,
+    fetch_tx: Sender<()>,
     rng: OsRng,
 }
 #[tokio::main]
@@ -42,10 +45,15 @@ async fn main() {
     let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
         rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
 
-    let client = Client::new(cfg.clone(), Box::new(db), Default::default());
+    let client = Arc::new(Client::new(cfg.clone(), Box::new(db), Default::default()));
+    let (tx, mut rx) = mpsc::channel(1024);
     let rng = OsRng::new().unwrap();
 
-    let shared_state = Arc::new(State { client, rng });
+    let shared_state = Arc::new(State {
+        client: Arc::clone(&client),
+        fetch_tx: tx,
+        rng,
+    });
     let app = Router::new()
         .route("/get_info", post(info))
         .route("/get_pending", post(pending))
@@ -63,6 +71,13 @@ async fn main() {
                 )
                 .layer(Extension(shared_state)),
         );
+
+    let fetch_client = Arc::clone(&client);
+    tokio::spawn(async move {
+        while rx.recv().await.is_some() {
+            fetch(Arc::clone(&fetch_client)).await;
+        }
+    });
 
     Server::bind(&"127.0.0.1:8081".parse().unwrap())
         .serve(app.into_make_service())
@@ -111,11 +126,13 @@ async fn peg_in(
     payload: JsonExtract<PegInPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
+    let fetch_signal = &state.fetch_tx;
     let mut rng = state.rng.clone();
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}", txid.to_hex());
+    fetch_signal.send(()).await.unwrap(); //TODO: handle 500 server error
     json_success!(PegInOutResponse { txid })
 }
 
@@ -127,4 +144,21 @@ async fn spend(
 
     let coins = client.select_and_spend_coins(payload.0.amount)?;
     json_success!(SpendResponse { coins })
+}
+
+async fn fetch(client: Arc<Client<UserClientConfig>>) {
+    //TODO: log txid or error (handle unwrap)
+    let batch = client.fetch_all_coins().await;
+    for item in batch.iter() {
+        match item {
+            Ok(out_point) => {
+                //TODO: Log event
+                info!("fetched coins: {}", out_point);
+            }
+            Err(err) => {
+                //TODO: Log event
+                info!("error fetching coins: {}", err);
+            }
+        }
+    }
 }
