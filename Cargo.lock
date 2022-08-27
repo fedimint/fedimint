@@ -202,7 +202,7 @@ dependencies = [
 [[package]]
 name = "bitcoin_hashes"
 version = "0.10.0"
-source = "git+https://github.com/fedimint/bitcoin_hashes?branch=minimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
+source = "git+https://github.com/fedimint/bitcoin_hashes?branch=fedimint#fb2be02f95fac4d21cc8822f4bf63166c7aa8d47"
 dependencies = [
  "serde",
 ]
