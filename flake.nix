@@ -197,7 +197,8 @@
 
         workspaceTest = craneLib.cargoBuild (commonArgs // {
           pname = "workspace-test";
-          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "true";
+          cargoArtifacts = workspaceDeps;
           doCheck = true;
         });
 
@@ -206,7 +207,7 @@
         # See: https://github.com/ipetkov/crane/issues/64
         workspaceClippy = craneLib.cargoBuild (commonArgs // {
           pname = "workspace-clippy";
-          cargoArtifacts = workspaceBuild;
+          cargoArtifacts = workspaceDeps;
 
           cargoBuildCommand = "cargo clippy --profile release --no-deps --lib --bins --tests --examples --workspace -- --deny warnings";
           doInstallCargoArtifacts = false;
@@ -257,7 +258,7 @@
 
         workspaceDoc = craneLib.cargoBuild (commonArgs // {
           pname = "workspace-doc";
-          cargoArtifacts = workspaceBuild;
+          cargoArtifacts = workspaceDeps;
           cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
           doCheck = false;
         });
