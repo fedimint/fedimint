@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint is the main consensus code for processing transactions and REST API"
 license = "MIT"
-license-file = "../LICENSE"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

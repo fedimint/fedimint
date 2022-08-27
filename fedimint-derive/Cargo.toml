@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-derive provides helper macros for serialization."
 license = "MIT"
-license-file = "../LICENSE"
 
 [lib]
 proc-macro = true
