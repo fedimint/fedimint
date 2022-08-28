@@ -1,6 +1,6 @@
 # What is a transaction
 
-- A [`Transaction`](https://github.com/fedimint/fedimint/blob/master/fedimint-core/src/transaction.rs) Consists of inputs and outputs
+- A [`Transaction`](https://github.com/fedimint/fedimint/blob/a1f57e3c6ff860a9c4a998bf88ebad73ebdb67c9/fedimint-core/src/transaction.rs#L12) Consists of inputs and outputs
   - Each input and output belongs to a certain module (e.g. Mint, Wallet, …)
   - All inputs have to add up to the same sum as all outputs
 - Also contains a signature
