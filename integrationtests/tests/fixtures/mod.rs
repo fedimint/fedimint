@@ -242,12 +242,11 @@ impl GatewayTest {
             Default::default(),
         ));
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let server = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr)
-            .await
-            .expect("Gateway failed to register with federation");
+        let mut gateway = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr);
+        gateway.run().await.expect("Failed to run gateway");
 
         GatewayTest {
-            server,
+            server: gateway,
             keys,
             user,
             client,

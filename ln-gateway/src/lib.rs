@@ -115,27 +115,24 @@ pub struct LnGateway {
 }
 
 impl LnGateway {
-    pub async fn new(
+    pub fn new(
         federation_client: Arc<GatewayClient>,
         ln_client: Box<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
         bind_addr: SocketAddr,
-    ) -> Result<Self> {
+    ) -> Self {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
-        // Regster gateway with federation
-        federation_client
-            .register_with_federation(federation_client.config().into())
-            .await
-            .expect("Failed to register with federation");
+
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(bind_addr, sender));
-        Ok(Self {
+
+        Self {
             federation_client,
             ln_client,
             webserver,
             receiver,
-        })
+        }
     }
 
     pub async fn buy_preimage_offer(
@@ -282,6 +279,12 @@ impl LnGateway {
     }
 
     pub async fn run(&mut self) -> Result<()> {
+        // Regster gateway with federation
+        self.federation_client
+            .register_with_federation(self.federation_client.config().into())
+            .await
+            .expect("Failed to register with federation");
+
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
