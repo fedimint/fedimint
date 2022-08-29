@@ -2,7 +2,7 @@
 # Generates the configs and starts the federation nodes
 
 set -euxo pipefail
-SKIPPED_SERVERS=${SKIPPED_SERVERS:-0}
+SKIPPED_SERVERS=${1:-0}
 
 # Start the federation members inside the temporary directory
 for ((ID=SKIPPED_SERVERS; ID<FM_FED_SIZE; ID++)); do

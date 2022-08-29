@@ -235,7 +235,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_roundtrip() {
-        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         enum TestEnum {
             Foo,
             Bar(u64),
@@ -265,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_not_try_parse_partial() {
-        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         enum TestEnum {
             Foo,
             Bar(u64),

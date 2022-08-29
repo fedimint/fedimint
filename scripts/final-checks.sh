@@ -6,10 +6,11 @@
 set -e
 
 cargo fmt --all
-cargo clippy --fix --lib --bins --tests --examples --workspace --allow-dirty
+cargo +nightly clippy --fix --lib --bins --tests --examples --workspace --allow-dirty
+nix develop --ignore-environment --extra-experimental-features nix-command --extra-experimental-features flakes .#lint --command ./misc/git-hooks/pre-commit
 
 export FM_TEST_DISABLE_MOCKS=0
-cargo test
+cargo +nightly test --release
 
 if [ "$1" == "nix" ]; then
   nix-shell --run ./scripts/cli-test.sh

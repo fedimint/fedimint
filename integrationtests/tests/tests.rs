@@ -4,14 +4,14 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint::consensus::ConsensusOutcomeConversion;
+
 use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 
 use crate::fixtures::FederationTest;
-use fedimint::epoch::{ConsensusItem, EpochVerifyError};
+use fedimint::epoch::ConsensusItem;
 use fedimint::transaction::Output;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
@@ -634,14 +634,36 @@ async fn can_get_signed_epoch_history() {
     let epoch1 = user.client.fetch_epoch_history(1).await.unwrap();
     let pubkey = fed.cfg.epoch_pk_set.public_key();
 
-    assert!(epoch0.signature.is_some());
-    assert_eq!(epoch0.verify(&pubkey, None), Ok(()));
+    assert_eq!(epoch0.verify_sig(&pubkey), Ok(()));
+    assert_eq!(epoch0.verify_hash(&None), Ok(()));
+    assert_eq!(epoch1.verify_hash(&Some(epoch0)), Ok(()));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejoin_consensus_single_peer() {
+    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+
+    // Keep peer 3 out of consensus
+    bitcoin.mine_blocks(110);
+    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    bitcoin.mine_blocks(100);
+    fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+    let height = user.client.await_consensus_block_height(0).await;
+
+    join_all(vec![
+        Either::Left(async {
+            fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+        }),
+        Either::Right(async {
+            fed.subset_peers(&[3]).rejoin_consensus().await;
+        }),
+    ])
+    .await;
+
+    // Ensure peer 3 rejoined and caught up to consensus
+    let user = user.new_client(&[1, 2, 3]);
     assert_eq!(
-        epoch1.verify(&pubkey, Some(&epoch0)),
-        Err(EpochVerifyError::MissingSignature)
+        user.client.await_consensus_block_height(height).await,
+        height
     );
-    assert_eq!(
-        ConsensusOutcomeConversion(fed.last_consensus()),
-        epoch1.outcome.into()
-    )
 }

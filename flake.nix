@@ -214,6 +214,11 @@
           doCheck = false;
         });
 
+        cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
+        });
+
         cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
@@ -377,6 +382,7 @@
           workspaceCov = workspaceLlvmCov;
 
           cli-test = {
+            reconnect = cliTestReconnect;
             latency = cliTestLatency;
             cli = cliTestCli;
             clientd = cliTestClientd;
