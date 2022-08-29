@@ -247,12 +247,21 @@
           doCheck = false;
         };
 
-        llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
+        # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
+        workspaceDepsLlvmCov = craneLib.buildDepsOnly (commonArgs // {
+          pname = "workspace-deps-llvm-cov";
+          src = filterWorkspaceDepsBuildFiles ./.;
+          cargoBuildCommand = "cargo llvm-cov --workspace";
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+          doCheck = false;
+        });
+
+        workspaceLlvmCov = craneLib.cargoBuild (commonArgs // {
           pname = "workspace-llvm-cov";
-          cargoArtifacts = workspaceDeps;
+          cargoArtifacts = workspaceDepsLlvmCov;
           # TODO: as things are right now, the integration tests can't run in parallel
           cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
-          doCheck = true;
+          doCheck = false;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
 
@@ -364,8 +373,8 @@
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
-          workspaceCov = llvmCovWorkspace;
           workspaceDoc = workspaceDoc;
+          workspaceCov = workspaceLlvmCov;
 
           cli-test = {
             latency = cliTestLatency;
