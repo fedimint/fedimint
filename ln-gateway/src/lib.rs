@@ -8,6 +8,7 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256::Hash;
 use cln::HtlcAccepted;
+use cln_plugin::Plugin;
 use fedimint::modules::ln::contracts::{incoming::Preimage, ContractId};
 use fedimint::modules::wallet::txoproof::TxOutProof;
 use fedimint_api::{Amount, OutPoint, TransactionId};
@@ -24,7 +25,8 @@ use std::{
     time::{Duration, Instant},
 };
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::task::JoinHandle;
 use tracing::{debug, error, instrument, warn};
 use webserver::run_webserver;
 
@@ -107,30 +109,26 @@ where
     }
 }
 
+pub type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
+
 pub struct LnGateway {
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
-    webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
+    webserver: Option<JoinHandle<axum::response::Result<()>>>,
+    sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
 }
 
 impl LnGateway {
-    pub fn new(
-        federation_client: Arc<GatewayClient>,
-        ln_client: Box<dyn LnRpc>,
-        sender: mpsc::Sender<GatewayRequest>,
-        receiver: mpsc::Receiver<GatewayRequest>,
-        bind_addr: SocketAddr,
-    ) -> Self {
+    pub fn new(federation_client: Arc<GatewayClient>, ln_client: Box<dyn LnRpc>) -> Self {
         let ln_client: Arc<dyn LnRpc> = ln_client.into();
-
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(bind_addr, sender));
+        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
 
         Self {
             federation_client,
             ln_client,
-            webserver,
+            webserver: None,
+            sender,
             receiver,
         }
     }
@@ -278,7 +276,10 @@ impl LnGateway {
             .map(|out_point| out_point.txid)
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self, bind_addr: SocketAddr) -> Result<()> {
+        // Run webserver asynchronously in tokio
+        self.webserver = Some(tokio::spawn(run_webserver(bind_addr, self.sender.clone())));
+
         // Regster gateway with federation
         self.federation_client
             .register_with_federation(self.federation_client.config().into())
@@ -330,12 +331,21 @@ impl LnGateway {
             fedimint_api::task::sleep_until(least_wait_until).await;
         }
     }
+
+    pub fn register_plugin(
+        &self,
+        plugin_factory: fn(sender: mpsc::Sender<GatewayRequest>) -> Option<Plugin<PluginState>>,
+    ) -> Option<Plugin<PluginState>> {
+        plugin_factory(self.sender.clone())
+    }
 }
 
 impl Drop for LnGateway {
     fn drop(&mut self) {
-        self.webserver.abort();
-        let _ = futures::executor::block_on(&mut self.webserver);
+        if let Some(server) = self.webserver.take() {
+            server.abort();
+            let _ = futures::executor::block_on(server);
+        }
     }
 }
 

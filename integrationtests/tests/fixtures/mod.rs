@@ -24,7 +24,6 @@ use fedimint_ln::LightningGateway;
 use fedimint_wallet::bitcoincore_rpc;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::GatewayRequest;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -241,9 +240,8 @@ impl GatewayTest {
             database.clone(),
             Default::default(),
         ));
-        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let mut gateway = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr);
-        gateway.run().await.expect("Failed to run gateway");
+        let mut gateway = LnGateway::new(client.clone(), ln_client);
+        gateway.run(bind_addr).await.expect("Failed to run gateway");
 
         GatewayTest {
             server: gateway,

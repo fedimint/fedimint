@@ -10,15 +10,13 @@ use secp256k1::KeyPair;
 use serde_json::json;
 use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tracing::error;
+use tracing::{debug, error};
 
 use fedimint::config::load_from_file;
 use ln_gateway::{
     cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
+    GatewayRequestTrait, LnGateway, LnGatewayError, PluginState, WithdrawPayload,
 };
-
-type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
 /// Create [`gateway.json`] config files
 async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &SocketAddr) {
@@ -56,11 +54,9 @@ async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &Soc
 
 /// Loads configs if they exist, generates them if not
 /// Initializes [`LnGateway`] and runs it's main event loop
-async fn initialize_gateway(
-    plugin: &Plugin<PluginState>,
-    sender: mpsc::Sender<GatewayRequest>,
-    receiver: mpsc::Receiver<GatewayRequest>,
-) -> LnGateway {
+async fn initialize_gateway(plugin: &Plugin<PluginState>) -> LnGateway {
+    // TODO: 1. Generalize basic configs options for initializing a gateway: { 'workdir', 'host', 'port' }
+    // TODO: 2. Add a configuration to select ln-client type: abstract over cln_rpc::ClnRpc vs other ln rpc clients
     let workdir = match plugin.option("fedimint-cfg") {
         Some(options::Value::String(workdir)) => {
             // FIXME: cln_plugin doesn't yet support optional parameters
@@ -80,6 +76,7 @@ async fn initialize_gateway(
         Some(options::Value::String(port)) => port,
         _ => unreachable!(),
     };
+
     let bind_addr = format!("{}:{}", host, port)
         .parse()
         .expect("Invalid gateway bind address");
@@ -104,7 +101,9 @@ async fn initialize_gateway(
     let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx));
     let ln_client = Box::new(Mutex::new(ln_client));
 
-    LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
+    let mut gateway = LnGateway::new(federation_client, ln_client);
+    gateway.run(bind_addr).await.expect("Failed to run Gateway");
+    gateway
 }
 
 /// Send message to LnGateway over channel and receive response over onshot channel
@@ -172,12 +171,26 @@ async fn withdraw_rpc(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
+    let (sender, _receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
         mpsc::channel(100);
-    let state = Arc::new(Mutex::new(sender.clone()));
 
     // Register this plugin with core-lightning
-    if let Some(plugin) = Builder::new(state, stdin(), stdout())
+    // TODO: Invert gateway initialization vs plugin registration,
+    // such that we can have a gateway before we register a cln plugin
+    // This should loosen dependency on cln plugin and open ground for generic lightning node integration
+    match cln_plugin_factory(sender.clone()).await {
+        Some(cln_plugin) => {
+            initialize_gateway(&cln_plugin).await;
+            Ok(())
+        }
+        None => Ok(()),
+    }
+}
+
+async fn cln_plugin_factory(sender: mpsc::Sender<GatewayRequest>) -> Option<Plugin<PluginState>> {
+    let state = Arc::new(Mutex::new(sender));
+    // TODO: Abstract
+    match Builder::new(state, stdin(), stdout())
         .option(options::ConfigOption::new(
             "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
@@ -219,12 +232,12 @@ async fn main() -> Result<(), Error> {
         })
         .dynamic() // Allow reloading the plugin
         .start()
-        .await?
+        .await
     {
-        let mut gateway = initialize_gateway(&plugin, sender, receiver).await;
-        gateway.run().await.expect("gateway failed to run");
-        Ok(())
-    } else {
-        Ok(())
+        Ok(plugin) => plugin,
+        Err(e) => {
+            debug!("Failed to register plugin: {}", e);
+            None
+        }
     }
 }
