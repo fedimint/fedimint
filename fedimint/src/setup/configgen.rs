@@ -37,7 +37,6 @@ pub fn configgen(cfg_path: PathBuf, setup_peers: Vec<Peer>) {
             .connection_string
             .split("@")
             .collect::<Vec<&str>>();
-        println!("saving config to {}.json", matches[0]);
         path.push(format!("{}.json", matches[0]));
 
         let file = std::fs::File::create(path).expect("Could not create cfg file");

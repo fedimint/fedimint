@@ -79,7 +79,7 @@ async fn start_federation(
 ) -> Result<Redirect, (StatusCode, String)> {
     let mut state = state.write().unwrap();
     configgen(state.out_dir.clone(), state.peers.clone());
-    println!("generated configs");
+    tracing::info!("Generated configs");
 
     // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
     let server_filename = state.pubkey.to_string();

@@ -28,6 +28,7 @@ async fn main() {
 
     if let Some((cfg_path, db_path)) = receiver.recv().await {
         let cfg: ServerConfig = load_from_file(&cfg_path);
+        tracing::info!("Running fedimint");
         run_fedimint(cfg.clone(), db_path.clone()).await;
     }
 }
