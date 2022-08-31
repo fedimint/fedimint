@@ -1,7 +1,7 @@
 mod configgen;
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use askama::Template;
@@ -16,8 +16,10 @@ use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use rand::rngs::OsRng;
 use serde::Deserialize;
+use tokio::task::JoinHandle;
 
 use crate::setup::configgen::configgen;
+use crate::{run_fedimint, ServerConfig};
 use mint_client::api::WsFederationConnect;
 use mint_client::UserClientConfig;
 
@@ -71,9 +73,18 @@ async fn start_federation(
     let mut state = state.write().unwrap();
     configgen(state.out_dir.clone(), state.peers.clone().len() as u16);
     println!("generated configs");
-    println!("TODO: run fedimintd!");
 
-    state.running = true;
+    // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
+    let server_filename = "server-0";
+    let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
+    if Path::new(&cfg_path).is_file() {
+        let cfg: ServerConfig = load_from_file(&cfg_path);
+        let db_path = state.out_dir.join(format!("{}.db", server_filename));
+        let handle = tokio::spawn(run_fedimint(cfg.clone(), db_path.clone()));
+        // FIXME: remove this parameter. just check if handle is some.
+        state.running = true;
+        state.handle = Some(handle);
+    }
     Ok(Redirect::to("/".parse().unwrap()))
 }
 
@@ -93,12 +104,13 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::I
     )
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 struct State {
     peers: Vec<Peer>,
     running: bool, // this should probably be handle or something ...
     out_dir: PathBuf,
     connection_string: String,
+    handle: Option<JoinHandle<()>>,
 }
 type MutableState = Arc<RwLock<State>>;
 
@@ -114,6 +126,7 @@ pub async fn run_setup(out_dir: PathBuf, port: u16) {
         running: false,
         out_dir,
         connection_string,
+        handle: None,
     }));
 
     let app = Router::new()

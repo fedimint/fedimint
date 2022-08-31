@@ -31,6 +31,7 @@ pub fn configgen(cfg_path: PathBuf, num_peers: u16) {
 
     for (id, cfg) in server_cfg {
         let mut path: PathBuf = cfg_path.clone();
+        // FIXME: use their pubkey to name this file so that they can find it later
         path.push(format!("server-{}.json", id));
 
         let file = std::fs::File::create(path).expect("Could not create cfg file");
