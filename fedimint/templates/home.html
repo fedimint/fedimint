@@ -20,6 +20,11 @@
 
 {% endif %}
 
+{% if can_run %}
+<form action="/start-federation" method="post">
+    <input type="submit" value="Run Fedimint">
+</form>
+{% endif %}
 <script>
     const generate = document.querySelector("#create-federation");
     generate.addEventListener("click", function(e) {

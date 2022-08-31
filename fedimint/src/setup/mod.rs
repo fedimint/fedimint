@@ -15,6 +15,7 @@ use fedimint_core::config::load_from_file;
 use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use rand::rngs::OsRng;
+use secp256k1_zkp::PublicKey;
 use serde::Deserialize;
 use tokio::sync::mpsc::Sender;
 
@@ -24,7 +25,7 @@ use mint_client::UserClientConfig;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
-struct Peer {
+pub struct Peer {
     name: String,
     connection_string: String,
 }
@@ -34,12 +35,19 @@ struct Peer {
 struct HomeTemplate {
     running: bool,
     connection_string: String,
+    can_run: bool,
 }
 
 async fn home(Extension(state): Extension<MutableState>) -> HomeTemplate {
+    // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
+    let state = state.read().unwrap();
+    let server_filename = state.pubkey.to_string();
+    let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
+    let can_run = Path::new(&cfg_path).is_file() && !state.running;
     HomeTemplate {
-        running: state.read().unwrap().running.clone(),
-        connection_string: state.read().unwrap().connection_string.clone(),
+        running: state.running.clone(),
+        connection_string: state.connection_string.clone(),
+        can_run,
     }
 }
 
@@ -70,11 +78,11 @@ async fn start_federation(
     Extension(state): Extension<MutableState>,
 ) -> Result<Redirect, (StatusCode, String)> {
     let mut state = state.write().unwrap();
-    configgen(state.out_dir.clone(), state.peers.clone().len() as u16);
+    configgen(state.out_dir.clone(), state.peers.clone());
     println!("generated configs");
 
     // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
-    let server_filename = "server-0";
+    let server_filename = state.pubkey.to_string();
     let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
     if Path::new(&cfg_path).is_file() {
         let db_path = state.out_dir.join(format!("{}.db", server_filename));
@@ -104,6 +112,7 @@ struct State {
     running: bool,
     out_dir: PathBuf,
     connection_string: String,
+    pubkey: PublicKey,
     sender: Sender<(PathBuf, PathBuf)>,
 }
 type MutableState = Arc<RwLock<State>>;
@@ -114,10 +123,15 @@ pub async fn run_setup(out_dir: PathBuf, port: u16, sender: Sender<(PathBuf, Pat
     let (_, pubkey) = secp.generate_keypair(&mut rng);
     let our_ip = "127.0.0.1"; // TODO: get our actual IP
     let connection_string = format!("{}@{}:{}", pubkey, our_ip, port);
+    let peers = vec![Peer {
+        connection_string: connection_string.clone(),
+        name: "You".into(),
+    }];
 
     let state = Arc::new(RwLock::new(State {
-        peers: vec![],
+        peers,
         running: false,
+        pubkey,
         out_dir,
         connection_string,
         sender,

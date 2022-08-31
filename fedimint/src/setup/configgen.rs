@@ -1,10 +1,11 @@
 use crate::config::{ServerConfig, ServerConfigParams};
+use crate::setup::Peer;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 
-pub fn configgen(cfg_path: PathBuf, num_peers: u16) {
+pub fn configgen(cfg_path: PathBuf, setup_peers: Vec<Peer>) {
     let hbbft_base_port = 17240;
     let api_base_port = 17340;
     let amount_tiers = vec![Amount::from_sat(1), Amount::from_sat(10)];
@@ -14,6 +15,7 @@ pub fn configgen(cfg_path: PathBuf, num_peers: u16) {
     // Recursively create config directory if it doesn't exist
     std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
 
+    let num_peers = setup_peers.len() as u16;
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
@@ -31,8 +33,12 @@ pub fn configgen(cfg_path: PathBuf, num_peers: u16) {
 
     for (id, cfg) in server_cfg {
         let mut path: PathBuf = cfg_path.clone();
-        // FIXME: use their pubkey to name this file so that they can find it later
-        path.push(format!("server-{}.json", id));
+        let matches: &[&str] = &setup_peers[id.to_usize()]
+            .connection_string
+            .split("@")
+            .collect::<Vec<&str>>();
+        println!("saving config to {}.json", matches[0]);
+        path.push(format!("{}.json", matches[0]));
 
         let file = std::fs::File::create(path).expect("Could not create cfg file");
         serde_json::to_writer_pretty(file, &cfg).unwrap();
