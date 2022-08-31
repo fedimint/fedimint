@@ -58,13 +58,17 @@
         filterModules = modules: src:
           let
             basePath = toString src + "/";
+            relPathAllCargoTomlFiles = builtins.filter
+              (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
+              (builtins.map (path: lib.removePrefix basePath (toString path)) (lib.filesystem.listFilesRecursive src));
           in
           lib.cleanSourceWith {
             filter = (path: type:
               let
                 relPath = lib.removePrefix basePath (toString path);
                 includePath =
-                  (type == "directory" && builtins.match "^[^/]+$" relPath != null) ||
+                  # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitily whitelisted
+                  (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
                   lib.any
                     (re: builtins.match re relPath != null)
                     ([ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
@@ -276,9 +280,6 @@
           name = "fedimintd";
           dir = "fedimint";
           extraDirs = [
-            "client/cli"
-            "client/client-lib"
-            "client/clientd"
             "crypto/tbs"
             "ln-gateway"
             "fedimint-api"
@@ -296,8 +297,6 @@
           extraDirs = [
             "crypto/tbs"
             "client/client-lib"
-            "client/clientd"
-            "client/cli"
             "modules/fedimint-ln"
             "fedimint"
             "fedimint-api"
