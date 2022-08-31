@@ -256,6 +256,31 @@
 <span id="256">256</span>
 <span id="257">257</span>
 <span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::FeeConsensus;
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
@@ -266,14 +291,26 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
+///
+/// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>Transaction {
-    <span class="kw">pub </span>inputs: Vec&lt;Input&gt;,
-    <span class="kw">pub </span>outputs: Vec&lt;Output&gt;,
-    <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;,
+    <span class="doccomment">/// [`Input`]s consumed by the transaction
+    </span><span class="kw">pub </span>inputs: Vec&lt;Input&gt;,
+    <span class="doccomment">/// [`Output`]s created as a result of the transaction
+    </span><span class="kw">pub </span>outputs: Vec&lt;Output&gt;,
+    <span class="doccomment">/// Aggregated MuSig2 signature over all the public keys of the inputs
+    </span><span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;schnorr::Signature&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+<span class="doccomment">/// An Input consumed by a Transaction is defined within a Fedimint Module.
+///
+/// The user must be able to produce an aggregate Schnorr signature for the transaction over all the inputs.
+///
+/// Each input has an associated secret/public key pair.
+/// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
+</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>Input {
     <span class="comment">// TODO: maybe treat every coin as a seperate input?
     </span>Mint(&lt;fedimint_mint::Mint <span class="kw">as </span>FederationModule&gt;::TxInput),
@@ -290,7 +327,9 @@
     LN(&lt;fedimint_ln::LightningModule <span class="kw">as </span>FederationModule&gt;::TxOutput),
 }
 
-<span class="doccomment">/// Common properties of transaction in- and outputs
+<span class="doccomment">/// Common properties of value transfer for inputs and outputs.
+///
+/// Input and output both define amount transferred and fee. The fee is paid to the federation.
 </span><span class="kw">pub trait </span>TransactionItem {
     <span class="doccomment">/// The amount before fees represented by the in/output
     </span><span class="kw">fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_api::Amount;
@@ -355,7 +394,8 @@
             .sum::&lt;Amount&gt;()
     }
 
-    <span class="kw">pub fn </span>fee_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; Amount {
+    <span class="doccomment">/// The sum of fees across all inputs and outputs.
+    </span><span class="kw">pub fn </span>fee_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; Amount {
         <span class="self">self</span>.inputs
             .iter()
             .map(|input| input.fee(fee_consensus))
@@ -367,7 +407,12 @@
                 .sum::&lt;Amount&gt;()
     }
 
-    <span class="kw">pub fn </span>validate_funding(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
+    <span class="doccomment">/// Validate amounts balance.
+    ///
+    /// A valid transaction maintains 1:1 ratio of assets to liabilities.
+
+    </span><span class="comment">// TODO: better named validate_amounts?
+    </span><span class="kw">pub fn </span>validate_funding(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
         <span class="kw">let </span>in_amount = <span class="self">self</span>.in_amount();
         <span class="kw">let </span>out_amount = <span class="self">self</span>.out_amount();
         <span class="kw">let </span>fee_amount = <span class="self">self</span>.fee_amount(fee_consensus);
@@ -383,14 +428,15 @@
         }
     }
 
-    <span class="doccomment">/// Hash the transaction excluding the signature. This hash is what the signature inside the
-    /// transaction commits to. To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+    <span class="doccomment">/// Hash of the transaction (excluding the signature).
+    ///
+    /// Transaction signature commits to this hash.
+    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
     </span><span class="kw">pub fn </span>tx_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TransactionId {
         <span class="self">Self</span>::tx_hash_from_parts(<span class="kw-2">&amp;</span><span class="self">self</span>.inputs, <span class="kw-2">&amp;</span><span class="self">self</span>.outputs)
     }
 
-    <span class="doccomment">/// Generates the transaction hash without constructing the transaction (which would require a
-    /// signature).
+    <span class="doccomment">/// Generate the transaction hash.
     </span><span class="kw">pub fn </span>tx_hash_from_parts(inputs: <span class="kw-2">&amp;</span>[Input], outputs: <span class="kw-2">&amp;</span>[Output]) -&gt; TransactionId {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = TransactionId::engine();
         inputs
@@ -402,7 +448,8 @@
         TransactionId::from_engine(engine)
     }
 
-    <span class="kw">pub fn </span>validate_signature(
+    <span class="doccomment">/// Validate the aggregated Schnorr Signature signed over the tx_hash
+    </span><span class="kw">pub fn </span>validate_signature(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         keys: <span class="kw">impl </span>Iterator&lt;Item = XOnlyPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
@@ -436,16 +483,17 @@
     }
 }
 
-<span class="doccomment">/// Aggregates a stream of public keys. Be aware that the order of the keys matters for the
-/// aggregation result.
+<span class="doccomment">/// Aggregate a stream of public keys.
 ///
+/// Be aware that the order of the keys matters for the aggregation result.
 /// # Panics
 /// * If the `keys` iterator does not yield any keys
 </span><span class="kw">pub fn </span>agg_keys(keys: <span class="kw-2">&amp;</span>[XOnlyPublicKey]) -&gt; XOnlyPublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
-<span class="kw">fn </span>new_pre_session&lt;C&gt;(
+<span class="doccomment">/// Precompute a combined public key and the hash of the given public keys for Musig2.
+</span><span class="kw">fn </span>new_pre_session&lt;C&gt;(
     keys: <span class="kw-2">&amp;</span>[XOnlyPublicKey],
     ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
 ) -&gt; secp256k1_zkp::MusigKeyAggCache
@@ -458,7 +506,9 @@
     </span>);
     secp256k1_zkp::MusigKeyAggCache::new(ctx, keys)
 }
-<span class="kw">pub fn </span>agg_sign&lt;R, C, M&gt;(
+
+<span class="doccomment">/// Create an aggregated signature over the `msg`
+</span><span class="kw">pub fn </span>agg_sign&lt;R, C, M&gt;(
     keys: <span class="kw-2">&amp;</span>[bitcoin::KeyPair],
     msg: M,
     ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
@@ -515,4 +565,4 @@
     </span>MissingSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (ce36e8825 2022-08-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (02654a084 2022-08-30)" ></div></body></html>
