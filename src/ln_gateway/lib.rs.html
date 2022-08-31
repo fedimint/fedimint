@@ -368,6 +368,9 @@
 <span id="368">368</span>
 <span id="369">369</span>
 <span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -485,27 +488,24 @@
 }
 
 <span class="kw">impl </span>LnGateway {
-    <span class="kw">pub async fn </span>new(
+    <span class="kw">pub fn </span>new(
         federation_client: Arc&lt;GatewayClient&gt;,
         ln_client: Box&lt;<span class="kw">dyn </span>LnRpc&gt;,
         sender: mpsc::Sender&lt;GatewayRequest&gt;,
         receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
         bind_addr: SocketAddr,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+    ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt; = ln_client.into();
-        <span class="comment">// Regster gateway with federation
-        </span>federation_client
-            .register_with_federation(federation_client.config().into())
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Failed to register with federation&quot;</span>);
+
         <span class="comment">// Run webserver asynchronously in tokio
         </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(bind_addr, sender));
-        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+
+        <span class="self">Self </span>{
             federation_client,
             ln_client,
             webserver,
             receiver,
-        })
+        }
     }
 
     <span class="kw">pub async fn </span>buy_preimage_offer(
@@ -652,6 +652,12 @@
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="comment">// Regster gateway with federation
+        </span><span class="self">self</span>.federation_client
+            .register_with_federation(<span class="self">self</span>.federation_client.config().into())
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Failed to register with federation&quot;</span>);
+
         <span class="comment">// TODO: try to drive forward outgoing and incoming payments that were interrupted
         </span><span class="kw">loop </span>{
             <span class="kw">let </span>least_wait_until = Instant::now() + Duration::from_millis(<span class="number">100</span>);
