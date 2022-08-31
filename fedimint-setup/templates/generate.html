@@ -1,12 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Fedimint</title>
-</head>
+<!doctype html>
+<html>
+<head></head>
 <body>
+<h3>Add Guardians</h3>
+<form action="/guardians" method="post">
+    <div>
+        <label for="name">
+            Name:
+            <input type="text" name="name">
+        </label>
+    </div>
+    <div>
+        <label for="connection_string">
+            Connection String:
+            <input type="text" name="connection_string">
+        </label>
+    </div>
+    <div>
+        <input type="submit" value="Add Guardian">
+    </div>
+</form>
 
-Generate
+<h3>Guardians</h3>
+{% for peer in peers %}
+    <li>{{peer.name}}: {{ peer.connection_string }}</li>
+{% endfor %}
 
+{% if peers.len() > 0 %}
+    <form action="/generate-configs" method="post">
+        <input type="submit" value="Start Federation">
+    </form>
+{% endif %}
 </body>
 </html>
