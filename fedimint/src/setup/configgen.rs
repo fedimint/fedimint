@@ -35,9 +35,10 @@ pub fn configgen(cfg_path: PathBuf, setup_peers: Vec<Peer>) {
         let mut path: PathBuf = cfg_path.clone();
         let matches: &[&str] = &setup_peers[id.to_usize()]
             .connection_string
-            .split("@")
+            .split(":")
             .collect::<Vec<&str>>();
-        path.push(format!("{}.json", matches[0]));
+        let port = matches[1];
+        path.push(format!("server-{}.json", port));
 
         let file = std::fs::File::create(path).expect("Could not create cfg file");
         serde_json::to_writer_pretty(file, &cfg).unwrap();

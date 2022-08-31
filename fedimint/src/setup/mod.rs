@@ -41,8 +41,7 @@ struct HomeTemplate {
 async fn home(Extension(state): Extension<MutableState>) -> HomeTemplate {
     // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
     let state = state.read().unwrap();
-    let server_filename = state.pubkey.to_string();
-    let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
+    let cfg_path = state.out_dir.join(format!("server-{}.json", state.port));
     let can_run = Path::new(&cfg_path).is_file() && !state.running;
     HomeTemplate {
         running: state.running.clone(),
@@ -81,13 +80,12 @@ async fn start_federation(
     configgen(state.out_dir.clone(), state.peers.clone());
     tracing::info!("Generated configs");
 
-    // FIXME: don't hardcode. this needs to be able to find this guardian's db path.
-    let server_filename = state.pubkey.to_string();
-    let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
+    let cfg_path = state.out_dir.join(format!("server-{}.json", state.port));
     if Path::new(&cfg_path).is_file() {
-        let db_path = state.out_dir.join(format!("{}.db", server_filename));
+        let db_path = state.out_dir.join(format!("server-{}.db", state.port));
         let sender_clone = state.sender.clone();
         tokio::task::spawn(async move {
+            // FIXME: don't send cfg_path and db_path because we can now infer these from port
             sender_clone.send((cfg_path, db_path)).await;
         }); // FIXME: it won't let me await this
         state.running = true;
@@ -117,6 +115,7 @@ struct State {
     connection_string: String,
     pubkey: PublicKey,
     sender: Sender<(PathBuf, PathBuf)>,
+    port: u16,
 }
 type MutableState = Arc<RwLock<State>>;
 
@@ -138,6 +137,7 @@ pub async fn run_setup(out_dir: PathBuf, port: u16, sender: Sender<(PathBuf, Pat
         out_dir,
         connection_string,
         sender,
+        port,
     }));
 
     let app = Router::new()
