@@ -735,7 +735,11 @@ name = "fedimint"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "askama",
+ "askama_axum",
  "async-trait",
+ "axum 0.4.8",
+ "axum-core 0.1.2",
  "bincode",
  "bitcoin",
  "bytes",
@@ -743,11 +747,13 @@ dependencies = [
  "fedimint-api",
  "fedimint-core",
  "fedimint-derive",
- "fedimint-setup",
  "fedimint-wallet",
  "futures",
  "hbbft",
  "hex",
+ "http",
+ "http-body",
+ "hyper",
  "itertools",
  "jsonrpsee",
  "opentelemetry",
@@ -767,6 +773,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util 0.6.10",
+ "tower",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -881,24 +888,6 @@ dependencies = [
  "tbs",
  "test-log",
  "thiserror",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "fedimint-setup"
-version = "0.1.0"
-dependencies = [
- "askama",
- "askama_axum",
- "axum 0.4.8",
- "axum-core 0.1.2",
- "http",
- "http-body",
- "hyper",
- "serde",
- "tokio",
- "tower",
  "tracing",
  "tracing-subscriber",
 ]
