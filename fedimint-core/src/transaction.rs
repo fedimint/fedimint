@@ -8,13 +8,25 @@ use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// An atomic value transfer operation within the Fedimint system and consensus
+///
+/// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct Transaction {
+    /// [`Input`]s consumed by the transaction
     pub inputs: Vec<Input>,
+    /// [`Output`]s created as a result of the transaction
     pub outputs: Vec<Output>,
+    /// Aggregated MuSig2 signature over all the public keys of the inputs
     pub signature: Option<schnorr::Signature>,
 }
 
+/// An Input consumed by a Transaction is defined within a Fedimint Module.
+///
+/// The user must be able to produce an aggregate Schnorr signature for the transaction over all the inputs.
+///
+/// Each input has an associated secret/public key pair.
+/// Inputs can not have keys if the transaction value is 0. This is useful for non-monetary transactions to announce information to the mint like incoming LN contract offers.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
@@ -32,7 +44,9 @@ pub enum Output {
     LN(<fedimint_ln::LightningModule as FederationModule>::TxOutput),
 }
 
-/// Common properties of transaction in- and outputs
+/// Common properties of value transfer for inputs and outputs.
+///
+/// Input and output both define amount transferred and fee. The fee is paid to the federation.
 pub trait TransactionItem {
     /// The amount before fees represented by the in/output
     fn amount(&self) -> fedimint_api::Amount;
@@ -97,6 +111,7 @@ impl Transaction {
             .sum::<Amount>()
     }
 
+    /// The sum of fees across all inputs and outputs.
     pub fn fee_amount(&self, fee_consensus: &FeeConsensus) -> Amount {
         self.inputs
             .iter()
@@ -109,6 +124,11 @@ impl Transaction {
                 .sum::<Amount>()
     }
 
+    /// Validate amounts balance.
+    ///
+    /// A valid transaction maintains 1:1 ratio of assets to liabilities.
+
+    // TODO: better named validate_amounts?
     pub fn validate_funding(&self, fee_consensus: &FeeConsensus) -> Result<(), TransactionError> {
         let in_amount = self.in_amount();
         let out_amount = self.out_amount();
@@ -125,14 +145,15 @@ impl Transaction {
         }
     }
 
-    /// Hash the transaction excluding the signature. This hash is what the signature inside the
-    /// transaction commits to. To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+    /// Hash of the transaction (excluding the signature).
+    ///
+    /// Transaction signature commits to this hash.
+    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
     pub fn tx_hash(&self) -> TransactionId {
         Self::tx_hash_from_parts(&self.inputs, &self.outputs)
     }
 
-    /// Generates the transaction hash without constructing the transaction (which would require a
-    /// signature).
+    /// Generate the transaction hash.
     pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
         let mut engine = TransactionId::engine();
         inputs
@@ -144,6 +165,7 @@ impl Transaction {
         TransactionId::from_engine(engine)
     }
 
+    /// Validate the aggregated Schnorr Signature signed over the tx_hash
     pub fn validate_signature(
         &self,
         keys: impl Iterator<Item = XOnlyPublicKey>,
@@ -178,15 +200,16 @@ impl Transaction {
     }
 }
 
-/// Aggregates a stream of public keys. Be aware that the order of the keys matters for the
-/// aggregation result.
+/// Aggregate a stream of public keys.
 ///
+/// Be aware that the order of the keys matters for the aggregation result.
 /// # Panics
 /// * If the `keys` iterator does not yield any keys
 pub fn agg_keys(keys: &[XOnlyPublicKey]) -> XOnlyPublicKey {
     new_pre_session(keys, secp256k1_zkp::SECP256K1).agg_pk()
 }
 
+/// Precompute a combined public key and the hash of the given public keys for Musig2.
 fn new_pre_session<C>(
     keys: &[XOnlyPublicKey],
     ctx: &Secp256k1<C>,
@@ -200,6 +223,8 @@ where
     );
     secp256k1_zkp::MusigKeyAggCache::new(ctx, keys)
 }
+
+/// Create an aggregated signature over the `msg`
 pub fn agg_sign<R, C, M>(
     keys: &[bitcoin::KeyPair],
     msg: M,
