@@ -1,3 +1,6 @@
+mod configgen;
+
+use crate::setup::configgen::configgen;
 use askama::Template;
 use axum::extract::{Extension, Form};
 use axum::response::Redirect;
@@ -6,7 +9,10 @@ use axum::{
     Router,
 };
 use http::StatusCode;
+use rand::rngs::OsRng;
 use serde::Deserialize;
+use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 #[derive(Deserialize, Debug, Clone)]
@@ -18,10 +24,14 @@ struct Peer {
 
 #[derive(Template)]
 #[template(path = "home.html")]
-struct HomeTemplate;
+struct HomeTemplate {
+    connection_string: String,
+}
 
-async fn home() -> HomeTemplate {
-    HomeTemplate
+async fn home(Extension(state): Extension<MutableState>) -> HomeTemplate {
+    HomeTemplate {
+        connection_string: state.read().unwrap().connection_string.clone(),
+    }
 }
 
 #[derive(Template)]
@@ -33,8 +43,9 @@ struct GenerateTemplate {
 #[derive(Deserialize, Debug)]
 struct State {
     peers: Vec<Peer>,
-    configs: Vec<String>,
     running: bool, // this should probably be handle or something ...
+    out_dir: PathBuf,
+    connection_string: String,
 }
 
 async fn generate(Extension(state): Extension<MutableState>) -> GenerateTemplate {
@@ -47,8 +58,6 @@ async fn add_guardian(
     Extension(state): Extension<MutableState>,
     Form(input): Form<Peer>,
 ) -> Result<Redirect, (StatusCode, String)> {
-    dbg!(&state);
-    dbg!(&input);
     state.write().unwrap().peers.push(Peer {
         connection_string: input.connection_string,
         name: input.name,
@@ -56,49 +65,16 @@ async fn add_guardian(
     Ok(Redirect::to("/guardians".parse().unwrap()))
 }
 
-async fn generate_configs(
-    Extension(state): Extension<MutableState>,
-) -> Result<Redirect, (StatusCode, String)> {
-    println!("todo: actually generate configs");
-    let mut state = state.write().unwrap();
-    state.configs = state
-        .peers
-        .iter()
-        .enumerate()
-        .map(|(i, peer)| format!("config for peer {}", i))
-        .collect::<Vec<String>>();
-    Ok(Redirect::to("/configs".parse().unwrap()))
-}
-
-#[derive(Template)]
-#[template(path = "configs.html")]
-struct ConfigsTemplate {
-    pairs: Vec<(Peer, String)>,
-}
-
-async fn configs(Extension(state): Extension<MutableState>) -> ConfigsTemplate {
-    let s = state.read().unwrap();
-    let pairs = s
-        .peers
-        .clone()
-        .into_iter()
-        .zip(s.configs.clone().into_iter())
-        .collect();
-    ConfigsTemplate { pairs }
-}
-
 async fn start_federation(
     Extension(state): Extension<MutableState>,
 ) -> Result<Redirect, (StatusCode, String)> {
+    let mut state = state.write().unwrap();
+    configgen(state.out_dir.clone(), state.peers.clone().len() as u16);
+    println!("generated configs");
+    println!("TODO: run fedimintd!");
+
+    state.running = true;
     Ok(Redirect::to("/dashboard".parse().unwrap()))
-}
-
-#[derive(Template)]
-#[template(path = "upload.html")]
-struct UploadTemplate;
-
-async fn upload() -> UploadTemplate {
-    UploadTemplate
 }
 
 #[derive(Template)]
@@ -111,27 +87,29 @@ async fn dashboard() -> DashboardTemplate {
 
 type MutableState = Arc<RwLock<State>>;
 
-pub async fn run_setup() {
-    // build our application with a single route
-    // let app = Router::new().route("/", get(|| async { "Hello, World!" }));
+pub async fn run_setup(out_dir: PathBuf, port: u16) {
+    let mut rng = OsRng::new().unwrap();
+    let secp = bitcoin::secp256k1::Secp256k1::new();
+    let (_, pubkey) = secp.generate_keypair(&mut rng);
+    let our_ip = "127.0.0.1"; // TODO: get our actual IP
+    let connection_string = format!("{}@{}:{}", pubkey, our_ip, port);
+
     let state = Arc::new(RwLock::new(State {
         peers: vec![],
-        configs: vec![],
         running: false,
+        out_dir,
+        connection_string,
     }));
 
     let app = Router::new()
         .route("/", get(home))
         .route("/guardians", get(generate).post(add_guardian))
-        .route("/generate-configs", post(generate_configs))
-        .route("/configs", get(configs))
         .route("/start-federation", post(start_federation))
         .route("/dashboard", get(dashboard))
-        .route("/upload", get(upload))
         .layer(Extension(state));
 
-    // run it with hyper on localhost:3000
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
+    let bind_addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
+    axum::Server::bind(&bind_addr)
         .serve(app.into_make_service())
         .await
         .unwrap();

@@ -6,19 +6,15 @@
 </head>
 <body>
 
-<button id="generate">Generate Config</button>
-<button id="upload">Upload Config</button>
+<h3>Your Fedimint connection string</h3>
+<div>{{ connection_string }}</div>
+
+<button id="create-federation">Create Federation</button>
 
 <script>
-    const generate = document.querySelector("#generate");
-    const upload = document.querySelector("#upload");
-
+    const generate = document.querySelector("#create-federation");
     generate.addEventListener("click", function(e) {
         location.href = "/guardians";
-    });
-
-    upload.addEventListener("click", function(e) {
-        location.href = "/upload";
     });
 </script>
 </body>

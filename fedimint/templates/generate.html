@@ -27,7 +27,7 @@
 {% endfor %}
 
 {% if peers.len() > 0 %}
-    <form action="/generate-configs" method="post">
+    <form action="/start-federation" method="post">
         <input type="submit" value="Start Federation">
     </form>
 {% endif %}
