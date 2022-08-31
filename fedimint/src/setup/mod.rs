@@ -86,7 +86,10 @@ async fn start_federation(
     let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
     if Path::new(&cfg_path).is_file() {
         let db_path = state.out_dir.join(format!("{}.db", server_filename));
-        state.sender.send((cfg_path, db_path)); // FIXME: it won't let me await this
+        let sender_clone = state.sender.clone();
+        tokio::task::spawn(async move {
+            sender_clone.send((cfg_path, db_path)).await;
+        }); // FIXME: it won't let me await this
         state.running = true;
     }
     Ok(Redirect::to("/".parse().unwrap()))
