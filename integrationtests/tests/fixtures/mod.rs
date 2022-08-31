@@ -242,12 +242,16 @@ impl GatewayTest {
             Default::default(),
         ));
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let server = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr)
+        let gateway = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr);
+        // Normally, this client registration with the federation is automated as part of running the gateway
+        // In test cases, we want to register without running a gateway
+        client
+            .register_with_federation(client.config().into())
             .await
-            .expect("Gateway failed to register with federation");
+            .expect("Failed to register client with federation");
 
         GatewayTest {
-            server,
+            server: gateway,
             keys,
             user,
             client,
