@@ -16,10 +16,9 @@ use http::StatusCode;
 use qrcode_generator::QrCodeEcc;
 use rand::rngs::OsRng;
 use serde::Deserialize;
-use tokio::task::JoinHandle;
+use tokio::sync::mpsc::Sender;
 
 use crate::setup::configgen::configgen;
-use crate::{run_fedimint, ServerConfig};
 use mint_client::api::WsFederationConnect;
 use mint_client::UserClientConfig;
 
@@ -78,12 +77,9 @@ async fn start_federation(
     let server_filename = "server-0";
     let cfg_path = state.out_dir.join(format!("{}.json", server_filename));
     if Path::new(&cfg_path).is_file() {
-        let cfg: ServerConfig = load_from_file(&cfg_path);
         let db_path = state.out_dir.join(format!("{}.db", server_filename));
-        let handle = tokio::spawn(run_fedimint(cfg.clone(), db_path.clone()));
-        // FIXME: remove this parameter. just check if handle is some.
+        state.sender.send((cfg_path, db_path)); // FIXME: it won't let me await this
         state.running = true;
-        state.handle = Some(handle);
     }
     Ok(Redirect::to("/".parse().unwrap()))
 }
@@ -107,14 +103,14 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::I
 #[derive(Debug)]
 struct State {
     peers: Vec<Peer>,
-    running: bool, // this should probably be handle or something ...
+    running: bool,
     out_dir: PathBuf,
     connection_string: String,
-    handle: Option<JoinHandle<()>>,
+    sender: Sender<(PathBuf, PathBuf)>,
 }
 type MutableState = Arc<RwLock<State>>;
 
-pub async fn run_setup(out_dir: PathBuf, port: u16) {
+pub async fn run_setup(out_dir: PathBuf, port: u16, sender: Sender<(PathBuf, PathBuf)>) {
     let mut rng = OsRng::new().unwrap();
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let (_, pubkey) = secp.generate_keypair(&mut rng);
@@ -126,7 +122,7 @@ pub async fn run_setup(out_dir: PathBuf, port: u16) {
         running: false,
         out_dir,
         connection_string,
-        handle: None,
+        sender,
     }));
 
     let app = Router::new()
