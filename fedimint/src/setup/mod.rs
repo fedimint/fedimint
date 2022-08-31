@@ -88,12 +88,10 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::I
     let client_cfg_path = state.read().unwrap().out_dir.join("client.json");
     let cfg: UserClientConfig = load_from_file(&client_cfg_path);
     let connect_info = WsFederationConnect::from(cfg.as_ref());
-    let png_bytes: Vec<u8> = qrcode_generator::to_png_to_vec(
-        serde_json::to_string(&connect_info).unwrap(),
-        QrCodeEcc::Low,
-        1024,
-    )
-    .unwrap();
+    let mut string = serde_json::to_string(&connect_info)
+        .unwrap()
+        .replace("127.0.0.1", "188.166.55.8");
+    let png_bytes: Vec<u8> = qrcode_generator::to_png_to_vec(string, QrCodeEcc::Low, 1024).unwrap();
     (
         axum::response::Headers([(axum::http::header::CONTENT_TYPE, "image/png")]),
         png_bytes,
