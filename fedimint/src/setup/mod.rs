@@ -1,6 +1,9 @@
 mod configgen;
 
-use crate::setup::configgen::configgen;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
+
 use askama::Template;
 use axum::extract::{Extension, Form};
 use axum::response::Redirect;
@@ -8,12 +11,15 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use fedimint_core::config::load_from_file;
 use http::StatusCode;
+use qrcode_generator::QrCodeEcc;
 use rand::rngs::OsRng;
 use serde::Deserialize;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+
+use crate::setup::configgen::configgen;
+use mint_client::api::WsFederationConnect;
+use mint_client::UserClientConfig;
 
 #[derive(Deserialize, Debug, Clone)]
 #[allow(dead_code)]
@@ -25,31 +31,25 @@ struct Peer {
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {
+    running: bool,
     connection_string: String,
 }
 
 async fn home(Extension(state): Extension<MutableState>) -> HomeTemplate {
     HomeTemplate {
+        running: state.read().unwrap().running.clone(),
         connection_string: state.read().unwrap().connection_string.clone(),
     }
 }
 
 #[derive(Template)]
-#[template(path = "generate.html")]
-struct GenerateTemplate {
+#[template(path = "guardians.html")]
+struct GuardiansTemplate {
     peers: Vec<Peer>,
 }
 
-#[derive(Deserialize, Debug)]
-struct State {
-    peers: Vec<Peer>,
-    running: bool, // this should probably be handle or something ...
-    out_dir: PathBuf,
-    connection_string: String,
-}
-
-async fn generate(Extension(state): Extension<MutableState>) -> GenerateTemplate {
-    GenerateTemplate {
+async fn guardians(Extension(state): Extension<MutableState>) -> GuardiansTemplate {
+    GuardiansTemplate {
         peers: state.read().unwrap().peers.clone(),
     }
 }
@@ -74,17 +74,32 @@ async fn start_federation(
     println!("TODO: run fedimintd!");
 
     state.running = true;
-    Ok(Redirect::to("/dashboard".parse().unwrap()))
+    Ok(Redirect::to("/".parse().unwrap()))
 }
 
-#[derive(Template)]
-#[template(path = "dashboard.html")]
-struct DashboardTemplate;
-
-async fn dashboard() -> DashboardTemplate {
-    DashboardTemplate
+async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::IntoResponse {
+    let client_cfg_path = state.read().unwrap().out_dir.join("client.json");
+    let cfg: UserClientConfig = load_from_file(&client_cfg_path);
+    let connect_info = WsFederationConnect::from(cfg.as_ref());
+    let png_bytes: Vec<u8> = qrcode_generator::to_png_to_vec(
+        serde_json::to_string(&connect_info).unwrap(),
+        QrCodeEcc::Low,
+        1024,
+    )
+    .unwrap();
+    (
+        axum::response::Headers([(axum::http::header::CONTENT_TYPE, "image/png")]),
+        png_bytes,
+    )
 }
 
+#[derive(Deserialize, Debug)]
+struct State {
+    peers: Vec<Peer>,
+    running: bool, // this should probably be handle or something ...
+    out_dir: PathBuf,
+    connection_string: String,
+}
 type MutableState = Arc<RwLock<State>>;
 
 pub async fn run_setup(out_dir: PathBuf, port: u16) {
@@ -103,9 +118,9 @@ pub async fn run_setup(out_dir: PathBuf, port: u16) {
 
     let app = Router::new()
         .route("/", get(home))
-        .route("/guardians", get(generate).post(add_guardian))
+        .route("/guardians", get(guardians).post(add_guardian))
         .route("/start-federation", post(start_federation))
-        .route("/dashboard", get(dashboard))
+        .route("/qr", get(qr))
         .layer(Extension(state));
 
     let bind_addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
