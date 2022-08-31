@@ -20,6 +20,7 @@ struct Options {
     port: u16,
 }
 
+// TODO: make a shell script to ensure that bitcoind / lightningd are running ...
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
