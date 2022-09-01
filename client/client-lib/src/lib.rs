@@ -238,22 +238,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// based on the federation public key. It does not check if the nonce is unspent.
     pub async fn validate_tokens(&self, coins: &Coins<SpendableCoin>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
-        if coins
-            .iter()
-            .map(|(amt, coin)| {
-                if coin.coin.verify(*tbs_pks.tier(&amt)?) {
-                    Ok(())
-                } else {
-                    Err(ClientError::InvalidSignature)
-                }
-            })
-            .all(|x| x.is_ok())
-        {
-            println!("All tokens have valid signatures")
-        } else {
-            println!("Found invalid signature")
-        }
-        Ok(())
+        coins.iter().try_for_each(|(amt, coin)| {
+            if coin.coin.verify(*tbs_pks.tier(&amt)?) {
+                Ok(())
+            } else {
+                Err(ClientError::InvalidSignature)
+            }
+        })
     }
 
     pub async fn pay_for_coins<R: RngCore + CryptoRng>(

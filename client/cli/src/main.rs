@@ -167,10 +167,17 @@ async fn main() {
             info!(%id, "Started reissuance, please fetch the result later");
         }
         Command::Validate { coins } => {
-            client
-                .validate_tokens(&coins)
-                .await
-                .expect("Invalid tokens");
+            let validate_result = client.validate_tokens(&coins).await;
+
+            match validate_result {
+                Ok(()) => {
+                    println!("All tokens have valid signatures");
+                }
+                Err(e) => {
+                    println!("Found invalid token: {:?}", e);
+                    std::process::exit(-1);
+                }
+            }
         }
         Command::Spend { amount } => {
             match client.select_and_spend_coins(amount) {
