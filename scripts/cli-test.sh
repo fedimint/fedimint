@@ -15,6 +15,7 @@ start_gateway
 
 # reissue
 TOKENS=$($FM_MINT_CLIENT spend '42000msat')
+$FM_MINT_CLIENT validate $TOKENS
 $FM_MINT_CLIENT reissue $TOKENS
 $FM_MINT_CLIENT fetch
 

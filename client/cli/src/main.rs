@@ -45,6 +45,12 @@ enum Command {
         coins: Coins<SpendableCoin>,
     },
 
+    /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
+    Validate {
+        #[clap(parse(from_str = parse_coins))]
+        coins: Coins<SpendableCoin>,
+    },
+
     /// Prepare coins to send to a third party as a payment
     Spend {
         #[clap(parse(try_from_str = parse_fedimint_amount))]
@@ -159,6 +165,19 @@ async fn main() {
             info!(coins = %coins.amount(), "Starting reissuance transaction");
             let id = client.reissue(coins, &mut rng).await.unwrap();
             info!(%id, "Started reissuance, please fetch the result later");
+        }
+        Command::Validate { coins } => {
+            let validate_result = client.validate_tokens(&coins).await;
+
+            match validate_result {
+                Ok(()) => {
+                    println!("All tokens have valid signatures");
+                }
+                Err(e) => {
+                    println!("Found invalid token: {:?}", e);
+                    std::process::exit(-1);
+                }
+            }
         }
         Command::Spend { amount } => {
             match client.select_and_spend_coins(amount) {

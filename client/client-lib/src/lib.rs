@@ -41,7 +41,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::coins::Coins, BlindToken},
+        mint::{tiered::coins::Coins, BlindToken, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -232,6 +232,19 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
+    }
+
+    /// Validate tokens without claiming them. This function checks if signatures are valid
+    /// based on the federation public key. It does not check if the nonce is unspent.
+    pub async fn validate_tokens(&self, coins: &Coins<SpendableCoin>) -> Result<()> {
+        let tbs_pks = &self.mint_client().config.tbs_pks;
+        coins.iter().try_for_each(|(amt, coin)| {
+            if coin.coin.verify(*tbs_pks.tier(&amt)?) {
+                Ok(())
+            } else {
+                Err(ClientError::InvalidSignature)
+            }
+        })
     }
 
     pub async fn pay_for_coins<R: RngCore + CryptoRng>(
@@ -946,4 +959,14 @@ pub enum ClientError {
     HttpError(#[from] reqwest::Error),
     #[error("Outgoing payment timeout")]
     OutgoingPaymentTimeout,
+    #[error("Invalid amount tier {0:?}")]
+    InvalidAmountTier(Amount),
+    #[error("Invalid signature")]
+    InvalidSignature,
+}
+
+impl From<InvalidAmountTierError> for ClientError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        ClientError::InvalidAmountTier(e.0)
+    }
 }
