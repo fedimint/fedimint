@@ -67,7 +67,7 @@ impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
     type Value = ();
 }
 
-#[derive(Debug, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Encodable, Decodable)]
 pub struct EpochHistoryKey(pub u64);
 
 impl DatabaseKeyPrefixConst for EpochHistoryKey {

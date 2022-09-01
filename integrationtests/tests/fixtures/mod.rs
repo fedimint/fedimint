@@ -17,7 +17,6 @@ use cln_rpc::ClnRpc;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
-use hbbft::honey_badger::Message;
 
 use fedimint_api::task::spawn;
 use fedimint_ln::LightningGateway;
@@ -40,7 +39,7 @@ use fedimint::net::connect::mock::MockNetwork;
 use fedimint::net::connect::{Connector, TlsTcpConnector};
 use fedimint::net::peers::PeerConnector;
 use fedimint::transaction::Output;
-use fedimint::{consensus, FedimintServer};
+use fedimint::{consensus, EpochMessage, FedimintServer};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
@@ -494,8 +493,9 @@ impl FederationTest {
 
     /// Inserts coins directly into the databases of federation nodes
     pub fn database_add_coins_for_user(&self, user: &UserTest, amount: Amount) -> OutPoint {
+        let bytes: [u8; 32] = rand::random();
         let out_point = OutPoint {
-            txid: Default::default(),
+            txid: fedimint_api::TransactionId::from_inner(bytes),
             out_idx: 0,
         };
 
@@ -580,6 +580,14 @@ impl FederationTest {
         self.update_last_consensus();
     }
 
+    #[allow(clippy::await_holding_refcell_ref)]
+    pub async fn rejoin_consensus(&self) {
+        for server in &self.servers {
+            let mut s = server.borrow_mut();
+            s.fedimint.rejoin_consensus().await;
+        }
+    }
+
     // Necessary to allow servers to progress concurrently, should be fine since the same server
     // will never run an epoch concurrently with itself.
     #[allow(clippy::await_holding_refcell_ref)]
@@ -632,7 +640,7 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
-        connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<Message<PeerId>>,
+        connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {
             let bitcoin_rpc = bitcoin_gen();

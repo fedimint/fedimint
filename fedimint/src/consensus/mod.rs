@@ -181,7 +181,7 @@ where
         let outcome = consensus_outcome.clone();
 
         let UnzipConsensusItem {
-            epoch_info: epoch_info_cis,
+            epoch_info: _epoch_info_cis,
             transaction: transaction_cis,
             wallet: wallet_cis,
             mint: mint_cis,
@@ -270,12 +270,7 @@ where
             let mut db_batch = DbBatch::new();
             let mut drop_peers = Vec::<PeerId>::new();
 
-            self.save_epoch_history(
-                outcome,
-                epoch_info_cis,
-                db_batch.transaction(),
-                &mut drop_peers,
-            );
+            self.save_epoch_history(outcome, db_batch.transaction(), &mut drop_peers);
 
             let mut drop_wallet = self
                 .wallet
@@ -321,7 +316,6 @@ where
     fn save_epoch_history(
         &self,
         outcome: ConsensusOutcome,
-        signatures: Vec<(PeerId, EpochSignatureShare)>,
         mut transaction: AccumulatorTx<BatchItem>,
         drop_peers: &mut Vec<PeerId>,
     ) {
@@ -329,48 +323,29 @@ where
         let peers: Vec<PeerId> = outcome.contributions.keys().cloned().collect();
         let maybe_prev_epoch = self.db.get_value(&prev_epoch_key).expect("DB error");
 
-        // save current epoch
         let current = EpochHistory::new(outcome.epoch, outcome.contributions, &maybe_prev_epoch);
-        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
-        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
 
-        // validate and update sigs on last epoch
-        if let Some(mut prev_epoch) = maybe_prev_epoch {
-            let mut valid_sigs: HashSet<PeerId> = HashSet::new();
+        // validate and update sigs on prev epoch
+        if let Some(prev_epoch) = maybe_prev_epoch {
+            let pks = &self.cfg.epoch_pk_set;
 
-            let filtered: BTreeMap<_, _> = signatures
-                .iter()
-                .filter(|(peer, sig)| {
-                    let pub_key = self.cfg.epoch_pk_set.public_key_share(peer.to_usize());
-                    pub_key.verify(&sig.0, prev_epoch.hash)
-                })
-                .map(|(peer, sig)| {
-                    valid_sigs.insert(*peer);
-                    (peer.to_usize(), &sig.0)
-                })
-                .collect();
-
-            for peer in peers {
-                if !valid_sigs.contains(&peer) {
-                    warn!("Dropping {} for not contributing valid epoch sigs.", peer);
-                    drop_peers.push(peer);
+            match current.add_sig_to_prev(pks, prev_epoch) {
+                Ok(prev_epoch) => transaction.append_insert(prev_epoch_key, prev_epoch),
+                Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
+                    warn!("Unable to sign epoch {}", prev_epoch_key.0);
+                    for peer in peers {
+                        if !contributing_peers.contains(&peer) {
+                            warn!("Dropping {} for not contributing valid epoch sigs.", peer);
+                            drop_peers.push(peer);
+                        }
+                    }
                 }
-            }
-
-            if let Ok(final_sig) = self.cfg.epoch_pk_set.combine_signatures(filtered) {
-                assert!(self
-                    .cfg
-                    .epoch_pk_set
-                    .public_key()
-                    .verify(&final_sig, prev_epoch.hash));
-
-                prev_epoch.signature = Some(EpochSignature(final_sig));
-                transaction.append_insert(prev_epoch_key, prev_epoch);
-            } else {
-                warn!("Unable to sign epoch {}", prev_epoch.outcome.epoch);
+                Err(_) => panic!("Not possible"),
             }
         }
 
+        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
+        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
         transaction.commit();
     }
 

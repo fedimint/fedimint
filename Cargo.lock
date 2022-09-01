@@ -646,6 +646,7 @@ dependencies = [
  "hex",
  "itertools",
  "jsonrpsee",
+ "mint-client",
  "opentelemetry",
  "opentelemetry-jaeger",
  "rand 0.6.5",
