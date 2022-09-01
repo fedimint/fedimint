@@ -287,6 +287,7 @@
           extraDirs = [
             "crypto/tbs"
             "ln-gateway"
+            "client/client-lib"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
