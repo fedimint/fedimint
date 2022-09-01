@@ -970,6 +970,7 @@
 <span id="970">970</span>
 <span id="971">971</span>
 <span id="972">972</span>
+<span id="973">973</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1446,6 +1447,7 @@
             .expect(<span class="string">&quot;DB error&quot;</span>);
         <span class="prelude-val">Ok</span>(gateway)
     }
+
     <span class="kw">pub async fn </span>fund_outgoing_ln_contract&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: Invoice,

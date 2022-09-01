@@ -110,8 +110,6 @@
 <span id="110">110</span>
 <span id="111">111</span>
 <span id="112">112</span>
-<span id="113">113</span>
-<span id="114">114</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::batch::{BatchItem, DbBatch};
 <span class="kw">use </span><span class="kw">super</span>::Database;
 <span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
@@ -119,7 +117,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::{Arc, Mutex};
-<span class="kw">use </span>tracing::{error, trace};
+<span class="kw">use </span>tracing::error;
 
 <span class="attribute">#[derive(Debug, Default, Clone)]
 </span><span class="kw">pub struct </span>MemDatabase {
@@ -180,8 +178,7 @@
                         </span>.raw_insert_entry(<span class="kw-2">&amp;</span>element.key.to_bytes(), element.value.to_bytes())<span class="question-mark">?
                         </span>.is_some()
                     {
-                        <span class="macro">error!</span>(<span class="string">&quot;Database replaced element! This should not happen!&quot;</span>);
-                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, element.key);
+                        <span class="macro">error!</span>(<span class="string">&quot;Database replaced element! {:?}&quot;</span>, element.key);
                     }
                 }
                 BatchItem::InsertElement(element) =&gt; {
@@ -189,8 +186,7 @@
                 }
                 BatchItem::DeleteElement(key) =&gt; {
                     <span class="kw">if </span><span class="self">self</span>.raw_remove_entry(<span class="kw-2">&amp;</span>key.to_bytes())<span class="question-mark">?</span>.is_none() {
-                        <span class="macro">error!</span>(<span class="string">&quot;Database deleted absent element! This should not happen!&quot;</span>);
-                        <span class="macro">trace!</span>(<span class="string">&quot;Problematic key: {:?}&quot;</span>, key);
+                        <span class="macro">error!</span>(<span class="string">&quot;Database deleted absent element! {:?}&quot;</span>, key);
                     }
                 }
                 BatchItem::MaybeDeleteElement(key) =&gt; {
