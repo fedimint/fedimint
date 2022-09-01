@@ -474,6 +474,7 @@ impl Client<UserClientConfig> {
             .expect("DB error");
         Ok(gateway)
     }
+
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
         invoice: Invoice,
