@@ -245,6 +245,89 @@
 <span id="245">245</span>
 <span id="246">246</span>
 <span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
@@ -253,8 +336,8 @@
 <span class="kw">use </span>fedimint_derive::UnzipConsensus;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>threshold_crypto::{PublicKey, Signature, SignatureShare};
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
 <span class="attribute">#[derive(
     Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
@@ -318,12 +401,45 @@
         }
     }
 
-    <span class="doccomment">/// verifies the sig, the hash, and the merkle tree
-    </span><span class="kw">pub fn </span>verify(
+    <span class="kw">pub fn </span>add_sig_to_prev(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pks: <span class="kw-2">&amp;</span>PublicKey,
-        prev_epoch: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>EpochHistory&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
+        pks: <span class="kw-2">&amp;</span>PublicKeySet,
+        <span class="kw-2">mut </span>prev_epoch: EpochHistory,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory, EpochVerifyError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>contributing_peers = HashSet::new();
+
+        <span class="kw">let </span>sigs: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = <span class="self">self
+            </span>.outcome
+            .items
+            .iter()
+            .flat_map(|(peer, items)| items.iter().map(|i| (<span class="kw-2">*</span>peer, i)))
+            .filter_map(|(peer, item)| <span class="kw">match </span>item {
+                ConsensusItem::EpochInfo(EpochSignatureShare(sig)) =&gt; <span class="prelude-val">Some</span>((peer, sig)),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+            })
+            .filter(|(peer, sig)| {
+                <span class="kw">let </span>pub_key = pks.public_key_share(peer.to_usize());
+                pub_key.verify(sig, prev_epoch.hash)
+            })
+            .map(|(peer, sig)| {
+                contributing_peers.insert(peer);
+                (peer.to_usize(), sig)
+            })
+            .collect();
+
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(final_sig) = pks.combine_signatures(sigs) {
+            <span class="macro">assert!</span>(pks.public_key().verify(<span class="kw-2">&amp;</span>final_sig, prev_epoch.hash));
+
+            prev_epoch.signature = <span class="prelude-val">Some</span>(EpochSignature(final_sig));
+            <span class="prelude-val">Ok</span>(prev_epoch)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(
+                contributing_peers,
+            ))
+        }
+    }
+
+    <span class="kw">pub fn </span>verify_sig(<span class="kw-2">&amp;</span><span class="self">self</span>, pks: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(sig) = <span class="kw-2">&amp;</span><span class="self">self</span>.signature {
             <span class="kw">if </span>!pks.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, <span class="self">self</span>.hash) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::InvalidSignature);
@@ -332,6 +448,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::MissingSignature);
         }
 
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub fn </span>verify_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;EpochHistory&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), EpochVerifyError&gt; {
         <span class="kw">if </span><span class="self">self</span>.outcome.epoch &gt; <span class="number">0 </span>{
             <span class="kw">match </span>prev_epoch {
                 <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(EpochVerifyError::MissingPreviousEpoch),
@@ -357,6 +477,7 @@
     MissingPreviousEpoch,
     InvalidEpochHash,
     InvalidPreviousEpochHash,
+    NotEnoughValidSigShares(HashSet&lt;PeerId&gt;),
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>EpochSignature {
@@ -391,14 +512,17 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::Sha256;
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
     <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
+    <span class="kw">use </span>fedimint_api::rand::Rand07Compat;
     <span class="kw">use </span>fedimint_api::PeerId;
-    <span class="kw">use </span>threshold_crypto::SecretKey;
+    <span class="kw">use </span>rand::rngs::OsRng;
+    <span class="kw">use </span>std::collections::HashSet;
+    <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
 
     <span class="kw">fn </span>signed_history(
         epoch: u16,
-        prev_epoch: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>EpochHistory&gt;,
+        prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;EpochHistory&gt;,
         sk: <span class="kw-2">&amp;</span>SecretKey,
     ) -&gt; EpochHistory {
         <span class="kw">let </span>missing_sig = history(epoch, prev_epoch, <span class="prelude-val">None</span>);
@@ -408,12 +532,12 @@
 
     <span class="kw">fn </span>history(
         epoch: u16,
-        prev_epoch: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>EpochHistory&gt;,
+        prev_epoch: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;EpochHistory&gt;,
         signature: <span class="prelude-ty">Option</span>&lt;EpochSignature&gt;,
     ) -&gt; EpochHistory {
         <span class="kw">let </span>items = <span class="macro">vec!</span>[(PeerId::from(epoch), <span class="macro">vec!</span>[])];
         <span class="kw">let </span>outcome = OutcomeHistory {
-            last_hash: prev_epoch.map(|epoch| epoch.hash),
+            last_hash: prev_epoch.clone().map(|epoch| epoch.hash),
             items,
             epoch: epoch <span class="kw">as </span>u64,
         };
@@ -426,13 +550,55 @@
     }
 
     <span class="attribute">#[test]
+    </span><span class="kw">fn </span>adds_sig_to_prev_epoch() {
+        <span class="kw">let </span>rng = OsRng::new().unwrap();
+        <span class="kw">let </span>sk_set = SecretKeySet::random(<span class="number">2</span>, <span class="kw-2">&amp;mut </span>Rand07Compat(rng));
+        <span class="kw">let </span>pk_set = sk_set.public_keys();
+
+        <span class="kw">let </span>epoch0 = history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="prelude-val">None</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>epoch1 = history(<span class="number">1</span>, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch0.clone()), <span class="prelude-val">None</span>);
+
+        <span class="kw">let </span>peers = [PeerId::from(<span class="number">0</span>), PeerId::from(<span class="number">1</span>), PeerId::from(<span class="number">2</span>)];
+        <span class="kw">let </span>sigs: Vec&lt;(PeerId, Vec&lt;ConsensusItem&gt;)&gt; = peers
+            .iter()
+            .map(|<span class="kw-2">&amp;</span>peer| {
+                <span class="kw">let </span>sig = sk_set.secret_key_share(peer.to_usize()).sign(<span class="kw-2">&amp;</span>epoch0.hash);
+                (
+                    peer,
+                    <span class="macro">vec!</span>[ConsensusItem::EpochInfo(EpochSignatureShare(sig))],
+                )
+            })
+            .collect();
+
+        epoch1.outcome = OutcomeHistory {
+            epoch: <span class="number">1</span>,
+            last_hash: <span class="prelude-val">None</span>,
+            items: sigs[<span class="number">0</span>..<span class="number">1</span>].to_vec(),
+        };
+        <span class="kw">let </span>contributing = HashSet::from([PeerId::from(<span class="number">0</span>)]);
+        <span class="kw">let </span>result = epoch1.add_sig_to_prev(<span class="kw-2">&amp;</span>pk_set, epoch0.clone()).unwrap_err();
+        <span class="macro">assert_eq!</span>(
+            result,
+            EpochVerifyError::NotEnoughValidSigShares(contributing)
+        );
+
+        epoch1.outcome = OutcomeHistory {
+            epoch: <span class="number">1</span>,
+            last_hash: <span class="prelude-val">None</span>,
+            items: sigs,
+        };
+        <span class="kw">let </span>epoch0 = epoch1.add_sig_to_prev(<span class="kw-2">&amp;</span>pk_set, epoch0).unwrap();
+        <span class="macro">assert_eq!</span>(epoch0.verify_sig(<span class="kw-2">&amp;</span>pk_set.public_key()), <span class="prelude-val">Ok</span>(()));
+    }
+
+    <span class="attribute">#[test]
     </span><span class="kw">fn </span>verifies_hash() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
-        <span class="kw">let </span>pk = sk.public_key();
+        <span class="kw">let </span>_pk = sk.public_key();
         <span class="kw">let </span>wrong_hash: Sha256 = Default::default();
         <span class="kw">let </span>sig = EpochSignature(sk.sign(<span class="kw-2">&amp;</span>wrong_hash));
 
-        <span class="kw">let </span>epoch0 = history(<span class="number">0</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(sig));
+        <span class="kw">let </span>epoch0 = history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(sig));
         <span class="kw">let </span>epoch = EpochHistory {
             outcome: epoch0.outcome,
             hash: wrong_hash,
@@ -440,7 +606,7 @@
         };
 
         <span class="macro">assert_eq!</span>(
-            epoch.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">None</span>),
+            epoch.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>),
             <span class="prelude-val">Err</span>(EpochVerifyError::InvalidEpochHash)
         );
     }
@@ -448,22 +614,22 @@
     <span class="attribute">#[test]
     </span><span class="kw">fn </span>verifies_merkle_tree() {
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
-        <span class="kw">let </span>pk = sk.public_key();
+        <span class="kw">let </span>_pk = sk.public_key();
 
-        <span class="kw">let </span>epoch0 = signed_history(<span class="number">0</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>sk);
-        <span class="kw">let </span>epoch1 = signed_history(<span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0), <span class="kw-2">&amp;</span>sk);
-        <span class="kw">let </span>epoch2 = signed_history(<span class="number">2</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch1), <span class="kw-2">&amp;</span>sk);
+        <span class="kw">let </span>epoch0 = signed_history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>sk);
+        <span class="kw">let </span>epoch1 = signed_history(<span class="number">1</span>, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch0.clone()), <span class="kw-2">&amp;</span>sk);
+        <span class="kw">let </span>epoch2 = signed_history(<span class="number">2</span>, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch1.clone()), <span class="kw-2">&amp;</span>sk);
 
-        <span class="macro">assert_eq!</span>(epoch0.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">None</span>), <span class="prelude-val">Ok</span>(()));
-        <span class="macro">assert_eq!</span>(epoch1.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0)), <span class="prelude-val">Ok</span>(()));
-        <span class="macro">assert_eq!</span>(epoch2.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch1)), <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(epoch0.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>), <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(epoch1.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch0)), <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(epoch2.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch1.clone())), <span class="prelude-val">Ok</span>(()));
 
         <span class="macro">assert_eq!</span>(
-            epoch1.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">None</span>),
+            epoch1.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">None</span>),
             <span class="prelude-val">Err</span>(EpochVerifyError::MissingPreviousEpoch)
         );
         <span class="macro">assert_eq!</span>(
-            epoch1.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch2)),
+            epoch1.verify_hash(<span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch2)),
             <span class="prelude-val">Err</span>(EpochVerifyError::InvalidPreviousEpochHash)
         );
     }
@@ -473,21 +639,21 @@
         <span class="kw">let </span>sk: SecretKey = SecretKey::random();
         <span class="kw">let </span>pk = sk.public_key();
 
-        <span class="kw">let </span>epoch0 = signed_history(<span class="number">0</span>, <span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>sk);
-        <span class="kw">let </span>epoch1 = signed_history(<span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0), <span class="kw-2">&amp;</span>sk);
+        <span class="kw">let </span>epoch0 = signed_history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, <span class="kw-2">&amp;</span>sk);
+        <span class="kw">let </span>epoch1 = signed_history(<span class="number">1</span>, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch0.clone()), <span class="kw-2">&amp;</span>sk);
 
-        <span class="macro">assert_eq!</span>(epoch0.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">None</span>), <span class="prelude-val">Ok</span>(()));
-        <span class="macro">assert_eq!</span>(epoch1.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0)), <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(epoch0.verify_sig(<span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
+        <span class="macro">assert_eq!</span>(epoch1.verify_sig(<span class="kw-2">&amp;</span>pk), <span class="prelude-val">Ok</span>(()));
 
-        <span class="kw">let </span>epoch0_wrong = history(<span class="number">0</span>, <span class="prelude-val">None</span>, epoch1.signature);
-        <span class="kw">let </span>epoch1_wrong = history(<span class="number">1</span>, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0), epoch0.signature.clone());
+        <span class="kw">let </span>epoch0_wrong = history(<span class="number">0</span>, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, epoch1.signature);
+        <span class="kw">let </span>epoch1_wrong = history(<span class="number">1</span>, <span class="kw-2">&amp;</span><span class="prelude-val">Some</span>(epoch0.clone()), epoch0.signature);
 
         <span class="macro">assert_eq!</span>(
-            epoch0_wrong.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">None</span>),
+            epoch0_wrong.verify_sig(<span class="kw-2">&amp;</span>pk),
             <span class="prelude-val">Err</span>(EpochVerifyError::InvalidSignature)
         );
         <span class="macro">assert_eq!</span>(
-            epoch1_wrong.verify(<span class="kw-2">&amp;</span>pk, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>epoch0)),
+            epoch1_wrong.verify_sig(<span class="kw-2">&amp;</span>pk),
             <span class="prelude-val">Err</span>(EpochVerifyError::InvalidSignature)
         );
     }

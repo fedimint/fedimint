@@ -641,31 +641,6 @@
 <span id="641">641</span>
 <span id="642">642</span>
 <span id="643">643</span>
-<span id="644">644</span>
-<span id="645">645</span>
-<span id="646">646</span>
-<span id="647">647</span>
-<span id="648">648</span>
-<span id="649">649</span>
-<span id="650">650</span>
-<span id="651">651</span>
-<span id="652">652</span>
-<span id="653">653</span>
-<span id="654">654</span>
-<span id="655">655</span>
-<span id="656">656</span>
-<span id="657">657</span>
-<span id="658">658</span>
-<span id="659">659</span>
-<span id="660">660</span>
-<span id="661">661</span>
-<span id="662">662</span>
-<span id="663">663</span>
-<span id="664">664</span>
-<span id="665">665</span>
-<span id="666">666</span>
-<span id="667">667</span>
-<span id="668">668</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -849,7 +824,7 @@
         <span class="kw">let </span>outcome = consensus_outcome.clone();
 
         <span class="kw">let </span>UnzipConsensusItem {
-            epoch_info: epoch_info_cis,
+            epoch_info: _epoch_info_cis,
             transaction: transaction_cis,
             wallet: wallet_cis,
             mint: mint_cis,
@@ -938,12 +913,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>db_batch = DbBatch::new();
             <span class="kw">let </span><span class="kw-2">mut </span>drop_peers = Vec::&lt;PeerId&gt;::new();
 
-            <span class="self">self</span>.save_epoch_history(
-                outcome,
-                epoch_info_cis,
-                db_batch.transaction(),
-                <span class="kw-2">&amp;mut </span>drop_peers,
-            );
+            <span class="self">self</span>.save_epoch_history(outcome, db_batch.transaction(), <span class="kw-2">&amp;mut </span>drop_peers);
 
             <span class="kw">let </span><span class="kw-2">mut </span>drop_wallet = <span class="self">self
                 </span>.wallet
@@ -989,7 +959,6 @@
     <span class="kw">fn </span>save_epoch_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outcome: ConsensusOutcome,
-        signatures: Vec&lt;(PeerId, EpochSignatureShare)&gt;,
         <span class="kw-2">mut </span>transaction: AccumulatorTx&lt;BatchItem&gt;,
         drop_peers: <span class="kw-2">&amp;mut </span>Vec&lt;PeerId&gt;,
     ) {
@@ -997,48 +966,29 @@
         <span class="kw">let </span>peers: Vec&lt;PeerId&gt; = outcome.contributions.keys().cloned().collect();
         <span class="kw">let </span>maybe_prev_epoch = <span class="self">self</span>.db.get_value(<span class="kw-2">&amp;</span>prev_epoch_key).expect(<span class="string">&quot;DB error&quot;</span>);
 
-        <span class="comment">// save current epoch
-        </span><span class="kw">let </span>current = EpochHistory::new(outcome.epoch, outcome.contributions, <span class="kw-2">&amp;</span>maybe_prev_epoch);
-        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
-        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
+        <span class="kw">let </span>current = EpochHistory::new(outcome.epoch, outcome.contributions, <span class="kw-2">&amp;</span>maybe_prev_epoch);
 
-        <span class="comment">// validate and update sigs on last epoch
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_epoch) = maybe_prev_epoch {
-            <span class="kw">let </span><span class="kw-2">mut </span>valid_sigs: HashSet&lt;PeerId&gt; = HashSet::new();
+        <span class="comment">// validate and update sigs on prev epoch
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(prev_epoch) = maybe_prev_epoch {
+            <span class="kw">let </span>pks = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.epoch_pk_set;
 
-            <span class="kw">let </span>filtered: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = signatures
-                .iter()
-                .filter(|(peer, sig)| {
-                    <span class="kw">let </span>pub_key = <span class="self">self</span>.cfg.epoch_pk_set.public_key_share(peer.to_usize());
-                    pub_key.verify(<span class="kw-2">&amp;</span>sig.<span class="number">0</span>, prev_epoch.hash)
-                })
-                .map(|(peer, sig)| {
-                    valid_sigs.insert(<span class="kw-2">*</span>peer);
-                    (peer.to_usize(), <span class="kw-2">&amp;</span>sig.<span class="number">0</span>)
-                })
-                .collect();
-
-            <span class="kw">for </span>peer <span class="kw">in </span>peers {
-                <span class="kw">if </span>!valid_sigs.contains(<span class="kw-2">&amp;</span>peer) {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, peer);
-                    drop_peers.push(peer);
+            <span class="kw">match </span>current.add_sig_to_prev(pks, prev_epoch) {
+                <span class="prelude-val">Ok</span>(prev_epoch) =&gt; transaction.append_insert(prev_epoch_key, prev_epoch),
+                <span class="prelude-val">Err</span>(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch_key.<span class="number">0</span>);
+                    <span class="kw">for </span>peer <span class="kw">in </span>peers {
+                        <span class="kw">if </span>!contributing_peers.contains(<span class="kw-2">&amp;</span>peer) {
+                            <span class="macro">warn!</span>(<span class="string">&quot;Dropping {} for not contributing valid epoch sigs.&quot;</span>, peer);
+                            drop_peers.push(peer);
+                        }
+                    }
                 }
-            }
-
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(final_sig) = <span class="self">self</span>.cfg.epoch_pk_set.combine_signatures(filtered) {
-                <span class="macro">assert!</span>(<span class="self">self
-                    </span>.cfg
-                    .epoch_pk_set
-                    .public_key()
-                    .verify(<span class="kw-2">&amp;</span>final_sig, prev_epoch.hash));
-
-                prev_epoch.signature = <span class="prelude-val">Some</span>(EpochSignature(final_sig));
-                transaction.append_insert(prev_epoch_key, prev_epoch);
-            } <span class="kw">else </span>{
-                <span class="macro">warn!</span>(<span class="string">&quot;Unable to sign epoch {}&quot;</span>, prev_epoch.outcome.epoch);
+                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Not possible&quot;</span>),
             }
         }
 
+        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
+        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
         transaction.commit();
     }
 

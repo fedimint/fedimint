@@ -658,6 +658,9 @@
 <span id="658">658</span>
 <span id="659">659</span>
 <span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -1067,7 +1070,10 @@
     ) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="kw">match </span><span class="self">self</span>.receive_message_inner(msg_res).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(connected),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; {
+                <span class="self">self</span>.last_received = <span class="prelude-val">None</span>;
+                <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>)
+            }
         }
     }
 
@@ -1081,10 +1087,10 @@
         <span class="kw">let </span>expected = <span class="self">self
             </span>.last_received
             .map(|last_id| last_id.increment())
-            .unwrap_or(MessageId(<span class="number">1</span>));
+            .unwrap_or(msg.id);
 
         <span class="kw">if </span>msg.id &lt; expected {
-            <span class="macro">debug!</span>(<span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received old message&quot;</span>);
+            <span class="macro">info!</span>(<span class="question-mark">?</span>expected, received = <span class="question-mark">?</span>msg.id, <span class="string">&quot;Received old message&quot;</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 

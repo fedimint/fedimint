@@ -536,7 +536,7 @@
 
     <span class="attribute">#[tokio::test]
     </span><span class="kw">async fn </span>test_roundtrip() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
@@ -566,7 +566,7 @@
 
     <span class="attribute">#[tokio::test]
     </span><span class="kw">async fn </span>test_not_try_parse_partial() {
-        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+        <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
         </span><span class="kw">enum </span>TestEnum {
             Foo,
             Bar(u64),
