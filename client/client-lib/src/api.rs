@@ -12,7 +12,7 @@ use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use serde::{Deserialize, Serialize};
-use tracing::{error, instrument, warn};
+use tracing::{error, info, instrument};
 
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
@@ -303,7 +303,7 @@ impl<C> WsFederationApi<C> {
 }
 
 impl<C: JsonRpcClient> FederationMember<C> {
-    #[instrument(fields(peer = %self.peer_id), skip_all, err)]
+    #[instrument(fields(peer = %self.peer_id), skip_all)]
     pub async fn request<R>(
         &self,
         method: &str,
@@ -321,7 +321,7 @@ impl<C: JsonRpcClient> FederationMember<C> {
             _ => {}
         };
 
-        warn!("web socket not connected, reconnecting");
+        info!("web socket not connected, reconnecting");
 
         drop(rclient);
         let mut wclient = self.client.write().await;

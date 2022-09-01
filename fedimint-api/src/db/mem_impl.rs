@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
-use tracing::{error, trace};
+use tracing::error;
 
 #[derive(Debug, Default, Clone)]
 pub struct MemDatabase {
@@ -66,8 +66,7 @@ impl Database for MemDatabase {
                         .raw_insert_entry(&element.key.to_bytes(), element.value.to_bytes())?
                         .is_some()
                     {
-                        error!("Database replaced element! This should not happen!");
-                        trace!("Problematic key: {:?}", element.key);
+                        error!("Database replaced element! {:?}", element.key);
                     }
                 }
                 BatchItem::InsertElement(element) => {
@@ -75,8 +74,7 @@ impl Database for MemDatabase {
                 }
                 BatchItem::DeleteElement(key) => {
                     if self.raw_remove_entry(&key.to_bytes())?.is_none() {
-                        error!("Database deleted absent element! This should not happen!");
-                        trace!("Problematic key: {:?}", key);
+                        error!("Database deleted absent element! {:?}", key);
                     }
                 }
                 BatchItem::MaybeDeleteElement(key) => {
