@@ -58,13 +58,17 @@
         filterModules = modules: src:
           let
             basePath = toString src + "/";
+            relPathAllCargoTomlFiles = builtins.filter
+              (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
+              (builtins.map (path: lib.removePrefix basePath (toString path)) (lib.filesystem.listFilesRecursive src));
           in
           lib.cleanSourceWith {
             filter = (path: type:
               let
                 relPath = lib.removePrefix basePath (toString path);
                 includePath =
-                  (type == "directory" && builtins.match "^[^/]+$" relPath != null) ||
+                  # traverse only into directories that somewhere in there contain `Cargo.toml` file, or were explicitily whitelisted
+                  (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
                   lib.any
                     (re: builtins.match re relPath != null)
                     ([ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
@@ -153,7 +157,8 @@
 
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
           src = filterWorkspaceDepsBuildFiles ./.;
-          pname = "fedimint-dependencies";
+          pname = "workspace-deps";
+          buildPhaseCargoCommand = "cargo doc && cargo check --profile release --all-targets && cargo build --profile release --all-targets";
           doCheck = false;
         });
 
@@ -189,12 +194,15 @@
         };
 
         workspaceBuild = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-build";
           cargoArtifacts = workspaceDeps;
           doCheck = false;
         });
 
         workspaceTest = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceBuild;
+          pname = "workspace-test";
+          cargoBuildCommand = "true";
+          cargoArtifacts = workspaceDeps;
           doCheck = true;
         });
 
@@ -202,11 +210,17 @@
         # we can't build benches on stable
         # See: https://github.com/ipetkov/crane/issues/64
         workspaceClippy = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceBuild;
+          pname = "workspace-clippy";
+          cargoArtifacts = workspaceDeps;
 
-          cargoBuildCommand = "cargo clippy --profile release --lib --bins --tests --examples --workspace -- --deny warnings";
+          cargoBuildCommand = "cargo clippy --profile release --no-deps --lib --bins --tests --examples --workspace -- --deny warnings";
           doInstallCargoArtifacts = false;
           doCheck = false;
+        });
+
+        cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
         });
 
         cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
@@ -242,23 +256,38 @@
           doCheck = false;
         };
 
-        llvmCovWorkspace = craneLib.cargoBuild (commonArgs // {
-          cargoArtifacts = workspaceDeps;
+        # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
+        workspaceDepsLlvmCov = craneLib.buildDepsOnly (commonArgs // {
+          pname = "workspace-deps-llvm-cov";
+          src = filterWorkspaceDepsBuildFiles ./.;
+          cargoBuildCommand = "cargo llvm-cov --workspace";
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+          doCheck = false;
+        });
+
+        workspaceLlvmCov = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-llvm-cov";
+          cargoArtifacts = workspaceDepsLlvmCov;
           # TODO: as things are right now, the integration tests can't run in parallel
           cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
-          doCheck = true;
+          doCheck = false;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+        });
+
+        workspaceDoc = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-doc";
+          cargoArtifacts = workspaceDeps;
+          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
+          doCheck = false;
         });
 
         fedimintd = pkg {
           name = "fedimintd";
           dir = "fedimint";
           extraDirs = [
-            "client/cli"
-            "client/client-lib"
-            "client/clientd"
             "crypto/tbs"
             "ln-gateway"
+            "client/client-lib"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
@@ -274,8 +303,6 @@
           extraDirs = [
             "crypto/tbs"
             "client/client-lib"
-            "client/clientd"
-            "client/cli"
             "modules/fedimint-ln"
             "fedimint"
             "fedimint-api"
@@ -351,9 +378,11 @@
           workspaceBuild = workspaceBuild;
           workspaceClippy = workspaceClippy;
           workspaceTest = workspaceTest;
-          workspaceCov = llvmCovWorkspace;
+          workspaceDoc = workspaceDoc;
+          workspaceCov = workspaceLlvmCov;
 
           cli-test = {
+            reconnect = cliTestReconnect;
             latency = cliTestLatency;
             cli = cliTestCli;
             clientd = cliTestClientd;

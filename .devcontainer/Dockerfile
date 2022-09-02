@@ -25,10 +25,10 @@ RUN mkdir -p /etc/nix && echo "sandbox = false" >> /etc/nix/nix.conf
 # Use nix to build project dependencies.
 USER nonroot
 ADD --chown=nonroot:nonroot flake.* /home/nonroot/tmp_src/
+# Setup bashrc with nix develop trigger.
+ADD --chown=nonroot:nonroot .devcontainer/bashrc /home/nonroot/.bashrc
 RUN . /home/nonroot/.nix-profile/etc/profile.d/nix.sh && \
     (cd /home/nonroot/tmp_src && nix develop --extra-experimental-features nix-command --extra-experimental-features flakes)
-# Setup bashrc with nix develop trigger.
-RUN cat /home/nonroot/tmp_src/.devcontainer/bashrc >> /home/nonroot/.bashrc
 RUN rm -rf /home/nonroot/tmp_src
 
 # Give sudo permissions to nonroot user.

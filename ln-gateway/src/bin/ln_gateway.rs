@@ -107,8 +107,6 @@ async fn initialize_gateway(
     let ln_client = Box::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
-        .await
-        .expect("Failed to register with federation")
 }
 
 /// Send message to LnGateway over channel and receive response over onshot channel

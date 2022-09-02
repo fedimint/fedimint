@@ -3,7 +3,7 @@ use super::{Database, DecodingError};
 use crate::db::PrefixIter;
 use anyhow::Result;
 use sled::transaction::TransactionError;
-use tracing::{error, trace};
+use tracing::error;
 
 // TODO: maybe make the concrete impl its own crate
 impl Database for sled::Tree {
@@ -42,8 +42,7 @@ impl Database for sled::Tree {
                         if t.insert(element.key.to_bytes(), element.value.to_bytes())?
                             .is_some()
                         {
-                            error!("Database replaced element! This should not happen!");
-                            trace!("Problematic key: {:?}", element.key);
+                            error!("Database replaced element! {:?}", element.key);
                         }
                     }
                     BatchItem::InsertElement(element) => {
@@ -51,8 +50,7 @@ impl Database for sled::Tree {
                     }
                     BatchItem::DeleteElement(key) => {
                         if t.remove(key.to_bytes())?.is_none() {
-                            error!("Database deleted absent element! This should not happen!");
-                            trace!("Problematic key: {:?}", key);
+                            error!("Database deleted absent element! {:?}", key);
                         }
                     }
                     BatchItem::MaybeDeleteElement(key) => {

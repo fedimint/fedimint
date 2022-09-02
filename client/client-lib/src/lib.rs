@@ -12,7 +12,7 @@ use std::time::SystemTime;
 use futures::StreamExt;
 
 use bitcoin::util::key::KeyPair;
-use bitcoin::{Address, Transaction as BitcoinTransaction};
+use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 
 use bitcoin_hashes::Hash;
 use futures::stream::FuturesUnordered;
@@ -41,7 +41,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::coins::Coins, BlindToken},
+        mint::{tiered::coins::Coins, BlindToken, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -235,6 +235,19 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
+    /// Validate tokens without claiming them. This function checks if signatures are valid
+    /// based on the federation public key. It does not check if the nonce is unspent.
+    pub async fn validate_tokens(&self, coins: &Coins<SpendableCoin>) -> Result<()> {
+        let tbs_pks = &self.mint_client().config.tbs_pks;
+        coins.iter().try_for_each(|(amt, coin)| {
+            if coin.coin.verify(*tbs_pks.tier(&amt)?) {
+                Ok(())
+            } else {
+                Err(ClientError::InvalidSignature)
+            }
+        })
+    }
+
     pub async fn pay_for_coins<R: RngCore + CryptoRng>(
         &self,
         coins: Coins<BlindToken>,
@@ -421,35 +434,54 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 }
 
 impl Client<UserClientConfig> {
-    pub async fn fetch_gateway(&self) -> Result<LightningGateway> {
-        // fetch gateway from db
+    pub async fn fetch_registered_gateways(&self) -> Result<Vec<LightningGateway>> {
+        Ok(self.context.api.fetch_gateways().await?)
+    }
+    pub async fn fetch_active_gateway(&self) -> Result<LightningGateway> {
         if let Some(gateway) = self
             .context
             .db
             .get_value(&LightningGatewayKey)
             .expect("DB error")
         {
-            return Ok(gateway);
+            Ok(gateway)
+        } else {
+            Ok(self.switch_active_gateway(None).await?)
         }
-
-        // if db is empty, fetch from federation and save to db
-        let gateways = self.context.api.fetch_gateways().await?;
+    }
+    /// Switches the clients active gateway to a registered gateway with the given node pubkey.
+    /// If no pubkey is given (node_pub_key == None) the first available registered gateway is activated.
+    /// This behavior is useful for scenarios where we don't know any registered gateways in advance.
+    pub async fn switch_active_gateway(
+        &self,
+        node_pub_key: Option<secp256k1::PublicKey>,
+    ) -> Result<LightningGateway> {
+        let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
             return Err(ClientError::NoGateways);
         };
-        let gateway = gateways[0].clone();
+        let gateway = match node_pub_key {
+            // If a pubkey was provided, try to select and activate a gateway with that pubkey.
+            Some(pub_key) => gateways
+                .into_iter()
+                .find(|g| g.node_pub_key == pub_key)
+                .ok_or(ClientError::GatewayNotFound)?,
+            // Otherwise (no pubkey provided), select and activate the first registered gateway.
+            None => gateways[0].clone(),
+        };
         self.context
             .db
             .insert_entry(&LightningGatewayKey, &gateway)
             .expect("DB error");
         Ok(gateway)
     }
+
     pub async fn fund_outgoing_ln_contract<R: RngCore + CryptoRng>(
         &self,
         invoice: Invoice,
         mut rng: R,
     ) -> Result<(ContractId, OutPoint)> {
-        let gateway = self.fetch_gateway().await?;
+        let gateway = self.fetch_active_gateway().await?;
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
@@ -496,7 +528,7 @@ impl Client<UserClientConfig> {
         description: String,
         mut rng: R,
     ) -> Result<ConfirmedInvoice> {
-        let gateway = self.fetch_gateway().await?;
+        let gateway = self.fetch_active_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
         let raw_payment_secret = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
@@ -595,8 +627,7 @@ impl Client<UserClientConfig> {
     /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
     /// for them to do so
     pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
-        let gateway = self.fetch_gateway().await?;
-
+        let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
             .post(&format!("{}/pay_invoice", gateway.api))
             .json(&contract_id)
@@ -924,8 +955,20 @@ pub enum ClientError {
     InvalidPreimage,
     #[error("Federation has no lightning gateways")]
     NoGateways,
+    #[error("Federation has no registered lightning gateway with the given node public key")]
+    GatewayNotFound,
     #[error("HTTP Error {0}")]
     HttpError(#[from] reqwest::Error),
     #[error("Outgoing payment timeout")]
     OutgoingPaymentTimeout,
+    #[error("Invalid amount tier {0:?}")]
+    InvalidAmountTier(Amount),
+    #[error("Invalid signature")]
+    InvalidSignature,
+}
+
+impl From<InvalidAmountTierError> for ClientError {
+    fn from(e: InvalidAmountTierError) -> Self {
+        ClientError::InvalidAmountTier(e.0)
+    }
 }

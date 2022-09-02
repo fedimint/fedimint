@@ -53,9 +53,16 @@ jobs:
       - name: Clippy workspace
         run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceClippy
 
+      - name: Run cargo doc
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceDoc
+
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
       #   run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceTest
+
+      - name: Reconnect Tests
+        # run: nix-shell --command ./scripts/reconnect-test.sh
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.reconnect
 
       - name: Latency Tests
         # run: nix-shell --command ./scripts/latency-test.sh
@@ -72,6 +79,7 @@ jobs:
       - name: Integration Tests (no fixtures)
         # run: nix-shell --command ./scripts/rust-tests.sh
         run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.rust-tests
+
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another

@@ -142,7 +142,8 @@ impl TransactionBuilder {
         // move input coins to pending state, awaiting a transaction
         if !self.input_coins.coins.is_empty() {
             batch.append_from_iter(self.input_coins.iter().map(|(amount, coin)| {
-                BatchItem::delete(CoinKey {
+                // maybe_delete because coins might have been received from another user directly
+                BatchItem::maybe_delete(CoinKey {
                     amount,
                     nonce: coin.coin.0.clone(),
                 })

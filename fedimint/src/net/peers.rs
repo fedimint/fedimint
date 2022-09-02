@@ -407,7 +407,10 @@ where
     ) -> PeerConnectionState<M> {
         match self.receive_message_inner(msg_res).await {
             Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(e, 0),
+            Err(e) => {
+                self.last_received = None;
+                self.disconnect_err(e, 0)
+            }
         }
     }
 
@@ -421,10 +424,10 @@ where
         let expected = self
             .last_received
             .map(|last_id| last_id.increment())
-            .unwrap_or(MessageId(1));
+            .unwrap_or(msg.id);
 
         if msg.id < expected {
-            debug!(?expected, received = ?msg.id, "Received old message");
+            info!(?expected, received = ?msg.id, "Received old message");
             return Ok(());
         }
 

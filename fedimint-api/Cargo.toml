@@ -1,8 +1,10 @@
 [package]
 name = "fedimint-api"
 version = "0.1.0"
-authors = ["elsirion <elsirion@protonmail.com>"]
-edition = "2018"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-api provides the common serialization and database representations for communication between crates"
+license = "MIT"
 
 [lib]
 name = "fedimint_api"
