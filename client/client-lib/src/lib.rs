@@ -164,7 +164,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .enumerate()
                 .map(|(id, url)| {
                     let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = url.parse().expect("Invalid URL in config");
+                    let url = url.clone();
                     (peer_id, url)
                 })
                 .collect(),

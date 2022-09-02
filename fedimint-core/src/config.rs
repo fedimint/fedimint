@@ -4,10 +4,11 @@ use fedimint_wallet::config::WalletClientConfig;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
-    pub api_endpoints: Vec<String>,
+    pub api_endpoints: Vec<Url>,
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,

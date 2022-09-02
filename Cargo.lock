@@ -667,6 +667,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -726,6 +727,7 @@ dependencies = [
  "thiserror",
  "threshold_crypto",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1758,6 +1760,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

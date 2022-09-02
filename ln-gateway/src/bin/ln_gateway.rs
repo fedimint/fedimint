@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
+use fedimint::consensus::debug;
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -82,10 +83,10 @@ async fn initialize_gateway(
         Some(options::Value::String(port)) => port,
         _ => unreachable!(),
     };
-    let bind_addr = format!("{}:{}", host, port)
+    let bind_addr = format!("{}:{}/", host, port)
         .parse()
         .expect("Invalid gateway bind address");
-
+    eprintln!("bind_addr: {}", bind_addr);
     // If no config exists, try to generate one
     let cfg_path = workdir.join("gateway.json");
     let config = plugin.configuration();

@@ -4,7 +4,7 @@
 set -eu
 FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-5}
-export RUST_LOG=error,ln_gateway=off
+export RUST_LOG=error,ln_gateway=on
 export PEG_IN_AMOUNT=99999
 
 source ./scripts/setup-tests.sh $FM_FED_SIZE
@@ -14,6 +14,12 @@ start_gateway
 
 #### BEGIN TESTS ####
 echo "Running with fed size $FM_FED_SIZE"
+
+echo "$FM_TMP_DIR/cfg/client.json"
+cat $FM_TMP_DIR/cfg/client.json
+
+echo "$FM_TMP_DIR/cfg/server-0.json"
+cat $FM_TMP_DIR/cfg/server-0.json
 
 # reissue
 time1=$(date +%s.%N)
