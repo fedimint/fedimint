@@ -16,7 +16,7 @@ use fedimint::transaction::Output;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
 use fedimint_ln::DecryptionShareCI;
-use fedimint_mint::tiered::coins::Coins;
+use fedimint_mint::tiered::TieredMulti;
 use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
@@ -308,9 +308,7 @@ async fn drop_peers_who_contribute_bad_sigs() {
     let out_point = fed.database_add_coins_for_user(&user, sats(2000));
     let bad_proposal = vec![ConsensusItem::Mint(PartiallySignedRequest {
         out_point,
-        partial_signature: PartialSigResponse(Coins {
-            coins: Default::default(),
-        }),
+        partial_signature: PartialSigResponse(TieredMulti::default()),
     })];
 
     fed.subset_peers(&[3]).override_proposal(bad_proposal);

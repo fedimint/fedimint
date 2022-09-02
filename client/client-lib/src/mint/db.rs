@@ -2,7 +2,7 @@ use crate::mint::{CoinFinalizationData, SpendableCoin};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::mint::CoinNonce;
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
@@ -36,7 +36,7 @@ pub struct PendingCoinsKey(pub TransactionId);
 impl DatabaseKeyPrefixConst for PendingCoinsKey {
     const DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
     type Key = Self;
-    type Value = Coins<SpendableCoin>;
+    type Value = TieredMulti<SpendableCoin>;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -45,7 +45,7 @@ pub struct PendingCoinsKeyPrefix;
 impl DatabaseKeyPrefixConst for PendingCoinsKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
     type Key = PendingCoinsKey;
-    type Value = Coins<SpendableCoin>;
+    type Value = TieredMulti<SpendableCoin>;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]

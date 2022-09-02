@@ -7,7 +7,7 @@ use axum::BoxError;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::Transaction;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::mint::{CoinFinalizationData, SpendableCoin};
 use mint_client::ClientError;
@@ -51,12 +51,11 @@ pub struct InfoResponse {
 
 impl InfoResponse {
     pub fn new(
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
         active_issuances: Vec<(OutPoint, CoinFinalizationData)>,
     ) -> Self {
         let info_coins: Vec<CoinsByTier> = coins
-            .coins
-            .iter()
+            .iter_tiers()
             .map(|(tier, c)| CoinsByTier {
                 quantity: c.len(),
                 tier: tier.milli_sat,

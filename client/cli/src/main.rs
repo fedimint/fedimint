@@ -3,7 +3,7 @@ use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
 use fedimint_api::Amount;
 use fedimint_core::config::{load_from_file, ClientConfig};
-use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 
 use mint_client::api::{WsFederationApi, WsFederationConnect};
@@ -42,13 +42,13 @@ enum Command {
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
         #[clap(parse(from_str = parse_coins))]
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
     },
 
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
         #[clap(parse(from_str = parse_coins))]
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
     },
 
     /// Prepare coins to send to a third party as a payment
@@ -105,7 +105,7 @@ enum Command {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
-    coins: Coins<SpendableCoin>,
+    coins: TieredMulti<SpendableCoin>,
     invoice: String,
 }
 
@@ -162,7 +162,7 @@ async fn main() {
             );
         }
         Command::Reissue { coins } => {
-            info!(coins = %coins.amount(), "Starting reissuance transaction");
+            info!(coins = %coins.total_amount(), "Starting reissuance transaction");
             let id = client.reissue(coins, &mut rng).await.unwrap();
             info!(%id, "Started reissuance, please fetch the result later");
         }
@@ -198,10 +198,10 @@ async fn main() {
             let coins = client.coins();
             println!(
                 "We own {} coins with a total value of {}",
-                coins.coin_count(),
-                coins.amount()
+                coins.item_count(),
+                coins.total_amount()
             );
-            for (amount, coins) in coins.coins {
+            for (amount, coins) in coins.iter_tiers() {
                 println!("We own {} coins of denomination {}", coins.len(), amount);
             }
         }

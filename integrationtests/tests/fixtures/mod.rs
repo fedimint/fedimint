@@ -288,16 +288,15 @@ impl UserTest {
     pub fn coin_amounts(&self) -> Vec<Amount> {
         self.client
             .coins()
-            .coins
-            .into_iter()
-            .flat_map(|(a, c)| repeat(a).take(c.len()))
+            .iter_tiers()
+            .flat_map(|(a, c)| repeat(*a).take(c.len()))
             .sorted()
             .collect::<Vec<Amount>>()
     }
 
     /// Returns sum total of all coins
     pub fn total_coins(&self) -> Amount {
-        self.client.coins().amount()
+        self.client.coins().total_amount()
     }
 
     fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
