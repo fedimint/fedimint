@@ -311,12 +311,7 @@ impl UserTest {
                 .iter()
                 .enumerate()
                 .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-                .map(|(id, url)| {
-                    (
-                        PeerId::from(id as u16),
-                        url.parse().expect("Invalid URL in config"),
-                    )
-                })
+                .map(|(id, url)| (PeerId::from(id as u16), url.clone()))
                 .collect(),
         ));
 

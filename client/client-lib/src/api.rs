@@ -271,6 +271,7 @@ pub trait JsonRpcClient: ClientT + Sized {
 #[async_trait]
 impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
+        println!("JsonRpcClientUrl <<<<{}>>>>", url);
         WsClientBuilder::default().build(url).await
     }
 
@@ -390,6 +391,7 @@ mod tests {
     use once_cell::sync::Lazy;
     use std::{
         collections::HashSet,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
@@ -418,7 +420,7 @@ mod tests {
             self.0.is_connected()
         }
 
-        async fn connect(_url: &str) -> Result<Self> {
+        async fn connect(_url: &Url) -> Result<Self> {
             Ok(Self(C::connect().await?))
         }
     }
@@ -458,7 +460,7 @@ mod tests {
 
     fn federation_member<C: SimpleClient + Send + Sync>() -> FederationMember<Client<C>> {
         FederationMember {
-            url: String::new(),
+            url: Url::from_str("http://127.0.0.1").expect("Could not parse"),
             peer_id: PeerId::from(0),
             client: RwLock::new(None),
         }

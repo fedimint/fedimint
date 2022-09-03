@@ -4,7 +4,7 @@
 set -eu
 FM_FED_SIZE=${1:-4}
 ITERATIONS=${2:-5}
-export RUST_LOG=error,ln_gateway=on
+export RUST_LOG=error,ln_gateway=off
 export PEG_IN_AMOUNT=99999
 
 source ./scripts/setup-tests.sh $FM_FED_SIZE

@@ -599,6 +599,7 @@ mod tests {
     use std::iter::FromIterator;
     use std::time::Duration;
     use tracing_subscriber::EnvFilter;
+    use url::Url;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -622,9 +623,11 @@ mod tests {
             .iter()
             .enumerate()
             .map(|(idx, &peer)| {
+                println!("peer:<<<{}>>>", peer);
                 let cfg = ConnectionConfig {
                     hbbft_addr: peer.to_string(),
-                    api_addr: peer.to_string(),
+                    api_addr: Url::parse(format!("http://{}", peer).as_str())
+                        .expect("Could not parse Url"),
                 };
                 (PeerId::from(idx as u16 + 1), cfg)
             })

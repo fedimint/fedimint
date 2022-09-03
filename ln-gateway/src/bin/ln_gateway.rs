@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
-use fedimint::consensus::debug;
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
