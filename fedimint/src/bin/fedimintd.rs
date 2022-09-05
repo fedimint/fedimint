@@ -12,6 +12,7 @@ use tracing_subscriber::Layer;
 pub struct ServerOpts {
     pub cfg_path: PathBuf,
     pub db_path: PathBuf,
+    pub setup_port: u16,
     #[cfg(feature = "telemetry")]
     #[clap(long)]
     pub with_telemetry: bool,
@@ -46,9 +47,7 @@ async fn main() {
         registry.init();
     }
 
-    let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-    let db_path = opts.db_path;
-    run_fedimint(cfg, db_path).await;
+    run_fedimint(opts.cfg_path, opts.db_path, opts.setup_port).await;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();

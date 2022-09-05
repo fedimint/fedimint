@@ -2,7 +2,7 @@ extern crate fedimint_api;
 
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use fedimint_api::rand::Rand07Compat;
@@ -21,6 +21,7 @@ use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
 use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
+use fedimint_core::config::load_from_file;
 use fedimint_core::epoch::ConsensusItem;
 pub use fedimint_core::*;
 
@@ -30,6 +31,7 @@ use crate::net::peers::{
     AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
 };
 use crate::rng::RngGenerator;
+use crate::setup::run_setup;
 
 /// The actual implementation of the federated mint
 pub mod consensus;
@@ -59,7 +61,17 @@ pub struct FedimintServer {
 }
 
 /// Start all the components of the mint and plug them together
-pub async fn run_fedimint(cfg: ServerConfig, db_path: PathBuf) {
+pub async fn run_fedimint(cfg_path: PathBuf, db_path: PathBuf, setup_port: u16) {
+    let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+    if !Path::new(&cfg_path).is_file() {
+        // Spawn setup UI, wait for setup to finish
+        tokio::task::spawn(run_setup(cfg_path.clone(), setup_port, sender));
+        receiver
+            .recv()
+            .await
+            .expect("failed to receive setup message");
+    }
+    let cfg: ServerConfig = load_from_file(&cfg_path);
     let server = FedimintServer::new(cfg.clone(), db_path.clone()).await;
     spawn(net::api::run_server(cfg, server.consensus.clone()));
     server.run_consensus().await;

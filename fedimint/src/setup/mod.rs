@@ -83,10 +83,11 @@ async fn start_federation(
     let cfg_path = state.out_dir.join(format!("server-{}.json", state.port));
     if Path::new(&cfg_path).is_file() {
         let db_path = state.out_dir.join(format!("server-{}.db", state.port));
-        let sender_clone = state.sender.clone();
+        // let sender_clone = state.sender.clone();
+        let sender = state.sender.clone();
         tokio::task::spawn(async move {
             // FIXME: don't send cfg_path and db_path because we can now infer these from port
-            sender_clone.send((cfg_path, db_path)).await;
+            sender.send(()).await.expect("failed to send over channel");
         }); // FIXME: it won't let me await this
         state.running = true;
     }
@@ -107,6 +108,7 @@ async fn qr(Extension(state): Extension<MutableState>) -> impl axum::response::I
     )
 }
 
+// TODO: write cfg_path and db_path into state so we don't re-compute them
 #[derive(Debug)]
 struct State {
     peers: Vec<Peer>,
@@ -114,12 +116,12 @@ struct State {
     out_dir: PathBuf,
     connection_string: String,
     pubkey: PublicKey,
-    sender: Sender<(PathBuf, PathBuf)>,
+    sender: Sender<()>,
     port: u16,
 }
 type MutableState = Arc<RwLock<State>>;
 
-pub async fn run_setup(out_dir: PathBuf, port: u16, sender: Sender<(PathBuf, PathBuf)>) {
+pub async fn run_setup(out_dir: PathBuf, port: u16, sender: Sender<()>) {
     let mut rng = OsRng::new().unwrap();
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let (_, pubkey) = secp.generate_keypair(&mut rng);

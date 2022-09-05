@@ -33,19 +33,19 @@ async fn main() {
     let (sender, mut receiver) = mpsc::channel(32);
     let Options { dir_out_path, port } = Options::parse();
     let dir_out_path_clone = dir_out_path.clone();
-    tokio::task::spawn(run_setup(dir_out_path_clone, port, sender));
-
-    let cfg_path = dir_out_path.join(format!("server-{}.json", port));
-    let db_path = dir_out_path.join(format!("server-{}.db", port));
-    if Path::new(&cfg_path).is_file() {
-        let cfg: ServerConfig = load_from_file(&cfg_path);
-        tracing::info!("Running fedimint");
-        run_fedimint(cfg.clone(), db_path.clone()).await;
-    }
-
-    if let Some(_) = receiver.recv().await {
-        let cfg: ServerConfig = load_from_file(&cfg_path);
-        tracing::info!("Running fedimint");
-        run_fedimint(cfg.clone(), db_path.clone()).await;
-    }
+    // tokio::task::spawn(run_setup(dir_out_path_clone, port, sender));
+    //
+    // let cfg_path = dir_out_path.join(format!("server-{}.json", port));
+    // let db_path = dir_out_path.join(format!("server-{}.db", port));
+    // if Path::new(&cfg_path).is_file() {
+    //     let cfg: ServerConfig = load_from_file(&cfg_path);
+    //     tracing::info!("Running fedimint");
+    //     run_fedimint(cfg.clone(), db_path.clone()).await;
+    // }
+    //
+    // if let Some(_) = receiver.recv().await {
+    //     let cfg: ServerConfig = load_from_file(&cfg_path);
+    //     tracing::info!("Running fedimint");
+    //     run_fedimint(cfg.clone(), db_path.clone()).await;
+    // }
 }
