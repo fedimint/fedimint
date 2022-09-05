@@ -33,5 +33,5 @@ serde = { version = "1.0.118", features = [ "derive" ] }
 tokio = { version = "1.0.1", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
-hbbft = { git = "https://github.com/fedimint/hbbft" }
-threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
+hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
+threshold_crypto = { git = "https://github.com/elsirion/threshold_crypto", branch = "2022-08-upgrade-pairing" }

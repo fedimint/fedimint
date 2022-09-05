@@ -5,7 +5,7 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use fedimint_api::rand::Rand07Compat;
+use fedimint_api::rand::Rand085Compat;
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::{Epoched, NetworkInfo, Target};
 use rand::rngs::OsRng;
@@ -314,7 +314,7 @@ impl FedimintServer {
 
         let step = self
             .hbbft
-            .propose(&proposal.items, &mut Rand07Compat(rng))
+            .propose(&proposal.items, &mut Rand085Compat(rng))
             .expect("HBBFT propose failed");
 
         for msg in step.messages {

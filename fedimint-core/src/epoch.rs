@@ -184,7 +184,7 @@ impl Decodable for EpochSignatureShare {
 mod tests {
     use crate::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
     use crate::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
-    use fedimint_api::rand::Rand07Compat;
+    use fedimint_api::rand::Rand085Compat;
     use fedimint_api::PeerId;
     use rand::rngs::OsRng;
     use std::collections::HashSet;
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn adds_sig_to_prev_epoch() {
         let rng = OsRng::new().unwrap();
-        let sk_set = SecretKeySet::random(2, &mut Rand07Compat(rng));
+        let sk_set = SecretKeySet::random(2, &mut Rand085Compat(rng));
         let pk_set = sk_set.public_keys();
 
         let epoch0 = history(0, &None, None);

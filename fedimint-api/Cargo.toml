@@ -21,7 +21,7 @@ hex = "0.4.3"
 lightning-invoice = "0.17.0"
 fedimint-derive = { path = "../fedimint-derive" }
 rand = "0.6.0"
-rand07 = { version = "0.7", package = "rand" }
+rand08 = { version = "0.8.5", package = "rand" }
 secp256k1-zkp = { version = "0.6.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
 rocksdb = { version = "0.19.0", optional = true }
 serde = { version = "1.0.118", features = [ "derive" ] }

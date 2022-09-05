@@ -1,5 +1,5 @@
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::rand::Rand07Compat;
+use fedimint_api::rand::Rand085Compat;
 use fedimint_api::PeerId;
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,7 @@ impl GenerateConfig for LightningModuleConfig {
         rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
         let threshold = peers.len() - max_evil;
-        let sks = threshold_crypto::SecretKeySet::random(threshold - 1, &mut Rand07Compat(rng));
+        let sks = threshold_crypto::SecretKeySet::random(threshold - 1, &mut Rand085Compat(rng));
         let pks = sks.public_keys();
 
         let server_cfg = peers

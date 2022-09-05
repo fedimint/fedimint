@@ -1,4 +1,4 @@
-use fedimint_api::rand::Rand07Compat;
+use fedimint_api::rand::Rand085Compat;
 pub use fedimint_core::config::*;
 
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
@@ -66,10 +66,11 @@ impl GenerateConfig for ServerConfig {
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
-            .expect("Could not generate HBBFT netinfo");
+        let netinfo =
+            hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand085Compat(&mut rng))
+                .expect("Could not generate HBBFT netinfo");
         let epochinfo =
-            hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
+            hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand085Compat(&mut rng))
                 .expect("Could not generate HBBFT netinfo");
 
         let tls_keys = peers
