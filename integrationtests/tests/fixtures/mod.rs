@@ -92,7 +92,7 @@ pub async fn fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 2, Ordering::Relaxed);
+    let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == 4000 {
@@ -140,6 +140,7 @@ pub async fn fixtures(
                 Box::new(lightning_rpc),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
+                base_port + num_peers + 1,
             )
             .await;
 
@@ -161,6 +162,7 @@ pub async fn fixtures(
                 Box::new(lightning.clone()),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
+                base_port + num_peers + 1,
             )
             .await;
 
@@ -208,6 +210,7 @@ impl GatewayTest {
         ln_client: Box<dyn LnRpc>,
         client_config: ClientConfig,
         node_pub_key: secp256k1::PublicKey,
+        bind_port: u16,
     ) -> Self {
         let mut rng = OsRng::new().unwrap();
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -227,7 +230,7 @@ impl GatewayTest {
             config: user_cfg,
         };
 
-        let bind_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
         let gw_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
