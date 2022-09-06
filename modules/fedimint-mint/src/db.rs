@@ -1,4 +1,4 @@
-use crate::{CoinNonce, PartialSigResponse, SigResponse};
+use crate::{Nonce, PartialSigResponse, SigResponse};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
@@ -10,7 +10,7 @@ const DB_PREFIX_OUTPUT_OUTCOME: u8 = 0x13;
 const DB_PREFIX_MINT_AUDIT_ITEM: u8 = 0x14;
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
-pub struct NonceKey(pub CoinNonce);
+pub struct NonceKey(pub Nonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
     const DB_PREFIX: u8 = DB_PREFIX_COIN_NONCE;

@@ -2,7 +2,7 @@ use crate::transaction::{Input, Output, Transaction};
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
 use fedimint_core::modules::ln::ContractOrOfferOutput;
 use fedimint_core::modules::mint::tiered::TieredMulti;
-use fedimint_core::modules::mint::Coin;
+use fedimint_core::modules::mint::Note;
 use fedimint_core::modules::wallet::txoproof::PegInProof;
 use std::collections::HashSet;
 
@@ -26,7 +26,7 @@ where
 {
     inner_iter: I,
     tx_accessor: F,
-    coin_set: HashSet<TieredMulti<Coin>>,
+    coin_set: HashSet<TieredMulti<Note>>,
     peg_in_set: HashSet<PegInProof>,
     contract_set: HashSet<ContractId>,
     pegged_out: bool,

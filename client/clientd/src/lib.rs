@@ -9,7 +9,7 @@ use bitcoin::Transaction;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
-use mint_client::mint::{CoinFinalizationData, SpendableCoin};
+use mint_client::mint::{CoinFinalizationData, SpendableNote};
 use mint_client::ClientError;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
@@ -61,7 +61,7 @@ pub struct InfoResponse {
 
 impl InfoResponse {
     pub fn new(
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
         active_issuances: Vec<(OutPoint, CoinFinalizationData)>,
     ) -> Self {
         let info_coins: Vec<CoinsByTier> = coins
@@ -109,7 +109,7 @@ pub struct PegInOutResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct SpendResponse {
-    pub coins: TieredMulti<SpendableCoin>,
+    pub coins: TieredMulti<SpendableNote>,
 }
 
 /// Holds a e-cash tier (msat by convention) and a quantity of coins

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::api::FederationApi;
-use crate::mint::SpendableCoin;
+use crate::mint::SpendableNote;
 use bitcoin::{secp256k1, Network};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
@@ -9,12 +9,12 @@ use fedimint_api::ParseAmountError;
 use fedimint_core::modules::mint::tiered::TieredMulti;
 use lightning_invoice::Currency;
 
-pub fn parse_coins(s: &str) -> TieredMulti<SpendableCoin> {
+pub fn parse_coins(s: &str) -> TieredMulti<SpendableNote> {
     let bytes = base64::decode(s).unwrap();
     bincode::deserialize(&bytes).unwrap()
 }
 
-pub fn serialize_coins(c: &TieredMulti<SpendableCoin>) -> String {
+pub fn serialize_coins(c: &TieredMulti<SpendableNote>) -> String {
     let bytes = bincode::serialize(&c).unwrap();
     base64::encode(&bytes)
 }
