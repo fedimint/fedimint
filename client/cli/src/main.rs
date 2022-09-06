@@ -7,7 +7,7 @@ use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 
 use mint_client::api::{WsFederationApi, WsFederationConnect};
-use mint_client::mint::SpendableCoin;
+use mint_client::mint::SpendableNote;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
     serialize_coins,
@@ -42,13 +42,13 @@ enum Command {
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
         #[clap(parse(from_str = parse_coins))]
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
     },
 
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
         #[clap(parse(from_str = parse_coins))]
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
     },
 
     /// Prepare coins to send to a third party as a payment
@@ -105,7 +105,7 @@ enum Command {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
-    coins: TieredMulti<SpendableCoin>,
+    coins: TieredMulti<SpendableNote>,
     invoice: String,
 }
 

@@ -12,7 +12,7 @@ use fedimint_core::config::FeeConsensus;
 use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::mint::{
-    BlindToken, Coin, CoinNonce, InvalidAmountTierError, SigResponse, SignRequest, Tiered,
+    BlindNonce, InvalidAmountTierError, Nonce, Note, SigResponse, SignRequest, Tiered,
 };
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -39,7 +39,7 @@ pub struct CoinRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
     /// Nonce belonging to the secret key
-    nonce: CoinNonce,
+    nonce: Nonce,
     /// Key to unblind the blind signature supplied by the mint for this coin
     blinding_key: BlindingKey,
 }
@@ -52,16 +52,15 @@ pub struct CoinFinalizationData {
     coins: TieredMulti<CoinRequest>,
 }
 
-/// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
-/// belonging to the nonce.
+/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
-pub struct SpendableCoin {
-    pub coin: Coin,
+pub struct SpendableNote {
+    pub coin: Note,
     pub spend_key: [u8; 32],
 }
 
 impl<'c> MintClient<'c> {
-    pub fn coins(&self) -> TieredMulti<SpendableCoin> {
+    pub fn coins(&self) -> TieredMulti<SpendableNote> {
         self.context
             .db
             .find_by_prefix(&CoinKeyPrefix)
@@ -72,7 +71,7 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
-    pub fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableCoin>> {
+    pub fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
         let coins = self
             .coins()
             .select_coins(amount)
@@ -112,7 +111,7 @@ impl<'c> MintClient<'c> {
         amount: Amount,
         mut tx: BatchTx,
         rng: R,
-        mut create_tx: impl FnMut(TieredMulti<BlindToken>) -> OutPoint,
+        mut create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut builder = TransactionBuilder::default();
 
@@ -145,7 +144,7 @@ impl<'c> MintClient<'c> {
         batch.append_from_iter(
             coins
                 .into_iter()
-                .map(|(amount, coin): (Amount, SpendableCoin)| {
+                .map(|(amount, coin): (Amount, SpendableNote)| {
                     let key = CoinKey {
                         amount,
                         nonce: coin.coin.0.clone(),
@@ -244,7 +243,7 @@ impl CoinFinalizationData {
         &self,
         bsigs: SigResponse,
         mint_pub_key: &Tiered<AggregatePublicKey>,
-    ) -> std::result::Result<TieredMulti<SpendableCoin>, CoinFinalizationError> {
+    ) -> std::result::Result<TieredMulti<SpendableNote>, CoinFinalizationError> {
         if !self.coins.structural_eq(&bsigs.0) {
             return Err(CoinFinalizationError::WrongMintAnswer);
         }
@@ -255,9 +254,9 @@ impl CoinFinalizationData {
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 let sig = unblind_signature(coin_req.blinding_key, bsig);
-                let coin = Coin(coin_req.nonce.clone(), sig);
+                let coin = Note(coin_req.nonce.clone(), sig);
                 if coin.verify(*mint_pub_key.tier(&amt)?) {
-                    let coin = SpendableCoin {
+                    let coin = SpendableNote {
                         coin,
                         spend_key: coin_req.spend_key,
                     };
@@ -290,7 +289,7 @@ impl CoinRequest {
         C: Signing,
     {
         let spend_key = bitcoin::KeyPair::new(ctx, &mut rng);
-        let nonce = CoinNonce(spend_key.public_key());
+        let nonce = Nonce(spend_key.public_key());
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         let cr = CoinRequest {
