@@ -9,7 +9,7 @@ use bitcoin::Transaction;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
-use mint_client::mint::{CoinFinalizationData, SpendableNote};
+use mint_client::mint::{NoteIssuanceRequests, SpendableNote};
 use mint_client::ClientError;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
@@ -62,7 +62,7 @@ pub struct InfoResponse {
 impl InfoResponse {
     pub fn new(
         notes: TieredMulti<SpendableNote>,
-        active_issuances: Vec<(OutPoint, CoinFinalizationData)>,
+        active_issuances: Vec<(OutPoint, NoteIssuanceRequests)>,
     ) -> Self {
         Self {
             notes: notes.into(),
@@ -77,7 +77,7 @@ pub struct PendingResponse {
 }
 
 impl PendingResponse {
-    pub fn new(active_issuances: Vec<(OutPoint, CoinFinalizationData)>) -> Self {
+    pub fn new(active_issuances: Vec<(OutPoint, NoteIssuanceRequests)>) -> Self {
         let transactions: Vec<PendingTransaction> = active_issuances
             .iter()
             .map(|(out_point, cfd)| PendingTransaction {

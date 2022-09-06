@@ -32,10 +32,12 @@ pub struct MintClient<'c> {
     pub context: &'c ClientContext,
 }
 
-/// Client side representation of one coin in an issuance request that keeps all necessary
-/// information to generate one spendable coin once the blind signature arrives.
+/// Single [`Note`] issuance request to the mint.
+///
+/// Keeps the data to generate [`SpendableNote`] once the
+/// mint successfully processed the transaction signing the corresponding [`BlindNonce`].
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
-pub struct CoinRequest {
+pub struct NoteIssuanceRequest {
     /// Spend key from which the coin nonce (corresponding public key) is derived
     spend_key: [u8; 32], // FIXME: either make KeyPair Serializable or add secret key newtype
     /// Nonce belonging to the secret key
@@ -44,18 +46,20 @@ pub struct CoinRequest {
     blinding_key: BlindingKey,
 }
 
-/// Client side representation of a coin reissuance that keeps all necessary information to
-/// generate spendable coins once the blind signatures arrive.
+/// Multiple [`Note`] issuance requests
+///
+/// Keeps all the data to generate [`SpendableNote`]s once the
+/// mint successfully processed corresponding [`NoteIssuanceRequest`]s.
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
-pub struct CoinFinalizationData {
+pub struct NoteIssuanceRequests {
     /// Finalization data for all coin outputs in this request
-    coins: TieredMulti<CoinRequest>,
+    coins: TieredMulti<NoteIssuanceRequest>,
 }
 
 /// A [`Note`] with associated secret key that allows to proof ownership (spend it)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
-    pub coin: Note,
+    pub note: Note,
     pub spend_key: [u8; 32],
 }
 
@@ -147,7 +151,7 @@ impl<'c> MintClient<'c> {
                 .map(|(amount, coin): (Amount, SpendableNote)| {
                     let key = CoinKey {
                         amount,
-                        nonce: coin.coin.0.clone(),
+                        nonce: coin.note.0.clone(),
                     };
                     let value = coin;
                     BatchItem::insert_new(key, value)
@@ -159,7 +163,7 @@ impl<'c> MintClient<'c> {
         Ok(())
     }
 
-    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.context
             .db
             .find_by_prefix(&OutputFinalizationKeyPrefix)
@@ -203,14 +207,14 @@ impl<'c> MintClient<'c> {
     }
 }
 
-impl CoinFinalizationData {
+impl NoteIssuanceRequests {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
     pub fn new<K, C>(
         amount: Amount,
         amount_tiers: &Tiered<K>,
         ctx: &Secp256k1<C>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> (CoinFinalizationData, SignRequest)
+    ) -> (NoteIssuanceRequests, SignRequest)
     where
         C: Signing,
     {
@@ -218,7 +222,7 @@ impl CoinFinalizationData {
             TieredMulti::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
-                    let (request, blind_msg) = CoinRequest::new(ctx, rng);
+                    let (request, blind_msg) = NoteIssuanceRequest::new(ctx, rng);
                     ((amt, request), (amt, blind_msg))
                 })
                 .unzip();
@@ -231,7 +235,7 @@ impl CoinFinalizationData {
         );
 
         let sig_req = SignRequest(blinded_nonces);
-        let issuance_req = CoinFinalizationData { coins: requests };
+        let issuance_req = NoteIssuanceRequests { coins: requests };
 
         (issuance_req, sig_req)
     }
@@ -257,7 +261,7 @@ impl CoinFinalizationData {
                 let coin = Note(coin_req.nonce.clone(), sig);
                 if coin.verify(*mint_pub_key.tier(&amt)?) {
                     let coin = SpendableNote {
-                        coin,
+                        note: coin,
                         spend_key: coin_req.spend_key,
                     };
 
@@ -278,13 +282,13 @@ impl CoinFinalizationData {
     }
 }
 
-impl CoinRequest {
+impl NoteIssuanceRequest {
     /// Generate a request session for a single coin and returns it plus the corresponding blinded
     /// message
     fn new<C>(
         ctx: &Secp256k1<C>,
         rng: &mut (impl RngCore + CryptoRng),
-    ) -> (CoinRequest, BlindedMessage)
+    ) -> (NoteIssuanceRequest, BlindedMessage)
     where
         C: Signing,
     {
@@ -292,7 +296,7 @@ impl CoinRequest {
         let nonce = Nonce(spend_key.public_key());
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
-        let cr = CoinRequest {
+        let cr = NoteIssuanceRequest {
             spend_key: spend_key.secret_bytes(),
             nonce,
             blinding_key,
