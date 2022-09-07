@@ -164,6 +164,43 @@
 <span id="164">164</span>
 <span id="165">165</span>
 <span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>axum::extract::rejection::JsonRejection;
@@ -187,12 +224,17 @@
 </span><span class="kw">pub enum </span>ClientdError {
     <span class="attribute">#[error(<span class="string">&quot;Client error: {0}&quot;</span>)]
     </span>ClientError(<span class="attribute">#[from] </span>ClientError),
+    <span class="attribute">#[error(<span class="string">&quot;Fatal server error, action reqired&quot;</span>)]
+    </span>ServerError,
 }
 
 <span class="kw">impl </span>IntoResponse <span class="kw">for </span>ClientdError {
     <span class="kw">fn </span>into_response(<span class="self">self</span>) -&gt; Response {
         <span class="kw">let </span>payload = <span class="macro">json!</span>({ <span class="string">&quot;error&quot;</span>: <span class="self">self</span>.to_string(), });
-        <span class="kw">let </span>code = StatusCode::BAD_REQUEST;
+        <span class="kw">let </span>code = <span class="kw">match </span><span class="self">self </span>{
+            ClientdError::ClientError(<span class="kw">_</span>) =&gt; StatusCode::BAD_REQUEST,
+            ClientdError::ServerError =&gt; StatusCode::INTERNAL_SERVER_ERROR,
+        };
         <span class="prelude-ty">Result</span>::&lt;(), <span class="kw">_</span>&gt;::Err((code, axum::Json(payload))).into_response()
     }
 }
@@ -207,6 +249,11 @@
 </span><span class="kw">pub struct </span>PegInPayload {
     <span class="kw">pub </span>txout_proof: TxOutProof,
     <span class="kw">pub </span>transaction: Transaction,
+}
+
+<span class="attribute">#[derive(Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>SpendPayload {
+    <span class="kw">pub </span>amount: Amount,
 }
 
 <span class="attribute">#[derive(Deserialize, Serialize)]
@@ -261,6 +308,11 @@
 <span class="attribute">#[derive(Deserialize, Serialize)]
 </span><span class="kw">pub struct </span>PegInOutResponse {
     <span class="kw">pub </span>txid: TransactionId,
+}
+
+<span class="attribute">#[derive(Deserialize, Serialize)]
+</span><span class="kw">pub struct </span>SpendResponse {
+    <span class="kw">pub </span>coins: TieredMulti&lt;SpendableCoin&gt;,
 }
 
 <span class="doccomment">/// Holds a e-cash tier (msat by convention) and a quantity of coins
@@ -329,6 +381,28 @@
             }
         }
     }
+}
+
+<span class="attribute">#[macro_export(local_inner_macros)]
+</span><span class="macro">macro_rules! </span>json_success {
+    () =&gt; {
+        {
+       <span class="kw">let </span>body = <span class="macro">serde_json::json!</span>({
+            <span class="string">&quot;data&quot;</span>: {}
+       });
+
+       <span class="prelude-val">Ok</span>(axum::Json(body))
+        }
+    };
+    (<span class="macro-nonterminal">$payload</span>:expr) =&gt; {
+        {
+       <span class="kw">let </span>body = <span class="macro">serde_json::json!</span>({
+            <span class="string">&quot;data&quot;</span>: <span class="macro-nonterminal">$payload
+       </span>});
+
+       <span class="prelude-val">Ok</span>(axum::Json(body))
+    }
+    };
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (78a891d36 2022-09-06)" ></div></body></html>
