@@ -61,7 +61,7 @@ for `nix develop`.
 Some of the scripts and examples in this repository make use of the `tmux` terminal multiplexer. 
 However, by default a tmux instance launches a _login shell_, which can lead to unintended problems 
 on certain operating systems (e.g. Debian)[^1]. Especially, when `tmux` is launched within a _nix shell_,
-as needed for [Running Fedimint for dev testing](docs/dev-running.md).
+as needed for [Running Fedimint for dev testing](/docs/dev-running.md).
 
 You can preclude these problems by forcing `tmux` to always use non-login shells. Create (or edit) a `.tmux.conf`
 in your home directory with the following line:
