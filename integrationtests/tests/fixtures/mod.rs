@@ -217,7 +217,8 @@ impl GatewayTest {
         let keys = LightningGateway {
             mint_pub_key: kp.public_key(),
             node_pub_key,
-            api: "".to_string(),
+            api: Url::parse("http://example.com")
+                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };
 
         let database = Box::new(MemDatabase::new());

@@ -178,6 +178,7 @@ impl From<&ClientConfig> for WsFederationConnect {
             .map(|(id, url)| {
                 let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
                 let url = url.clone();
+                println!("url: <<<{}>>>", url);
                 (peer_id, url)
             })
             .collect();
@@ -254,6 +255,8 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
     }
 
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
+        // println!("{:?}", self.request("/ln/list_gateways", ()).await);
+
         self.request("/ln/list_gateways", ()).await
     }
 
@@ -271,7 +274,7 @@ pub trait JsonRpcClient: ClientT + Sized {
 #[async_trait]
 impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
-        println!("JsonRpcClientUrl <<<<{}>>>>", url);
+        tracing::info!("JsonRpcClient is {url:?}");
         WsClientBuilder::default().build(url).await
     }
 
@@ -334,6 +337,7 @@ impl<C: JsonRpcClient> FederationMember<C> {
                 rclient.as_ref().unwrap().request::<R>(method, params).await
             }
             _ => {
+                info!("Client is not connected");
                 // write lock is acquired before creating a new client
                 // so only one task will try to create a new client
                 match C::connect(&self.url).await {

@@ -106,7 +106,7 @@ impl From<GatewayClientConfig> for LightningGateway {
         LightningGateway {
             mint_pub_key: config.redeem_key.public_key(),
             node_pub_key: config.node_pub_key,
-            api: config.api.to_string(),
+            api: config.api,
         }
     }
 }
@@ -629,7 +629,7 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
-            .post(&format!("{}/pay_invoice", gateway.api))
+            .post(&format!("{}pay_invoice", gateway.api))
             .json(&contract_id)
             .send();
         fedimint_api::task::timeout(Duration::from_secs(15), future)
@@ -878,6 +878,7 @@ impl Client<GatewayClientConfig> {
         self.context
             .api
             .register_gateway(config)
+            // FIXME: make sure at least one registers
             .await
             .map_err(ClientError::MintApiError)
     }

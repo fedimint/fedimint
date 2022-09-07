@@ -82,10 +82,10 @@ async fn initialize_gateway(
         Some(options::Value::String(port)) => port,
         _ => unreachable!(),
     };
-    let bind_addr = format!("{}:{}/", host, port)
+    let bind_addr = format!("{}:{}", host, port)
         .parse()
         .expect("Invalid gateway bind address");
-    eprintln!("bind_addr: {}", bind_addr);
+
     // If no config exists, try to generate one
     let cfg_path = workdir.join("gateway.json");
     let config = plugin.configuration();
