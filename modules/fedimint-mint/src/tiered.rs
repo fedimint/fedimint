@@ -33,6 +33,10 @@ impl<T> Tiered<T> {
     pub fn get(&self, amt: Amount) -> Option<&T> {
         self.0.get(&amt)
     }
+
+    pub fn as_map(&self) -> &BTreeMap<Amount, T> {
+        &self.0
+    }
 }
 
 impl Tiered<SecretKeyShare> {
