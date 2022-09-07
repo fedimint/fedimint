@@ -21,6 +21,7 @@ use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
 use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 
+use fedimint_api::config::GenerateConfig;
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
 use mint_client::api::{FederationApi, WsFederationApi};
@@ -96,11 +97,7 @@ impl FedimintServer {
         bitcoind: impl Fn() -> Box<dyn BitcoindRpc>,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {
-        assert_eq!(
-            cfg.peers.keys().max().copied().map(|id| id.to_usize()),
-            Some(cfg.peers.len() - 1)
-        );
-        assert_eq!(cfg.peers.keys().min().copied(), Some(PeerId::from(0)));
+        cfg.validate_config(&cfg.identity);
 
         let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
 
