@@ -69,7 +69,7 @@
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::mint::CoinNonce;
 
 <span class="kw">pub const </span>DB_PREFIX_COIN: u8 = <span class="number">0x20</span>;
@@ -103,7 +103,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKey {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
-    <span class="kw">type </span>Value = Coins&lt;SpendableCoin&gt;;
+    <span class="kw">type </span>Value = TieredMulti&lt;SpendableCoin&gt;;
 }
 
 <span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]
@@ -112,7 +112,7 @@
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingCoinsKeyPrefix {
     <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_COINS;
     <span class="kw">type </span>Key = PendingCoinsKey;
-    <span class="kw">type </span>Value = Coins&lt;SpendableCoin&gt;;
+    <span class="kw">type </span>Value = TieredMulti&lt;SpendableCoin&gt;;
 }
 
 <span class="attribute">#[derive(Debug, Clone, Encodable, Decodable)]

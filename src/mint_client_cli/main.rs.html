@@ -319,7 +319,7 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 
 <span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
@@ -358,13 +358,13 @@
     <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends
     </span>Reissue {
         <span class="attribute">#[clap(parse(from_str = parse_coins))]
-        </span>coins: Coins&lt;SpendableCoin&gt;,
+        </span>coins: TieredMulti&lt;SpendableCoin&gt;,
     },
 
     <span class="doccomment">/// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     </span>Validate {
         <span class="attribute">#[clap(parse(from_str = parse_coins))]
-        </span>coins: Coins&lt;SpendableCoin&gt;,
+        </span>coins: TieredMulti&lt;SpendableCoin&gt;,
     },
 
     <span class="doccomment">/// Prepare coins to send to a third party as a payment
@@ -421,7 +421,7 @@
 
 <span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">struct </span>PayRequest {
-    coins: Coins&lt;SpendableCoin&gt;,
+    coins: TieredMulti&lt;SpendableCoin&gt;,
     invoice: String,
 }
 
@@ -478,7 +478,7 @@
             );
         }
         Command::Reissue { coins } =&gt; {
-            <span class="macro">info!</span>(coins = %coins.amount(), <span class="string">&quot;Starting reissuance transaction&quot;</span>);
+            <span class="macro">info!</span>(coins = %coins.total_amount(), <span class="string">&quot;Starting reissuance transaction&quot;</span>);
             <span class="kw">let </span>id = client.reissue(coins, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>.unwrap();
             <span class="macro">info!</span>(%id, <span class="string">&quot;Started reissuance, please fetch the result later&quot;</span>);
         }
@@ -514,10 +514,10 @@
             <span class="kw">let </span>coins = client.coins();
             <span class="macro">println!</span>(
                 <span class="string">&quot;We own {} coins with a total value of {}&quot;</span>,
-                coins.coin_count(),
-                coins.amount()
+                coins.item_count(),
+                coins.total_amount()
             );
-            <span class="kw">for </span>(amount, coins) <span class="kw">in </span>coins.coins {
+            <span class="kw">for </span>(amount, coins) <span class="kw">in </span>coins.iter_tiers() {
                 <span class="macro">println!</span>(<span class="string">&quot;We own {} coins of denomination {}&quot;</span>, coins.len(), amount);
             }
         }

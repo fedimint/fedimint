@@ -915,6 +915,9 @@
 <span id="915">915</span>
 <span id="916">916</span>
 <span id="917">917</span>
+<span id="918">918</span>
+<span id="919">919</span>
+<span id="920">920</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -944,9 +947,9 @@
     PublicKeyShare, SecretKeyShare,
 };
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tiered::coins::Coins;
-<span class="kw">use </span>tiered::coins::TieredMultiZip;
-<span class="kw">pub use </span>tiered::keys::Keys;
+<span class="kw">pub use </span>tiered::Tiered;
+<span class="kw">use </span>tiered::TieredMulti;
+<span class="kw">use </span>tiered::TieredMultiZip;
 <span class="kw">use </span>tracing::{debug, error, warn};
 
 <span class="kw">pub mod </span>config;
@@ -958,8 +961,8 @@
 <span class="doccomment">/// Federated mint member mint
 </span><span class="kw">pub struct </span>Mint {
     cfg: MintConfig,
-    sec_key: Keys&lt;SecretKeyShare&gt;,
-    pub_key_shares: BTreeMap&lt;PeerId, Keys&lt;PublicKeyShare&gt;&gt;,
+    sec_key: Tiered&lt;SecretKeyShare&gt;,
+    pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
     db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
 }
@@ -972,16 +975,16 @@
 
 <span class="doccomment">/// Request to blind sign a certain amount of coins
 </span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>Coins&lt;tbs::BlindedMessage&gt;);
+</span><span class="kw">pub struct </span>SignRequest(<span class="kw">pub </span>TieredMulti&lt;tbs::BlindedMessage&gt;);
 
 <span class="comment">// FIXME: optimize out blinded msg by making the mint remember it
 </span><span class="doccomment">/// Blind signature share for a [`SignRequest`]
 </span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>Coins&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
+</span><span class="kw">pub struct </span>PartialSigResponse(<span class="kw">pub </span>TieredMulti&lt;(tbs::BlindedMessage, tbs::BlindedSignatureShare)&gt;);
 
 <span class="doccomment">/// Blind signature for a [`SignRequest`]
 </span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>Coins&lt;tbs::BlindedSignature&gt;);
+</span><span class="kw">pub struct </span>SigResponse(<span class="kw">pub </span>TieredMulti&lt;tbs::BlindedSignature&gt;);
 
 <span class="doccomment">/// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding secret spend key
@@ -1005,8 +1008,8 @@
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
 </span><span class="kw">impl </span>FederationModule <span class="kw">for </span>Mint {
     <span class="kw">type </span>Error = MintError;
-    <span class="kw">type </span>TxInput = Coins&lt;Coin&gt;;
-    <span class="kw">type </span>TxOutput = Coins&lt;BlindToken&gt;;
+    <span class="kw">type </span>TxInput = TieredMulti&lt;Coin&gt;;
+    <span class="kw">type </span>TxOutput = TieredMulti&lt;BlindToken&gt;;
     <span class="kw">type </span>TxOutputOutcome = <span class="prelude-ty">Option</span>&lt;SigResponse&gt;; <span class="comment">// TODO: make newtype
     </span><span class="kw">type </span>ConsensusItem = PartiallySignedRequest;
     <span class="kw">type </span>VerificationCache = VerificationCache;
@@ -1058,7 +1061,7 @@
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         </span><span class="kw">let </span>valid_coins = inputs
-            .flat_map(|inputs| inputs.iter())
+            .flat_map(|inputs| inputs.iter_items())
             .par_bridge()
             .filter_map(|(amount, coin)| {
                 <span class="kw">let </span>amount_key = <span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount)<span class="question-mark">?</span>;
@@ -1079,7 +1082,7 @@
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;a</span>&gt;, <span class="self">Self</span>::Error&gt; {
-        input.iter().try_for_each(|(amount, coin)| {
+        input.iter_items().try_for_each(|(amount, coin)| {
             <span class="kw">let </span>coin_valid = cache
                 .valid_coins
                 .get(coin) <span class="comment">// We validated the coin
@@ -1103,8 +1106,8 @@
         })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(InputMeta {
-            amount: input.amount(),
-            puk_keys: Box::new(input.iter().map(|(<span class="kw">_</span>, coin)| <span class="kw-2">*</span>coin.spend_key())),
+            amount: input.total_amount(),
+            puk_keys: Box::new(input.iter_items().map(|(<span class="kw">_</span>, coin)| <span class="kw-2">*</span>coin.spend_key())),
         })
     }
 
@@ -1117,7 +1120,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
 
-        batch.append_from_iter(input.iter().flat_map(|(amount, coin)| {
+        batch.append_from_iter(input.iter_items().flat_map(|(amount, coin)| {
             <span class="kw">let </span>key = NonceKey(coin.<span class="number">0</span>.clone());
             <span class="macro">vec!</span>[
                 BatchItem::insert_new(key.clone(), ()),
@@ -1130,7 +1133,7 @@
     }
 
     <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter().find_map(|(amount, <span class="kw">_</span>)| {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter_items().find_map(|(amount, <span class="kw">_</span>)| {
             <span class="kw">if </span><span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount).is_none() {
                 <span class="prelude-val">Some</span>(amount)
             } <span class="kw">else </span>{
@@ -1139,7 +1142,7 @@
         }) {
             <span class="prelude-val">Err</span>(MintError::InvalidAmountTier(amount))
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(output.amount())
+            <span class="prelude-val">Ok</span>(output.total_amount())
         }
     }
 
@@ -1159,9 +1162,9 @@
             },
             partial_sig,
         );
-        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.amount());
+        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.total_amount());
         batch.commit();
-        <span class="prelude-val">Ok</span>(output.amount())
+        <span class="prelude-val">Ok</span>(output.total_amount())
     }
 
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1367,7 +1370,7 @@
         <span class="self">self</span>.pub_key.clone()
     }
 
-    <span class="kw">fn </span>blind_sign(<span class="kw-2">&amp;</span><span class="self">self</span>, output: Coins&lt;BlindToken&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;PartialSigResponse, MintError&gt; {
+    <span class="kw">fn </span>blind_sign(<span class="kw-2">&amp;</span><span class="self">self</span>, output: TieredMulti&lt;BlindToken&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;PartialSigResponse, MintError&gt; {
         <span class="prelude-val">Ok</span>(PartialSigResponse(output.map(
             |amt, msg| -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, InvalidAmountTierError&gt; {
                 <span class="kw">let </span>sec_key = <span class="self">self</span>.sec_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>;
@@ -1417,7 +1420,10 @@
             }
         };
 
-        <span class="kw">let </span>reference_msgs = our_contribution.<span class="number">0</span>.iter().map(|(_amt, (msg, _sig))| msg);
+        <span class="kw">let </span>reference_msgs = our_contribution
+            .<span class="number">0
+            </span>.iter_items()
+            .map(|(_amt, (msg, _sig))| msg);
 
         <span class="kw">let </span><span class="kw-2">mut </span>peer_errors = <span class="macro">vec!</span>[];
 
@@ -1444,7 +1450,7 @@
         <span class="kw">let </span>bsigs = TieredMultiZip::new(
             partial_sigs
                 .iter()
-                .map(|(_peer, sig_share)| sig_share.<span class="number">0</span>.iter())
+                .map(|(_peer, sig_share)| sig_share.<span class="number">0</span>.iter_items())
                 .collect(),
         )
         .zip(reference_msgs)
@@ -1494,7 +1500,7 @@
 
             <span class="prelude-val">Ok</span>((amt, sig))
         })
-        .collect::&lt;<span class="prelude-ty">Result</span>&lt;Coins&lt;<span class="kw">_</span>&gt;, CombineError&gt;&gt;();
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;TieredMulti&lt;<span class="kw">_</span>&gt;, CombineError&gt;&gt;();
 
         <span class="kw">let </span>bsigs = <span class="kw">match </span>bsigs {
             <span class="prelude-val">Ok</span>(bs) =&gt; bs,
@@ -1570,7 +1576,7 @@
     }
 }
 
-<span class="kw">impl </span>From&lt;SignRequest&gt; <span class="kw">for </span>Coins&lt;BlindToken&gt; {
+<span class="kw">impl </span>From&lt;SignRequest&gt; <span class="kw">for </span>TieredMulti&lt;BlindToken&gt; {
     <span class="kw">fn </span>from(sig_req: SignRequest) -&gt; <span class="self">Self </span>{
         sig_req
             .<span class="number">0
@@ -1638,7 +1644,7 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
-    <span class="kw">use crate</span>::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
+    <span class="kw">use crate</span>::{BlindToken, CombineError, Mint, MintConfig, PeerErrorType, TieredMulti};
     <span class="kw">use </span>fedimint_api::config::GenerateConfig;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId};
@@ -1668,7 +1674,7 @@
             .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg.tbs_pks.keys.get(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap();
+        <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg.tbs_pks.get(Amount::from_sat(<span class="number">1</span>)).unwrap();
 
         (agg_pk, mints)
     }
@@ -1679,14 +1685,14 @@
 
         <span class="kw">let </span>nonce = Message::from_bytes(<span class="kw-2">&amp;</span><span class="string">b&quot;test coin&quot;</span>[..]);
         <span class="kw">let </span>(bkey, bmsg) = blind_message(nonce);
-        <span class="kw">let </span>blind_tokens = Coins {
-            coins: <span class="macro">vec!</span>[(
+        <span class="kw">let </span>blind_tokens = TieredMulti::new(
+            <span class="macro">vec!</span>[(
                 Amount::from_sat(<span class="number">1</span>),
                 <span class="macro">vec!</span>[BlindToken(bmsg), BlindToken(bmsg)],
             )]
             .into_iter()
             .collect(),
-        };
+        );
 
         <span class="kw">let </span>psigs = mints
             .iter()
@@ -1707,9 +1713,9 @@
         <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
         <span class="kw">let </span>bsig = bsig_res.unwrap();
-        <span class="macro">assert_eq!</span>(bsig.<span class="number">0</span>.amount(), Amount::from_sat(<span class="number">2</span>));
+        <span class="macro">assert_eq!</span>(bsig.<span class="number">0</span>.total_amount(), Amount::from_sat(<span class="number">2</span>));
 
-        bsig.<span class="number">0</span>.iter().for_each(|(<span class="kw">_</span>, bs)| {
+        bsig.<span class="number">0</span>.iter_items().for_each(|(<span class="kw">_</span>, bs)| {
             <span class="kw">let </span>sig = unblind_signature(bkey, <span class="kw-2">*</span>bs);
             <span class="macro">assert!</span>(verify(nonce, sig, pk));
         });
@@ -1720,7 +1726,7 @@
         <span class="macro">assert!</span>(bsig_res.is_ok());
         <span class="macro">assert!</span>(errors.<span class="number">0</span>.is_empty());
 
-        bsig_res.unwrap().<span class="number">0</span>.iter().for_each(|(<span class="kw">_</span>, bs)| {
+        bsig_res.unwrap().<span class="number">0</span>.iter_items().for_each(|(<span class="kw">_</span>, bs)| {
             <span class="kw">let </span>sig = unblind_signature(bkey, <span class="kw-2">*</span>bs);
             <span class="macro">assert!</span>(verify(nonce, sig, pk));
         });
@@ -1765,7 +1771,7 @@
                 .cloned()
                 .map(|(peer, <span class="kw-2">mut </span>psigs)| {
                     <span class="kw">if </span>peer == PeerId::from(<span class="number">1</span>) {
-                        psigs.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap().pop();
+                        psigs.<span class="number">0</span>.get_mut(Amount::from_sat(<span class="number">1</span>)).unwrap().pop();
                     }
                     (peer, psigs)
                 })
@@ -1783,8 +1789,8 @@
                 .cloned()
                 .map(|(peer, <span class="kw-2">mut </span>psig)| {
                     <span class="kw">if </span>peer == PeerId::from(<span class="number">2</span>) {
-                        psig.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">1 </span>=
-                            psigs[<span class="number">0</span>].<span class="number">1 </span>.<span class="number">0</span>.coins[<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)][<span class="number">0</span>].<span class="number">1</span>;
+                        psig.<span class="number">0</span>.get_mut(Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">1 </span>=
+                            psigs[<span class="number">0</span>].<span class="number">1 </span>.<span class="number">0</span>.get(Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">1</span>;
                     }
                     (peer, psig)
                 })
@@ -1803,7 +1809,7 @@
                 .cloned()
                 .map(|(peer, <span class="kw-2">mut </span>psig)| {
                     <span class="kw">if </span>peer == PeerId::from(<span class="number">3</span>) {
-                        psig.<span class="number">0</span>.coins.get_mut(<span class="kw-2">&amp;</span>Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">0 </span>= bmsg;
+                        psig.<span class="number">0</span>.get_mut(Amount::from_sat(<span class="number">1</span>)).unwrap()[<span class="number">0</span>].<span class="number">0 </span>= bmsg;
                     }
                     (peer, psig)
                 })

@@ -341,7 +341,7 @@
 <span class="kw">impl </span>TransactionItem <span class="kw">for </span>Input {
     <span class="kw">fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            Input::Mint(coins) =&gt; coins.amount(),
+            Input::Mint(coins) =&gt; coins.total_amount(),
             Input::Wallet(peg_in) =&gt; Amount::from_sat(peg_in.tx_output().value),
             Input::LN(input) =&gt; input.amount,
         }
@@ -349,7 +349,7 @@
 
     <span class="kw">fn </span>fee(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            Input::Mint(coins) =&gt; fee_consensus.mint.coin_spend_abs * (coins.coins.len() <span class="kw">as </span>u64),
+            Input::Mint(coins) =&gt; fee_consensus.mint.coin_spend_abs * (coins.tier_count() <span class="kw">as </span>u64),
             Input::Wallet(<span class="kw">_</span>) =&gt; fee_consensus.wallet.peg_in_abs,
             Input::LN(<span class="kw">_</span>) =&gt; fee_consensus.ln.contract_input,
         }
@@ -359,7 +359,7 @@
 <span class="kw">impl </span>TransactionItem <span class="kw">for </span>Output {
     <span class="kw">fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            Output::Mint(coins) =&gt; coins.amount(),
+            Output::Mint(coins) =&gt; coins.total_amount(),
             Output::Wallet(peg_out) =&gt; (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(output)) =&gt; output.amount,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(<span class="kw">_</span>)) =&gt; Amount::ZERO,
@@ -368,7 +368,7 @@
 
     <span class="kw">fn </span>fee(<span class="kw-2">&amp;</span><span class="self">self</span>, fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus) -&gt; Amount {
         <span class="kw">match </span><span class="self">self </span>{
-            Output::Mint(coins) =&gt; fee_consensus.mint.coin_spend_abs * (coins.coins.len() <span class="kw">as </span>u64),
+            Output::Mint(coins) =&gt; fee_consensus.mint.coin_spend_abs * (coins.tier_count() <span class="kw">as </span>u64),
             Output::Wallet(<span class="kw">_</span>) =&gt; fee_consensus.wallet.peg_out_abs,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(<span class="kw">_</span>)) =&gt; {
                 fee_consensus.ln.contract_output

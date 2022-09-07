@@ -175,13 +175,13 @@
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint};
 <span class="kw">use </span>fedimint_core::config::FeeConsensus;
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindToken, Coin, Keys};
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindToken, Coin, Tiered};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>tbs::AggregatePublicKey;
 
 <span class="kw">pub struct </span>TransactionBuilder {
-    input_coins: Coins&lt;SpendableCoin&gt;,
+    input_coins: TieredMulti&lt;SpendableCoin&gt;,
     output_coins: Vec&lt;(u64, CoinFinalizationData)&gt;,
     keys: Vec&lt;KeyPair&gt;,
     tx: Transaction,
@@ -205,7 +205,7 @@
 <span class="kw">impl </span>TransactionBuilder {
     <span class="kw">pub fn </span>input_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        coins: Coins&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableCoin&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MintClientError&gt; {
         <span class="self">self</span>.input_coins.extend(coins.clone());
@@ -216,9 +216,9 @@
 
     <span class="kw">pub fn </span>create_input_from_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        coins: Coins&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableCoin&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, Coins&lt;Coin&gt;), MintClientError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, TieredMulti&lt;Coin&gt;), MintClientError&gt; {
         <span class="kw">let </span>coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -256,13 +256,13 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-        tbs_pks: <span class="kw-2">&amp;</span>Keys&lt;AggregatePublicKey&gt;,
+        tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         rng: R,
     ) {
         <span class="kw">let </span>(coin_finalization_data, coin_output) =
             <span class="self">self</span>.create_output_coins(amount, secp, tbs_pks, rng);
 
-        <span class="kw">if </span>!coin_output.coins.is_empty() {
+        <span class="kw">if </span>!coin_output.is_empty() {
             <span class="kw">let </span>out_idx = <span class="self">self</span>.tx.outputs.len();
             <span class="self">self</span>.output(Output::Mint(coin_output));
             <span class="self">self</span>.output_coins
@@ -274,9 +274,9 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         amount: Amount,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-        tbs_pks: <span class="kw-2">&amp;</span>Keys&lt;AggregatePublicKey&gt;,
+        tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         rng: R,
-    ) -&gt; (CoinFinalizationData, Coins&lt;BlindToken&gt;) {
+    ) -&gt; (CoinFinalizationData, TieredMulti&lt;BlindToken&gt;) {
         <span class="kw">let </span>(coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);
 
@@ -294,7 +294,7 @@
         change_required: Amount,
         <span class="kw-2">mut </span>batch: BatchTx,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-        tbs_pks: <span class="kw-2">&amp;</span>Keys&lt;AggregatePublicKey&gt;,
+        tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Transaction {
         <span class="comment">// add change
@@ -308,8 +308,8 @@
         }
 
         <span class="comment">// move input coins to pending state, awaiting a transaction
-        </span><span class="kw">if </span>!<span class="self">self</span>.input_coins.coins.is_empty() {
-            batch.append_from_iter(<span class="self">self</span>.input_coins.iter().map(|(amount, coin)| {
+        </span><span class="kw">if </span>!<span class="self">self</span>.input_coins.item_count() != <span class="number">0 </span>{
+            batch.append_from_iter(<span class="self">self</span>.input_coins.iter_items().map(|(amount, coin)| {
                 <span class="comment">// maybe_delete because coins might have been received from another user directly
                 </span>BatchItem::maybe_delete(CoinKey {
                     amount,

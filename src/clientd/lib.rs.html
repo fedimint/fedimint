@@ -164,7 +164,6 @@
 <span id="164">164</span>
 <span id="165">165</span>
 <span id="166">166</span>
-<span id="167">167</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>axum::extract::rejection::JsonRejection;
@@ -174,7 +173,7 @@
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::Transaction;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::coins::Coins;
+<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::mint::{CoinFinalizationData, SpendableCoin};
 <span class="kw">use </span>mint_client::ClientError;
@@ -218,12 +217,11 @@
 
 <span class="kw">impl </span>InfoResponse {
     <span class="kw">pub fn </span>new(
-        coins: Coins&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableCoin&gt;,
         active_issuances: Vec&lt;(OutPoint, CoinFinalizationData)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>info_coins: Vec&lt;CoinsByTier&gt; = coins
-            .coins
-            .iter()
+            .iter_tiers()
             .map(|(tier, c)| CoinsByTier {
                 quantity: c.len(),
                 tier: tier.milli_sat,
