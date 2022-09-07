@@ -1,0 +1,52 @@
+use crate::InvalidAmountTierError;
+use fedimint_api::Amount;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::iter::FromIterator;
+use tbs::{PublicKeyShare, SecretKeyShare};
+
+mod tiered_multi;
+pub use tiered_multi::*;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Tiered<T>(BTreeMap<Amount, T>);
+
+impl<T> Tiered<T> {
+    pub fn structural_eq<O>(&self, other: &Tiered<O>) -> bool {
+        self.0.keys().eq(other.0.keys())
+    }
+
+    /// Returns a reference to the key of the specified tier
+    pub fn tier(&self, amount: &Amount) -> Result<&T, InvalidAmountTierError> {
+        self.0.get(amount).ok_or(InvalidAmountTierError(*amount))
+    }
+
+    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+        self.0.keys()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &T)> {
+        self.0.iter().map(|(amt, key)| (*amt, key))
+    }
+
+    pub fn get(&self, amt: Amount) -> Option<&T> {
+        self.0.get(&amt)
+    }
+}
+
+impl Tiered<SecretKeyShare> {
+    pub fn to_public(&self) -> Tiered<PublicKeyShare> {
+        Tiered(
+            self.iter()
+                .map(|(amt, key)| (amt, key.to_pub_key_share()))
+                .collect(),
+        )
+    }
+}
+
+impl<T> FromIterator<(Amount, T)> for Tiered<T> {
+    fn from_iter<I: IntoIterator<Item = (Amount, T)>>(iter: I) -> Self {
+        Tiered(iter.into_iter().collect())
+    }
+}

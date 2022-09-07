@@ -27,9 +27,9 @@ use tbs::{
     PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
-use tiered::coins::Coins;
-use tiered::coins::TieredMultiZip;
-pub use tiered::keys::Keys;
+pub use tiered::Tiered;
+use tiered::TieredMulti;
+use tiered::TieredMultiZip;
 use tracing::{debug, error, warn};
 
 pub mod config;
@@ -41,8 +41,8 @@ pub mod tiered;
 /// Federated mint member mint
 pub struct Mint {
     cfg: MintConfig,
-    sec_key: Keys<SecretKeyShare>,
-    pub_key_shares: BTreeMap<PeerId, Keys<PublicKeyShare>>,
+    sec_key: Tiered<SecretKeyShare>,
+    pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
     db: Arc<dyn Database>,
 }
@@ -55,16 +55,16 @@ pub struct PartiallySignedRequest {
 
 /// Request to blind sign a certain amount of coins
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct SignRequest(pub Coins<tbs::BlindedMessage>);
+pub struct SignRequest(pub TieredMulti<tbs::BlindedMessage>);
 
 // FIXME: optimize out blinded msg by making the mint remember it
 /// Blind signature share for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct PartialSigResponse(pub Coins<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
+pub struct PartialSigResponse(pub TieredMulti<(tbs::BlindedMessage, tbs::BlindedSignatureShare)>);
 
 /// Blind signature for a [`SignRequest`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct SigResponse(pub Coins<tbs::BlindedSignature>);
+pub struct SigResponse(pub TieredMulti<tbs::BlindedSignature>);
 
 /// A cryptographic coin consisting of a token and a threshold signature by the federated mint. In
 /// this form it can oly be validated, not spent since for that the corresponding secret spend key
@@ -88,8 +88,8 @@ pub struct VerificationCache {
 #[async_trait(?Send)]
 impl FederationModule for Mint {
     type Error = MintError;
-    type TxInput = Coins<Coin>;
-    type TxOutput = Coins<BlindToken>;
+    type TxInput = TieredMulti<Coin>;
+    type TxOutput = TieredMulti<BlindToken>;
     type TxOutputOutcome = Option<SigResponse>; // TODO: make newtype
     type ConsensusItem = PartiallySignedRequest;
     type VerificationCache = VerificationCache;
@@ -141,7 +141,7 @@ impl FederationModule for Mint {
         // calculation can happen massively in parallel since verification is a pure function and
         // thus has no side effects.
         let valid_coins = inputs
-            .flat_map(|inputs| inputs.iter())
+            .flat_map(|inputs| inputs.iter_items())
             .par_bridge()
             .filter_map(|(amount, coin)| {
                 let amount_key = self.pub_key.get(&amount)?;
@@ -162,7 +162,7 @@ impl FederationModule for Mint {
         cache: &Self::VerificationCache,
         input: &'a Self::TxInput,
     ) -> Result<InputMeta<'a>, Self::Error> {
-        input.iter().try_for_each(|(amount, coin)| {
+        input.iter_items().try_for_each(|(amount, coin)| {
             let coin_valid = cache
                 .valid_coins
                 .get(coin) // We validated the coin
@@ -186,8 +186,8 @@ impl FederationModule for Mint {
         })?;
 
         Ok(InputMeta {
-            amount: input.amount(),
-            puk_keys: Box::new(input.iter().map(|(_, coin)| *coin.spend_key())),
+            amount: input.total_amount(),
+            puk_keys: Box::new(input.iter_items().map(|(_, coin)| *coin.spend_key())),
         })
     }
 
@@ -200,7 +200,7 @@ impl FederationModule for Mint {
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        batch.append_from_iter(input.iter().flat_map(|(amount, coin)| {
+        batch.append_from_iter(input.iter_items().flat_map(|(amount, coin)| {
             let key = NonceKey(coin.0.clone());
             vec![
                 BatchItem::insert_new(key.clone(), ()),
@@ -213,7 +213,7 @@ impl FederationModule for Mint {
     }
 
     fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
-        if let Some(amount) = output.iter().find_map(|(amount, _)| {
+        if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
             } else {
@@ -222,7 +222,7 @@ impl FederationModule for Mint {
         }) {
             Err(MintError::InvalidAmountTier(amount))
         } else {
-            Ok(output.amount())
+            Ok(output.total_amount())
         }
     }
 
@@ -242,9 +242,9 @@ impl FederationModule for Mint {
             },
             partial_sig,
         );
-        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.amount());
+        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.total_amount());
         batch.commit();
-        Ok(output.amount())
+        Ok(output.total_amount())
     }
 
     async fn end_consensus_epoch<'a>(
@@ -450,7 +450,7 @@ impl Mint {
         self.pub_key.clone()
     }
 
-    fn blind_sign(&self, output: Coins<BlindToken>) -> Result<PartialSigResponse, MintError> {
+    fn blind_sign(&self, output: TieredMulti<BlindToken>) -> Result<PartialSigResponse, MintError> {
         Ok(PartialSigResponse(output.map(
             |amt, msg| -> Result<_, InvalidAmountTierError> {
                 let sec_key = self.sec_key.tier(&amt)?;
@@ -500,7 +500,10 @@ impl Mint {
             }
         };
 
-        let reference_msgs = our_contribution.0.iter().map(|(_amt, (msg, _sig))| msg);
+        let reference_msgs = our_contribution
+            .0
+            .iter_items()
+            .map(|(_amt, (msg, _sig))| msg);
 
         let mut peer_errors = vec![];
 
@@ -527,7 +530,7 @@ impl Mint {
         let bsigs = TieredMultiZip::new(
             partial_sigs
                 .iter()
-                .map(|(_peer, sig_share)| sig_share.0.iter())
+                .map(|(_peer, sig_share)| sig_share.0.iter_items())
                 .collect(),
         )
         .zip(reference_msgs)
@@ -577,7 +580,7 @@ impl Mint {
 
             Ok((amt, sig))
         })
-        .collect::<Result<Coins<_>, CombineError>>();
+        .collect::<Result<TieredMulti<_>, CombineError>>();
 
         let bsigs = match bsigs {
             Ok(bs) => bs,
@@ -653,7 +656,7 @@ impl CoinNonce {
     }
 }
 
-impl From<SignRequest> for Coins<BlindToken> {
+impl From<SignRequest> for TieredMulti<BlindToken> {
     fn from(sig_req: SignRequest) -> Self {
         sig_req
             .0
@@ -721,7 +724,7 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindToken, Coins, CombineError, Mint, MintConfig, PeerErrorType};
+    use crate::{BlindToken, CombineError, Mint, MintConfig, PeerErrorType, TieredMulti};
     use fedimint_api::config::GenerateConfig;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, PeerId};
@@ -751,7 +754,7 @@ mod test {
             .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
             .collect::<Vec<_>>();
 
-        let agg_pk = *client_cfg.tbs_pks.keys.get(&Amount::from_sat(1)).unwrap();
+        let agg_pk = *client_cfg.tbs_pks.get(Amount::from_sat(1)).unwrap();
 
         (agg_pk, mints)
     }
@@ -762,14 +765,14 @@ mod test {
 
         let nonce = Message::from_bytes(&b"test coin"[..]);
         let (bkey, bmsg) = blind_message(nonce);
-        let blind_tokens = Coins {
-            coins: vec![(
+        let blind_tokens = TieredMulti::new(
+            vec![(
                 Amount::from_sat(1),
                 vec![BlindToken(bmsg), BlindToken(bmsg)],
             )]
             .into_iter()
             .collect(),
-        };
+        );
 
         let psigs = mints
             .iter()
@@ -790,9 +793,9 @@ mod test {
         assert!(errors.0.is_empty());
 
         let bsig = bsig_res.unwrap();
-        assert_eq!(bsig.0.amount(), Amount::from_sat(2));
+        assert_eq!(bsig.0.total_amount(), Amount::from_sat(2));
 
-        bsig.0.iter().for_each(|(_, bs)| {
+        bsig.0.iter_items().for_each(|(_, bs)| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });
@@ -803,7 +806,7 @@ mod test {
         assert!(bsig_res.is_ok());
         assert!(errors.0.is_empty());
 
-        bsig_res.unwrap().0.iter().for_each(|(_, bs)| {
+        bsig_res.unwrap().0.iter_items().for_each(|(_, bs)| {
             let sig = unblind_signature(bkey, *bs);
             assert!(verify(nonce, sig, pk));
         });
@@ -848,7 +851,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psigs)| {
                     if peer == PeerId::from(1) {
-                        psigs.0.coins.get_mut(&Amount::from_sat(1)).unwrap().pop();
+                        psigs.0.get_mut(Amount::from_sat(1)).unwrap().pop();
                     }
                     (peer, psigs)
                 })
@@ -866,8 +869,8 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == PeerId::from(2) {
-                        psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].1 =
-                            psigs[0].1 .0.coins[&Amount::from_sat(1)][0].1;
+                        psig.0.get_mut(Amount::from_sat(1)).unwrap()[0].1 =
+                            psigs[0].1 .0.get(Amount::from_sat(1)).unwrap()[0].1;
                     }
                     (peer, psig)
                 })
@@ -886,7 +889,7 @@ mod test {
                 .cloned()
                 .map(|(peer, mut psig)| {
                     if peer == PeerId::from(3) {
-                        psig.0.coins.get_mut(&Amount::from_sat(1)).unwrap()[0].0 = bmsg;
+                        psig.0.get_mut(Amount::from_sat(1)).unwrap()[0].0 = bmsg;
                     }
                     (peer, psig)
                 })

@@ -1,4 +1,4 @@
-use crate::{Amount, InvalidAmountTierError, Keys};
+use crate::{Amount, InvalidAmountTierError, Tiered};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -11,42 +11,44 @@ use std::marker::PhantomData;
 /// the total amount represented. As it is prudent to limit both the maximum coin amount and maximum
 /// coin count per transaction this shouldn't be a problem in practice though.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct Coins<C> {
-    pub coins: BTreeMap<Amount, Vec<C>>,
-}
+pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
 
-pub struct TieredMultiZip<'a, I, C>
-where
-    I: 'a,
-{
-    iters: Vec<I>,
-    _pd: PhantomData<&'a C>,
-}
+impl<T> TieredMulti<T> {
+    pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
+        TieredMulti(map)
+    }
 
-impl<C> Coins<C> {
-    pub fn amount(&self) -> Amount {
+    pub fn total_amount(&self) -> Amount {
         let milli_sat = self
-            .coins
+            .0
             .iter()
             .map(|(tier, coins)| tier.milli_sat * (coins.len() as u64))
             .sum();
         Amount { milli_sat }
     }
 
-    pub fn coin_count(&self) -> usize {
-        self.coins.iter().map(|(_, coins)| coins.len()).sum()
+    pub fn item_count(&self) -> usize {
+        self.0.iter().map(|(_, coins)| coins.len()).sum()
     }
 
-    pub fn coin_amount_tiers(&self) -> impl Iterator<Item = &Amount> {
-        self.coins.keys()
+    pub fn tier_count(&self) -> usize {
+        self.0.len()
     }
 
-    pub fn map<F, N, E>(self, f: F) -> Result<Coins<N>, E>
+    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+        self.0.keys()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.item_count() == 0
+    }
+
+    pub fn map<F, N, E>(self, f: F) -> Result<TieredMulti<N>, E>
     where
-        F: Fn(Amount, C) -> Result<N, E>,
+        F: Fn(Amount, T) -> Result<N, E>,
     {
-        let coins = self
-            .coins
+        let res = self
+            .0
             .into_iter()
             .map(|(amt, coins)| -> Result<_, E> {
                 let coins = coins
@@ -57,35 +59,48 @@ impl<C> Coins<C> {
             })
             .collect::<Result<BTreeMap<Amount, Vec<N>>, E>>()?;
 
-        Ok(Coins { coins })
+        Ok(TieredMulti(res))
     }
 
-    pub fn structural_eq<O>(&self, other: &Coins<O>) -> bool {
-        let tier_eq = self.coins.keys().eq(other.coins.keys());
-        let coins_per_tier_eq = self
-            .coins
+    pub fn structural_eq<O>(&self, other: &TieredMulti<O>) -> bool {
+        let tier_eq = self.0.keys().eq(other.0.keys());
+        let per_tier_eq = self
+            .0
             .values()
-            .zip(other.coins.values())
+            .zip(other.0.values())
             .all(|(c1, c2)| c1.len() == c2.len());
 
-        tier_eq && coins_per_tier_eq
+        tier_eq && per_tier_eq
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Amount, &C)> + DoubleEndedIterator {
-        self.coins
+    pub fn iter_tiers(&self) -> impl Iterator<Item = (&Amount, &Vec<T>)> {
+        self.0.iter()
+    }
+
+    pub fn iter_items(&self) -> impl Iterator<Item = (Amount, &T)> + DoubleEndedIterator {
+        self.0
             .iter()
             .flat_map(|(amt, coins)| coins.iter().map(move |c| (*amt, c)))
     }
 
-    pub fn check_tiers<K>(&self, keys: &Keys<K>) -> Result<(), InvalidAmountTierError> {
-        match self.coins.keys().find(|amt| !keys.keys.contains_key(amt)) {
+    pub fn check_tiers<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
+        match self.0.keys().find(|amt| !keys.0.contains_key(amt)) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
             None => Ok(()),
         }
     }
+
+    pub fn get(&self, amt: Amount) -> Option<&Vec<T>> {
+        self.0.get(&amt)
+    }
+
+    // TODO: Get rid of it. It might be used to break useful invariants (like making sure there are no empty `Vec`s after removal)
+    pub fn get_mut(&mut self, amt: Amount) -> Option<&mut Vec<T>> {
+        self.0.get_mut(&amt)
+    }
 }
 
-impl<C> Coins<C>
+impl<C> TieredMulti<C>
 where
     C: Clone,
 {
@@ -94,15 +109,16 @@ where
     /// returned.
     ///
     /// The caller can request change from the federation.
-    pub fn select_coins(&self, amount: Amount) -> Option<Coins<C>> {
-        if amount > self.amount() {
+    // TODO: move somewhere else?
+    pub fn select_coins(&self, amount: Amount) -> Option<TieredMulti<C>> {
+        if amount > self.total_amount() {
             return None;
         }
 
-        let mut remaining = self.amount();
+        let mut remaining = self.total_amount();
 
         let coins = self
-            .iter()
+            .iter_items()
             .rev()
             .filter_map(|(coin_amount, coin)| {
                 if amount <= remaining - coin_amount {
@@ -112,16 +128,17 @@ where
                     Some((coin_amount, (*coin).clone()))
                 }
             })
-            .collect::<Coins<C>>();
+            .collect::<TieredMulti<C>>();
 
         Some(coins)
     }
 }
 
-impl Coins<()> {
-    pub fn represent_amount<K>(mut amount: Amount, tiers: &Keys<K>) -> Coins<()> {
+impl TieredMulti<()> {
+    // TODO: move somewhere else?
+    pub fn represent_amount<K>(mut amount: Amount, tiers: &Tiered<K>) -> TieredMulti<()> {
         let coins = tiers
-            .keys
+            .0
             .keys()
             .rev()
             .map(|&amount_tier| {
@@ -131,19 +148,19 @@ impl Coins<()> {
             })
             .collect();
 
-        Coins { coins }
+        TieredMulti(coins)
     }
 }
 
-impl<C> FromIterator<(Amount, C)> for Coins<C> {
+impl<C> FromIterator<(Amount, C)> for TieredMulti<C> {
     fn from_iter<T: IntoIterator<Item = (Amount, C)>>(iter: T) -> Self {
-        let mut coins = Coins::default();
-        coins.extend(iter);
-        coins
+        let mut res = TieredMulti::default();
+        res.extend(iter);
+        res
     }
 }
 
-impl<C> IntoIterator for Coins<C>
+impl<C> IntoIterator for TieredMulti<C>
 where
     C: 'static,
 {
@@ -152,58 +169,64 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
-            self.coins
+            self.0
                 .into_iter()
                 .flat_map(|(amt, coins)| coins.into_iter().map(move |c| (amt, c))),
         )
     }
 }
 
-impl<C> Default for Coins<C> {
+impl<C> Default for TieredMulti<C> {
     fn default() -> Self {
-        Coins {
-            coins: BTreeMap::default(),
-        }
+        TieredMulti(BTreeMap::default())
     }
 }
 
-impl<C> Extend<(Amount, C)> for Coins<C> {
+impl<C> Extend<(Amount, C)> for TieredMulti<C> {
     fn extend<T: IntoIterator<Item = (Amount, C)>>(&mut self, iter: T) {
         for (amount, coin) in iter {
-            self.coins.entry(amount).or_default().push(coin)
+            self.0.entry(amount).or_default().push(coin)
         }
     }
 }
 
-impl<C> Encodable for Coins<C>
+impl<C> Encodable for TieredMulti<C>
 where
     C: Encodable,
 {
     fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
         let mut len = 0;
-        len += (self.iter().count() as u64).consensus_encode(&mut writer)?;
-        for (amount, coin) in self.iter() {
+        len += (self.iter_items().count() as u64).consensus_encode(&mut writer)?;
+        for (amount, i) in self.iter_items() {
             len += amount.consensus_encode(&mut writer)?;
-            len += coin.consensus_encode(&mut writer)?;
+            len += i.consensus_encode(&mut writer)?;
         }
         Ok(len)
     }
 }
 
-impl<C> Decodable for Coins<C>
+impl<C> Decodable for TieredMulti<C>
 where
     C: Decodable,
 {
     fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-        let mut coins = BTreeMap::new();
+        let mut res = BTreeMap::new();
         let len = u64::consensus_decode(&mut d)?;
         for _ in 0..len {
             let amt = Amount::consensus_decode(&mut d)?;
-            let coin = C::consensus_decode(&mut d)?;
-            coins.entry(amt).or_insert_with(Vec::new).push(coin);
+            let v = C::consensus_decode(&mut d)?;
+            res.entry(amt).or_insert_with(Vec::new).push(v);
         }
-        Ok(Coins { coins })
+        Ok(TieredMulti(res))
     }
+}
+
+pub struct TieredMultiZip<'a, I, T>
+where
+    I: 'a,
+{
+    iters: Vec<I>,
+    _pd: PhantomData<&'a T>,
 }
 
 impl<'a, I, C> TieredMultiZip<'a, I, C> {
@@ -255,7 +278,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::Coins;
+    use crate::TieredMulti;
     use fedimint_api::Amount;
 
     #[test]
@@ -292,7 +315,7 @@ mod test {
         assert_eq!(starting.select_coins(Amount::from_sat(100)), None);
     }
 
-    fn coins(coins: Vec<(Amount, usize)>) -> Coins<usize> {
+    fn coins(coins: Vec<(Amount, usize)>) -> TieredMulti<usize> {
         coins
             .into_iter()
             .flat_map(|(amount, number)| vec![(amount, 0_usize); number])

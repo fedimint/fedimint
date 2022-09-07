@@ -10,9 +10,9 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::config::FeeConsensus;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::tiered::coins::Coins;
+use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::mint::{
-    BlindToken, Coin, CoinNonce, InvalidAmountTierError, Keys, SigResponse, SignRequest,
+    BlindToken, Coin, CoinNonce, InvalidAmountTierError, SigResponse, SignRequest, Tiered,
 };
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -49,7 +49,7 @@ pub struct CoinRequest {
 #[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
 pub struct CoinFinalizationData {
     /// Finalization data for all coin outputs in this request
-    coins: Coins<CoinRequest>,
+    coins: TieredMulti<CoinRequest>,
 }
 
 /// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
@@ -61,7 +61,7 @@ pub struct SpendableCoin {
 }
 
 impl<'c> MintClient<'c> {
-    pub fn coins(&self) -> Coins<SpendableCoin> {
+    pub fn coins(&self) -> TieredMulti<SpendableCoin> {
         self.context
             .db
             .find_by_prefix(&CoinKeyPrefix)
@@ -72,7 +72,7 @@ impl<'c> MintClient<'c> {
             .collect()
     }
 
-    pub fn select_coins(&self, amount: Amount) -> Result<Coins<SpendableCoin>> {
+    pub fn select_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableCoin>> {
         let coins = self
             .coins()
             .select_coins(amount)
@@ -112,7 +112,7 @@ impl<'c> MintClient<'c> {
         amount: Amount,
         mut tx: BatchTx,
         rng: R,
-        mut create_tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
+        mut create_tx: impl FnMut(TieredMulti<BlindToken>) -> OutPoint,
     ) {
         let mut builder = TransactionBuilder::default();
 
@@ -208,15 +208,15 @@ impl CoinFinalizationData {
     /// Generate a new `IssuanceRequest` and the associates [`SignRequest`]
     pub fn new<K, C>(
         amount: Amount,
-        amount_tiers: &Keys<K>,
+        amount_tiers: &Tiered<K>,
         ctx: &Secp256k1<C>,
         mut rng: impl RngCore + CryptoRng,
     ) -> (CoinFinalizationData, SignRequest)
     where
         C: Signing,
     {
-        let (requests, blinded_nonces): (Coins<_>, Coins<_>) =
-            Coins::represent_amount(amount, amount_tiers)
+        let (requests, blinded_nonces): (TieredMulti<_>, TieredMulti<_>) =
+            TieredMulti::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
                     let (request, blind_msg) = CoinRequest::new(ctx, &mut rng);
@@ -226,8 +226,8 @@ impl CoinFinalizationData {
 
         debug!(
             %amount,
-            coins = %requests.coin_count(),
-            tiers = ?requests.coins.keys().collect::<Vec<_>>(),
+            coins = %requests.item_count(),
+            tiers = ?requests.tiers().collect::<Vec<_>>(),
             "Generated issuance request"
         );
 
@@ -243,14 +243,14 @@ impl CoinFinalizationData {
     pub fn finalize(
         &self,
         bsigs: SigResponse,
-        mint_pub_key: &Keys<AggregatePublicKey>,
-    ) -> std::result::Result<Coins<SpendableCoin>, CoinFinalizationError> {
+        mint_pub_key: &Tiered<AggregatePublicKey>,
+    ) -> std::result::Result<TieredMulti<SpendableCoin>, CoinFinalizationError> {
         if !self.coins.structural_eq(&bsigs.0) {
             return Err(CoinFinalizationError::WrongMintAnswer);
         }
 
         self.coins
-            .iter()
+            .iter_items()
             .zip(bsigs.0)
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
@@ -271,11 +271,11 @@ impl CoinFinalizationData {
     }
 
     pub fn coin_count(&self) -> usize {
-        self.coins.coins.values().map(|v| v.len()).sum()
+        self.coins.item_count()
     }
 
     pub fn coin_amount(&self) -> Amount {
-        self.coins.amount()
+        self.coins.total_amount()
     }
 }
 
@@ -520,7 +520,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(client.coins().amount(), ISSUE_AMOUNT)
+        assert_eq!(client.coins().total_amount(), ISSUE_AMOUNT)
     }
 
     #[test_log::test(tokio::test)]
@@ -574,7 +574,7 @@ mod tests {
             .await;
 
         // The right amount of money is left
-        assert_eq!(client.coins().amount(), SPEND_AMOUNT);
+        assert_eq!(client.coins().total_amount(), SPEND_AMOUNT);
 
         // Double spends aren't possible
         assert!(fed.lock().await.verify_input(&input).is_err());
@@ -602,6 +602,6 @@ mod tests {
         );
 
         // No money is left
-        assert_eq!(client.coins().amount(), Amount::ZERO);
+        assert_eq!(client.coins().total_amount(), Amount::ZERO);
     }
 }

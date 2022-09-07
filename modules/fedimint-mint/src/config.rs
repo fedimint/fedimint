@@ -1,5 +1,5 @@
-use crate::tiered::coins::TieredMultiZip;
-use crate::Keys;
+use crate::tiered::TieredMultiZip;
+use crate::Tiered;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, PeerId};
 use rand::{CryptoRng, RngCore};
@@ -10,15 +10,15 @@ use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
-    pub tbs_sks: Keys<tbs::SecretKeyShare>,
-    pub peer_tbs_pks: BTreeMap<PeerId, Keys<tbs::PublicKeyShare>>,
+    pub tbs_sks: Tiered<tbs::SecretKeyShare>,
+    pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
     pub fee_consensus: FeeConsensus,
     pub threshold: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintClientConfig {
-    pub tbs_pks: Keys<AggregatePublicKey>,
+    pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
 }
 
@@ -92,7 +92,7 @@ impl GenerateConfig for MintConfig {
         })
         .collect();
         MintClientConfig {
-            tbs_pks: Keys::from_iter(pub_key.into_iter()),
+            tbs_pks: Tiered::from_iter(pub_key.into_iter()),
             fee_consensus: self.fee_consensus.clone(),
         }
     }
