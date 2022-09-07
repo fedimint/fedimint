@@ -159,16 +159,21 @@ impl FedimintServer {
         let consensus = self.consensus.clone();
 
         // Rejoin consensus and catch up to the most recent epoch
-        tracing::info!("Rejoining consensus");
-        self.rejoin_consensus(Duration::from_secs(60), &mut rng)
-            .await;
+        info!("Rejoining consensus");
+        let rejoin = self.rejoin_consensus(Duration::from_secs(60), &mut rng);
+        let mut next_epoch_num = rejoin.await + 1;
+        let mut outcomes = vec![];
 
         loop {
-            let outcomes = self
-                .run_consensus_epoch(consensus.get_consensus_proposal(), &mut rng)
-                .await;
+            outcomes.append(
+                &mut self
+                    .run_consensus_epoch(consensus.get_consensus_proposal(), &mut rng)
+                    .await,
+            );
 
-            for outcome in outcomes {
+            while let Some(pos) = outcomes.iter().position(|out| out.epoch == next_epoch_num) {
+                next_epoch_num += 1;
+                let outcome = outcomes.swap_remove(pos);
                 self.consensus.process_consensus_outcome(outcome).await;
             }
         }
@@ -183,7 +188,7 @@ impl FedimintServer {
         &mut self,
         timeout: Duration,
         rng: &mut (impl RngCore + CryptoRng + Clone + 'static),
-    ) {
+    ) -> u64 {
         let (msg_buffer, next_epoch_num) = self.determine_rejoin_epoch(timeout).await;
         info!("Rejoining consensus: at epoch {}", next_epoch_num);
         self.hbbft.skip_to_epoch(next_epoch_num);
@@ -212,8 +217,12 @@ impl FedimintServer {
         info!("Rejoining consensus: created outcome");
 
         // FIXME: Should handle failing and querying other peers
+        let last_outcome = outcomes
+            .into_iter()
+            .max_by_key(|out| out.epoch)
+            .expect("non-empty");
         loop {
-            match self.download_history(outcomes[0].clone()).await {
+            match self.download_history(last_outcome.clone()).await {
                 Ok(_) => {
                     break;
                 }
@@ -222,6 +231,8 @@ impl FedimintServer {
                 }
             }
         }
+
+        next_epoch_num
     }
 
     /// Requests, verifies and processes history from peers
