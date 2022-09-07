@@ -353,7 +353,9 @@ struct ServerTest {
     dropped_peers: Vec<PeerId>,
 }
 
+/// Represents a collection of fedimint peer servers
 impl FederationTest {
+    /// Returns the outcome of the last consensus epoch
     pub fn last_consensus(&self) -> ConsensusOutcome {
         self.last_consensus.borrow().clone()
     }
@@ -547,6 +549,7 @@ impl FederationTest {
     }
 
     /// Has every federation node send new consensus proposals then process the outcome.
+    /// If the epoch has empty proposals (no new information) then panic
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
             if self
@@ -554,13 +557,16 @@ impl FederationTest {
                 .iter()
                 .all(|s| Self::empty_proposal(&s.borrow().fedimint))
             {
-                panic!("Empty proposals");
+                panic!("Empty proposals, fed might wait forever");
             }
 
             self.await_consensus_epoch().await;
         }
     }
 
+    /// Runs a consensus epoch
+    /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
+    /// it will wait forever
     pub async fn await_consensus_epoch(&self) {
         let consensus = join_all(
             self.servers
@@ -571,12 +577,14 @@ impl FederationTest {
         self.update_last_consensus();
     }
 
+    /// Returns true if the fed would produce an empty epoch proposal (no new information)
     fn empty_proposal(server: &FedimintServer) -> bool {
         let height = server.consensus.wallet.consensus_height().unwrap_or(0);
         let proposal = block_on(server.consensus.get_consensus_proposal());
 
         for item in proposal.items {
             match item {
+                // ignore items that get automatically generated
                 ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(r))
                     if r.block_height == height =>
                 {
@@ -605,6 +613,7 @@ impl FederationTest {
         self.update_last_consensus();
     }
 
+    /// Force these peers to rejoin consensus, simulating what happens upon node restart
     #[allow(clippy::await_holding_refcell_ref)]
     pub async fn rejoin_consensus(&self) {
         for server in &self.servers {
