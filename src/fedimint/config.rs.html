@@ -296,6 +296,12 @@
 <span id="296">296</span>
 <span id="297">297</span>
 <span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 
@@ -512,9 +518,15 @@
         <span class="self">self</span>.identity.into()
     }
 
-    <span class="kw">pub fn </span>max_faulty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+    <span class="doccomment">/// how many peers can be evil without breaking consensus
+    </span><span class="kw">pub fn </span>max_faulty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         hbbft::util::max_faulty(<span class="self">self</span>.peers.len())
     }
+
+    <span class="doccomment">/// how many peers are required for consensus
+    </span><span class="kw">pub fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        hbbft::util::max_faulty(<span class="self">self</span>.peers.len()) * <span class="number">2 </span>+ <span class="number">1
+    </span>}
 
     <span class="kw">pub fn </span>fee_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::config::FeeConsensus {
         fedimint_core::config::FeeConsensus {
