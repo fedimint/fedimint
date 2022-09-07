@@ -120,6 +120,16 @@
 <span id="120">120</span>
 <span id="121">121</span>
 <span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
@@ -241,6 +251,16 @@
             finality_delay: <span class="self">self</span>.finality_delay,
         }
     }
+
+    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) {
+        <span class="kw">let </span>pubkey = secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span><span class="self">self</span>.peg_in_key);
+
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.peer_peg_in_keys.get(identity).unwrap(),
+            <span class="kw-2">&amp;</span>CompressedPublicKey::new(pubkey),
+            <span class="string">&quot;Bitcoin wallet private key doesn&#39;t match multisig pubkey&quot;
+        </span>);
+    }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (289279de1 2022-09-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (78a891d36 2022-09-06)" ></div></body></html>

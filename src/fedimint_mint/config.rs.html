@@ -112,6 +112,17 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::tiered::coins::TieredMultiZip;
 <span class="kw">use </span><span class="kw">crate</span>::Keys;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
@@ -120,7 +131,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
-<span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey};
+<span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
 
 <span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
@@ -210,6 +221,17 @@
             fee_consensus: <span class="self">self</span>.fee_consensus.clone(),
         }
     }
+
+    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) {
+        <span class="kw">let </span>sks: BTreeMap&lt;Amount, PublicKeyShare&gt; = <span class="self">self
+            </span>.tbs_sks
+            .iter()
+            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .collect();
+        <span class="kw">let </span>pks: BTreeMap&lt;Amount, PublicKeyShare&gt; =
+            <span class="self">self</span>.peer_tbs_pks.get(identity).unwrap().keys.clone();
+        <span class="macro">assert_eq!</span>(sks, pks, <span class="string">&quot;Mint private key doesn&#39;t match pubkey share&quot;</span>);
+    }
 }
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,4 +249,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (289279de1 2022-09-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (78a891d36 2022-09-06)" ></div></body></html>

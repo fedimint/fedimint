@@ -269,6 +269,33 @@
 <span id="269">269</span>
 <span id="270">270</span>
 <span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 
@@ -427,6 +454,33 @@
             ln: <span class="self">self</span>.ln.to_client_config(),
         }
     }
+
+    <span class="kw">fn </span>validate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, identity: <span class="kw-2">&amp;</span>PeerId) {
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.epoch_sks.public_key_share(),
+            <span class="self">self</span>.epoch_pk_set.public_key_share(identity.to_usize()),
+            <span class="string">&quot;Epoch private key doesn&#39;t match pubkey share&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.hbbft_sks.public_key_share(),
+            <span class="self">self</span>.hbbft_pk_set.public_key_share(identity.to_usize()),
+            <span class="string">&quot;HBBFT private key doesn&#39;t match pubkey share&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.peers.keys().max().copied().map(|id| id.to_usize()),
+            <span class="prelude-val">Some</span>(<span class="self">self</span>.peers.len() - <span class="number">1</span>),
+            <span class="string">&quot;Peer ids are not indexed from 0&quot;
+        </span>);
+        <span class="macro">assert_eq!</span>(
+            <span class="self">self</span>.peers.keys().min().copied(),
+            <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)),
+            <span class="string">&quot;Peer ids are not indexed from 0&quot;
+        </span>);
+
+        <span class="self">self</span>.mint.validate_config(identity);
+        <span class="self">self</span>.ln.validate_config(identity);
+        <span class="self">self</span>.wallet.validate_config(identity);
+    }
 }
 
 <span class="kw">impl </span>ServerConfig {
@@ -541,4 +595,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (289279de1 2022-09-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (78a891d36 2022-09-06)" ></div></body></html>
