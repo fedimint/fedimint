@@ -1,12 +1,15 @@
-#!/usr/bin/env nix-shell
-#!nix-shell -i bash ../shell.nix
-# shellcheck shell=bash
+#!/usr/bin/env bash
 
 set -euo pipefail
 
 if [[ -n "${TMUX:-}" ]]; then
   echo "Can not run tmuxinator in tmux"
   exit 1
+fi
+
+if [[ -z "$IN_NIX_SHELL" ]]; then
+  echo "It is recommended to run this command from a Nix dev shell. Use `nix develop` first"
+  sleep 3
 fi
 
 source scripts/build.sh

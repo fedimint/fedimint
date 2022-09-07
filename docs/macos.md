@@ -10,6 +10,8 @@ If you have trouble setting up a Nix environment directly on Mac, try one of the
 
 ### Setup
 
+It's recommended to **start all the commands in "Nix dev shell"**, which can be started with `nix develop` command.
+
  - `%` indicates a command ran in your macOS enviroment
  - `$` indicates a command ran inside the Ubuntu VM
  - `#` indicates a comment

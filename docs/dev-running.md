@@ -19,6 +19,8 @@ git clone git@github.com:fedimint/fedimint.git
 cd fedimint
 ```
 
+It's recommended to **start all the commands in "Nix dev shell"**, which can be started with `nix develop` command.
+
 ### Setting up the federation
 
 Just run the following script, **make sure not to run it inside a tmux window**:
