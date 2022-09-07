@@ -125,89 +125,8 @@ pub enum OutputOutcome {
 pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
-    // #[serde(with = "my_format")]
     pub api: Url,
 }
-
-// mod my_format {
-//     // use chrono::{DateTime, Utc, TimeZone};
-//     use Url;
-//     use serde::{self, Deserialize, Serializer, Deserializer};
-
-//     // const FORMAT: &'static str = "%Y-%m-%d %H:%M:%S";
-
-//     // The signature of a serialize_with function must follow the pattern:
-//     //
-//     //    fn serialize<S>(&T, S) -> Result<S::Ok, S::Error>
-//     //    where
-//     //        S: Serializer
-//     //
-//     // although it may also be generic over the input types T.
-//     pub fn serialize<S>(
-//         url: Url,
-//         serializer: S,
-//     ) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let s = url.to_string();
-//         serializer.serialize_str(&s)
-//     }
-
-//     // The signature of a deserialize_with function must follow the pattern:
-//     //
-//     //    fn deserialize<'de, D>(D) -> Result<T, D::Error>
-//     //    where
-//     //        D: Deserializer<'de>
-//     //
-//     // although it may also be generic over the output types T.
-//     pub fn deserialize<'de, D>(
-//         deserializer: D,
-//     ) -> Result<Url, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         let s = String::deserialize(deserializer)?;
-//         Url::parse(s).map_err(serde::de::Error::custom);
-//         // Utc.datetime_from_str(&s, FORMAT).map_err(serde::de::Error::custom)
-//     }
-// }
-
-// pub trait MyTryFromBytes: Sized {
-//     type Err: 'static + Sized + ::std::error::Error;
-//     fn try_from(_: &[u8]) -> Result<Self, Self::Err>;
-// }
-
-// pub fn from_bytes<'d, T, D>(deserializer: D) -> Result<T, D::Error>
-// where
-//     D: serde::Deserializer<'d>,
-//     T: MyTryFromBytes,
-// {
-//     use bitcoin_hashes::serde::de::Error;
-//     String::deserialize(deserializer)
-//         .and_then(|string| {
-//             from_bytes(&string).map_err(|err| Error::custom(err.to_string()))
-//         })
-//         .and_then(|ref bytes| {
-//             <T as MyTryFromBytes>::try_from(bytes)
-//                 .map_err(|err| Error::custom(format!("{}", &err as &dyn (::std::error::Error))))
-//         })
-// }
-
-// impl MyTryFromBytes for Vec<u8> {
-//     type Err = std::io::Error;
-//     fn try_from(slice: &[u8]) -> Result<Self, Self::Err> {
-//         Ok(Vec::from(slice))
-//     }
-// }
-
-// pub fn as_bytes<T, S>(key: &T, serializer: S) -> Result<S::Ok, S::Error>
-// where
-//     T: AsRef<[u8]>,
-//     S: serde::Serializer,
-// {
-//     serializer.serialize_str(key.as_str())
-// }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct DecryptionShareCI {
