@@ -109,7 +109,7 @@ pub struct PegInOutResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct SpendResponse {
-    pub coins: Coins<SpendableCoin>,
+    pub coins: TieredMulti<SpendableCoin>,
 }
 
 /// Holds a e-cash tier (msat by convention) and a quantity of coins
