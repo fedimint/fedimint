@@ -21,12 +21,17 @@ use thiserror::Error;
 pub enum ClientdError {
     #[error("Client error: {0}")]
     ClientError(#[from] ClientError),
+    #[error("Fatal server error, action reqired")]
+    ServerError,
 }
 
 impl IntoResponse for ClientdError {
     fn into_response(self) -> Response {
         let payload = json!({ "error": self.to_string(), });
-        let code = StatusCode::BAD_REQUEST;
+        let code = match self {
+            ClientdError::ClientError(_) => StatusCode::BAD_REQUEST,
+            ClientdError::ServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
         Result::<(), _>::Err((code, axum::Json(payload))).into_response()
     }
 }
@@ -41,6 +46,11 @@ pub struct WaitBlockHeightPayload {
 pub struct PegInPayload {
     pub txout_proof: TxOutProof,
     pub transaction: Transaction,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct SpendPayload {
+    pub amount: Amount,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -95,6 +105,11 @@ pub struct PegInAddressResponse {
 #[derive(Deserialize, Serialize)]
 pub struct PegInOutResponse {
     pub txid: TransactionId,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct SpendResponse {
+    pub coins: Coins<SpendableCoin>,
 }
 
 /// Holds a e-cash tier (msat by convention) and a quantity of coins
@@ -163,4 +178,26 @@ where
             }
         }
     }
+}
+
+#[macro_export(local_inner_macros)]
+macro_rules! json_success {
+    () => {
+        {
+       let body = serde_json::json!({
+            "data": {}
+       });
+
+       Ok(axum::Json(body))
+        }
+    };
+    ($payload:expr) => {
+        {
+       let body = serde_json::json!({
+            "data": $payload
+       });
+
+       Ok(axum::Json(body))
+    }
+    };
 }

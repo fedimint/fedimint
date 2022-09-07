@@ -1,21 +1,21 @@
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::Json as JsonRespond;
 use axum::{Extension, Router, Server};
 use bitcoin::secp256k1::rand;
 use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use clientd::Json as JsonExtract;
 use clientd::{
-    ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
-    PendingResponse, WaitBlockHeightPayload,
+    json_success, ClientdError, InfoResponse, PegInAddressResponse, PegInOutResponse, PegInPayload,
+    PendingResponse, SpendResponse, WaitBlockHeightPayload,
 };
+use clientd::{Json as JsonExtract, SpendPayload};
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
-use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
 use tracing::{info, Level};
@@ -26,7 +26,8 @@ struct Config {
     workdir: PathBuf,
 }
 struct State {
-    client: Client<UserClientConfig>,
+    client: Arc<Client<UserClientConfig>>,
+    fetch_tx: Sender<()>,
     rng: OsRng,
 }
 #[tokio::main]
@@ -44,16 +45,22 @@ async fn main() {
     let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
         rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
 
-    let client = Client::new(cfg.clone(), Box::new(db), Default::default());
+    let client = Arc::new(Client::new(cfg.clone(), Box::new(db), Default::default()));
+    let (tx, mut rx) = mpsc::channel(1024);
     let rng = OsRng::new().unwrap();
 
-    let shared_state = Arc::new(State { client, rng });
+    let shared_state = Arc::new(State {
+        client: Arc::clone(&client),
+        fetch_tx: tx,
+        rng,
+    });
     let app = Router::new()
         .route("/get_info", post(info))
         .route("/get_pending", post(pending))
         .route("/get_new_peg_in_address", post(new_peg_in_address))
         .route("/wait_block_height", post(wait_block_height))
         .route("/peg_in", post(peg_in))
+        .route("/spend", post(spend))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -65,6 +72,13 @@ async fn main() {
                 .layer(Extension(shared_state)),
         );
 
+    let fetch_client = Arc::clone(&client);
+    tokio::spawn(async move {
+        while rx.recv().await.is_some() {
+            fetch(Arc::clone(&fetch_client)).await;
+        }
+    });
+
     Server::bind(&"127.0.0.1:8081".parse().unwrap())
         .serve(app.into_make_service())
         .await
@@ -74,10 +88,10 @@ async fn main() {
 /// Handler for "get_info", returns all the clients holdings and pending transactions
 async fn info(Extension(state): Extension<Arc<State>>) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Ok(JsonRespond(json!(InfoResponse::new(
+    json_success!(InfoResponse::new(
         client.coins(),
         client.list_active_issuances(),
-    ))))
+    ))
 }
 
 /// Handler for "get_pending", returns the clients pending transactions
@@ -85,9 +99,7 @@ async fn pending(
     Extension(state): Extension<Arc<State>>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
-    Ok(JsonRespond(json!(PendingResponse::new(
-        client.list_active_issuances()
-    ))))
+    json_success!(PendingResponse::new(client.list_active_issuances()))
 }
 
 async fn new_peg_in_address(
@@ -95,9 +107,9 @@ async fn new_peg_in_address(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     let mut rng = state.rng.clone();
-    Ok(JsonRespond(json!(PegInAddressResponse {
-        peg_in_address: client.get_new_pegin_address(&mut rng),
-    })))
+    json_success!(PegInAddressResponse {
+        peg_in_address: client.get_new_pegin_address(&mut rng)
+    })
 }
 
 async fn wait_block_height(
@@ -106,7 +118,7 @@ async fn wait_block_height(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
     client.await_consensus_block_height(payload.height).await;
-    Ok(JsonRespond(json!("done")))
+    json_success!("done")
 }
 
 async fn peg_in(
@@ -114,10 +126,42 @@ async fn peg_in(
     payload: JsonExtract<PegInPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
+    let fetch_signal = &state.fetch_tx;
     let mut rng = state.rng.clone();
     let txout_proof = payload.0.txout_proof;
     let transaction = payload.0.transaction;
     let txid = client.peg_in(txout_proof, transaction, &mut rng).await?;
     info!("Started peg-in {}", txid.to_hex());
-    Ok(JsonRespond(json!(PegInOutResponse { txid })))
+    fetch_signal
+        .send(())
+        .await
+        .map_err(|_| ClientdError::ServerError)?;
+    json_success!(PegInOutResponse { txid })
+}
+
+async fn spend(
+    Extension(state): Extension<Arc<State>>,
+    payload: JsonExtract<SpendPayload>,
+) -> Result<impl IntoResponse, ClientdError> {
+    let client = &state.client;
+
+    let coins = client.select_and_spend_coins(payload.0.amount)?;
+    json_success!(SpendResponse { coins })
+}
+
+async fn fetch(client: Arc<Client<UserClientConfig>>) {
+    //TODO: log txid or error (handle unwrap)
+    let batch = client.fetch_all_coins().await;
+    for item in batch.iter() {
+        match item {
+            Ok(out_point) => {
+                //TODO: Log event
+                info!("fetched coins: {}", out_point);
+            }
+            Err(err) => {
+                //TODO: Log event
+                info!("error fetching coins: {}", err);
+            }
+        }
+    }
 }
