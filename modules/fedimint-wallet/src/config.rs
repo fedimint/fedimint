@@ -119,4 +119,14 @@ impl GenerateConfig for WalletConfig {
             finality_delay: self.finality_delay,
         }
     }
+
+    fn validate_config(&self, identity: &PeerId) {
+        let pubkey = secp256k1::PublicKey::from_secret_key_global(&self.peg_in_key);
+
+        assert_eq!(
+            self.peer_peg_in_keys.get(identity).unwrap(),
+            &CompressedPublicKey::new(pubkey),
+            "Bitcoin wallet private key doesn't match multisig pubkey"
+        );
+    }
 }

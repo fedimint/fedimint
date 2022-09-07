@@ -6,7 +6,7 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
-use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey};
+use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -95,6 +95,17 @@ impl GenerateConfig for MintConfig {
             tbs_pks: Keys::from_iter(pub_key.into_iter()),
             fee_consensus: self.fee_consensus.clone(),
         }
+    }
+
+    fn validate_config(&self, identity: &PeerId) {
+        let sks: BTreeMap<Amount, PublicKeyShare> = self
+            .tbs_sks
+            .iter()
+            .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
+            .collect();
+        let pks: BTreeMap<Amount, PublicKeyShare> =
+            self.peer_tbs_pks.get(identity).unwrap().keys.clone();
+        assert_eq!(sks, pks, "Mint private key doesn't match pubkey share");
     }
 }
 

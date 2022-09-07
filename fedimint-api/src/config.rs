@@ -17,4 +17,7 @@ pub trait GenerateConfig: Sized {
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig);
 
     fn to_client_config(&self) -> Self::ClientConfig;
+
+    /// Asserts that the public keys in the config are and panics otherwise (no way to recover)
+    fn validate_config(&self, identity: &PeerId);
 }
