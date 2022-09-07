@@ -41,7 +41,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::coins::Coins, BlindToken, InvalidAmountTierError},
+        mint::{tiered::TieredMulti, BlindToken, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -223,7 +223,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
@@ -237,9 +237,9 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Validate tokens without claiming them. This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    pub async fn validate_tokens(&self, coins: &Coins<SpendableCoin>) -> Result<()> {
+    pub async fn validate_tokens(&self, coins: &TieredMulti<SpendableCoin>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
-        coins.iter().try_for_each(|(amt, coin)| {
+        coins.iter_items().try_for_each(|(amt, coin)| {
             if coin.coin.verify(*tbs_pks.tier(&amt)?) {
                 Ok(())
             } else {
@@ -250,13 +250,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     pub async fn pay_for_coins<R: RngCore + CryptoRng>(
         &self,
-        coins: Coins<BlindToken>,
+        coins: TieredMulti<BlindToken>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let input_coins = self.mint_client().select_coins(coins.amount())?;
+        let input_coins = self.mint_client().select_coins(coins.total_amount())?;
         tx.input_coins(input_coins, &self.context.secp)?;
         tx.output(Output::Mint(coins));
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
@@ -268,7 +268,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         &self,
         amount: Amount,
         rng: R,
-        create_tx: impl FnMut(Coins<BlindToken>) -> OutPoint,
+        create_tx: impl FnMut(TieredMulti<BlindToken>) -> OutPoint,
     ) {
         let mut batch = DbBatch::new();
         self.mint_client()
@@ -335,11 +335,11 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// **WARNING** this selects and removes coins from the database without confirming whether
     /// we have successfully spent them in a transaction.
-    pub fn select_and_spend_coins(&self, amount: Amount) -> Result<Coins<SpendableCoin>> {
+    pub fn select_and_spend_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableCoin>> {
         let mut batch = DbBatch::new();
         let mut tx = batch.transaction();
         let coins = self.mint_client().select_coins(amount)?;
-        tx.append_from_iter(coins.iter().map(|(amount, coin)| {
+        tx.append_from_iter(coins.iter_items().map(|(amount, coin)| {
             BatchItem::delete(CoinKey {
                 amount,
                 nonce: coin.coin.0.clone(),
@@ -377,7 +377,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     match self.context.api.fetch_tx_outcome(key.0).await {
                         Ok(TransactionStatus::Rejected(_)) => return (key, coins),
                         Ok(TransactionStatus::Accepted { .. }) => {
-                            return (key, Coins::<SpendableCoin>::default())
+                            return (key, TieredMulti::<SpendableCoin>::default())
                         }
                         _ => {}
                     }
@@ -387,7 +387,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
         let mut batch = DbBatch::new();
         let mut tx = batch.transaction();
-        let mut all_coins = Coins::<SpendableCoin>::default();
+        let mut all_coins = TieredMulti::<SpendableCoin>::default();
         for (key, coins) in stream.collect::<Vec<_>>().await {
             all_coins.extend(coins);
             tx.append_delete(key);
@@ -416,7 +416,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .collect()
     }
 
-    pub fn coins(&self) -> Coins<SpendableCoin> {
+    pub fn coins(&self) -> TieredMulti<SpendableCoin> {
         self.mint_client().coins()
     }
 

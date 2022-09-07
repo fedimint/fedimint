@@ -9,6 +9,7 @@ use fixtures::{fixtures, rng, sats, secp, sha256};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
+use tokio::time::timeout;
 
 use crate::fixtures::FederationTest;
 use fedimint::epoch::ConsensusItem;
@@ -16,7 +17,7 @@ use fedimint::transaction::Output;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
 use fedimint_ln::DecryptionShareCI;
-use fedimint_mint::tiered::coins::Coins;
+use fedimint_mint::tiered::TieredMulti;
 use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
@@ -308,9 +309,7 @@ async fn drop_peers_who_contribute_bad_sigs() {
     let out_point = fed.database_add_coins_for_user(&user, sats(2000));
     let bad_proposal = vec![ConsensusItem::Mint(PartiallySignedRequest {
         out_point,
-        partial_signature: PartialSigResponse(Coins {
-            coins: Default::default(),
-        }),
+        partial_signature: PartialSigResponse(TieredMulti::default()),
     })];
 
     fed.subset_peers(&[3]).override_proposal(bad_proposal);
@@ -666,4 +665,26 @@ async fn rejoin_consensus_single_peer() {
         user.client.await_consensus_block_height(height).await,
         height
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejoin_consensus_threshold_peers() {
+    let (fed, _, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let peer0 = fed.subset_peers(&[0]);
+    let peer1 = fed.subset_peers(&[1]);
+
+    bitcoin.mine_blocks(110);
+    fed.run_consensus_epochs(1).await;
+
+    let rejoin = join_all(vec![
+        Either::Left(async {
+            peer0.rejoin_consensus().await;
+        }),
+        Either::Right(async {
+            peer1.rejoin_consensus().await;
+        }),
+    ]);
+
+    // confirm that the entire federation can rejoin at an epoch
+    timeout(Duration::from_secs(15), rejoin).await.unwrap();
 }

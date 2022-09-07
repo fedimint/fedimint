@@ -93,7 +93,7 @@ pub async fn fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 2, Ordering::Relaxed);
+    let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == 4000 {
@@ -141,6 +141,7 @@ pub async fn fixtures(
                 Box::new(lightning_rpc),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
+                base_port + num_peers + 1,
             )
             .await;
 
@@ -162,6 +163,7 @@ pub async fn fixtures(
                 Box::new(lightning.clone()),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
+                base_port + num_peers + 1,
             )
             .await;
 
@@ -209,6 +211,7 @@ impl GatewayTest {
         ln_client: Box<dyn LnRpc>,
         client_config: ClientConfig,
         node_pub_key: secp256k1::PublicKey,
+        bind_port: u16,
     ) -> Self {
         let mut rng = OsRng::new().unwrap();
         let ctx = bitcoin::secp256k1::Secp256k1::new();
@@ -229,7 +232,7 @@ impl GatewayTest {
             config: user_cfg,
         };
 
-        let bind_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
         let gw_cfg = GatewayClientConfig {
             client_config: client_config.clone(),
             redeem_key: kp,
@@ -291,16 +294,15 @@ impl UserTest {
     pub fn coin_amounts(&self) -> Vec<Amount> {
         self.client
             .coins()
-            .coins
-            .into_iter()
-            .flat_map(|(a, c)| repeat(a).take(c.len()))
+            .iter_tiers()
+            .flat_map(|(a, c)| repeat(*a).take(c.len()))
             .sorted()
             .collect::<Vec<Amount>>()
     }
 
     /// Returns sum total of all coins
     pub fn total_coins(&self) -> Amount {
-        self.client.coins().amount()
+        self.client.coins().total_amount()
     }
 
     fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
@@ -582,7 +584,9 @@ impl FederationTest {
     pub async fn rejoin_consensus(&self) {
         for server in &self.servers {
             let mut s = server.borrow_mut();
-            s.fedimint.rejoin_consensus().await;
+            s.fedimint
+                .rejoin_consensus(Duration::from_secs(1), &mut rng())
+                .await;
         }
     }
 
@@ -599,10 +603,7 @@ impl FederationTest {
         s.dropped_peers
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-        s.last_consensus = s
-            .fedimint
-            .run_consensus_epoch(proposal, &mut OsRng::new().unwrap())
-            .await;
+        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await;
 
         for outcome in &s.last_consensus {
             consensus.process_consensus_outcome(outcome.clone()).await;

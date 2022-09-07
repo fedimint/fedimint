@@ -249,7 +249,7 @@ impl LnGateway {
         fetch_results
             .into_iter()
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        Ok(self.federation_client.coins().amount())
+        Ok(self.federation_client.coins().total_amount())
     }
     async fn handle_address_msg(&self) -> Result<Address> {
         let mut rng = rand::rngs::OsRng::new().unwrap();

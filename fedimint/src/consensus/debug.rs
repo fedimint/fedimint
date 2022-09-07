@@ -37,7 +37,7 @@ fn item_message(item: &ConsensusItem) -> String {
         }) => {
             format!(
                 "Mint Signed Coins {} with TxId {}",
-                partial_signature.0.amount(),
+                partial_signature.0.total_amount(),
                 out_point.txid
             )
         }
@@ -50,7 +50,7 @@ fn item_message(item: &ConsensusItem) -> String {
             let mut tx_debug = "Transaction".to_string();
             for input in inputs.iter() {
                 let input_debug = match input {
-                    Input::Mint(t) => format!("Mint Coins {}", t.amount()),
+                    Input::Mint(t) => format!("Mint Coins {}", t.total_amount()),
                     Input::Wallet(t) => {
                         format!("Wallet PegIn with TxId {}", t.outpoint().txid)
                     }
@@ -62,7 +62,7 @@ fn item_message(item: &ConsensusItem) -> String {
             }
             for output in outputs.iter() {
                 let output_debug = match output {
-                    Output::Mint(t) => format!("Mint Coins {}", t.amount()),
+                    Output::Mint(t) => format!("Mint Coins {}", t.total_amount()),
                     Output::Wallet(t) => {
                         format!("Wallet PegOut {} to address {}", t.amount, t.recipient)
                     }

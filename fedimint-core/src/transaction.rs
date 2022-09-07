@@ -58,7 +58,7 @@ pub trait TransactionItem {
 impl TransactionItem for Input {
     fn amount(&self) -> Amount {
         match self {
-            Input::Mint(coins) => coins.amount(),
+            Input::Mint(coins) => coins.total_amount(),
             Input::Wallet(peg_in) => Amount::from_sat(peg_in.tx_output().value),
             Input::LN(input) => input.amount,
         }
@@ -66,7 +66,7 @@ impl TransactionItem for Input {
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Input::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.coins.len() as u64),
+            Input::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.tier_count() as u64),
             Input::Wallet(_) => fee_consensus.wallet.peg_in_abs,
             Input::LN(_) => fee_consensus.ln.contract_input,
         }
@@ -76,7 +76,7 @@ impl TransactionItem for Input {
 impl TransactionItem for Output {
     fn amount(&self) -> Amount {
         match self {
-            Output::Mint(coins) => coins.amount(),
+            Output::Mint(coins) => coins.total_amount(),
             Output::Wallet(peg_out) => (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
@@ -85,7 +85,7 @@ impl TransactionItem for Output {
 
     fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
         match self {
-            Output::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.coins.len() as u64),
+            Output::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.tier_count() as u64),
             Output::Wallet(_) => fee_consensus.wallet.peg_out_abs,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(_)) => {
                 fee_consensus.ln.contract_output

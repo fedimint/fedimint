@@ -166,6 +166,33 @@ impl GenerateConfig for ServerConfig {
             ln: self.ln.to_client_config(),
         }
     }
+
+    fn validate_config(&self, identity: &PeerId) {
+        assert_eq!(
+            self.epoch_sks.public_key_share(),
+            self.epoch_pk_set.public_key_share(identity.to_usize()),
+            "Epoch private key doesn't match pubkey share"
+        );
+        assert_eq!(
+            self.hbbft_sks.public_key_share(),
+            self.hbbft_pk_set.public_key_share(identity.to_usize()),
+            "HBBFT private key doesn't match pubkey share"
+        );
+        assert_eq!(
+            self.peers.keys().max().copied().map(|id| id.to_usize()),
+            Some(self.peers.len() - 1),
+            "Peer ids are not indexed from 0"
+        );
+        assert_eq!(
+            self.peers.keys().min().copied(),
+            Some(PeerId::from(0)),
+            "Peer ids are not indexed from 0"
+        );
+
+        self.mint.validate_config(identity);
+        self.ln.validate_config(identity);
+        self.wallet.validate_config(identity);
+    }
 }
 
 impl ServerConfig {
@@ -197,8 +224,14 @@ impl ServerConfig {
         self.identity.into()
     }
 
+    /// how many peers can be evil without breaking consensus
     pub fn max_faulty(&self) -> usize {
         hbbft::util::max_faulty(self.peers.len())
+    }
+
+    /// how many peers are required for consensus
+    pub fn threshold(&self) -> usize {
+        hbbft::util::max_faulty(self.peers.len()) * 2 + 1
     }
 
     pub fn fee_consensus(&self) -> fedimint_core::config::FeeConsensus {

@@ -66,6 +66,15 @@ impl GenerateConfig for LightningModuleConfig {
             fee_consensus: self.fee_consensus.clone(),
         }
     }
+
+    fn validate_config(&self, identity: &PeerId) {
+        assert_eq!(
+            self.threshold_sec_key.public_key_share(),
+            self.threshold_pub_keys
+                .public_key_share(identity.to_usize()),
+            "Lightning private key doesn't match pubkey share"
+        )
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

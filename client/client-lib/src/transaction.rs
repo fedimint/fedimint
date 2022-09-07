@@ -7,13 +7,13 @@ use bitcoin::KeyPair;
 use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::{Amount, OutPoint};
 use fedimint_core::config::FeeConsensus;
-use fedimint_core::modules::mint::tiered::coins::Coins;
-use fedimint_core::modules::mint::{BlindToken, Coin, Keys};
+use fedimint_core::modules::mint::tiered::TieredMulti;
+use fedimint_core::modules::mint::{BlindToken, Coin, Tiered};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use tbs::AggregatePublicKey;
 
 pub struct TransactionBuilder {
-    input_coins: Coins<SpendableCoin>,
+    input_coins: TieredMulti<SpendableCoin>,
     output_coins: Vec<(u64, CoinFinalizationData)>,
     keys: Vec<KeyPair>,
     tx: Transaction,
@@ -37,7 +37,7 @@ impl Default for TransactionBuilder {
 impl TransactionBuilder {
     pub fn input_coins(
         &mut self,
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     ) -> Result<(), MintClientError> {
         self.input_coins.extend(coins.clone());
@@ -48,9 +48,9 @@ impl TransactionBuilder {
 
     pub fn create_input_from_coins(
         &mut self,
-        coins: Coins<SpendableCoin>,
+        coins: TieredMulti<SpendableCoin>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-    ) -> Result<(Vec<KeyPair>, Coins<Coin>), MintClientError> {
+    ) -> Result<(Vec<KeyPair>, TieredMulti<Coin>), MintClientError> {
         let coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -88,13 +88,13 @@ impl TransactionBuilder {
         &mut self,
         amount: Amount,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-        tbs_pks: &Keys<AggregatePublicKey>,
+        tbs_pks: &Tiered<AggregatePublicKey>,
         rng: R,
     ) {
         let (coin_finalization_data, coin_output) =
             self.create_output_coins(amount, secp, tbs_pks, rng);
 
-        if !coin_output.coins.is_empty() {
+        if !coin_output.is_empty() {
             let out_idx = self.tx.outputs.len();
             self.output(Output::Mint(coin_output));
             self.output_coins
@@ -106,9 +106,9 @@ impl TransactionBuilder {
         &mut self,
         amount: Amount,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-        tbs_pks: &Keys<AggregatePublicKey>,
+        tbs_pks: &Tiered<AggregatePublicKey>,
         rng: R,
-    ) -> (CoinFinalizationData, Coins<BlindToken>) {
+    ) -> (CoinFinalizationData, TieredMulti<BlindToken>) {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);
 
@@ -126,7 +126,7 @@ impl TransactionBuilder {
         change_required: Amount,
         mut batch: BatchTx,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-        tbs_pks: &Keys<AggregatePublicKey>,
+        tbs_pks: &Tiered<AggregatePublicKey>,
         mut rng: R,
     ) -> Transaction {
         // add change
@@ -140,8 +140,8 @@ impl TransactionBuilder {
         }
 
         // move input coins to pending state, awaiting a transaction
-        if !self.input_coins.coins.is_empty() {
-            batch.append_from_iter(self.input_coins.iter().map(|(amount, coin)| {
+        if !self.input_coins.item_count() != 0 {
+            batch.append_from_iter(self.input_coins.iter_items().map(|(amount, coin)| {
                 // maybe_delete because coins might have been received from another user directly
                 BatchItem::maybe_delete(CoinKey {
                     amount,
