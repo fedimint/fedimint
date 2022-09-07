@@ -104,7 +104,7 @@ impl GenerateConfig for MintConfig {
             .map(|(amount, sk)| (amount, sk.to_pub_key_share()))
             .collect();
         let pks: BTreeMap<Amount, PublicKeyShare> =
-            self.peer_tbs_pks.get(identity).unwrap().keys.clone();
+            self.peer_tbs_pks.get(identity).unwrap().as_map().clone();
         assert_eq!(sks, pks, "Mint private key doesn't match pubkey share");
     }
 }
