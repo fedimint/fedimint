@@ -271,7 +271,6 @@ pub trait JsonRpcClient: ClientT + Sized {
 #[async_trait]
 impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
-        println!("JsonRpcClientUrl <<<<{}>>>>", url);
         WsClientBuilder::default().build(url).await
     }
 

@@ -629,7 +629,7 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
-            .post(&format!("{}/pay_invoice", gateway.api))
+            .post(&format!("{}pay_invoice", gateway.api))
             .json(&contract_id)
             .send();
         fedimint_api::task::timeout(Duration::from_secs(15), future)
