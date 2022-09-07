@@ -214,8 +214,14 @@ impl ServerConfig {
         self.identity.into()
     }
 
+    /// how many peers can be evil without breaking consensus
     pub fn max_faulty(&self) -> usize {
         hbbft::util::max_faulty(self.peers.len())
+    }
+
+    /// how many peers are required for consensus
+    pub fn threshold(&self) -> usize {
+        hbbft::util::max_faulty(self.peers.len()) * 2 + 1
     }
 
     pub fn fee_consensus(&self) -> fedimint_core::config::FeeConsensus {
