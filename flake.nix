@@ -414,6 +414,9 @@
                 cargo-llvm-cov
                 cargo-udeps
 
+                # This is required to prevent a mangled bash shell in nix develop
+                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+                (hiPrio pkgs.bashInteractive)
                 tmux
                 tmuxinator
 
@@ -453,6 +456,9 @@
                 clightning-dev
                 jq
                 procps
+                # This is required to prevent a mangled bash shell in nix develop
+                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+                (hiPrio pkgs.bashInteractive)
                 tmux
                 tmuxinator
 
