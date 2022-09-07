@@ -584,7 +584,9 @@ impl FederationTest {
     pub async fn rejoin_consensus(&self) {
         for server in &self.servers {
             let mut s = server.borrow_mut();
-            s.fedimint.rejoin_consensus().await;
+            s.fedimint
+                .rejoin_consensus(Duration::from_secs(1), &mut rng())
+                .await;
         }
     }
 
@@ -601,10 +603,7 @@ impl FederationTest {
         s.dropped_peers
             .append(&mut consensus.get_consensus_proposal().await.drop_peers);
 
-        s.last_consensus = s
-            .fedimint
-            .run_consensus_epoch(proposal, &mut OsRng::new().unwrap())
-            .await;
+        s.last_consensus = s.fedimint.run_consensus_epoch(proposal, &mut rng()).await;
 
         for outcome in &s.last_consensus {
             consensus.process_consensus_outcome(outcome.clone()).await;
