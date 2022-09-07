@@ -20,13 +20,13 @@ use hbbft::honey_badger::Batch;
 
 use fedimint_api::task::spawn;
 use fedimint_ln::LightningGateway;
-use fedimint_wallet::bitcoincore_rpc;
+use fedimint_wallet::{bitcoincore_rpc, WalletConsensusItem};
 use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::GatewayRequest;
 use rand::rngs::OsRng;
 use tokio::sync::Mutex;
-use tokio::time::timeout;
+
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -549,21 +549,44 @@ impl FederationTest {
     /// Has every federation node send new consensus proposals then process the outcome.
     pub async fn run_consensus_epochs(&self, epochs: usize) {
         for _ in 0..(epochs) {
-            let consensus = join_all(
-                self.servers
-                    .iter()
-                    .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
-            );
-            if (timeout(Duration::from_secs(15), consensus).await).is_err() {
-                let proposals: Vec<ConsensusProposal> = self
-                    .servers
-                    .iter()
-                    .map(|s| block_on(s.borrow().fedimint.consensus.get_consensus_proposal()))
-                    .collect();
-                panic!("Timed out waiting for consensus, try reducing epochs if proposals are empty: {:?}", proposals);
+            if self
+                .servers
+                .iter()
+                .all(|s| Self::empty_proposal(&s.borrow().fedimint))
+            {
+                panic!("Empty proposals");
             }
-            self.update_last_consensus();
+
+            self.await_consensus_epoch().await;
         }
+    }
+
+    pub async fn await_consensus_epoch(&self) {
+        let consensus = join_all(
+            self.servers
+                .iter()
+                .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
+        );
+        consensus.await;
+        self.update_last_consensus();
+    }
+
+    fn empty_proposal(server: &FedimintServer) -> bool {
+        let height = server.consensus.wallet.consensus_height().unwrap_or(0);
+        let proposal = block_on(server.consensus.get_consensus_proposal());
+
+        for item in proposal.items {
+            match item {
+                ConsensusItem::Wallet(WalletConsensusItem::RoundConsensus(r))
+                    if r.block_height == height =>
+                {
+                    continue
+                }
+                ConsensusItem::EpochInfo(_) => continue,
+                _ => return false,
+            }
+        }
+        true
     }
 
     /// Runs consensus, but delay peers and only wait for one to complete.

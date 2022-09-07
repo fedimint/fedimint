@@ -212,7 +212,7 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) {
 
     // let peers run consensus, but delay peer 0 so if peer 3 wasn't dropped peer 0 won't be included
     join_all(vec![
-        Either::Left(fed.subset_peers(&[1, 2]).run_consensus_epochs(1)),
+        Either::Left(fed.subset_peers(&[1, 2]).await_consensus_epoch()),
         Either::Right(
             fed.subset_peers(&[0, 3])
                 .race_consensus_epoch(vec![Duration::from_millis(500), Duration::from_millis(0)]),
@@ -230,7 +230,7 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() {
     user.peg_out(1000, &peg_out_address).await;
     // Ensure peer 0 who received the peg out request is in the next epoch
     fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
-    fed.subset_peers(&[3]).run_consensus_epochs(1).await;
+    fed.subset_peers(&[3]).await_consensus_epoch().await;
 
     fed.subset_peers(&[3]).override_proposal(vec![]);
     drop_peer_3_during_epoch(&fed).await;
@@ -255,7 +255,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
     let invoice = tokio::join!(
         user.client
             .generate_invoice(payment_amount, "".into(), rng()),
-        fed.run_consensus_epochs(1) // create offer
+        fed.await_consensus_epoch() // create offer
     )
     .0
     .unwrap();
@@ -380,7 +380,7 @@ async fn receive_lightning_payment_valid_preimage() {
     let invoice = tokio::join!(
         user.client
             .generate_invoice(payment_amount, "".into(), rng()),
-        fed.run_consensus_epochs(1),
+        fed.await_consensus_epoch(),
     )
     .0
     .unwrap();
@@ -562,7 +562,10 @@ async fn runs_consensus_if_tx_submitted() {
             tokio::time::sleep(Duration::from_millis(500)).await;
             user_receive.client.reissue(coins, rng()).await.unwrap();
         }),
-        Either::Right(fed.run_consensus_epochs(2)),
+        Either::Right(async {
+            fed.await_consensus_epoch().await;
+            fed.await_consensus_epoch().await;
+        }),
     ])
     .await;
 
@@ -584,7 +587,7 @@ async fn runs_consensus_if_new_block() {
             tokio::time::sleep(Duration::from_millis(500)).await;
             bitcoin.mine_blocks(fed.wallet.finality_delay as u64);
         }),
-        Either::Right(async { fed.run_consensus_epochs(1).await }),
+        Either::Right(async { fed.await_consensus_epoch().await }),
     ])
     .await;
 
@@ -651,7 +654,7 @@ async fn rejoin_consensus_single_peer() {
 
     join_all(vec![
         Either::Left(async {
-            fed.subset_peers(&[0, 1, 2]).run_consensus_epochs(1).await;
+            fed.subset_peers(&[0, 1, 2]).await_consensus_epoch().await;
         }),
         Either::Right(async {
             fed.subset_peers(&[3]).rejoin_consensus().await;
