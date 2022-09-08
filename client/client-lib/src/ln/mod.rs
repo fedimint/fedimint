@@ -215,6 +215,7 @@ mod tests {
     use fedimint_core::transaction::Transaction;
     use lightning_invoice::Invoice;
     use std::sync::Arc;
+    use url::Url;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
 
@@ -346,7 +347,8 @@ mod tests {
             LightningGateway {
                 mint_pub_key,
                 node_pub_key,
-                api: "".to_string(),
+                api: Url::parse("http://example.com")
+                    .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
             }
         };
         let timelock = 42;

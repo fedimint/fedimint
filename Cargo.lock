@@ -667,6 +667,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -698,6 +699,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "wasm-bindgen-futures",
 ]
 
@@ -726,6 +728,7 @@ dependencies = [
  "thiserror",
  "threshold_crypto",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -759,6 +762,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -810,6 +814,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -1621,6 +1626,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -1734,6 +1740,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -1755,6 +1762,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -3242,6 +3250,7 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

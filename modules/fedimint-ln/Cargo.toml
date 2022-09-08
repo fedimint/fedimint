@@ -27,6 +27,7 @@ threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 thiserror = "1.0.23"
 tracing = "0.1.29"
 serde_json = "1.0.82"
+url = { version = "2.2.2", features = ["serde"] }
 
 [dev-dependencies]
 tokio = {version = "1.14.0", features = [ "full" ] }

@@ -9,6 +9,7 @@ use fedimint_core::modules::mint::config::MintConfig;
 use fedimint_core::modules::wallet::config::WalletConfig;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
+use url::Url;
 
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -87,7 +88,10 @@ impl GenerateConfig for ServerConfig {
                 let peer = Peer {
                     connection: ConnectionConfig {
                         hbbft_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
-                        api_addr: format!("ws://127.0.0.1:{}", params.api_base_port + id_u16),
+                        api_addr: Url::parse(
+                            format!("ws://127.0.0.1:{}", params.api_base_port + id_u16).as_str(),
+                        )
+                        .expect("Could not parse URL"),
                     },
                     tls_cert: tls_keys[&id].0.clone(),
                 };
@@ -131,7 +135,13 @@ impl GenerateConfig for ServerConfig {
             max_evil,
             api_endpoints: peers
                 .iter()
-                .map(|&peer| format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer)))
+                .map(|&peer| {
+                    Url::parse(
+                        format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer))
+                            .as_str(),
+                    )
+                    .expect("Could not parse Url")
+                })
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
@@ -142,7 +152,7 @@ impl GenerateConfig for ServerConfig {
     }
 
     fn to_client_config(&self) -> Self::ClientConfig {
-        let api_endpoints: Vec<String> = self
+        let api_endpoints: Vec<Url> = self
             .peers
             .iter()
             .map(|(_, peer)| peer.connection.api_addr.clone())

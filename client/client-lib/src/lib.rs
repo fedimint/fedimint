@@ -55,6 +55,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use url::Url;
 
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
@@ -96,7 +97,7 @@ pub struct GatewayClientConfig {
     #[serde(with = "serde_keypair")]
     pub redeem_key: bitcoin::KeyPair,
     pub timelock_delta: u64,
-    pub api: String,
+    pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
 }
 
@@ -163,7 +164,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 .enumerate()
                 .map(|(id, url)| {
                     let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = url.parse().expect("Invalid URL in config");
+                    let url = url.clone();
                     (peer_id, url)
                 })
                 .collect(),
@@ -628,7 +629,13 @@ impl Client<UserClientConfig> {
     pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
-            .post(&format!("{}/pay_invoice", gateway.api))
+            .post(
+                gateway
+                    .api
+                    .join("pay_invoice")
+                    .expect("'pay_invoice' contains no invalid characters for a URL")
+                    .as_str(),
+            )
             .json(&contract_id)
             .send();
         fedimint_api::task::timeout(Duration::from_secs(15), future)
