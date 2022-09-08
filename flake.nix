@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
-    crane.url = "github:ipetkov/crane";
+    crane.url = "github:ipetkov/crane?rev=2d5e7fbfcee984424fe4ad4b3b077c62d18fe1cf"; # v0.6
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -209,11 +209,11 @@
         # Note: can't use `cargoClippy` because it implies `--all-targets`, while
         # we can't build benches on stable
         # See: https://github.com/ipetkov/crane/issues/64
-        workspaceClippy = craneLib.cargoBuild (commonArgs // {
+        workspaceClippy = craneLib.cargoClippy (commonArgs // {
           pname = "workspace-clippy";
           cargoArtifacts = workspaceDeps;
 
-          cargoBuildCommand = "cargo clippy --profile release --no-deps --lib --bins --tests --examples --workspace -- --deny warnings";
+          cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
           doInstallCargoArtifacts = false;
           doCheck = false;
         });
