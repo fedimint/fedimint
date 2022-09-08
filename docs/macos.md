@@ -23,9 +23,13 @@ It's recommended to **start all the commands in "Nix dev shell"**, which can be 
 % multipass shell fedidev
 $ sudo apt-get install build-essential
 $ sh <(curl -L https://nixos.org/nix/install) --daemon
+$ echo "experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf
+$ sudo systemctl restart nix-daemon
+$ exec "$SHELL"
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ git clone https://github.com/fedimint/fedimint
 $ cd fedimint
+$ nix develop
 $ ./scripts/tmuxinator.sh
 # you should now have a fully setup federation with all the backing bitcoin infrastrucure running locally
 ```
