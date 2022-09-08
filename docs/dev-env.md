@@ -4,6 +4,10 @@
 
 Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`,
 
+## MacOS
+
+If you encounter problems with Nix on MacOS, refer to the [macOS Guide](./macos.md).
+
 ## Set up Nix
 
 Fedimint uses [Nix](https://nixos.org/explore.html) for building, CI, and managing dev environment.
