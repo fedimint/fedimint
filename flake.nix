@@ -132,7 +132,6 @@
             perl
             fenix-channel.rustc
             fenix-channel.clippy
-            mold
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
