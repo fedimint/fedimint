@@ -210,9 +210,6 @@
           doCheck = true;
         });
 
-        # Note: can't use `cargoClippy` because it implies `--all-targets`, while
-        # we can't build benches on stable
-        # See: https://github.com/ipetkov/crane/issues/64
         workspaceClippy = craneLib.cargoClippy (commonArgs // {
           pname = "workspace-clippy";
           cargoArtifacts = workspaceDeps;
