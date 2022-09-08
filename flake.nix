@@ -132,10 +132,12 @@
             perl
             fenix-channel.rustc
             fenix-channel.clippy
-            mold
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
+          ] ++ lib.optionals (!stdenv.isDarwin) [
+            # mold is currently broken on MacOS
+            mold
           ];
 
           nativeBuildInputs = with pkgs; [

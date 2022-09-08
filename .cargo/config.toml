@@ -2,6 +2,7 @@
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
-[target.aarch64-apple-darwin]
-linker = "clang"
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+# mold is currently broken on MacOS
+# [target.aarch64-apple-darwin]
+# linker = "clang"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
