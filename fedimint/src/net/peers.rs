@@ -22,6 +22,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
+use url::Url;
 
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
@@ -104,7 +105,7 @@ pub struct ConnectionConfig {
     /// The peer's hbbft network address and port (e.g. `10.42.0.10:4000`)
     pub hbbft_addr: String,
     /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    pub api_addr: String,
+    pub api_addr: Url,
 }
 
 /// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -598,6 +599,7 @@ mod tests {
     use std::iter::FromIterator;
     use std::time::Duration;
     use tracing_subscriber::EnvFilter;
+    use url::Url;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -623,7 +625,8 @@ mod tests {
             .map(|(idx, &peer)| {
                 let cfg = ConnectionConfig {
                     hbbft_addr: peer.to_string(),
-                    api_addr: peer.to_string(),
+                    api_addr: Url::parse(format!("http://{}", peer).as_str())
+                        .expect("Could not parse Url"),
                 };
                 (PeerId::from(idx as u16 + 1), cfg)
             })

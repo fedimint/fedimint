@@ -13,6 +13,7 @@ use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, instrument};
+use url::Url;
 
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
@@ -155,7 +156,7 @@ pub struct WsFederationApi<C = WsClient> {
 
 #[derive(Debug)]
 struct FederationMember<C> {
-    url: String,
+    url: Url,
     peer_id: PeerId,
     client: RwLock<Option<C>>,
 }
@@ -163,20 +164,20 @@ struct FederationMember<C> {
 /// Information required for client to construct [`WsFederationApi`] instance
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WsFederationConnect {
-    pub members: Vec<(PeerId, String)>,
+    pub members: Vec<(PeerId, Url)>,
     pub max_evil: usize,
 }
 
 impl From<&ClientConfig> for WsFederationConnect {
     fn from(config: &ClientConfig) -> Self {
         let max_evil = config.max_evil;
-        let members: Vec<(PeerId, String)> = config
+        let members: Vec<(PeerId, Url)> = config
             .api_endpoints
             .iter()
             .enumerate()
             .map(|(id, url)| {
                 let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                let url = url.parse().expect("Invalid URL in config");
+                let url = url.clone();
                 (peer_id, url)
             })
             .collect();
@@ -263,13 +264,13 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
 
 #[async_trait]
 pub trait JsonRpcClient: ClientT + Sized {
-    async fn connect(url: &str) -> std::result::Result<Self, JsonRpcError>;
+    async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError>;
     fn is_connected(&self) -> bool;
 }
 
 #[async_trait]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &str) -> std::result::Result<Self, JsonRpcError> {
+    async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
         WsClientBuilder::default().build(url).await
     }
 
@@ -280,14 +281,14 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(max_evil: usize, members: Vec<(PeerId, String)>) -> Self {
+    pub fn new(max_evil: usize, members: Vec<(PeerId, Url)>) -> Self {
         Self::new_with_client(max_evil, members)
     }
 }
 
 impl<C> WsFederationApi<C> {
     /// Creates a new API client
-    pub fn new_with_client(max_evil: usize, members: Vec<(PeerId, String)>) -> Self {
+    pub fn new_with_client(max_evil: usize, members: Vec<(PeerId, Url)>) -> Self {
         WsFederationApi {
             members: members
                 .into_iter()
@@ -389,6 +390,7 @@ mod tests {
     use once_cell::sync::Lazy;
     use std::{
         collections::HashSet,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
@@ -417,7 +419,7 @@ mod tests {
             self.0.is_connected()
         }
 
-        async fn connect(_url: &str) -> Result<Self> {
+        async fn connect(_url: &Url) -> Result<Self> {
             Ok(Self(C::connect().await?))
         }
     }
@@ -457,7 +459,7 @@ mod tests {
 
     fn federation_member<C: SimpleClient + Send + Sync>() -> FederationMember<Client<C>> {
         FederationMember {
-            url: String::new(),
+            url: Url::from_str("http://127.0.0.1").expect("Could not parse"),
             peer_id: PeerId::from(0),
             client: RwLock::new(None),
         }
