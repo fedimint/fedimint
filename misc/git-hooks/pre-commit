@@ -1,6 +1,24 @@
 #!/usr/bin/env bash
 
+set -eo pipefail
+
+# Revert `git stash` on exit
+function revert_git_stash {
+  >&2 echo "Unstashing uncommited changes..."
+  git stash pop -q
+}
+
+set +e
+git diff-files --quiet
+is_unclean="$!"
 set -e
+
+# Stash pending changes and revert them when script ends
+if [ $is_unclean != 0 ]; then
+  >&2 echo "Stashing uncommited changes..."
+  git stash -q --keep-index
+  trap revert_git_stash EXIT
+fi
 
 git_ls_files="$(git ls-files)"
 
