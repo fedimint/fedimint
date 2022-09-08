@@ -49,7 +49,7 @@ secp256k1-zkp = { version = "0.6.0", features = [ "global-context", "bitcoin_has
 rocksdb = "0.19.0"
 serde = { version = "1.0.118", features = [ "derive" ] }
 serde_json = "1.0.61"
-sha3 = "0.9.1"
+sha3 = "0.10.4"
 sled = "0.34.6"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
