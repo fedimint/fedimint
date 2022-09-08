@@ -560,21 +560,23 @@ impl FederationTest {
                 panic!("Empty proposals, fed might wait forever");
             }
 
-            self.await_consensus_epoch().await;
+            self.await_consensus_epochs(1).await;
         }
     }
 
     /// Runs a consensus epoch
     /// If proposals are empty you will need to run a concurrent task that triggers a new epoch or
     /// it will wait forever
-    pub async fn await_consensus_epoch(&self) {
-        let consensus = join_all(
-            self.servers
-                .iter()
-                .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
-        );
-        consensus.await;
-        self.update_last_consensus();
+    pub async fn await_consensus_epochs(&self, epochs: usize) {
+        for _ in 0..(epochs) {
+            let consensus = join_all(
+                self.servers
+                    .iter()
+                    .map(|server| Self::consensus_epoch(server.clone(), Duration::from_millis(0))),
+            );
+            consensus.await;
+            self.update_last_consensus();
+        }
     }
 
     /// Returns true if the fed would produce an empty epoch proposal (no new information)
