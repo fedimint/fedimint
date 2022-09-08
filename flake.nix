@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
-    crane.url = "github:ipetkov/crane";
+    crane.url = "github:ipetkov/crane?rev=2d5e7fbfcee984424fe4ad4b3b077c62d18fe1cf"; # v0.6
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -12,9 +12,13 @@
       url = "github:edolstra/flake-compat";
       flake = false;
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane }:
+  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -41,6 +45,18 @@
         ]);
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
+
+        cargo-llvm-cov = craneLib.buildPackage rec {
+          pname = "cargo-llvm-cov";
+          version = "0.4.14";
+          buildInputs = commonArgs.buildInputs;
+
+          src = pkgs.fetchCrate {
+            inherit pname version;
+            sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
+          };
+          doCheck = false;
+        };
 
         # some extra utilities that cli-tests require
         cliTestsDeps = with pkgs; [
@@ -165,6 +181,85 @@
           doCheck = false;
         });
 
+        workspaceBuild = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-build";
+          cargoArtifacts = workspaceDeps;
+          doCheck = false;
+        });
+
+        workspaceTest = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-test";
+          cargoBuildCommand = "true";
+          cargoArtifacts = workspaceDeps;
+          doCheck = true;
+        });
+
+        workspaceClippy = craneLib.cargoClippy (commonArgs // {
+          pname = "workspace-clippy";
+          cargoArtifacts = workspaceDeps;
+
+          cargoClippyExtraArgs = "--all-targets --no-deps -- --deny warnings";
+          doInstallCargoArtifacts = false;
+          doCheck = false;
+        });
+
+        workspaceDoc = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-doc";
+          cargoArtifacts = workspaceDeps;
+          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
+          doCheck = false;
+        });
+
+        workspaceAudit = craneLib.cargoAudit (commonArgs // {
+          pname = "workspace-clippy";
+          inherit advisory-db;
+        });
+
+        # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
+        workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
+          pname = "workspace-deps-llvm-cov";
+          src = filterWorkspaceDepsBuildFiles ./.;
+          cargoBuildCommand = "cargo llvm-cov --workspace";
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+          doCheck = false;
+        });
+
+        workspaceCov = craneLib.cargoBuild (commonArgs // {
+          pname = "workspace-llvm-cov";
+          cargoArtifacts = workspaceDepsCov;
+          # TODO: as things are right now, the integration tests can't run in parallel
+          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
+          doCheck = false;
+          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
+        });
+
+        cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
+        });
+
+        cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
+          doInstallCargoArtifacts = false;
+        });
+
+        cliTestCli = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
+        });
+
+        cliTestClientd = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
+        });
+
+        cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
+          cargoArtifacts = workspaceBuild;
+          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
+        });
+
+
         # a function to define cargo&nix package, listing
         # all the dependencies (as dir) to help limit the
         # amount of things that need to rebuild when some
@@ -195,94 +290,6 @@
             };
           };
         };
-
-        workspaceBuild = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-build";
-          cargoArtifacts = workspaceDeps;
-          doCheck = false;
-        });
-
-        workspaceTest = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-test";
-          cargoBuildCommand = "true";
-          cargoArtifacts = workspaceDeps;
-          doCheck = true;
-        });
-
-        # Note: can't use `cargoClippy` because it implies `--all-targets`, while
-        # we can't build benches on stable
-        # See: https://github.com/ipetkov/crane/issues/64
-        workspaceClippy = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-clippy";
-          cargoArtifacts = workspaceDeps;
-
-          cargoBuildCommand = "cargo clippy --profile release --no-deps --lib --bins --tests --examples --workspace -- --deny warnings";
-          doInstallCargoArtifacts = false;
-          doCheck = false;
-        });
-
-        cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
-        });
-
-        cliTestLatency = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/latency-test.sh";
-          doInstallCargoArtifacts = false;
-        });
-
-        cliTestCli = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/cli-test.sh";
-        });
-
-        cliTestClientd = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/clientd-tests.sh";
-        });
-
-        cliRustTests = craneLib.cargoBuild (commonCliTestArgs // {
-          cargoArtifacts = workspaceBuild;
-          cargoBuildCommand = "patchShebangs ./scripts && ./scripts/rust-tests.sh";
-        });
-
-        cargo-llvm-cov = craneLib.buildPackage rec {
-          pname = "cargo-llvm-cov";
-          version = "0.4.14";
-          buildInputs = commonArgs.buildInputs;
-
-          src = pkgs.fetchCrate {
-            inherit pname version;
-            sha256 = "sha256-DY5eBSx/PSmKaG7I6scDEbyZQ5hknA/pfl0KjTNqZlo=";
-          };
-          doCheck = false;
-        };
-
-        # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
-        workspaceDepsLlvmCov = craneLib.buildDepsOnly (commonArgs // {
-          pname = "workspace-deps-llvm-cov";
-          src = filterWorkspaceDepsBuildFiles ./.;
-          cargoBuildCommand = "cargo llvm-cov --workspace";
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
-          doCheck = false;
-        });
-
-        workspaceLlvmCov = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-llvm-cov";
-          cargoArtifacts = workspaceDepsLlvmCov;
-          # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
-          doCheck = false;
-          nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
-        });
-
-        workspaceDoc = craneLib.cargoBuild (commonArgs // {
-          pname = "workspace-doc";
-          cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
-          doCheck = false;
-        });
 
         fedimintd = pkg {
           name = "fedimintd";
@@ -377,12 +384,13 @@
           clientd = clientd.package;
           mint-client-cli = mint-client-cli.package;
 
-          deps = workspaceDeps;
-          workspaceBuild = workspaceBuild;
-          workspaceClippy = workspaceClippy;
-          workspaceTest = workspaceTest;
-          workspaceDoc = workspaceDoc;
-          workspaceCov = workspaceLlvmCov;
+          inherit workspaceDeps
+            workspaceBuild
+            workspaceClippy
+            workspaceTest
+            workspaceDoc
+            workspaceCov
+            workspaceAudit;
 
           cli-test = {
             reconnect = cliTestReconnect;

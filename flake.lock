@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "advisory-db": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1662565102,
+        "narHash": "sha256-q5xeKP5yYAVQr+ylDx1aw1b8fUC0Oi/ztqNKlN9Tj5M=",
+        "owner": "rustsec",
+        "repo": "advisory-db",
+        "rev": "7f6f544c3916f78d209ebda5de700ca42e2e1089",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rustsec",
+        "repo": "advisory-db",
+        "type": "github"
+      }
+    },
     "crane": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -9,16 +25,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1660447363,
-        "narHash": "sha256-Y1OtGWEb0bgFlp9YULaiYcgfEoHVIz1NuXwzlFZ/0HE=",
+        "lastModified": 1662608853,
+        "narHash": "sha256-XevBt/KxyRIjFwXIIojZ7kaVOVi14NPTWG1sKeLjLzc=",
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "5548a68f5d4d60a2315ab1232e6fba5528e71dc8",
+        "rev": "2d5e7fbfcee984424fe4ad4b3b077c62d18fe1cf",
         "type": "github"
       },
       "original": {
         "owner": "ipetkov",
         "repo": "crane",
+        "rev": "2d5e7fbfcee984424fe4ad4b3b077c62d18fe1cf",
         "type": "github"
       }
     },
@@ -123,6 +140,7 @@
     },
     "root": {
       "inputs": {
+        "advisory-db": "advisory-db",
         "crane": "crane",
         "fenix": "fenix",
         "flake-compat": "flake-compat_2",
