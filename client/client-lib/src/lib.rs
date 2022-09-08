@@ -14,7 +14,7 @@ use futures::StreamExt;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use futures::stream::FuturesUnordered;
 
 use fedimint_api::task::sleep;
@@ -84,8 +84,10 @@ pub type UserClient = Client<UserClientConfig>;
 #[derive(Debug)]
 pub struct PaymentParameters {
     pub max_delay: u64,
-    // FIXME: change to absolute fee to avoid rounding errors
-    pub max_fee_percent: f64,
+    pub invoice_amount: Amount,
+    pub max_send_amount: Amount,
+    pub payment_hash: sha256::Hash,
+    pub maybe_internal: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -125,6 +127,14 @@ impl AsRef<ClientConfig> for GatewayClientConfig {
 impl AsRef<ClientConfig> for UserClientConfig {
     fn as_ref(&self) -> &ClientConfig {
         &self.0
+    }
+}
+
+impl PaymentParameters {
+    // FIXME: change to absolute fee to avoid rounding errors
+    pub fn max_fee_percent(&self) -> f64 {
+        let max_absolute_fee = self.max_send_amount - self.invoice_amount;
+        (max_absolute_fee.milli_sat as f64) / (self.invoice_amount.milli_sat as f64)
     }
 }
 
@@ -684,10 +694,6 @@ impl Client<GatewayClientConfig> {
             return Err(ClientError::Underfunded(invoice_amount, account.amount));
         }
 
-        let max_absolute_fee = account.amount - invoice_amount;
-        let max_fee_percent =
-            (max_absolute_fee.milli_sat as f64) / (invoice_amount.milli_sat as f64);
-
         let consensus_block_height = self.context.api.fetch_consensus_block_height().await?;
         // Calculate max delay taking into account current consensus block height and our safety
         // margin.
@@ -698,8 +704,22 @@ impl Client<GatewayClientConfig> {
 
         Ok(PaymentParameters {
             max_delay,
-            max_fee_percent,
+            invoice_amount,
+            max_send_amount: account.amount,
+            payment_hash: *invoice.payment_hash(),
+            maybe_internal: self.is_maybe_internal_payment(&invoice),
         })
+    }
+
+    /// Returns true if the invoice contains us as a routing hint
+    fn is_maybe_internal_payment(&self, invoice: &Invoice) -> bool {
+        let maybe_route_hint_first_id = invoice
+            .route_hints()
+            .first()
+            .and_then(|rh| rh.0.first())
+            .map(|hop| hop.src_node_id);
+
+        Some(self.config().node_pub_key) == maybe_route_hint_first_id
     }
 
     /// Save the details about an outgoing payment the client is about to process. This function has

@@ -1,19 +1,21 @@
 pub mod cln;
 pub mod ln;
+mod util;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
+use crate::util::{ThenAsync, UnwrapOrElseAsync};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
-use bitcoin_hashes::sha256::Hash;
+use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use fedimint::modules::ln::contracts::{incoming::Preimage, ContractId};
 use fedimint::modules::wallet::txoproof::TxOutProof;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use futures::Future;
 use mint_client::mint::MintClientError;
-use mint_client::{ClientError, GatewayClient};
+use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
@@ -137,7 +139,7 @@ impl LnGateway {
 
     pub async fn buy_preimage_offer(
         &self,
-        payment_hash: &Hash,
+        payment_hash: &sha256::Hash,
         amount: &Amount,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(OutPoint, ContractId)> {
@@ -160,7 +162,7 @@ impl LnGateway {
     pub async fn pay_invoice(
         &self,
         contract_id: ContractId,
-        rng: impl RngCore + CryptoRng,
+        mut rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
         debug!("Fetching contract");
         let contract_account = self
@@ -181,34 +183,83 @@ impl LnGateway {
         self.federation_client
             .save_outgoing_payment(contract_account.clone());
 
-        let preimage = match self
+        // If this could be an internal payment try to buy the preimage directly. Otherwise or if
+        // this fails try to route the payment via our attached LN node.
+        let preimage_res = payment_params
+            .maybe_internal
+            .then_async(async {
+                self.buy_preimage_internal(&payment_params, &mut rng)
+                    .await
+                    .ok()
+            })
+            .await
+            .flatten()
+            .map(Result::Ok)
+            .unwrap_or_else_async(
+                self.buy_preimage_external(&contract_account.contract.invoice, &payment_params),
+            )
+            .await;
+
+        match preimage_res {
+            Ok(preimage) => {
+                let outpoint = self
+                    .federation_client
+                    .claim_outgoing_contract(contract_id, preimage, rng)
+                    .await?;
+
+                Ok(outpoint)
+            }
+            Err(e) => {
+                warn!("LN payment failed, aborting");
+                self.federation_client.abort_outgoing_payment(contract_id);
+                Err(e)
+            }
+        }
+    }
+
+    async fn buy_preimage_internal(
+        &self,
+        payment_params: &PaymentParameters,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<[u8; 32]> {
+        let (out_point, _) = self
+            .federation_client
+            .buy_preimage_offer(
+                &payment_params.payment_hash,
+                &payment_params.invoice_amount,
+                &mut rng,
+            )
+            .await?;
+        let preimage = self
+            .federation_client
+            .await_preimage_decryption(out_point)
+            .await?;
+        Ok(preimage.0.serialize())
+    }
+
+    async fn buy_preimage_external(
+        &self,
+        invoice: &str,
+        payment_params: &PaymentParameters,
+    ) -> Result<[u8; 32]> {
+        match self
             .ln_client
             .pay(
-                &contract_account.contract.invoice,
+                invoice,
                 payment_params.max_delay,
-                payment_params.max_fee_percent,
+                payment_params.max_fee_percent(),
             )
             .await
         {
             Ok(preimage) => {
                 debug!(?preimage, "Successfully paid LN invoice");
-                preimage
+                Ok(preimage)
             }
             Err(e) => {
                 warn!("LN payment failed, aborting");
-                self.federation_client.abort_outgoing_payment(contract_id);
-                return Err(LnGatewayError::CouldNotRoute(e));
+                Err(LnGatewayError::CouldNotRoute(e))
             }
-        };
-
-        // FIXME: figure out how to treat RNGs (maybe include in context?)
-        debug!("Claiming outgoing contract");
-        let outpoint = self
-            .federation_client
-            .claim_outgoing_contract(contract_id, preimage, rng)
-            .await?;
-
-        Ok(outpoint)
+        }
     }
 
     pub async fn await_outgoing_contract_claimed(
