@@ -12,9 +12,13 @@
       url = "github:edolstra/flake-compat";
       flake = false;
     };
+    advisory-db = {
+      url = "github:rustsec/advisory-db";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane }:
+  outputs = { self, nixpkgs, flake-utils, flake-compat, fenix, crane, advisory-db }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
@@ -218,6 +222,11 @@
           doCheck = false;
         });
 
+        workspaceAudit = craneLib.cargoAudit (commonArgs // {
+          pname = "workspace-clippy";
+          inherit advisory-db;
+        });
+
         cliTestReconnect = craneLib.cargoBuild (commonCliTestArgs // {
           cargoArtifacts = workspaceBuild;
           cargoBuildCommand = "patchShebangs ./scripts && ./scripts/reconnect-test.sh";
@@ -380,6 +389,7 @@
           workspaceTest = workspaceTest;
           workspaceDoc = workspaceDoc;
           workspaceCov = workspaceLlvmCov;
+          workspaceAudit = workspaceAudit;
 
           cli-test = {
             reconnect = cliTestReconnect;

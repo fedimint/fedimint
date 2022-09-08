@@ -56,6 +56,9 @@ jobs:
       - name: Run cargo doc
         run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceDoc
 
+      - name: Run cargo audit
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceAudit
+
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
       #   run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceTest
