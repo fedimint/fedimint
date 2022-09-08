@@ -6,7 +6,7 @@ Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`
 
 ## MacOS
 
-If you're installing on macOS, refer to the [macOS Guide](./macos.md) instead of this file.
+If you encounter problems with Nix on MacOS, refer to the [macOS Guide](./macos.md).
 
 ## Set up Nix
 
