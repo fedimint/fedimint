@@ -765,17 +765,29 @@ impl Client<GatewayClientConfig> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
+    /// Buy a lightning preimage listed for sale inside the federation
+    ///
+    /// Called when a lightning gateway attempts to satisfy a contract on behalf of a user
+    ///
+    /// * `payment_hash` - hash of the invoice we want to buy.
+    ///     Should match the offer hash
+    /// * `htlc_amount` - amount from the htlc the gateway wants to pay.
+    ///     Should be less than or equal to the offer amount depending on gateway fee policy
     pub async fn buy_preimage_offer(
         &self,
         payment_hash: &bitcoin_hashes::sha256::Hash,
-        amount: &Amount,
+        htlc_amount: &Amount,
         rng: impl RngCore + CryptoRng,
     ) -> Result<(OutPoint, ContractId)> {
         let batch = DbBatch::new();
 
         // Fetch offer for this payment hash
         let offer: IncomingContractOffer = self.ln_client().get_offer(*payment_hash).await?;
-        if &offer.amount > amount || &offer.hash != payment_hash {
+
+        if &offer.amount > htlc_amount {
+            return Err(ClientError::ViolatedFeePolicy);
+        }
+        if &offer.hash != payment_hash {
             return Err(ClientError::InvalidOffer);
         }
 
@@ -794,7 +806,7 @@ impl Client<GatewayClientConfig> {
         });
         let incoming_output = fedimint_core::transaction::Output::LN(
             ContractOrOfferOutput::Contract(ContractOutput {
-                amount: *amount,
+                amount: offer.amount,
                 contract: contract.clone(),
             }),
         );
@@ -971,6 +983,8 @@ pub enum ClientError {
     InvalidAmountTier(Amount),
     #[error("Invalid signature")]
     InvalidSignature,
+    #[error("Violated fee policy")]
+    ViolatedFeePolicy,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
