@@ -609,6 +609,8 @@
 <span id="609">609</span>
 <span id="610">610</span>
 <span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -624,6 +626,7 @@
 <span class="kw">use </span>jsonrpsee_types::error::CallError <span class="kw">as </span>RpcCallError;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{error, info, instrument};
+<span class="kw">use </span>url::Url;
 
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
@@ -766,7 +769,7 @@
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">struct </span>FederationMember&lt;C&gt; {
-    url: String,
+    url: Url,
     peer_id: PeerId,
     client: RwLock&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
 }
@@ -774,20 +777,20 @@
 <span class="doccomment">/// Information required for client to construct [`WsFederationApi`] instance
 </span><span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WsFederationConnect {
-    <span class="kw">pub </span>members: Vec&lt;(PeerId, String)&gt;,
+    <span class="kw">pub </span>members: Vec&lt;(PeerId, Url)&gt;,
     <span class="kw">pub </span>max_evil: usize,
 }
 
 <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>ClientConfig&gt; <span class="kw">for </span>WsFederationConnect {
     <span class="kw">fn </span>from(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>max_evil = config.max_evil;
-        <span class="kw">let </span>members: Vec&lt;(PeerId, String)&gt; = config
+        <span class="kw">let </span>members: Vec&lt;(PeerId, Url)&gt; = config
             .api_endpoints
             .iter()
             .enumerate()
             .map(|(id, url)| {
                 <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
-                </span><span class="kw">let </span>url = url.parse().expect(<span class="string">&quot;Invalid URL in config&quot;</span>);
+                </span><span class="kw">let </span>url = url.clone();
                 (peer_id, url)
             })
             .collect();
@@ -874,13 +877,13 @@
 
 <span class="attribute">#[async_trait]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
 <span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>str) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
+    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
         WsClientBuilder::default().build(url).<span class="kw">await
     </span>}
 
@@ -891,14 +894,14 @@
 
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(max_evil: usize, members: Vec&lt;(PeerId, String)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(max_evil: usize, members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new_with_client(max_evil, members)
     }
 }
 
 <span class="kw">impl</span>&lt;C&gt; WsFederationApi&lt;C&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new_with_client(max_evil: usize, members: Vec&lt;(PeerId, String)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_with_client(max_evil: usize, members: Vec&lt;(PeerId, Url)&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
             members: members
                 .into_iter()
@@ -1000,6 +1003,7 @@
     <span class="kw">use </span>once_cell::sync::Lazy;
     <span class="kw">use </span>std::{
         collections::HashSet,
+        str::FromStr,
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Mutex,
@@ -1028,7 +1032,7 @@
             <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
 
-        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>Url) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
         }
     }
@@ -1068,7 +1072,7 @@
 
     <span class="kw">fn </span>federation_member&lt;C: SimpleClient + Send + Sync&gt;() -&gt; FederationMember&lt;Client&lt;C&gt;&gt; {
         FederationMember {
-            url: String::new(),
+            url: Url::from_str(<span class="string">&quot;http://127.0.0.1&quot;</span>).expect(<span class="string">&quot;Could not parse&quot;</span>),
             peer_id: PeerId::from(<span class="number">0</span>),
             client: RwLock::new(<span class="prelude-val">None</span>),
         }

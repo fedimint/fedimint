@@ -302,6 +302,16 @@
 <span id="302">302</span>
 <span id="303">303</span>
 <span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 
@@ -313,6 +323,7 @@
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletConfig;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
+<span class="kw">use </span>url::Url;
 
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -391,7 +402,10 @@
                 <span class="kw">let </span>peer = Peer {
                     connection: ConnectionConfig {
                         hbbft_addr: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, params.hbbft_base_port + id_u16),
-                        api_addr: <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + id_u16),
+                        api_addr: Url::parse(
+                            <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + id_u16).as_str(),
+                        )
+                        .expect(<span class="string">&quot;Could not parse URL&quot;</span>),
                     },
                     tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
                 };
@@ -435,7 +449,13 @@
             max_evil,
             api_endpoints: peers
                 .iter()
-                .map(|<span class="kw-2">&amp;</span>peer| <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + u16::from(peer)))
+                .map(|<span class="kw-2">&amp;</span>peer| {
+                    Url::parse(
+                        <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + u16::from(peer))
+                            .as_str(),
+                    )
+                    .expect(<span class="string">&quot;Could not parse Url&quot;</span>)
+                })
                 .collect(),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
@@ -446,7 +466,7 @@
     }
 
     <span class="kw">fn </span>to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ClientConfig {
-        <span class="kw">let </span>api_endpoints: Vec&lt;String&gt; = <span class="self">self
+        <span class="kw">let </span>api_endpoints: Vec&lt;Url&gt; = <span class="self">self
             </span>.peers
             .iter()
             .map(|(<span class="kw">_</span>, peer)| peer.connection.api_addr.clone())

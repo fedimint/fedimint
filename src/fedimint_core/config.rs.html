@@ -60,16 +60,18 @@
 <span id="60">60</span>
 <span id="61">61</span>
 <span id="62">62</span>
+<span id="63">63</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_wallet::config::WalletClientConfig;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::path::Path;
+<span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ClientConfig {
-    <span class="kw">pub </span>api_endpoints: Vec&lt;String&gt;,
+    <span class="kw">pub </span>api_endpoints: Vec&lt;Url&gt;,
     <span class="kw">pub </span>mint: MintClientConfig,
     <span class="kw">pub </span>wallet: WalletClientConfig,
     <span class="kw">pub </span>ln: LightningModuleClientConfig,

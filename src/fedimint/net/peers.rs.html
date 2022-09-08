@@ -661,6 +661,9 @@
 <span id="661">661</span>
 <span id="662">662</span>
 <span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -685,6 +688,7 @@
 <span class="kw">use </span>tokio::task::JoinHandle;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
+<span class="kw">use </span>url::Url;
 
 <span class="doccomment">/// Maximum connection failures we consider for our back-off strategy
 </span><span class="kw">const </span>MAX_FAIL_RECONNECT_COUNTER: u64 = <span class="number">300</span>;
@@ -767,7 +771,7 @@
     <span class="doccomment">/// The peer&#39;s hbbft network address and port (e.g. `10.42.0.10:4000`)
     </span><span class="kw">pub </span>hbbft_addr: String,
     <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    </span><span class="kw">pub </span>api_addr: String,
+    </span><span class="kw">pub </span>api_addr: Url,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -1261,6 +1265,7 @@
     <span class="kw">use </span>std::iter::FromIterator;
     <span class="kw">use </span>std::time::Duration;
     <span class="kw">use </span>tracing_subscriber::EnvFilter;
+    <span class="kw">use </span>url::Url;
 
     <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
     <span class="kw">where
@@ -1286,7 +1291,8 @@
             .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
                 <span class="kw">let </span>cfg = ConnectionConfig {
                     hbbft_addr: peer.to_string(),
-                    api_addr: peer.to_string(),
+                    api_addr: Url::parse(<span class="macro">format!</span>(<span class="string">&quot;http://{}&quot;</span>, peer).as_str())
+                        .expect(<span class="string">&quot;Could not parse Url&quot;</span>),
                 };
                 (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
             })

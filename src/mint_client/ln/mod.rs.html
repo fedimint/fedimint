@@ -420,6 +420,8 @@
 <span id="420">420</span>
 <span id="421">421</span>
 <span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -637,6 +639,7 @@
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>lightning_invoice::Invoice;
     <span class="kw">use </span>std::sync::Arc;
+    <span class="kw">use </span>url::Url;
 
     <span class="kw">type </span>Fed = FakeFed&lt;LightningModule, LightningModuleClientConfig&gt;;
 
@@ -768,7 +771,8 @@
             LightningGateway {
                 mint_pub_key,
                 node_pub_key,
-                api: <span class="string">&quot;&quot;</span>.to_string(),
+                api: Url::parse(<span class="string">&quot;http://example.com&quot;</span>)
+                    .expect(<span class="string">&quot;Could not parse URL to generate GatewayClientConfig API endpoint&quot;</span>),
             }
         };
         <span class="kw">let </span>timelock = <span class="number">42</span>;
