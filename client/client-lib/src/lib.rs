@@ -801,7 +801,7 @@ impl Client<GatewayClientConfig> {
         Ok((outpoint, contract.contract_id()))
     }
 
-    /// Claw back funds after outgoing contract that had invalid preimage
+    /// Claw back funds after incoming contract that had invalid preimage
     pub async fn refund_incoming_contract(
         &self,
         contract_id: ContractId,
