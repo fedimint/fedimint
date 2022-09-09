@@ -41,7 +41,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::TieredMulti, BlindToken, InvalidAmountTierError},
+        mint::{tiered::TieredMulti, BlindNonce, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -71,7 +71,7 @@ use crate::wallet::WalletClientError;
 use crate::{
     api::{ApiError, FederationApi},
     ln::{incoming::ConfirmedInvoice, LnClient},
-    mint::{MintClient, SpendableCoin},
+    mint::{MintClient, SpendableNote},
     wallet::WalletClient,
 };
 
@@ -223,7 +223,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
@@ -237,7 +237,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// Validate tokens without claiming them. This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    pub async fn validate_tokens(&self, coins: &TieredMulti<SpendableCoin>) -> Result<()> {
+    pub async fn validate_tokens(&self, coins: &TieredMulti<SpendableNote>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
         coins.iter_items().try_for_each(|(amt, coin)| {
             if coin.coin.verify(*tbs_pks.tier(&amt)?) {
@@ -250,7 +250,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     pub async fn pay_for_coins<R: RngCore + CryptoRng>(
         &self,
-        coins: TieredMulti<BlindToken>,
+        coins: TieredMulti<BlindNonce>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let batch = DbBatch::new();
@@ -268,7 +268,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         &self,
         amount: Amount,
         rng: R,
-        create_tx: impl FnMut(TieredMulti<BlindToken>) -> OutPoint,
+        create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut batch = DbBatch::new();
         self.mint_client()
@@ -335,7 +335,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     /// **WARNING** this selects and removes coins from the database without confirming whether
     /// we have successfully spent them in a transaction.
-    pub fn select_and_spend_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableCoin>> {
+    pub fn select_and_spend_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
         let mut batch = DbBatch::new();
         let mut tx = batch.transaction();
         let coins = self.mint_client().select_coins(amount)?;
@@ -377,7 +377,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                     match self.context.api.fetch_tx_outcome(key.0).await {
                         Ok(TransactionStatus::Rejected(_)) => return (key, coins),
                         Ok(TransactionStatus::Accepted { .. }) => {
-                            return (key, TieredMulti::<SpendableCoin>::default())
+                            return (key, TieredMulti::<SpendableNote>::default())
                         }
                         _ => {}
                     }
@@ -387,7 +387,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
         let mut batch = DbBatch::new();
         let mut tx = batch.transaction();
-        let mut all_coins = TieredMulti::<SpendableCoin>::default();
+        let mut all_coins = TieredMulti::<SpendableNote>::default();
         for (key, coins) in stream.collect::<Vec<_>>().await {
             all_coins.extend(coins);
             tx.append_delete(key);
@@ -416,7 +416,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .collect()
     }
 
-    pub fn coins(&self) -> TieredMulti<SpendableCoin> {
+    pub fn coins(&self) -> TieredMulti<SpendableNote> {
         self.mint_client().coins()
     }
 

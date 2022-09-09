@@ -2,18 +2,18 @@ use rand::{CryptoRng, RngCore};
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 use crate::mint::CoinFinalizationData;
-use crate::{MintClientError, SpendableCoin};
+use crate::{MintClientError, SpendableNote};
 use bitcoin::KeyPair;
 use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::{Amount, OutPoint};
 use fedimint_core::config::FeeConsensus;
 use fedimint_core::modules::mint::tiered::TieredMulti;
-use fedimint_core::modules::mint::{BlindToken, Coin, Tiered};
+use fedimint_core::modules::mint::{BlindNonce, Note, Tiered};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use tbs::AggregatePublicKey;
 
 pub struct TransactionBuilder {
-    input_coins: TieredMulti<SpendableCoin>,
+    input_coins: TieredMulti<SpendableNote>,
     output_coins: Vec<(u64, CoinFinalizationData)>,
     keys: Vec<KeyPair>,
     tx: Transaction,
@@ -37,7 +37,7 @@ impl Default for TransactionBuilder {
 impl TransactionBuilder {
     pub fn input_coins(
         &mut self,
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     ) -> Result<(), MintClientError> {
         self.input_coins.extend(coins.clone());
@@ -48,9 +48,9 @@ impl TransactionBuilder {
 
     pub fn create_input_from_coins(
         &mut self,
-        coins: TieredMulti<SpendableCoin>,
+        coins: TieredMulti<SpendableNote>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
-    ) -> Result<(Vec<KeyPair>, TieredMulti<Coin>), MintClientError> {
+    ) -> Result<(Vec<KeyPair>, TieredMulti<Note>), MintClientError> {
         let coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -108,14 +108,14 @@ impl TransactionBuilder {
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
         rng: R,
-    ) -> (CoinFinalizationData, TieredMulti<BlindToken>) {
+    ) -> (CoinFinalizationData, TieredMulti<BlindNonce>) {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);
 
         let coin_output = sig_req
             .0
             .into_iter()
-            .map(|(amt, token)| (amt, BlindToken(token)))
+            .map(|(amt, token)| (amt, BlindNonce(token)))
             .collect();
 
         (coin_finalization_data, coin_output)
