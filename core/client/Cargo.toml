@@ -1,0 +1,33 @@
+[package]
+name = "fedimint-core-client"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-module provides common code used by both client and server. Can't be in fedimint-api because it depends on modules."
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "fedimint_core_client"
+path = "src/lib.rs"
+
+[dependencies]
+bitcoin = "*"
+anyhow = "*"
+itertools = "0.10.0"
+impl-tools = "0.4.0"
+fedimint-api = { path = "../../fedimint-api" }
+fedimint-derive = { path = "../../fedimint-derive" }
+fedimint-core-api = { path = "../api" }
+rand = "0.6.5"
+secp256k1-zkp = { version = "0.6.0", features = [ "global-context", "bitcoin_hashes" ] }
+serde = { version = "1.0.118", features = [ "derive" ] }
+serde_json = "1.0.61"
+sha3 = "0.10.4"
+tbs = { path = "../../crypto/tbs" }
+thiserror = "1.0.23"
+tracing ="0.1.22"
+bitcoin_hashes = "0.10.0"
+url = { version = "2.2.2", features = ["serde"] }
+

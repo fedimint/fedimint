@@ -728,6 +728,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-client"
+version = "0.1.0"
+dependencies = [
+ "bitcoin",
+ "fedimint-api",
+ "fedimint-core-client",
+ "fedimint-mint-client",
+ "thiserror",
+]
+
+[[package]]
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
@@ -753,6 +764,56 @@ dependencies = [
  "threshold_crypto",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fedimint-core-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "fedimint-api",
+ "fedimint-derive",
+ "impl-tools",
+ "thiserror",
+]
+
+[[package]]
+name = "fedimint-core-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitcoin",
+ "bitcoin_hashes",
+ "fedimint-api",
+ "fedimint-core-api",
+ "fedimint-derive",
+ "impl-tools",
+ "itertools",
+ "rand 0.6.5",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tbs",
+ "thiserror",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "fedimint-core-server"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bitcoin",
+ "fedimint-api",
+ "fedimint-core-api",
+ "fedimint-derive",
+ "impl-tools",
+ "rand 0.6.5",
+ "thiserror",
 ]
 
 [[package]]
@@ -808,6 +869,36 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-mint-client"
+version = "0.1.0"
+dependencies = [
+ "fedimint-api",
+ "fedimint-core-client",
+ "fedimint-mint-common",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mint-common"
+version = "0.1.0"
+dependencies = [
+ "fedimint-api",
+ "fedimint-core-api",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-mint-server"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "fedimint-api",
+ "fedimint-core-server",
+ "fedimint-mint-common",
+ "tracing",
 ]
 
 [[package]]
@@ -1349,6 +1440,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb56e1aa765b4b4f3aadfab769793b7087bb03a4ea4920644a6d238e2df5b9ed"
 
 [[package]]
+name = "impl-tools"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abadd585d2a69fc2ee26dfa499628f4ed4077d180b566a25b97e5927f4495308"
+dependencies = [
+ "impl-tools-lib",
+ "proc-macro-error",
+ "syn 1.0.99",
+]
+
+[[package]]
+name = "impl-tools-lib"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3837639a23aafd86c12b25554cfa404cee532ddb4767b88adb48cb2238e043"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1761,8 +1875,11 @@ dependencies = [
  "bitcoin_hashes",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-derive",
+ "fedimint-mint-client",
  "futures",
  "hex",
+ "impl-tools",
  "js-sys",
  "jsonrpsee-core",
  "jsonrpsee-types",

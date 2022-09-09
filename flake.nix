@@ -295,6 +295,7 @@
           name = "fedimintd";
           dir = "fedimint";
           extraDirs = [
+            "core"
             "crypto/tbs"
             "ln-gateway"
             "client/client-lib"
@@ -304,6 +305,9 @@
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            "modules/mint-common"
+            "modules/mint-server"
+            "modules/mint-client"
           ];
         };
 
