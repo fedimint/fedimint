@@ -53,7 +53,7 @@ sha3 = "0.10.4"
 sled = "0.34.6"
 tbs = { path = "../crypto/tbs" }
 thiserror = "1.0.23"
-tokio = { version = "1.0.1", features = ["full"] }
+tokio = { version = "1.21.0", features = ["full"] }
 tokio-rustls = "0.23.4"
 tokio-util = { version = "0.6.0", features = [ "codec" ] }
 tracing ="0.1.22"
