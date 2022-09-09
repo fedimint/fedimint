@@ -10,11 +10,11 @@ function revert_git_stash {
 
 set +e
 git diff-files --quiet
-is_unclean="$!"
+is_unclean=$?
 set -e
 
 # Stash pending changes and revert them when script ends
-if [ $is_unclean != 0 ]; then
+if [ $is_unclean -ne 0 ]; then
   >&2 echo "Stashing uncommited changes..."
   git stash -q --keep-index
   trap revert_git_stash EXIT
@@ -36,7 +36,7 @@ rustfmt --edition 2021 --check $(echo "$git_ls_files" | grep -E '.*\.rs$')
 
 >&2 echo "Checking shell script files ..."
 for path in $(echo "$git_ls_files" | grep -E '.*\.sh$')  ; do
-  shellcheck --severity=warning $path
+  shellcheck --severity=warning "$path"
 done
 
 errors=""
