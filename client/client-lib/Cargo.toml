@@ -25,7 +25,9 @@ lightning-invoice = "0.18.0"
 lightning = "0.0.110"
 miniscript = "7.0.0"
 fedimint-core = { path = "../../fedimint-core" }
+fedimint-mint-client = { path = "../../modules/mint-client/" }
 fedimint-api = { path = "../../fedimint-api" }
+fedimint-derive = { path = "../../fedimint-derive" }
 rand = "0.6.5"
 reqwest = { version = "0.11.12", features = [ "json", "rustls-tls" ], default-features = false }
 secp256k1-zkp = { version = "0.6.0", features = [ "serde", "bitcoin_hashes" ] }
