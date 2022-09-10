@@ -151,8 +151,8 @@
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
-          ] ++ lib.optionals (!stdenv.isDarwin) [
-            # mold is currently broken on MacOS
+          ] ++ lib.optionals (!(stdenv.isAarch64 || stdenv.isDarwin)) [
+            # mold is currently broken on ARM and MacOS
             mold
           ];
 
