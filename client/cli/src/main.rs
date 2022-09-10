@@ -222,7 +222,7 @@ async fn main() {
             let (contract_id, outpoint) = client
                 .fund_outgoing_ln_contract(bolt11, &mut rng)
                 .await
-                .expect("Not enough coins");
+                .expect("Failure creating outgoing LN contract");
 
             client
                 .await_outgoing_contract_acceptance(outpoint)
