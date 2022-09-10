@@ -471,6 +471,7 @@
                 (hiPrio pkgs.bashInteractive)
                 tmux
                 tmuxinator
+                coreutils
 
                 fedimintd.package
                 fedimint-tests.package
