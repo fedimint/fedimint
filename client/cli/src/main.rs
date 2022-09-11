@@ -1,11 +1,12 @@
 use bitcoin::{secp256k1, Address, Transaction};
-use bitcoin_hashes::hex::ToHex;
 use clap::Parser;
-use fedimint_api::Amount;
+use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::config::{load_from_file, ClientConfig};
+use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 
+use core::fmt;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
 use mint_client::utils::{
@@ -14,10 +15,145 @@ use mint_client::utils::{
 };
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, to_string_pretty};
+use serde_json::{json, Value};
+use std::error::Error;
+use std::fmt::Debug;
 use std::path::PathBuf;
-use tracing::{error, info};
+use std::process::exit;
 use tracing_subscriber::EnvFilter;
+
+#[derive(Serialize)]
+#[serde(tag = "command")]
+enum CliOutput {
+    PegInAddress {
+        address: Address,
+    },
+
+    PegIn {
+        id: TransactionId,
+    },
+
+    Reissue {
+        id: OutPoint,
+    },
+
+    Validate {
+        all_valid: bool,
+        details: Vec<(SpendableNote, bool)>,
+    },
+
+    Spend {
+        token: String,
+    },
+
+    PegOut {
+        tx_id: bitcoin::Txid,
+    },
+
+    LnPay {
+        contract_id: ContractId,
+    },
+
+    Fetch {
+        issuance: Vec<OutPoint>,
+    },
+
+    Info {
+        total_amount: Amount,
+        total_num_coins: usize,
+        details: Vec<(Amount, usize)>,
+    },
+
+    LnInvoice {
+        invoice: String,
+    },
+
+    WaitInvoice {
+        paid_in_tx: OutPoint,
+    },
+
+    WaitBlockHeight {
+        reached: u64,
+    },
+
+    ConnectInfo {
+        connect_info: WsFederationConnect,
+    },
+
+    JoinFederation {
+        joined: String,
+    },
+
+    ListGateways {
+        num_gateways: usize,
+        gateways: Value,
+    },
+
+    SwitchGateway {
+        new_gateway: Value,
+    },
+}
+
+impl fmt::Display for CliOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", serde_json::to_string_pretty(self).unwrap())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum CliErrorKind {
+    NetworkError,
+    IOError,
+    InvalidValue,
+    OSError,
+    GeneralFederationError,
+    AlreadySpent,
+    Timeout,
+    InsufficientBalance,
+    SerializationError,
+    GeneralFailure,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "error")]
+struct CliError {
+    kind: CliErrorKind,
+    message: String,
+    #[serde(skip_serializing)]
+    raw_error: Option<Box<dyn Error>>,
+}
+
+impl Debug for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CliError")
+            .field("kind", &self.kind)
+            .field("message", &self.message)
+            .field("raw_error", &self.raw_error)
+            .finish()
+    }
+}
+
+impl CliError {
+    fn from(kind: CliErrorKind, message: &str, err: Option<Box<dyn Error>>) -> CliError {
+        CliError {
+            kind: (kind),
+            message: (String::from(message)),
+            raw_error: err,
+        }
+    }
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut json = serde_json::to_value(self).unwrap();
+        if let Some(err) = &self.raw_error {
+            json["raw_error"] = json!(*err.to_string())
+        }
+        return write!(f, "{}", serde_json::to_string_pretty(&json).unwrap());
+    }
+}
+
+impl Error for CliError {}
 
 #[derive(Parser)]
 struct Options {
@@ -103,6 +239,37 @@ enum Command {
     },
 }
 
+trait ErrorHandler<T, E> {
+    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T;
+    fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
+    where
+        F: Fn(T) -> CliOutput;
+}
+
+impl<T, E: Error + 'static> ErrorHandler<T, E> for Result<T, E> {
+    fn or_terminate(self, err: CliErrorKind, msg: &str) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => {
+                let cli_error = CliError::from(err, msg, Some(Box::new(e)));
+                println!("{}", cli_error.to_string());
+                exit(1);
+            }
+        }
+    }
+    fn transform<F>(self, success: F, err: CliErrorKind, msg: &str) -> CliResult
+    where
+        F: Fn(T) -> CliOutput,
+    {
+        match self {
+            Ok(v) => Ok(success(v)),
+            Err(e) => Err(CliError::from(err, msg, Some(Box::new(e)))),
+        }
+    }
+}
+
+type CliResult = Result<CliOutput, CliError>;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct PayRequest {
     coins: TieredMulti<SpendableNote>,
@@ -120,17 +287,24 @@ async fn main() {
         .init();
 
     if let Command::JoinFederation { connect } = opts.command {
-        let connect: WsFederationConnect =
-            serde_json::from_str(&connect).expect("Invalid connect info");
-        let api = WsFederationApi::new(connect.max_evil, connect.members);
-        let cfg: ClientConfig = api
-            .request("/config", ())
-            .await
-            .expect("Couldn't download config from peer");
+        let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
+            .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
+        let api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
+        let cfg: ClientConfig = api.request("/config", ()).await.or_terminate(
+            CliErrorKind::NetworkError,
+            "couldn't download config from peer",
+        );
         let cfg_path = opts.workdir.join("client.json");
-        std::fs::create_dir_all(&opts.workdir).expect("Failed to create config directory");
-        let writer = std::fs::File::create(cfg_path).expect("Couldn't create config.json");
-        serde_json::to_writer_pretty(writer, &cfg).expect("couldn't write config");
+        std::fs::create_dir_all(&opts.workdir)
+            .or_terminate(CliErrorKind::IOError, "failed to create config directory");
+        let writer = std::fs::File::create(cfg_path)
+            .or_terminate(CliErrorKind::IOError, "couldn't create config.json");
+        serde_json::to_writer_pretty(writer, &cfg)
+            .or_terminate(CliErrorKind::IOError, "couldn't write config");
+        println!(
+            "{}",
+            &CliOutput::JoinFederation { joined: (connect) }.to_string()
+        );
         return;
     };
 
@@ -138,179 +312,265 @@ async fn main() {
     let db_path = opts.workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path);
     let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
-        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
+        rocksdb::OptimisticTransactionDB::open_default(&db_path)
+            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
 
-    let mut rng = rand::rngs::OsRng::new().unwrap();
+    let rng = rand::rngs::OsRng::new().or_terminate(
+        CliErrorKind::OSError,
+        "failed to acquire random number generator from OS",
+    );
 
     let client = Client::new(cfg.clone(), Box::new(db), Default::default());
 
+    let cli_result = handle_command(opts, client, rng).await;
+
+    match cli_result {
+        Ok(output) => {
+            println!("{}", output.to_string());
+        }
+        Err(err) => {
+            println!("{}", err.to_string());
+            exit(1);
+        }
+    }
+}
+
+async fn handle_command(
+    opts: Options,
+    client: Client<UserClientConfig>,
+    mut rng: rand::rngs::OsRng,
+) -> CliResult {
     match opts.command {
         Command::PegInAddress => {
-            println!("{}", client.get_new_pegin_address(&mut rng))
+            let peg_in_address = client.get_new_pegin_address(&mut rng);
+            Ok(CliOutput::PegInAddress {
+                address: (peg_in_address),
+            })
         }
         Command::PegIn {
             txout_proof,
             transaction,
-        } => {
-            let id = client
-                .peg_in(txout_proof, transaction, &mut rng)
-                .await
-                .unwrap();
-            info!(
-                id = %id.to_hex(),
-                "Started peg-in, please fetch the result later",
-            );
-        }
+        } => client
+            .peg_in(txout_proof, transaction, &mut rng)
+            .await
+            .transform(
+                |v| CliOutput::PegIn { id: (v) },
+                CliErrorKind::GeneralFederationError,
+                "peg-in failed (no further information)",
+            ),
+
         Command::Reissue { coins } => {
-            info!(coins = %coins.total_amount(), "Starting reissuance transaction");
-            let id = client.reissue(coins, &mut rng).await.unwrap();
-            info!(%id, "Started reissuance, please fetch the result later");
+            let id = client.reissue(coins, &mut rng).await;
+            id.transform(
+                |v| CliOutput::Reissue { id: (v) },
+                CliErrorKind::GeneralFederationError,
+                "could not reissue notes (no further information)",
+            )
         }
         Command::Validate { coins } => {
             let validate_result = client.validate_tokens(&coins).await;
 
             match validate_result {
-                Ok(()) => {
-                    println!("All tokens have valid signatures");
-                }
-                Err(e) => {
-                    println!("Found invalid token: {:?}", e);
-                    std::process::exit(-1);
-                }
+                Ok(()) => Ok(CliOutput::Validate {
+                    all_valid: (true),
+                    details: ([].to_vec()),
+                }),
+                Err(_) => Ok(CliOutput::Validate {
+                    all_valid: (false),
+                    details: ([].to_vec()),
+                }),
             }
         }
-        Command::Spend { amount } => {
-            match client.select_and_spend_coins(amount) {
-                Ok(outgoing_coins) => {
-                    println!("{}", serialize_coins(&outgoing_coins));
-                }
-                Err(e) => {
-                    error!(error = ?e);
-                }
-            };
-        }
+        Command::Spend { amount } => client.select_and_spend_coins(amount).transform(
+            |v| CliOutput::Spend {
+                token: (serialize_coins(&v)),
+            },
+            CliErrorKind::GeneralFederationError,
+            "failed to execute spend (no further information)",
+        ),
         Command::Fetch => {
+            let mut result = Vec::<OutPoint>::new();
+            let mut has_error = false;
             for fetch_result in client.fetch_all_coins().await {
-                info!(issuance = %fetch_result.unwrap().txid.to_hex(), "Fetched coins");
+                match fetch_result {
+                    Ok(v) => result.push(v),
+                    Err(_) => {
+                        has_error = true;
+                    }
+                }
+            }
+            if has_error {
+                Err(CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to fetch notes",
+                    None,
+                ))
+            } else {
+                Ok(CliOutput::Fetch { issuance: (result) })
             }
         }
         Command::Info => {
             let coins = client.coins();
-            println!(
-                "We own {} coins with a total value of {}",
-                coins.item_count(),
-                coins.total_amount()
-            );
-            for (amount, coins) in coins.iter_tiers() {
-                println!("We own {} coins of denomination {}", coins.len(), amount);
-            }
+            let details_vec = coins
+                .iter_tiers()
+                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .collect();
+            Ok(CliOutput::Info {
+                total_amount: (coins.total_amount()),
+                total_num_coins: (coins.item_count()),
+                details: (details_vec),
+            })
         }
         Command::PegOut { address, satoshis } => {
-            let peg_out = client
-                .new_peg_out_with_fees(satoshis, address)
-                .await
-                .unwrap();
-            let out_point = client.peg_out(peg_out, &mut rng).await.unwrap();
-            let txid = client
-                .wallet_client()
-                .await_peg_out_outcome(out_point)
-                .await
-                .unwrap();
-            println!("Bitcoin transaction is about to be sent: {}", txid)
+            match client.new_peg_out_with_fees(satoshis, address).await {
+                Ok(peg_out) => match client.peg_out(peg_out, &mut rng).await {
+                    Ok(out_point) => client
+                        .wallet_client()
+                        .await_peg_out_outcome(out_point)
+                        .await
+                        .transform(
+                            |txid| CliOutput::PegOut { tx_id: (txid) },
+                            CliErrorKind::GeneralFederationError,
+                            "invalid peg-out outcome",
+                        ),
+                    Err(e) => Err(CliError::from(
+                        CliErrorKind::GeneralFederationError,
+                        "failed to commit peg-out",
+                        Some(Box::new(e)),
+                    )),
+                },
+                Err(e) => Err(CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to request peg-out",
+                    Some(Box::new(e)),
+                )),
+            }
         }
         Command::LnPay { bolt11 } => {
-            let (contract_id, outpoint) = client
-                .fund_outgoing_ln_contract(bolt11, &mut rng)
-                .await
-                .expect("Not enough coins");
-
-            client
-                .await_outgoing_contract_acceptance(outpoint)
-                .await
-                .expect("Contract wasn't accepted in time");
-
-            info!(
-                %contract_id,
-                "Funded outgoing contract, notifying gateway",
-            );
-
-            client
-                .await_outgoing_contract_execution(contract_id)
-                .await
-                .expect("Gateway failed to execute contract");
+            match client.fund_outgoing_ln_contract(bolt11, &mut rng).await {
+                Ok((contract_id, outpoint)) => {
+                    match client.await_outgoing_contract_acceptance(outpoint).await {
+                        Ok(_) => client
+                            .await_outgoing_contract_execution(contract_id)
+                            .await
+                            .transform(
+                                |_| CliOutput::LnPay {
+                                    contract_id: (contract_id),
+                                },
+                                CliErrorKind::GeneralFederationError,
+                                "gateway failed to execute contract",
+                            ),
+                        Err(e) => Err(CliError::from(
+                            CliErrorKind::Timeout,
+                            "contract wasn't accepted in time",
+                            Some(Box::new(e)),
+                        )),
+                    }
+                }
+                Err(e) => Err(CliError::from(
+                    CliErrorKind::InsufficientBalance,
+                    "not enough coins",
+                    Some(Box::new(e)),
+                )),
+            }
         }
         Command::LnInvoice {
             amount,
             description,
-        } => {
-            let confirmed_invoice = client
-                .generate_invoice(amount, description, &mut rng)
-                .await
-                .expect("Couldn't create invoice");
-            println!("{}", confirmed_invoice.invoice)
-        }
+        } => client
+            .generate_invoice(amount, description, &mut rng)
+            .await
+            .transform(
+                |confirmed_invoice| CliOutput::LnInvoice {
+                    invoice: (confirmed_invoice.invoice.to_string()),
+                },
+                CliErrorKind::GeneralFederationError,
+                "couldn't create invoice",
+            ),
         Command::WaitInvoice { invoice } => {
             let contract_id = (*invoice.payment_hash()).into();
-            let outpoint = client
+            client
                 .claim_incoming_contract(contract_id, &mut rng)
                 .await
-                .expect("Timeout waiting for invoice payment");
-            println!(
-                "Paid in fedimint transaction {}. Call 'fetch' to get your coins.",
-                outpoint.txid
-            );
+                .transform(
+                    |outpoint| CliOutput::WaitInvoice {
+                        paid_in_tx: (outpoint),
+                    },
+                    CliErrorKind::Timeout,
+                    "invoice did not appear in time",
+                )
         }
         Command::WaitBlockHeight { height } => {
             client.await_consensus_block_height(height).await;
+            Ok(CliOutput::WaitBlockHeight { reached: (height) })
         }
         Command::ConnectInfo => {
             let info = WsFederationConnect::from(client.config().as_ref());
-            println!("{}", serde_json::to_string(&info).unwrap());
+            Ok(CliOutput::ConnectInfo {
+                connect_info: (info),
+            })
         }
         Command::JoinFederation { .. } => {
             unreachable!()
         }
-        Command::ListGateways {} => {
-            println!("Fetching gateways from federation...");
-            let gateways = client
-                .fetch_registered_gateways()
-                .await
-                .expect("Failed to fetch gateways");
-            println!("Found {} registered gateways : ", gateways.len());
-            if !gateways.is_empty() {
-                let mut gateways_json = json!(&gateways);
-                if let Ok(active_gateway) = client.fetch_active_gateway().await {
-                    gateways_json
-                        .as_array_mut()
-                        .expect("gateways_json is not an array")
-                        .iter_mut()
-                        .for_each(|gateway| {
-                            if gateway["node_pub_key"] == json!(active_gateway.node_pub_key) {
-                                gateway["active"] = json!(true);
-                            } else {
-                                gateway["active"] = json!(false);
-                            }
-                        });
-                };
-                println!(
-                    "{}",
-                    to_string_pretty(&gateways_json).expect("failed to deserialize gateways")
-                );
+        Command::ListGateways {} => match client.fetch_registered_gateways().await {
+            Ok(gateways) => {
+                if !gateways.is_empty() {
+                    let mut gateways_json = json!(&gateways);
+                    match client.fetch_active_gateway().await {
+                        Ok(active_gateway) => {
+                            gateways_json
+                                .as_array_mut()
+                                .expect("gateways_json is not an array")
+                                .iter_mut()
+                                .for_each(|gateway| {
+                                    if gateway["node_pub_key"] == json!(active_gateway.node_pub_key)
+                                    {
+                                        gateway["active"] = json!(true);
+                                    } else {
+                                        gateway["active"] = json!(false);
+                                    }
+                                });
+                            Ok(CliOutput::ListGateways {
+                                num_gateways: (gateways.len()),
+                                gateways: (gateways_json),
+                            })
+                        }
+                        Err(e) => Err(CliError::from(
+                            CliErrorKind::GeneralFederationError,
+                            "could not determine active gateway",
+                            Some(Box::new(e)),
+                        )),
+                    }
+                } else {
+                    Err(CliError::from(
+                        CliErrorKind::GeneralFederationError,
+                        "no gateways found",
+                        None,
+                    ))
+                }
             }
-        }
+            Err(e) => Err(CliError::from(
+                CliErrorKind::GeneralFederationError,
+                "failed to fetch gateways",
+                Some(Box::new(e)),
+            )),
+        },
         Command::SwitchGateway { pubkey } => {
-            let gateway = client
-                .switch_active_gateway(Some(pubkey))
-                .await
-                .expect("Failed to switch active gateway");
-            println!("Successfully switched to gateway with the following details");
-            let mut gateway_json = json!(&gateway);
-            gateway_json["active"] = json!(true);
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&gateway_json)
-                    .expect("Failed to deserialize activated gateway")
-            );
+            match client.switch_active_gateway(Some(pubkey)).await {
+                Ok(gateway) => {
+                    let mut gateway_json = json!(&gateway);
+                    gateway_json["active"] = json!(true);
+                    Ok(CliOutput::SwitchGateway {
+                        new_gateway: (gateway_json),
+                    })
+                }
+                Err(e) => Err(CliError::from(
+                    CliErrorKind::GeneralFederationError,
+                    "failed to switch active gateway",
+                    Some(Box::new(e)),
+                )),
+            }
         }
     }
 }
