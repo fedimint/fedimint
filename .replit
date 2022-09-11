@@ -1,0 +1,63 @@
+# Replit support (note: currently broken)
+#
+# # Problem: no support for Nix Flakes
+#
+# I tried manual nix upgrade with `sh <(curl -L https://nixos.org/nix/install) --no-daemon`, and it works.
+# However it is taking a lot of storage, which is scarce. Turns out that by adding `nix` to `replit.nix`
+# We can get a newer version for free (from shared `/nix`) cache.
+#
+# That's kind of the name of the game here - trying to re-use as much as possible from the shared space,
+# so it doesn't count as our own storage, since every replit is getting btrfs 
+#
+# # Problem: low space
+#
+# With default 500M, we can't do anything (other than editing files). With 1GB (on a hacker plan) it seems
+# it might be possible to at least get the `cargo check` working if debug symbols etc. are disabled.
+# See `[env]` section below. Once that works, we could get `rust-analyzer` working (which needs `cargo check`
+# internally)
+#
+# # Problem: bindgen
+#
+# Bindgen doesn't like lack of `nix develop` to set all the env and tooling it needs. After setting:
+# `export LIBCLANG_PATH="$(nix-build '<nixpkgs>' --no-build-output -A llvmPackages_11.libclang.lib)/lib"`
+# The bindgen compiles, but rocksdb doesn't because it tries to link with the hosts's (Ubuntu 20.04) old glibc
+# version. Trying to enforce Nix glibc with `LD_LIBRARY_PATH` leads to problems with compiling C files,
+# which seem to be similiar to describe here: https://hoverbear.org/blog/rust-bindgen-in-nix/
+#
+# It might be possible to get it work, but requires every-increasing complexity.
+#
+# This was a blocker, so I eventually figured out a better way to support flakes.
+#
+# # Problem: `nix develop` too large
+#
+# There's too many depdencies in default shell, so I created a minimal `.#replit` dev shell.
+#
+# With this `bidgen` works.
+run = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop .#replit -c cargo check"
+hidden = ["target"]
+
+[env]
+CARGO_PROFILE_DEV_CODEGEN_UNITS="8"
+CARGO_PROFILE_DEV_DEBUG="0"
+CARGO_PROFILE_DEV_LTO="false"
+CARGO_PROFILE_DEV_INCREMENTAL="false"
+CARGO_PROFILE_DEV_OPT_LEVEL="s"
+
+[packager]
+language = "rust"
+
+[packager.features]
+packageSearch = true
+
+[languages.rust]
+pattern = "**/*.rs"
+
+[languages.rust.languageServer]
+start = "nix --extra-experimental-features nix-command --extra-experimental-features flakes develop .#replit -c rust-analyzer"
+
+[nix]
+# this must be kept in sync with `nixpkgs` channel in `flake.nix`
+channel = "stable-22_05"
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix"]
