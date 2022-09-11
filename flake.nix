@@ -493,6 +493,14 @@
                 pkgs.git
               ];
             };
+
+            replit = pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                openssl
+              ];
+              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+            };
           };
       });
 }
