@@ -468,8 +468,8 @@ async fn handle_command(
                     }
                 }
                 Err(e) => Err(CliError::from(
-                    CliErrorKind::InsufficientBalance,
-                    "not enough coins",
+                    CliErrorKind::GeneralFederationError,
+                    "Failure creating outgoing LN contract",
                     Some(Box::new(e)),
                 )),
             }
