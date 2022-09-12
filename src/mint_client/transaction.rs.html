@@ -170,18 +170,18 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 <span class="kw">use </span><span class="kw">crate</span>::mint::CoinFinalizationData;
-<span class="kw">use crate</span>::{MintClientError, SpendableCoin};
+<span class="kw">use crate</span>::{MintClientError, SpendableNote};
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint};
 <span class="kw">use </span>fedimint_core::config::FeeConsensus;
 <span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindToken, Coin, Tiered};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note, Tiered};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>tbs::AggregatePublicKey;
 
 <span class="kw">pub struct </span>TransactionBuilder {
-    input_coins: TieredMulti&lt;SpendableCoin&gt;,
+    input_coins: TieredMulti&lt;SpendableNote&gt;,
     output_coins: Vec&lt;(u64, CoinFinalizationData)&gt;,
     keys: Vec&lt;KeyPair&gt;,
     tx: Transaction,
@@ -205,7 +205,7 @@
 <span class="kw">impl </span>TransactionBuilder {
     <span class="kw">pub fn </span>input_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        coins: TieredMulti&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableNote&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MintClientError&gt; {
         <span class="self">self</span>.input_coins.extend(coins.clone());
@@ -216,9 +216,9 @@
 
     <span class="kw">pub fn </span>create_input_from_coins(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        coins: TieredMulti&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableNote&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, TieredMulti&lt;Coin&gt;), MintClientError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Vec&lt;KeyPair&gt;, TieredMulti&lt;Note&gt;), MintClientError&gt; {
         <span class="kw">let </span>coin_key_pairs = coins
             .into_iter()
             .map(|(amt, coin)| {
@@ -276,14 +276,14 @@
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         rng: R,
-    ) -&gt; (CoinFinalizationData, TieredMulti&lt;BlindToken&gt;) {
+    ) -&gt; (CoinFinalizationData, TieredMulti&lt;BlindNonce&gt;) {
         <span class="kw">let </span>(coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);
 
         <span class="kw">let </span>coin_output = sig_req
             .<span class="number">0
             </span>.into_iter()
-            .map(|(amt, token)| (amt, BlindToken(token)))
+            .map(|(amt, token)| (amt, BlindNonce(token)))
             .collect();
 
         (coin_finalization_data, coin_output)
@@ -335,4 +335,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (1120c5e01 2022-09-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

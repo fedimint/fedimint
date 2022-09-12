@@ -117,7 +117,7 @@
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
 <span class="kw">use </span>fedimint_core::modules::ln::ContractOrOfferOutput;
 <span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
-<span class="kw">use </span>fedimint_core::modules::mint::Coin;
+<span class="kw">use </span>fedimint_core::modules::mint::Note;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::PegInProof;
 <span class="kw">use </span>std::collections::HashSet;
 
@@ -141,7 +141,7 @@
 {
     inner_iter: I,
     tx_accessor: F,
-    coin_set: HashSet&lt;TieredMulti&lt;Coin&gt;&gt;,
+    coin_set: HashSet&lt;TieredMulti&lt;Note&gt;&gt;,
     peg_in_set: HashSet&lt;PegInProof&gt;,
     contract_set: HashSet&lt;ContractId&gt;,
     pegged_out: bool,
@@ -229,4 +229,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (1120c5e01 2022-09-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

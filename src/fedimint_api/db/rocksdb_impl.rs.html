@@ -125,7 +125,7 @@
                     <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">&quot;DB error&quot;</span>);
                     key_bytes
                         .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
+                        .then(|| (key_bytes, value_bytes))
                 })
                 .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map(<span class="prelude-val">Ok</span>),
@@ -191,4 +191,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (1120c5e01 2022-09-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

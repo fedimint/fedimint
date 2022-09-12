@@ -604,7 +604,6 @@
 <span id="604">604</span>
 <span id="605">605</span>
 <span id="606">606</span>
-<span id="607">607</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
@@ -619,7 +618,7 @@
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::mint::{
-    BlindToken, Coin, CoinNonce, InvalidAmountTierError, SigResponse, SignRequest, Tiered,
+    BlindNonce, InvalidAmountTierError, Nonce, Note, SigResponse, SignRequest, Tiered,
 };
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
@@ -646,7 +645,7 @@
     <span class="doccomment">/// Spend key from which the coin nonce (corresponding public key) is derived
     </span>spend_key: [u8; <span class="number">32</span>], <span class="comment">// FIXME: either make KeyPair Serializable or add secret key newtype
     </span><span class="doccomment">/// Nonce belonging to the secret key
-    </span>nonce: CoinNonce,
+    </span>nonce: Nonce,
     <span class="doccomment">/// Key to unblind the blind signature supplied by the mint for this coin
     </span>blinding_key: BlindingKey,
 }
@@ -659,16 +658,15 @@
     </span>coins: TieredMulti&lt;CoinRequest&gt;,
 }
 
-<span class="doccomment">/// Represents a coin that can be spent by us (i.e. we can sign a transaction with the secret key
-/// belonging to the nonce.
+<span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend it)
 </span><span class="attribute">#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>SpendableCoin {
-    <span class="kw">pub </span>coin: Coin,
+</span><span class="kw">pub struct </span>SpendableNote {
+    <span class="kw">pub </span>coin: Note,
     <span class="kw">pub </span>spend_key: [u8; <span class="number">32</span>],
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
-    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableCoin&gt; {
+    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.context
             .db
             .find_by_prefix(<span class="kw-2">&amp;</span>CoinKeyPrefix)
@@ -679,7 +677,7 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableCoin&gt;&gt; {
+    <span class="kw">pub fn </span>select_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>coins = <span class="self">self
             </span>.coins()
             .select_coins(amount)
@@ -719,7 +717,7 @@
         amount: Amount,
         <span class="kw-2">mut </span>tx: BatchTx,
         rng: R,
-        <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindToken&gt;) -&gt; OutPoint,
+        <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
 
@@ -752,7 +750,7 @@
         batch.append_from_iter(
             coins
                 .into_iter()
-                .map(|(amount, coin): (Amount, SpendableCoin)| {
+                .map(|(amount, coin): (Amount, SpendableNote)| {
                     <span class="kw">let </span>key = CoinKey {
                         amount,
                         nonce: coin.coin.<span class="number">0</span>.clone(),
@@ -851,7 +849,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         bsigs: SigResponse,
         mint_pub_key: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-    ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableCoin&gt;, CoinFinalizationError&gt; {
+    ) -&gt; std::result::Result&lt;TieredMulti&lt;SpendableNote&gt;, CoinFinalizationError&gt; {
         <span class="kw">if </span>!<span class="self">self</span>.coins.structural_eq(<span class="kw-2">&amp;</span>bsigs.<span class="number">0</span>) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(CoinFinalizationError::WrongMintAnswer);
         }
@@ -862,9 +860,9 @@
             .enumerate()
             .map(|(idx, ((amt, coin_req), (_amt, bsig)))| {
                 <span class="kw">let </span>sig = unblind_signature(coin_req.blinding_key, bsig);
-                <span class="kw">let </span>coin = Coin(coin_req.nonce.clone(), sig);
+                <span class="kw">let </span>coin = Note(coin_req.nonce.clone(), sig);
                 <span class="kw">if </span>coin.verify(<span class="kw-2">*</span>mint_pub_key.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
-                    <span class="kw">let </span>coin = SpendableCoin {
+                    <span class="kw">let </span>coin = SpendableNote {
                         coin,
                         spend_key: coin_req.spend_key,
                     };
@@ -897,7 +895,7 @@
         </span>C: Signing,
     {
         <span class="kw">let </span>spend_key = bitcoin::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>nonce = CoinNonce(spend_key.public_key());
+        <span class="kw">let </span>nonce = Nonce(spend_key.public_key());
         <span class="kw">let </span>(blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         <span class="kw">let </span>cr = CoinRequest {
@@ -1213,4 +1211,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (1120c5e01 2022-09-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>

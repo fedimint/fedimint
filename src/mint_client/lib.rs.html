@@ -1021,7 +1021,7 @@
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::TieredMulti, BlindToken, InvalidAmountTierError},
+        mint::{tiered::TieredMulti, BlindNonce, InvalidAmountTierError},
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -1051,7 +1051,7 @@
 <span class="kw">use crate</span>::{
     api::{ApiError, FederationApi},
     ln::{incoming::ConfirmedInvoice, LnClient},
-    mint::{MintClient, SpendableCoin},
+    mint::{MintClient, SpendableNote},
     wallet::WalletClient,
 };
 
@@ -1203,7 +1203,7 @@
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     </span><span class="kw">pub async fn </span>reissue&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        coins: TieredMulti&lt;SpendableCoin&gt;,
+        coins: TieredMulti&lt;SpendableNote&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
@@ -1217,7 +1217,7 @@
 
     <span class="doccomment">/// Validate tokens without claiming them. This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    </span><span class="kw">pub async fn </span>validate_tokens(<span class="kw-2">&amp;</span><span class="self">self</span>, coins: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableCoin&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">pub async fn </span>validate_tokens(<span class="kw-2">&amp;</span><span class="self">self</span>, coins: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks;
         coins.iter_items().try_for_each(|(amt, coin)| {
             <span class="kw">if </span>coin.coin.verify(<span class="kw-2">*</span>tbs_pks.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
@@ -1230,7 +1230,7 @@
 
     <span class="kw">pub async fn </span>pay_for_coins&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        coins: TieredMulti&lt;BlindToken&gt;,
+        coins: TieredMulti&lt;BlindNonce&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span>batch = DbBatch::new();
@@ -1248,7 +1248,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         rng: R,
-        create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindToken&gt;) -&gt; OutPoint,
+        create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="self">self</span>.mint_client()
@@ -1315,7 +1315,7 @@
 
     <span class="doccomment">/// **WARNING** this selects and removes coins from the database without confirming whether
     /// we have successfully spent them in a transaction.
-    </span><span class="kw">pub fn </span>select_and_spend_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableCoin&gt;&gt; {
+    </span><span class="kw">pub fn </span>select_and_spend_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
         <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
@@ -1357,7 +1357,7 @@
                     <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(key.<span class="number">0</span>).<span class="kw">await </span>{
                         <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="kw">return </span>(key, coins),
                         <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
-                            <span class="kw">return </span>(key, TieredMulti::&lt;SpendableCoin&gt;::default())
+                            <span class="kw">return </span>(key, TieredMulti::&lt;SpendableNote&gt;::default())
                         }
                         <span class="kw">_ </span>=&gt; {}
                     }
@@ -1367,7 +1367,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
-        <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableCoin&gt;::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableNote&gt;::default();
         <span class="kw">for </span>(key, coins) <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
             all_coins.extend(coins);
             tx.append_delete(key);
@@ -1396,7 +1396,7 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableCoin&gt; {
+    <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.mint_client().coins()
     }
 
@@ -1959,4 +1959,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (1120c5e01 2022-09-08)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (59e7a308e 2022-09-11)" ></div></body></html>
