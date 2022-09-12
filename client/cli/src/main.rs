@@ -23,7 +23,7 @@ use std::process::exit;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Serialize)]
-#[serde(tag = "command")]
+#[serde(rename_all(serialize = "snake_case"))]
 enum CliOutput {
     PegInAddress {
         address: Address,
@@ -115,7 +115,7 @@ enum CliErrorKind {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "error")]
+#[serde(tag = "error", rename_all(serialize = "snake_case"))]
 struct CliError {
     kind: CliErrorKind,
     message: String,
@@ -497,7 +497,7 @@ async fn handle_command(
                         paid_in_tx: (outpoint),
                     },
                     CliErrorKind::Timeout,
-                    "invoice did not appear in time",
+                    "invoice did not get paid in time",
                 )
         }
         Command::WaitBlockHeight { height } => {
