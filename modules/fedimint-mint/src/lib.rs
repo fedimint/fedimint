@@ -92,7 +92,7 @@ pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 /// [`Nonce`] but blinded by the user key
 ///
 /// Blinding prevents the Mint from being able to link the transaction spending [`Note`]s
-/// as an [`Input`]s of [`Transaction`] with new [`Note`]s being created in its [`Output`]s.
+/// as an `Input`s of `Transaction` with new [`Note`]s being created in its `Output`s.
 ///
 /// By signing it, the mint commits to the underlying (unblinded) [`Nonce`] as valid
 /// (until eventually spent).
