@@ -366,6 +366,8 @@ impl<C: JsonRpcClient> FederationMember<C> {
 /// Unfortunately `Url` swallows ports that it considers default ports (e.g. 80 and 443 for HTTP(S))
 /// which makes the `Uri` parsing fail in these cases. This function works around this limitation in
 /// a limited way (not fully standard compliant, but work for our use case).
+///
+/// See https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896
 fn url_to_string_with_default_port(url: &Url) -> String {
     format!(
         "{}://{}:{}{}",
