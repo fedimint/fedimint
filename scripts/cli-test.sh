@@ -14,7 +14,7 @@ start_gateway
 #### BEGIN TESTS ####
 
 # reissue
-TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -r '.token')
+TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -r '.spend.token')
 $FM_MINT_CLIENT validate $TOKENS
 $FM_MINT_CLIENT reissue $TOKENS
 $FM_MINT_CLIENT fetch
@@ -43,7 +43,7 @@ INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "paid" ]]
 
 # incoming lightning
-INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -r '.invoice')"
+INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -r '.ln_invoice.invoice')"
 INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]

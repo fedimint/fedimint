@@ -17,7 +17,7 @@ FINALITY_DELAY=$(get_finality_delay)
 echo "Pegging in $PEG_IN_AMOUNT with confirmation in $FINALITY_DELAY blocks"
 
 # get a peg-in address from either the gateway or the client
-if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address | jq -r '.address')"; fi
+if [ "$USE_GATEWAY" == 1 ]; then ADDR="$($FM_LN1 -H gw-address)"; else ADDR="$($FM_MINT_CLIENT peg-in-address | jq -r '.peg_in_address.address')"; fi
 # send bitcoin to that address and save the txid
 TX_ID=$(send_bitcoin $ADDR $PEG_IN_AMOUNT)
 # wait for confirmation and wait for the fed to sync
