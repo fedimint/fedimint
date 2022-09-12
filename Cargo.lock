@@ -685,7 +685,7 @@ dependencies = [
  "threshold_crypto",
  "tokio",
  "tokio-rustls",
- "tokio-util 0.6.10",
+ "tokio-util 0.7.3",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
