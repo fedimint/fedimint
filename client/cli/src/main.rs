@@ -60,7 +60,7 @@ enum CliOutput {
 
     Info {
         total_amount: Amount,
-        total_num_coins: usize,
+        total_num_notes: usize,
         details: Vec<(Amount, usize)>,
     },
 
@@ -167,7 +167,7 @@ enum Command {
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
-    /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates coins)
+    /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     PegIn {
         #[clap(parse(try_from_str = from_hex))]
         txout_proof: TxOutProof,
@@ -187,7 +187,7 @@ enum Command {
         coins: TieredMulti<SpendableNote>,
     },
 
-    /// Prepare coins to send to a third party as a payment
+    /// Prepare notes to send to a third party as a payment
     Spend {
         #[clap(parse(try_from_str = parse_fedimint_amount))]
         amount: Amount,
@@ -203,7 +203,7 @@ enum Command {
     /// Pay a lightning invoice via a gateway
     LnPay { bolt11: lightning_invoice::Invoice },
 
-    /// Fetch (re-)issued coins and finalize issuance process
+    /// Fetch (re-)issued notes and finalize issuance process
     Fetch,
 
     /// Display wallet info (holdings, tiers)
@@ -417,7 +417,7 @@ async fn handle_command(
                 .collect();
             Ok(CliOutput::Info {
                 total_amount: (coins.total_amount()),
-                total_num_coins: (coins.item_count()),
+                total_num_notes: (coins.item_count()),
                 details: (details_vec),
             })
         }
