@@ -33,7 +33,7 @@ serde = "1.0.118"
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.23"
 tracing ="0.1.22"
-jsonrpsee-types = "0.14.0"
+jsonrpsee-types = "0.15.1"
 jsonrpsee-core = "0.14.0"
 serde_json = "1.0.82"
 url = { version = "2.2.2", features = ["serde"] }
