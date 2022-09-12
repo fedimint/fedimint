@@ -611,6 +611,33 @@
 <span id="611">611</span>
 <span id="612">612</span>
 <span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -884,7 +911,9 @@
 <span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
-        WsClientBuilder::default().build(url).<span class="kw">await
+        WsClientBuilder::default()
+            .build(url_to_string_with_default_port(url)) <span class="comment">// Hack for default ports, see fn docs
+            </span>.<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -905,10 +934,18 @@
         WsFederationApi {
             members: members
                 .into_iter()
-                .map(|(peer_id, url)| FederationMember {
-                    peer_id,
-                    url,
-                    client: RwLock::new(<span class="prelude-val">None</span>),
+                .map(|(peer_id, url)| {
+                    <span class="macro">assert!</span>(
+                        url.port_or_known_default().is_some(),
+                        <span class="string">&quot;API client requires a port&quot;
+                    </span>);
+                    <span class="macro">assert!</span>(url.host().is_some(), <span class="string">&quot;API client requires a target host&quot;</span>);
+
+                    FederationMember {
+                        peer_id,
+                        url,
+                        client: RwLock::new(<span class="prelude-val">None</span>),
+                    }
                 })
                 .collect(),
             max_evil,
@@ -963,6 +1000,23 @@
             }
         }
     }
+}
+
+<span class="doccomment">/// `jsonrpsee` converts the `Url` to a `&amp;str` internally and then parses it as an `Uri`.
+/// Unfortunately `Url` swallows ports that it considers default ports (e.g. 80 and 443 for HTTP(S))
+/// which makes the `Uri` parsing fail in these cases. This function works around this limitation in
+/// a limited way (not fully standard compliant, but work for our use case).
+///
+/// See https://github.com/paritytech/jsonrpsee/issues/554#issue-1048646896
+</span><span class="kw">fn </span>url_to_string_with_default_port(url: <span class="kw-2">&amp;</span>Url) -&gt; String {
+    <span class="macro">format!</span>(
+        <span class="string">&quot;{}://{}:{}{}&quot;</span>,
+        url.scheme(),
+        url.host().expect(<span class="string">&quot;Asserted on construction&quot;</span>),
+        url.port_or_known_default()
+            .expect(<span class="string">&quot;Asserted on construction&quot;</span>),
+        url.path()
+    )
 }
 
 <span class="kw">impl</span>&lt;C: JsonRpcClient&gt; WsFederationApi&lt;C&gt; {
