@@ -40,7 +40,7 @@ enum CliOutput {
 
     Validate {
         all_valid: bool,
-        details: Vec<(SpendableNote, bool)>,
+        details: HashMap<SpendableNote, bool>,
     },
 
     Spend {
@@ -374,11 +374,11 @@ async fn handle_command(
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
                     all_valid: true,
-                    details: ([].to_vec()),
+                    details: ([].to_vec().into_iter().collect()),
                 }),
                 Err(_) => Ok(CliOutput::Validate {
                     all_valid: false,
-                    details: ([].to_vec()),
+                    details: ([].to_vec().into_iter().collect()),
                 }),
             }
         }

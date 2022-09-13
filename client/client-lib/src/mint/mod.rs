@@ -53,7 +53,7 @@ pub struct CoinFinalizationData {
 }
 
 /// A [`Note`] with associated secret key that allows to proof ownership (spend it)
-#[derive(Debug, Clone, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub coin: Note,
     pub spend_key: [u8; 32],
