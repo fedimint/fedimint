@@ -79,7 +79,7 @@ $ mint-client-cli validate AQAAAAAAAABAQg8AAA...
 {
   "validate": {
     "all_valid": true,
-    "details": []
+    "details": {}
   }
 }
 ```
