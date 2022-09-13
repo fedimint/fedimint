@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["main",""]],"struct":[["Options",""],["PayRequest",""]]};
+window.SIDEBAR_ITEMS = {"enum":[["CliErrorKind",""],["CliOutput",""],["Command",""]],"fn":[["handle_command",""],["main",""]],"struct":[["CliError",""],["Options",""],["PayRequest",""]],"trait":[["ErrorHandler",""]],"type":[["CliResult",""]]};
