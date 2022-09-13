@@ -16,6 +16,7 @@ use mint_client::utils::{
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -61,7 +62,7 @@ enum CliOutput {
     Info {
         total_amount: Amount,
         total_num_notes: usize,
-        details: Vec<(Amount, usize)>,
+        details: HashMap<Amount, usize>,
     },
 
     LnInvoice {
@@ -372,11 +373,11 @@ async fn handle_command(
 
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
-                    all_valid: (true),
+                    all_valid: true,
                     details: ([].to_vec()),
                 }),
                 Err(_) => Ok(CliOutput::Validate {
-                    all_valid: (false),
+                    all_valid: false,
                     details: ([].to_vec()),
                 }),
             }
