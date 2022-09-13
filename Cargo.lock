@@ -1620,18 +1620,18 @@ dependencies = [
 
 [[package]]
 name = "lightning"
-version = "0.0.109"
+version = "0.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "740348ba79a57039390b13236e6a3d7fe5f5c1627702178b9c19cd397e45d07e"
+checksum = "2dce6da860338d5a9ddc3fd42432465310cfab93b342bbd23b41b7c1f7c509d3"
 dependencies = [
  "bitcoin",
 ]
 
 [[package]]
 name = "lightning-invoice"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c87c47064c865a3e2f204837279a9a48c5f18ea4db8a56e813921793dc1f3cc5"
+checksum = "32aa02b7fd0bd95e40b6ca8d9d9232b162d5e23b41bd2bc42abe9e9c78d34d72"
 dependencies = [
  "bech32",
  "bitcoin_hashes",
