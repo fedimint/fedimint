@@ -46,34 +46,62 @@ You can view your client's holdings using the `info` command:
 ```shell
 $ mint-client-cli info
 
-We own 18 coins with a total value of 99000000 msat
-We own 9 coins of denomination 1000000 msat
-We own 9 coins of denomination 10000000 msat
+{
+  "info": {
+    "total_amount": 120005000,
+    "total_num_notes": 17,
+    "details":  {
+      "1000": 5,
+      "10000000": 12,
+    }
+  }
+}
 ```
 
-The `spend` subcommand allows sending tokens to another client. This will select the smallest possible set of the client's coins that represents a given amount. The coins are base64 encoded and printed to stdout.
+The `spend` subcommand allows sending notes to another client. This will select the smallest possible set of the client's notes that represents a given amount.
+The notes are base64 encoded into a token and printed as the `token` field.
 
 ```shell
 $ mint-client-cli spend 400000
 
-AQAAAAAAAABAQg8AAA...
+{
+  "spend": {
+    "token": "AQAAAAAAAACAlpgAAAAAAAEAA..."
+  }
+}
 ```
 
-The `validate` subcommand checks the validity of the signatures without claiming the tokens. It does not check if the nonce is unspent.
+The `validate` subcommand checks the validity of the signatures without claiming the notes. It does not check if the nonce is unspent. Validity will be printed as the `all_valid` boolean.
 
 ```shell
 $ mint-client-cli validate AQAAAAAAAABAQg8AAA...
 
-All tokens have valid signatures
+{
+  "validate": {
+    "all_valid": true,
+    "details": {}
+  }
+}
 ```
 
-A receiving client can now reissue these coins to claim them and avoid double spends:
+A receiving client can now reissue these notes to claim them and avoid double spends:
 
 ```shell
 $ mint-client-cli reissue AQAAAAAAAABAQg8AAA...
+> ...
+
 $ mint-client-cli fetch
 
-Fetched coins issuance=5b1ac4e9604...
+{
+  "fetch": {
+    "issuance": [
+      {
+        "txid": "46f2948b772ae8b8...",
+        "out_idx": 0
+      }
+    ]
+  }
+}
 ```
 
 ### Using the gateway
@@ -129,7 +157,12 @@ $ ln2 listinvoices test
 Create our own invoice:
 ```shell
 $ mint-client-cli ln-invoice 1000 "description"
-lnbcrt1u1p3vcp...
+
+{
+  "ln_invoice": {
+    "invoice": "lnbcrt10u1p33lg..."
+  }
+}
 ```
 
 Have `ln2` pay it:
@@ -138,7 +171,7 @@ Have `ln2` pay it:
 $ ln2 pay lnbcrt1u1p3vcp...
 ```
 
-Have mint client check that payment succeeded, fetch coins, and display new balances:
+Have mint client check that payment succeeded, fetch notes, and display new balances:
 
 ```shell
 $ mint-client-cli wait-invoice lnbcrt1u1p3vcp...
@@ -166,18 +199,18 @@ OPTIONS:
 
 SUBCOMMANDS:
     connect-info      Config enabling client to establish websocket connection to federation
-    fetch             Fetch (re-)issued coins and finalize issuance process
+    fetch             Fetch (re-)issued notes and finalize issuance process
     help              Print this message or the help of the given subcommand(s)
     info              Display wallet info (holdings, tiers)
     join-federation   Join a federation using it's ConnectInfo
     ln-invoice        Create a lightning invoice to receive payment via gateway
     ln-pay            Pay a lightning invoice via a gateway
     peg-in            Issue tokens in exchange for a peg-in proof (not yet implemented, just
-                          creates coins)
+                          creates notes)
     peg-in-address    Generate a new peg-in address, funds sent to it can later be claimed
     peg-out           Withdraw funds from the federation
     reissue           Reissue tokens received from a third party to avoid double spends
-    spend             Prepare coins to send to a third party as a payment
+    spend             Prepare notes to send to a third party as a payment
     validate          Validate tokens without claiming them (only checks if signatures valid,
                           does not check if nonce unspent)
     wait-block-height Wait for the fed to reach a consensus block height
