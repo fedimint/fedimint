@@ -150,7 +150,7 @@ impl fmt::Display for CliError {
         if let Some(err) = &self.raw_error {
             json["raw_error"] = json!(*err.to_string())
         }
-        return write!(f, "{}", serde_json::to_string_pretty(&json).unwrap());
+        write!(f, "{}", serde_json::to_string_pretty(&json).unwrap())
     }
 }
 
