@@ -374,11 +374,11 @@ async fn handle_command(
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
                     all_valid: true,
-                    details: ([].to_vec().into_iter().collect()),
+                    details: ([].iter().cloned().collect()),
                 }),
                 Err(_) => Ok(CliOutput::Validate {
                     all_valid: false,
-                    details: ([].to_vec().into_iter().collect()),
+                    details: ([].iter().cloned().collect()),
                 }),
             }
         }
