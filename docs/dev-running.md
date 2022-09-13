@@ -50,16 +50,10 @@ $ mint-client-cli info
   "info": {
     "total_amount": 120005000,
     "total_num_notes": 17,
-    "details": [
-      [
-        1000,
-        5
-      ],
-      [
-        10000000,
-        12
-      ]
-    ]
+    "details":  {
+      "1000": 5,
+      "10000000": 12,
+    }
   }
 }
 ```
