@@ -20,7 +20,7 @@ time1=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "REISSUE $i"
-  TOKENS=$($FM_MINT_CLIENT spend 1000)
+  TOKENS=$($FM_MINT_CLIENT spend 1000 | jq -r '.spend.token')
   $FM_MINT_CLIENT reissue $TOKENS
   $FM_MINT_CLIENT fetch
 done
@@ -44,7 +44,7 @@ time3=$(date +%s.%N)
 for i in $( seq 1 $ITERATIONS )
 do
   echo "LN RECEIVE $i"
-  INVOICE="$($FM_MINT_CLIENT ln-invoice '500000msat' '$RANDOM')"
+  INVOICE="$($FM_MINT_CLIENT ln-invoice '500000msat' '$RANDOM' | jq -r '.ln_invoice.invoice')"
   INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
   INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
   echo "RESULT $INVOICE_STATUS"
