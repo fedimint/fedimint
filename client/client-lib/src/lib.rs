@@ -17,6 +17,7 @@ use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::Hash;
 use futures::stream::FuturesUnordered;
 
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::task::sleep;
 use fedimint_api::{
     db::{
@@ -107,6 +108,21 @@ impl From<GatewayClientConfig> for LightningGateway {
             mint_pub_key: config.redeem_key.public_key(),
             node_pub_key: config.node_pub_key,
             api: config.api,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct Payment {
+    pub invoice: Invoice,
+    pub paid: bool,
+}
+
+impl Payment {
+    pub fn new(invoice: Invoice) -> Self {
+        Self {
+            invoice,
+            paid: false,
         }
     }
 }

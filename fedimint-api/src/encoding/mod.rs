@@ -244,6 +244,22 @@ impl Decodable for lightning_invoice::Invoice {
     }
 }
 
+impl Encodable for bool {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        let bytes = if *self == true { [1u8] } else { [0u8] };
+        writer.write_all(&bytes[..])?;
+        Ok(bytes.len())
+    }
+}
+
+impl Decodable for bool {
+    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut bytes = [0u8; 1];
+        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        Ok(bytes[0] == 1)
+    }
+}
+
 impl DecodeError {
     // TODO: think about better name
     #[allow(clippy::should_implement_trait)]

@@ -1,4 +1,7 @@
+use bitcoin_hashes::sha256;
+
 use crate::ln::outgoing::OutgoingContractData;
+use crate::Payment;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_core::modules::ln::contracts::ContractId;
@@ -12,6 +15,7 @@ const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x24;
 const DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = 0x25;
 const DB_PREFIX_CONFIRMED_INVOICE: u8 = 0x26;
 const DB_PREFIX_LIGHTNING_GATEWAY: u8 = 0x28;
+const DB_PREFIX_PAYMENTS: u8 = 0x29;
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKey(pub ContractId);
@@ -92,4 +96,23 @@ impl DatabaseKeyPrefixConst for LightningGatewayKey {
     const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
     type Key = Self;
     type Value = LightningGateway;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct PaymentKey(pub sha256::Hash);
+
+impl DatabaseKeyPrefixConst for PaymentKey {
+    const DB_PREFIX: u8 = DB_PREFIX_PAYMENTS;
+    type Key = Self;
+    type Value = Payment;
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct PaymentKeyPrefix;
+
+impl DatabaseKeyPrefixConst for PaymentKeyPrefix {
+    const DB_PREFIX: u8 = DB_PREFIX_PAYMENTS;
+    type Key = PaymentKey;
+
+    type Value = Payment;
 }

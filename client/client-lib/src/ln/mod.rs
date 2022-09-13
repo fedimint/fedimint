@@ -4,10 +4,12 @@ pub mod incoming;
 pub mod outgoing;
 
 use crate::api::ApiError;
-use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
+use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix, PaymentKey, PaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
+use crate::Payment;
+use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::Amount;
@@ -168,6 +170,7 @@ impl<'c> LnClient<'c> {
             .expect("Db error");
     }
 
+    // FIXME: should this return Option?
     pub fn get_confirmed_invoice(&self, contract_id: ContractId) -> Result<ConfirmedInvoice> {
         let confirmed_invoice = self
             .context
@@ -176,6 +179,28 @@ impl<'c> LnClient<'c> {
             .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
         Ok(confirmed_invoice)
+    }
+
+    pub fn fetch_payment(&self, payment_hash: &sha256::Hash) -> Option<Payment> {
+        self.context
+            .db
+            .get_value(&PaymentKey(payment_hash.clone()))
+            .expect("Db error")
+    }
+
+    pub fn list_payments(&self) -> Vec<Payment> {
+        self.context
+            .db
+            .find_by_prefix(&PaymentKeyPrefix)
+            .map(|res| res.expect("Db error").1)
+            .collect()
+    }
+
+    pub fn save_payment(&self, payment: &Payment) {
+        self.context
+            .db
+            .insert_entry(&PaymentKey(payment.invoice.payment_hash().clone()), payment)
+            .expect("Db error");
     }
 }
 
@@ -191,6 +216,8 @@ pub enum LnClientError {
     WrongAccountType,
     #[error("No ConfirmedOffer found for contract ID {0}")]
     NoConfirmedInvoice(ContractId),
+    #[error("No Payment found for payment hash {0}")]
+    PaymentNotFound(sha256::Hash),
 }
 
 #[cfg(test)]
