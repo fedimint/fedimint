@@ -63,14 +63,22 @@ pub struct FedimintServer {
 /// Start all the components of the mint and plug them together
 pub async fn run_fedimint(cfg_path: PathBuf, db_path: PathBuf, setup_port: u16) {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+
+    // TODO: this should run always as more of an admin UI
     if !Path::new(&cfg_path).is_file() {
-        // Spawn setup UI, wait for setup to finish
-        tokio::task::spawn(run_setup(cfg_path.clone(), setup_port, sender));
+        // Spawn setup UI, () sent over receive when it's finished
+        tokio::task::spawn(run_setup(
+            cfg_path.clone(),
+            db_path.clone(),
+            setup_port,
+            sender,
+        ));
         receiver
             .recv()
             .await
             .expect("failed to receive setup message");
     }
+
     let cfg: ServerConfig = load_from_file(&cfg_path);
     let server = FedimintServer::new(cfg.clone(), db_path.clone()).await;
     spawn(net::api::run_server(cfg, server.consensus.clone()));

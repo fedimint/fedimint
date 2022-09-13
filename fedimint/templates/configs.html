@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head></head>
+<body>
+
+<h1>Client config</h1>
+<pre>{{ client_config }}</pre>
+
+<h1>Server configs</h1>
+{% for (guardian, server_config) in server_configs %}
+    <h3>{{ guardian.name }}</h3>
+    <pre>{{ server_config }}</pre>
+{% endfor %}
+
+</body>
+</html>

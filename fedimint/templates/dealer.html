@@ -3,7 +3,7 @@
 <head></head>
 <body>
 <h3>Add Guardians</h3>
-<form action="/guardians" method="post">
+<form action="/dealer" method="post">
     <div>
         <label for="name">
             Name:
@@ -22,13 +22,13 @@
 </form>
 
 <h3>Guardians</h3>
-{% for peer in peers %}
-    <li>{{peer.name}}: {{ peer.connection_string }}</li>
+{% for guardian in guardians %}
+    <li>{{ guardian.name }}: {{ guardian.connection_string }}</li>
 {% endfor %}
 
-{% if peers.len() > 0 %}
-    <form action="/start-federation" method="post">
-        <input type="submit" value="Start Federation">
+{% if guardians.len() > 0 %}
+    <form action="/deal" method="post">
+        <input type="submit" value="Deal">
     </form>
 {% endif %}
 </body>
