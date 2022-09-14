@@ -18,7 +18,7 @@ bitcoin = { version = "0.28.1", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
 futures = "0.3.21"
 hex = "0.4.3"
-lightning-invoice = "0.17.0"
+lightning-invoice = "0.18.0"
 fedimint-derive = { path = "../fedimint-derive" }
 rand = "0.6.0"
 rand07 = { version = "0.7", package = "rand" }

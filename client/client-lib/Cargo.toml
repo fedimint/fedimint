@@ -21,8 +21,8 @@ bitcoin = "0.28.1"
 bitcoin_hashes = "0.10.0"
 futures = "0.3.9"
 hex = "0.4.3"
-lightning-invoice = "0.17.0"
-lightning = "0.0.109"
+lightning-invoice = "0.18.0"
+lightning = "0.0.110"
 miniscript = "7.0.0"
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-api = { path = "../../fedimint-api" }
@@ -33,17 +33,17 @@ serde = "1.0.118"
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.23"
 tracing ="0.1.22"
-jsonrpsee-types = "0.14.0"
-jsonrpsee-core = "0.14.0"
+jsonrpsee-types = "0.15.1"
+jsonrpsee-core = { version = "0.15.1", features = [ "client" ] }
 serde_json = "1.0.82"
 url = { version = "2.2.2", features = ["serde"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = "0.14.0"
+jsonrpsee-ws-client = "0.15.1"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 js-sys = "0.3.59"
-jsonrpsee-wasm-client = "0.14.0"
+jsonrpsee-wasm-client = "0.15.1"
 
 [dev-dependencies]
 tokio = { version = "1.21.0", features = ["full"] }
