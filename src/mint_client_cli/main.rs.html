@@ -727,7 +727,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = <span class="kw-2">&amp;</span><span class="self">self</span>.raw_error {
             json[<span class="string">&quot;raw_error&quot;</span>] = <span class="macro">json!</span>(<span class="kw-2">*</span>err.to_string())
         }
-        <span class="kw">return </span><span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).unwrap());
+        <span class="macro">write!</span>(f, <span class="string">&quot;{}&quot;</span>, serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).unwrap())
     }
 }
 
