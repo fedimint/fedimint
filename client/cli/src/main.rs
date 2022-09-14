@@ -13,7 +13,7 @@ use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
     serialize_coins,
 };
-use mint_client::{Client, UserClientConfig};
+use mint_client::{Client, Payment, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -63,6 +63,11 @@ enum CliOutput {
         total_amount: Amount,
         total_num_notes: usize,
         details: HashMap<Amount, usize>,
+    },
+
+    History {
+        num_results: usize,
+        payments: Vec<Payment>,
     },
 
     LnInvoice {
@@ -209,6 +214,9 @@ enum Command {
 
     /// Display wallet info (holdings, tiers)
     Info,
+
+    /// Fetch the payment history of the client
+    History,
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
@@ -422,6 +430,13 @@ async fn handle_command(
                 details: (details_vec),
             })
         }
+        Command::History => {
+            let payments = client.get_payment_history().await;
+            Ok(CliOutput::History {
+                num_results: (payments.len()),
+                payments: (payments),
+            })
+        }
         Command::PegOut { address, satoshis } => {
             match client.new_peg_out_with_fees(satoshis, address).await {
                 Ok(peg_out) => match client.peg_out(peg_out, &mut rng).await {
@@ -448,11 +463,14 @@ async fn handle_command(
             }
         }
         Command::LnPay { bolt11 } => {
-            match client.fund_outgoing_ln_contract(bolt11, &mut rng).await {
+            match client
+                .fund_outgoing_ln_contract(bolt11.clone(), &mut rng)
+                .await
+            {
                 Ok((contract_id, outpoint)) => {
                     match client.await_outgoing_contract_acceptance(outpoint).await {
                         Ok(_) => client
-                            .await_outgoing_contract_execution(contract_id)
+                            .await_outgoing_contract_execution(contract_id, bolt11)
                             .await
                             .transform(
                                 |_| CliOutput::LnPay {

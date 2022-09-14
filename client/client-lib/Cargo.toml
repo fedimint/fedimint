@@ -21,7 +21,7 @@ bitcoin = "0.28.1"
 bitcoin_hashes = "0.10.0"
 futures = "0.3.9"
 hex = "0.4.3"
-lightning-invoice = "0.17.0"
+lightning-invoice = { version = "0.17.0", features = ["serde"] }
 lightning = "0.0.109"
 miniscript = "7.0.0"
 fedimint-core = { path = "../../fedimint-core" }
@@ -37,6 +37,7 @@ jsonrpsee-types = "0.14.0"
 jsonrpsee-core = "0.14.0"
 serde_json = "1.0.82"
 url = { version = "2.2.2", features = ["serde"] }
+uuid = { version = "1.1.2", features = ["v4", "fast-rng", "macro-diagnostics", "serde"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = "0.14.0"

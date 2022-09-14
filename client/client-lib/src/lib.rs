@@ -5,11 +5,9 @@ pub mod transaction;
 pub mod utils;
 pub mod wallet;
 
-use std::time::Duration;
-#[cfg(not(target_family = "wasm"))]
-use std::time::SystemTime;
-
+use fedimint_core::modules::wallet::txoproof::PegInProof;
 use futures::StreamExt;
+use std::time::Duration;
 
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
@@ -53,10 +51,12 @@ use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
 use ln::db::LightningGatewayKey;
 use rand::{CryptoRng, RngCore};
-use secp256k1_zkp::{All, Secp256k1};
+use secp256k1_zkp::{All, PublicKey, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
+use utils::duration_since_epoch;
+use uuid::Uuid;
 
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
@@ -112,17 +112,66 @@ impl From<GatewayClientConfig> for LightningGateway {
     }
 }
 
-#[derive(Clone, Debug, Encodable, Decodable)]
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
+pub enum PaymentDirection {
+    Inbound,
+    Outbound,
+}
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
+pub enum TypedPaymentDetail {
+    InboundOnchain {
+        tx_id: bitcoin::Txid,
+        confirmed_in_block: Option<bitcoin::BlockHash>,
+        proof: PegInProof,
+    },
+    OutboundOnchain {
+        tx_id: bitcoin::Txid,
+        confirmed_in_block: Option<bitcoin::BlockHash>,
+    },
+    InboundLightning {
+        invoice: Invoice,
+        paid: bool,
+        used_gateway: PublicKey,
+    },
+    OutboundLightning {
+        used_invoice: Invoice,
+        contract_id: ContractId,
+        used_gateway: PublicKey,
+    },
+    InboundMint {
+        used_token: TieredMulti<SpendableNote>,
+        reissued_token: Option<TieredMulti<SpendableNote>>,
+    },
+    OutboundMint {
+        token: TieredMulti<SpendableNote>,
+    },
+}
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize, Deserialize)]
 pub struct Payment {
-    pub invoice: Invoice,
-    pub paid: bool,
+    pub uuid: Uuid,
+    pub timestamp: u128,
+    pub amount: Amount,
+    pub direction: PaymentDirection,
+    pub note: Option<String>,
+    pub detail: TypedPaymentDetail,
 }
 
 impl Payment {
-    pub fn new(invoice: Invoice) -> Self {
-        Self {
-            invoice,
-            paid: false,
+    fn new_realtime(
+        amount: Amount,
+        direction: PaymentDirection,
+        note: Option<String>,
+        detail: TypedPaymentDetail,
+    ) -> Self {
+        Payment {
+            uuid: (Uuid::new_v4()),
+            timestamp: (duration_since_epoch().as_millis()),
+            amount: (amount),
+            direction: (direction),
+            note: (note),
+            detail: (detail),
         }
     }
 }
@@ -566,21 +615,12 @@ impl Client<UserClientConfig> {
             htlc_maximum_msat: None,
         }]);
 
-        #[cfg(not(target_family = "wasm"))]
-        let duration_since_epoch = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap();
-
-        #[cfg(target_family = "wasm")]
-        let duration_since_epoch =
-            Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
-
         let invoice = InvoiceBuilder::new(network_to_currency(self.config.0.wallet.network))
             .amount_milli_satoshis(amount.milli_sat)
             .description(description)
             .payment_hash(payment_hash)
             .payment_secret(payment_secret)
-            .duration_since_epoch(duration_since_epoch)
+            .duration_since_epoch(duration_since_epoch())
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
             .private_route(gateway_route_hint)
@@ -610,12 +650,22 @@ impl Client<UserClientConfig> {
             .await_output_outcome::<OfferId>(outpoint, timeout)
             .await?;
 
+        self.ln_client().save_payment(&Payment::new_realtime(
+            amount,
+            PaymentDirection::Inbound,
+            None,
+            TypedPaymentDetail::InboundLightning {
+                invoice: (invoice.clone()),
+                paid: false,
+                used_gateway: (gateway.node_pub_key),
+            },
+        ));
+
         let confirmed = ConfirmedInvoice {
             invoice,
             keypair: payment_keypair,
         };
         self.ln_client().save_confirmed_invoice(&confirmed);
-
         Ok(confirmed)
     }
 
@@ -635,6 +685,24 @@ impl Client<UserClientConfig> {
             .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await?;
 
+        if let Some(mut saved_payment) = self.ln_client().fetch_payment(ci.invoice.payment_hash()) {
+            saved_payment.timestamp = duration_since_epoch().as_millis();
+            match saved_payment.detail {
+                TypedPaymentDetail::InboundLightning {
+                    invoice,
+                    used_gateway,
+                    ..
+                } => {
+                    saved_payment.detail = TypedPaymentDetail::InboundLightning {
+                        invoice: (invoice),
+                        paid: true,
+                        used_gateway: (used_gateway),
+                    }
+                }
+                _ => panic!("retrieved payment history is of wrong type! (LN)"),
+            }
+            self.ln_client().save_payment(&saved_payment);
+        }
         // TODO: Update database if invoice is paid or expired
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -642,7 +710,11 @@ impl Client<UserClientConfig> {
 
     /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
     /// for them to do so
-    pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
+    pub async fn await_outgoing_contract_execution(
+        &self,
+        contract_id: ContractId,
+        invoice: Invoice,
+    ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
             .post(
@@ -657,7 +729,23 @@ impl Client<UserClientConfig> {
         fedimint_api::task::timeout(Duration::from_secs(15), future)
             .await
             .map_err(|_| ClientError::OutgoingPaymentTimeout)??;
+        self.ln_client().save_payment(&Payment::new_realtime(
+            Amount {
+                milli_sat: (invoice.amount_milli_satoshis().unwrap()),
+            },
+            PaymentDirection::Outbound,
+            None,
+            TypedPaymentDetail::OutboundLightning {
+                used_invoice: (invoice),
+                contract_id: (contract_id),
+                used_gateway: (gateway.node_pub_key),
+            },
+        ));
         Ok(())
+    }
+
+    pub async fn get_payment_history(&self) -> Vec<Payment> {
+        self.ln_client().list_payments()
     }
 }
 

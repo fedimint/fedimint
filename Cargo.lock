@@ -706,6 +706,7 @@ dependencies = [
  "getrandom 0.2.7",
  "gloo-timers",
  "hex",
+ "lightning",
  "lightning-invoice",
  "rand 0.6.5",
  "rand 0.7.3",
@@ -722,6 +723,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
  "wasm-bindgen-futures",
 ]
 
@@ -1670,6 +1672,7 @@ dependencies = [
  "lightning",
  "num-traits",
  "secp256k1",
+ "serde",
 ]
 
 [[package]]
@@ -1813,6 +1816,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -3336,6 +3340,29 @@ dependencies = [
  "matches",
  "percent-encoding",
  "serde",
+]
+
+[[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+dependencies = [
+ "getrandom 0.2.7",
+ "rand 0.8.5",
+ "serde",
+ "uuid-macro-internal",
+]
+
+[[package]]
+name = "uuid-macro-internal"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "548f7181a5990efa50237abb7ebca410828b57a8955993334679f8b50b35c97d"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.21",
+ "syn 1.0.99",
 ]
 
 [[package]]

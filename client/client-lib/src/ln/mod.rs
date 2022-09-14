@@ -8,7 +8,7 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix, PaymentKey, Pa
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
-use crate::Payment;
+use crate::{Payment, TypedPaymentDetail};
 use bitcoin_hashes::sha256;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
@@ -184,7 +184,7 @@ impl<'c> LnClient<'c> {
     pub fn fetch_payment(&self, payment_hash: &sha256::Hash) -> Option<Payment> {
         self.context
             .db
-            .get_value(&PaymentKey(payment_hash.clone()))
+            .get_value(&PaymentKey(*payment_hash))
             .expect("Db error")
     }
 
@@ -197,10 +197,23 @@ impl<'c> LnClient<'c> {
     }
 
     pub fn save_payment(&self, payment: &Payment) {
-        self.context
-            .db
-            .insert_entry(&PaymentKey(payment.invoice.payment_hash().clone()), payment)
-            .expect("Db error");
+        match &payment.detail {
+            TypedPaymentDetail::InboundLightning { invoice, .. } => {
+                self.context
+                    .db
+                    .insert_entry(&PaymentKey(*invoice.payment_hash()), payment)
+                    .expect("Db error");
+            }
+            TypedPaymentDetail::OutboundLightning { used_invoice, .. } => {
+                self.context
+                    .db
+                    .insert_entry(&PaymentKey(*used_invoice.payment_hash()), payment)
+                    .expect("Db error");
+            }
+            _ => {
+                panic!("Tried to save a non-lightning payment into ln database!");
+            }
+        }
     }
 }
 

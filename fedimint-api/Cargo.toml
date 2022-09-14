@@ -19,6 +19,7 @@ bitcoin_hashes = { version = "0.10", features = ["serde"] }
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.17.0"
+lightning = "0.0.109"
 fedimint-derive = { path = "../fedimint-derive" }
 rand = "0.6.0"
 rand07 = { version = "0.7", package = "rand" }
@@ -31,6 +32,7 @@ tbs = { path = "../crypto/tbs"}
 thiserror = "1.0.23"
 tracing ="0.1.22"
 url = { version = "2.2.2", features = ["serde"] }
+uuid = "1.1.2"
 
 [target.'cfg(target_family="wasm")'.dependencies]
 async-lock = "2.5"

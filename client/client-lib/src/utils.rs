@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use crate::api::FederationApi;
 use crate::mint::SpendableNote;
@@ -7,7 +7,10 @@ use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::ParseAmountError;
 use fedimint_core::modules::mint::tiered::TieredMulti;
-use lightning_invoice::Currency;
+use lightning_invoice::{Currency, InvoiceDescription};
+
+#[cfg(not(target_family = "wasm"))]
+use std::time::SystemTime;
 
 pub fn parse_coins(s: &str) -> TieredMulti<SpendableNote> {
     let bytes = base64::decode(s).unwrap();
@@ -63,4 +66,23 @@ pub fn network_to_currency(network: Network) -> Currency {
         Network::Testnet => Currency::BitcoinTestnet,
         Network::Signet => Currency::Signet,
     }
+}
+
+pub fn invoice_description_to_string(desc: InvoiceDescription) -> String {
+    match desc {
+        InvoiceDescription::Direct(d) => d.to_string(),
+        InvoiceDescription::Hash(h) => h.0.to_string(),
+    }
+}
+
+pub fn duration_since_epoch() -> Duration {
+    #[cfg(not(target_family = "wasm"))]
+    let duration_since_epoch = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("Time went backwards?");
+
+    #[cfg(target_family = "wasm")]
+    let duration_since_epoch = Duration::from_secs_f64(js_sys::Date::new_0().get_time() / 1000.);
+
+    duration_since_epoch
 }

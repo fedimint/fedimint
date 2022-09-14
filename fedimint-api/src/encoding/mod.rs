@@ -11,6 +11,7 @@ use std::fmt::{Debug, Formatter};
 use std::io::Error;
 use thiserror::Error;
 use url::Url;
+use uuid::Uuid;
 
 /// Data which can be encoded in a consensus-consistent way
 pub trait Encodable {
@@ -66,6 +67,7 @@ macro_rules! impl_encode_decode_num {
     };
 }
 
+impl_encode_decode_num!(u128);
 impl_encode_decode_num!(u64);
 impl_encode_decode_num!(u32);
 impl_encode_decode_num!(u16);
@@ -244,9 +246,21 @@ impl Decodable for lightning_invoice::Invoice {
     }
 }
 
+impl Encodable for uuid::Uuid {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, std::io::Error> {
+        self.hyphenated().to_string().consensus_encode(writer)
+    }
+}
+
+impl Decodable for uuid::Uuid {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        Uuid::parse_str(String::consensus_decode(d)?.as_str()).map_err(DecodeError::from_err)
+    }
+}
+
 impl Encodable for bool {
     fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
-        let bytes = if *self == true { [1u8] } else { [0u8] };
+        let bytes = if *self { [1u8] } else { [0u8] };
         writer.write_all(&bytes[..])?;
         Ok(bytes.len())
     }
