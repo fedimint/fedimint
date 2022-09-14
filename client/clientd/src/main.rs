@@ -145,8 +145,8 @@ async fn spend(
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
 
-    let coins = client.select_and_spend_coins(payload.0.amount)?;
-    json_success!(SpendResponse { coins })
+    let notes = client.select_and_spend_coins(payload.0.amount)?;
+    json_success!(SpendResponse { notes })
 }
 
 async fn fetch(client: Arc<Client<UserClientConfig>>) {
@@ -156,11 +156,11 @@ async fn fetch(client: Arc<Client<UserClientConfig>>) {
         match item {
             Ok(out_point) => {
                 //TODO: Log event
-                info!("fetched coins: {}", out_point);
+                info!("fetched notes: {}", out_point);
             }
             Err(err) => {
                 //TODO: Log event
-                info!("error fetching coins: {}", err);
+                info!("error fetching notes: {}", err);
             }
         }
     }
