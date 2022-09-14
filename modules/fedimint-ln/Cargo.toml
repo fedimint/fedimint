@@ -18,8 +18,8 @@ bincode = "1"
 bitcoin_hashes = "0.10.0"
 futures = "0.3.21"
 itertools = "0.10.1"
-lightning = "0.0.109"
-lightning-invoice = "0.17.0"
+lightning = "0.0.110"
+lightning-invoice = "0.18.0"
 fedimint-api = { path = "../../fedimint-api" }
 secp256k1 = { version="0.22.1", default-features=false }
 serde = {version = "1.0.130", features = [ "derive" ] }
