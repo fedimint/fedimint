@@ -55,24 +55,17 @@ pub struct SpendPayload {
 
 #[derive(Deserialize, Serialize)]
 pub struct InfoResponse {
-    coins: Vec<CoinsByTier>,
+    notes: TieredNoteCount,
     pending: PendingResponse,
 }
 
 impl InfoResponse {
     pub fn new(
-        coins: TieredMulti<SpendableNote>,
+        notes: TieredMulti<SpendableNote>,
         active_issuances: Vec<(OutPoint, CoinFinalizationData)>,
     ) -> Self {
-        let info_coins: Vec<CoinsByTier> = coins
-            .iter_tiers()
-            .map(|(tier, c)| CoinsByTier {
-                quantity: c.len(),
-                tier: tier.milli_sat,
-            })
-            .collect();
         Self {
-            coins: info_coins,
+            notes: notes.into(),
             pending: PendingResponse::new(active_issuances),
         }
     }
@@ -109,19 +102,22 @@ pub struct PegInOutResponse {
 
 #[derive(Deserialize, Serialize)]
 pub struct SpendResponse {
-    pub coins: TieredMulti<SpendableNote>,
+    pub notes: TieredMulti<SpendableNote>,
 }
 
-/// Holds a e-cash tier (msat by convention) and a quantity of coins
+/// Represents an e-cash tier (msat by convention) grouped with a quantity of notes
 ///
-/// e.g { tier: 1000, quantity: 10 } means 10x coins worth 1000msat each
+/// e.g { tier: 1000, quantity: 10 } means 10x notes worth 1000msat each
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CoinsByTier {
+struct TieredCount {
     tier: u64,
-    quantity: usize,
+    quantity: u64,
 }
 
-/// Holds a pending transaction with the txid, the quantity of coins and the value
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct TieredNoteCount(Vec<TieredCount>);
+
+/// Holds a pending transaction with the txid, the quantity of notes and the value
 ///
 /// e.g { txid: xxx, qty: 10, value: 1 } is a pending transaction 'worth' 10btc
 /// notice that this are ALL pending transactions not only the ['Accepted'](fedimint_core::outcome::TransactionStatus) ones !
@@ -200,4 +196,17 @@ macro_rules! json_success {
        Ok(axum::Json(body))
     }
     };
+}
+
+impl From<TieredMulti<SpendableNote>> for TieredNoteCount {
+    fn from(tiered_multi: TieredMulti<SpendableNote>) -> Self {
+        let all_tiered: Vec<TieredCount> = tiered_multi
+            .iter_tiers()
+            .map(|(tier, n)| TieredCount {
+                quantity: n.len() as u64,
+                tier: tier.milli_sat,
+            })
+            .collect();
+        TieredNoteCount(all_tiered)
+    }
 }

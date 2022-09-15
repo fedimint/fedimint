@@ -2,7 +2,7 @@ use anyhow::Result;
 use bitcoin::Transaction;
 use clap::{Parser, Subcommand};
 use clientd::{call, PegInPayload, SpendPayload, WaitBlockHeightPayload};
-use fedimint_api::{module::__reexports::serde_json, Amount};
+use fedimint_api::Amount;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::{from_hex, parse_fedimint_amount};
 
