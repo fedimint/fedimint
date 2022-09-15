@@ -369,7 +369,7 @@ async fn lightning_gateway_pays_invoice() {
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() {
     let starting_balance = sats(2000);
-    let payment_amount = sats(100);
+    let preimage_price = sats(100);
     let (fed, user, bitcoin, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
     fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
@@ -379,16 +379,21 @@ async fn receive_lightning_payment_valid_preimage() {
     // Create lightning invoice whose associated "offer" is accepted by federation consensus
     let invoice = tokio::join!(
         user.client
-            .generate_invoice(payment_amount, "".into(), rng()),
+            .generate_invoice(preimage_price, "".into(), rng()),
         fed.await_consensus_epochs(1),
     )
     .0
     .unwrap();
 
     // Gateway deposits ecash to trigger preimage decryption by the federation
+
+    // Usually, the invoice amount needed to buy preimage is equivalent to the `preimage_price`
+    // however, for this test, the gateway deposits more than is necessary to check that
+    // we never overspend when buying the preimage!
+    let invoice_amount = preimage_price + sats(50);
     let (outpoint, contract_id) = gateway
         .server
-        .buy_preimage_offer(invoice.invoice.payment_hash(), &payment_amount, rng())
+        .buy_preimage_offer(invoice.invoice.payment_hash(), &invoice_amount, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(2).await; // 1 epoch to process contract, 1 for preimage decryption
@@ -396,7 +401,7 @@ async fn receive_lightning_payment_valid_preimage() {
     // Gateway funds have been escrowed
     gateway
         .user
-        .assert_total_coins(starting_balance - payment_amount)
+        .assert_total_coins(starting_balance - preimage_price)
         .await;
     user.assert_total_coins(sats(0)).await;
 
@@ -422,9 +427,9 @@ async fn receive_lightning_payment_valid_preimage() {
     // Ecash tokens have been transferred from gateway to user
     gateway
         .user
-        .assert_total_coins(starting_balance - payment_amount)
+        .assert_total_coins(starting_balance - preimage_price)
         .await;
-    user.assert_total_coins(payment_amount).await;
+    user.assert_total_coins(preimage_price).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
