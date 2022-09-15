@@ -992,6 +992,26 @@
 <span id="992">992</span>
 <span id="993">993</span>
 <span id="994">994</span>
+<span id="995">995</span>
+<span id="996">996</span>
+<span id="997">997</span>
+<span id="998">998</span>
+<span id="999">999</span>
+<span id="1000">1000</span>
+<span id="1001">1001</span>
+<span id="1002">1002</span>
+<span id="1003">1003</span>
+<span id="1004">1004</span>
+<span id="1005">1005</span>
+<span id="1006">1006</span>
+<span id="1007">1007</span>
+<span id="1008">1008</span>
+<span id="1009">1009</span>
+<span id="1010">1010</span>
+<span id="1011">1011</span>
+<span id="1012">1012</span>
+<span id="1013">1013</span>
+<span id="1014">1014</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1008,7 +1028,7 @@
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 
 <span class="kw">use </span>fedimint_api::task::sleep;
@@ -1078,8 +1098,10 @@
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub struct </span>PaymentParameters {
     <span class="kw">pub </span>max_delay: u64,
-    <span class="comment">// FIXME: change to absolute fee to avoid rounding errors
-    </span><span class="kw">pub </span>max_fee_percent: f64,
+    <span class="kw">pub </span>invoice_amount: Amount,
+    <span class="kw">pub </span>max_send_amount: Amount,
+    <span class="kw">pub </span>payment_hash: sha256::Hash,
+    <span class="kw">pub </span>maybe_internal: bool,
 }
 
 <span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1120,6 +1142,14 @@
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ClientConfig {
         <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
     </span>}
+}
+
+<span class="kw">impl </span>PaymentParameters {
+    <span class="comment">// FIXME: change to absolute fee to avoid rounding errors
+    </span><span class="kw">pub fn </span>max_fee_percent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; f64 {
+        <span class="kw">let </span>max_absolute_fee = <span class="self">self</span>.max_send_amount - <span class="self">self</span>.invoice_amount;
+        (max_absolute_fee.milli_sat <span class="kw">as </span>f64) / (<span class="self">self</span>.invoice_amount.milli_sat <span class="kw">as </span>f64)
+    }
 }
 
 <span class="kw">impl</span>&lt;T: AsRef&lt;ClientConfig&gt; + Clone&gt; Client&lt;T&gt; {
@@ -1678,10 +1708,6 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::Underfunded(invoice_amount, account.amount));
         }
 
-        <span class="kw">let </span>max_absolute_fee = account.amount - invoice_amount;
-        <span class="kw">let </span>max_fee_percent =
-            (max_absolute_fee.milli_sat <span class="kw">as </span>f64) / (invoice_amount.milli_sat <span class="kw">as </span>f64);
-
         <span class="kw">let </span>consensus_block_height = <span class="self">self</span>.context.api.fetch_consensus_block_height().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// Calculate max delay taking into account current consensus block height and our safety
         // margin.
@@ -1692,8 +1718,22 @@
 
         <span class="prelude-val">Ok</span>(PaymentParameters {
             max_delay,
-            max_fee_percent,
+            invoice_amount,
+            max_send_amount: account.amount,
+            payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
+            maybe_internal: <span class="self">self</span>.is_maybe_internal_payment(<span class="kw-2">&amp;</span>invoice),
         })
+    }
+
+    <span class="doccomment">/// Returns true if the invoice contains us as a routing hint
+    </span><span class="kw">fn </span>is_maybe_internal_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>Invoice) -&gt; bool {
+        <span class="kw">let </span>maybe_route_hint_first_id = invoice
+            .route_hints()
+            .first()
+            .and_then(|rh| rh.<span class="number">0</span>.first())
+            .map(|hop| hop.src_node_id);
+
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.config().node_pub_key) == maybe_route_hint_first_id
     }
 
     <span class="doccomment">/// Save the details about an outgoing payment the client is about to process. This function has
