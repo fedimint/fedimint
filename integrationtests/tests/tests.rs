@@ -10,6 +10,7 @@ use futures::executor::block_on;
 use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
 use tokio::time::timeout;
+use tracing::debug;
 
 use crate::fixtures::FederationTest;
 use fedimint::epoch::ConsensusItem;
@@ -320,7 +321,95 @@ async fn drop_peers_who_contribute_bad_sigs() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn lightning_gateway_pays_invoice() {
+async fn lightning_gateway_pays_internal_invoice() {
+    let (fed, sending_user, bitcoin, gateway, lightning) =
+        fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+
+    // Fund the gateway so it can route internal payments
+    fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
+        .await;
+    fed.mine_and_mint(&sending_user, &*bitcoin, sats(2000))
+        .await;
+
+    let receiving_user = sending_user.new_client(&[0]);
+
+    let confirmed_invoice = tokio::join!(
+        receiving_user
+            .client
+            .generate_invoice(sats(1000), "".into(), rng()),
+        fed.await_consensus_epochs(1),
+    )
+    .0
+    .unwrap();
+    let incoming_contract_id = confirmed_invoice.contract_id();
+    let invoice = confirmed_invoice.invoice;
+    debug!("Receiving User generated invoice: {:?}", invoice);
+
+    let (contract_id, funding_outpoint) = sending_user
+        .client
+        .fund_outgoing_ln_contract(invoice, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await; // send coins to LN contract
+
+    let contract_account = sending_user
+        .client
+        .ln_client()
+        .get_contract_account(contract_id)
+        .await
+        .unwrap();
+    assert_eq!(contract_account.amount, sats(1010)); // 1% LN fee
+    debug!(
+        "Sending User created outgoing contract: {:?}",
+        contract_account
+    );
+
+    sending_user
+        .client
+        .await_outgoing_contract_acceptance(funding_outpoint)
+        .await
+        .unwrap();
+    debug!("Outgoing contract accepted");
+
+    tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
+        // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+        fed.await_consensus_epochs(4).await;
+    })
+    .0
+    .unwrap();
+    debug!("Gateway paid invoice on behalf of Sending User");
+
+    gateway
+        .server
+        .await_outgoing_contract_claimed(contract_id, funding_outpoint)
+        .await
+        .unwrap();
+    debug!("Gateway claimed outgoing contract");
+
+    let receiving_outpoint = receiving_user
+        .client
+        .claim_incoming_contract(incoming_contract_id, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await; // claim incoming contract and mint the tokens
+
+    receiving_user
+        .client
+        .fetch_coins(receiving_outpoint)
+        .await
+        .unwrap();
+    debug!("User fetched funds paid to incoming contract");
+
+    sending_user.assert_total_coins(sats(2000 - 1010)).await; // user sent a 1000 sat + 10 sat fee invoice
+    gateway.user.assert_total_coins(sats(2010)).await; // gateway routed internally and earned fee
+    receiving_user.assert_total_coins(sats(1000)).await; // this user received the 1000 sat invoice
+
+    assert_eq!(lightning.amount_sent(), sats(0)); // We did not route any payments over the lightning network
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lightning_gateway_pays_outgoing_invoice() {
     let (fed, user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
