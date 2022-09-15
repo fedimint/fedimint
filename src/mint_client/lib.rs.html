@@ -978,6 +978,20 @@
 <span id="978">978</span>
 <span id="979">979</span>
 <span id="980">980</span>
+<span id="981">981</span>
+<span id="982">982</span>
+<span id="983">983</span>
+<span id="984">984</span>
+<span id="985">985</span>
+<span id="986">986</span>
+<span id="987">987</span>
+<span id="988">988</span>
+<span id="989">989</span>
+<span id="990">990</span>
+<span id="991">991</span>
+<span id="992">992</span>
+<span id="993">993</span>
+<span id="994">994</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1745,17 +1759,29 @@
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="kw">pub async fn </span>buy_preimage_offer(
+    <span class="doccomment">/// Buy a lightning preimage listed for sale inside the federation
+    ///
+    /// Called when a lightning gateway attempts to satisfy a contract on behalf of a user
+    ///
+    /// * `payment_hash` - hash of the preimage we want to buy.
+    ///     It is included inside a bolt11 invoice and should match the offer hash
+    /// * `htlc_amount` - amount from the htlc the gateway wants to pay.
+    ///     Should be less than or equal to the offer amount depending on gateway fee policy
+    </span><span class="kw">pub async fn </span>buy_preimage_offer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: <span class="kw-2">&amp;</span>bitcoin_hashes::sha256::Hash,
-        amount: <span class="kw-2">&amp;</span>Amount,
+        htlc_amount: <span class="kw-2">&amp;</span>Amount,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(OutPoint, ContractId)&gt; {
         <span class="kw">let </span>batch = DbBatch::new();
 
         <span class="comment">// Fetch offer for this payment hash
         </span><span class="kw">let </span>offer: IncomingContractOffer = <span class="self">self</span>.ln_client().get_offer(<span class="kw-2">*</span>payment_hash).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span><span class="kw-2">&amp;</span>offer.amount &gt; amount || <span class="kw-2">&amp;</span>offer.hash != payment_hash {
+
+        <span class="kw">if </span><span class="kw-2">&amp;</span>offer.amount &gt; htlc_amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::ViolatedFeePolicy);
+        }
+        <span class="kw">if </span><span class="kw-2">&amp;</span>offer.hash != payment_hash {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::InvalidOffer);
         }
 
@@ -1774,7 +1800,7 @@
         });
         <span class="kw">let </span>incoming_output = fedimint_core::transaction::Output::LN(
             ContractOrOfferOutput::Contract(ContractOutput {
-                amount: <span class="kw-2">*</span>amount,
+                amount: offer.amount,
                 contract: contract.clone(),
             }),
         );
@@ -1951,6 +1977,8 @@
     </span>InvalidAmountTier(Amount),
     <span class="attribute">#[error(<span class="string">&quot;Invalid signature&quot;</span>)]
     </span>InvalidSignature,
+    <span class="attribute">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
+    </span>ViolatedFeePolicy,
 }
 
 <span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>ClientError {
@@ -1959,4 +1987,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (fa6ee9375 2022-09-12)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (750bd1a7f 2022-09-14)" ></div></body></html>
