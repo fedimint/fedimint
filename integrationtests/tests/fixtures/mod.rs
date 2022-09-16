@@ -24,7 +24,11 @@ use fedimint_wallet::{bitcoincore_rpc, WalletConsensusItem};
 use itertools::Itertools;
 use lightning_invoice::Invoice;
 use ln_gateway::GatewayRequest;
+use rand::RngCore;
+
 use rand::rngs::OsRng;
+
+use rocksdb::OptimisticTransactionDB;
 use tokio::sync::Mutex;
 
 use tracing::info;
@@ -124,7 +128,7 @@ pub async fn fixtures(
             let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
             let bitcoin = RealBitcoinTest::new(wallet_config);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir).join("ln2/regtest/lightning-rpc");
+            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
                 RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
             let lightning_rpc = Mutex::new(
@@ -132,11 +136,16 @@ pub async fn fixtures(
                     .await
                     .expect("connect to ln_socket"),
             );
+
             let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+            let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
+            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
+
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers);
+            let user_db = Box::new(rocks(dir.clone()));
+            let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
+
             let gateway = GatewayTest::new(
                 Box::new(lightning_rpc),
                 client_config.clone(),
@@ -155,10 +164,15 @@ pub async fn fixtures(
             let net = MockNetwork::new();
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
-            let fed = FederationTest::new(server_config.clone(), &bitcoin_rpc, &connect_gen).await;
+
+            let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
+            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
+
+            let user_db = Box::new(MemDatabase::new());
             let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers);
+            let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
+
             let gateway = GatewayTest::new(
                 Box::new(lightning.clone()),
                 client_config.clone(),
@@ -170,6 +184,11 @@ pub async fn fixtures(
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
     }
+}
+
+fn rocks(dir: String) -> OptimisticTransactionDB<rocksdb::SingleThreaded> {
+    let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
+    OptimisticTransactionDB::open_default(db_dir).unwrap()
 }
 
 pub trait BitcoinTest {
@@ -276,7 +295,7 @@ impl UserTest {
             .iter()
             .map(|i| PeerId::from(*i))
             .collect::<Vec<PeerId>>();
-        Self::new(self.config.clone(), peers)
+        Self::new(self.config.clone(), peers, Box::new(MemDatabase::new()))
     }
 
     /// Helper to simplify the peg_out method calls
@@ -305,7 +324,7 @@ impl UserTest {
         self.client.coins().total_amount()
     }
 
-    fn new(config: UserClientConfig, peers: Vec<PeerId>) -> Self {
+    fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Box<dyn Database>) -> Self {
         let api = Box::new(WsFederationApi::new(
             config.0.max_evil,
             config
@@ -318,8 +337,7 @@ impl UserTest {
                 .collect(),
         ));
 
-        let database = Box::new(MemDatabase::new());
-        let client = UserClient::new_with_api(config.clone(), database, api, Default::default());
+        let client = UserClient::new_with_api(config.clone(), db, api, Default::default());
 
         UserTest { client, config }
     }
@@ -672,12 +690,13 @@ impl FederationTest {
 
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
+        database_gen: &impl Fn() -> Arc<dyn Database>,
         bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {
             let bitcoin_rpc = bitcoin_gen();
-            let database = Arc::new(MemDatabase::new());
+            let database = database_gen();
 
             let fedimint = FedimintServer::new_with(
                 cfg.clone(),

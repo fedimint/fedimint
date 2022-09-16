@@ -833,6 +833,7 @@ dependencies = [
  "ln-gateway",
  "mint-client",
  "rand 0.6.5",
+ "rocksdb",
  "serde",
  "threshold_crypto",
  "tokio",
