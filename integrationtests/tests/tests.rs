@@ -420,15 +420,13 @@ async fn lightning_gateway_pays_outgoing_invoice() {
         .fund_outgoing_ln_contract(invoice, rng())
         .await
         .unwrap();
-    fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    let contract_account = user
-        .client
-        .ln_client()
-        .get_contract_account(contract_id)
-        .await
-        .unwrap();
-    assert_eq!(contract_account.amount, sats(1010)); // 1% LN fee
+    let ln_client = user.client.ln_client();
+    let (contract_account, _) = tokio::join!(
+        ln_client.get_contract_account(contract_id),
+        fed.run_consensus_epochs(1)
+    );
+    assert_eq!(contract_account.unwrap().amount, sats(1010)); // 1% LN fee
 
     user.client
         .await_outgoing_contract_acceptance(outpoint)
@@ -725,9 +723,9 @@ async fn can_get_signed_epoch_history() {
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
 
-    let epoch0 = user.client.fetch_epoch_history(0).await.unwrap();
-    let epoch1 = user.client.fetch_epoch_history(1).await.unwrap();
     let pubkey = fed.cfg.epoch_pk_set.public_key();
+    let epoch0 = user.client.fetch_epoch_history(0, pubkey).await.unwrap();
+    let epoch1 = user.client.fetch_epoch_history(1, pubkey).await.unwrap();
 
     assert_eq!(epoch0.verify_sig(&pubkey), Ok(()));
     assert_eq!(epoch0.verify_hash(&None), Ok(()));

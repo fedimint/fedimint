@@ -104,7 +104,7 @@ pub struct ContractOutput {
     pub contract: contracts::Contract,
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 pub struct ContractAccount {
     pub amount: fedimint_api::Amount,
     pub contract: contracts::FundedContract,
@@ -121,7 +121,7 @@ pub enum OutputOutcome {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
     pub mint_pub_key: secp256k1::XOnlyPublicKey,
     pub node_pub_key: secp256k1::PublicKey,
