@@ -13,6 +13,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::typenum::U32;
 use sha3::Digest;
+use std::hash::Hasher;
 
 pub use bls12_381::G1Affine as MessagePoint;
 pub use bls12_381::G2Affine as PubKeyPoint;
@@ -67,6 +68,14 @@ impl Message {
     /// **IMPORTANT**: `from_bytes` includes a tag in the hash, this doesn't
     pub fn from_hash(hash: impl Digest<OutputSize = U32>) -> Message {
         Message(hash_to_curve::<G1Projective, _>(hash).to_affine())
+    }
+}
+
+#[allow(clippy::derive_hash_xor_eq)]
+impl std::hash::Hash for AggregatePublicKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let serialized = self.0.to_compressed();
+        state.write(&serialized);
     }
 }
 

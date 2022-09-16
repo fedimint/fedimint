@@ -170,6 +170,7 @@ mod tests {
     use std::str::FromStr;
     use std::sync::Arc;
     use std::time::Duration;
+    use threshold_crypto::PublicKey;
 
     type Fed = FakeFed<Wallet, WalletClientConfig>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
@@ -231,7 +232,11 @@ mod tests {
             unimplemented!()
         }
 
-        async fn fetch_epoch_history(&self, _epoch: u64) -> crate::api::Result<EpochHistory> {
+        async fn fetch_epoch_history(
+            &self,
+            _epoch: u64,
+            _pk: PublicKey,
+        ) -> crate::api::Result<EpochHistory> {
             unimplemented!()
         }
     }

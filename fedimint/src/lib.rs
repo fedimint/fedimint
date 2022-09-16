@@ -211,17 +211,9 @@ impl FedimintServer {
         }
         info!("Rejoining consensus: created outcome");
 
-        // FIXME: Should handle failing and querying other peers
-        loop {
-            match self.download_history(outcomes[0].clone()).await {
-                Ok(_) => {
-                    break;
-                }
-                Err(e) => {
-                    warn!("Download error {:?}", e)
-                }
-            }
-        }
+        self.download_history(outcomes[0].clone())
+            .await
+            .expect("Download error");
     }
 
     /// Requests, verifies and processes history from peers
@@ -240,7 +232,8 @@ impl FedimintServer {
                 let contributions = last_outcome.contributions.clone();
                 EpochHistory::new(last_outcome.epoch, contributions, &prev_epoch)
             } else {
-                let result = self.api.fetch_epoch_history(epoch_num).await;
+                let epoch_pk = self.cfg.epoch_pk_set.public_key();
+                let result = self.api.fetch_epoch_history(epoch_num, epoch_pk).await;
                 result.map_err(|_| EpochVerifyError::MissingPreviousEpoch)?
             };
 

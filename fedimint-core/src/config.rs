@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use url::Url;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub api_endpoints: Vec<Url>,
     pub mint: MintClientConfig,
@@ -25,7 +25,7 @@ impl ClientConfig {
     }
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub wallet: fedimint_wallet::config::FeeConsensus,
     pub mint: fedimint_mint::config::FeeConsensus,

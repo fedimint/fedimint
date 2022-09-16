@@ -1,6 +1,7 @@
 pub mod api;
 pub mod ln;
 pub mod mint;
+pub mod query;
 pub mod transaction;
 pub mod utils;
 pub mod wallet;
@@ -55,6 +56,7 @@ use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use threshold_crypto::PublicKey;
 use url::Url;
 
 use crate::ln::db::{
@@ -383,14 +385,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
         let stream = pending
             .map(|(key, coins)| async move {
-                loop {
-                    match self.context.api.fetch_tx_outcome(key.0).await {
-                        Ok(TransactionStatus::Rejected(_)) => return (key, coins),
-                        Ok(TransactionStatus::Accepted { .. }) => {
-                            return (key, TieredMulti::<SpendableNote>::default())
-                        }
-                        _ => {}
+                match self.context.api.fetch_tx_outcome(key.0).await {
+                    Ok(TransactionStatus::Rejected(_)) => Ok((key, coins)),
+                    Ok(TransactionStatus::Accepted { .. }) => {
+                        Ok((key, TieredMulti::<SpendableNote>::default()))
                     }
+                    Err(err) => Err(err),
                 }
             })
             .collect::<FuturesUnordered<_>>();
@@ -398,7 +398,8 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         let mut batch = DbBatch::new();
         let mut tx = batch.transaction();
         let mut all_coins = TieredMulti::<SpendableNote>::default();
-        for (key, coins) in stream.collect::<Vec<_>>().await {
+        for result in stream.collect::<Vec<_>>().await {
+            let (key, coins) = result?;
             all_coins.extend(coins);
             tx.append_delete(key);
         }
@@ -434,10 +435,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.mint_client().list_active_issuances()
     }
 
-    pub async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory> {
+    pub async fn fetch_epoch_history(
+        &self,
+        epoch: u64,
+        epoch_pk: PublicKey,
+    ) -> Result<EpochHistory> {
         self.context
             .api
-            .fetch_epoch_history(epoch)
+            .fetch_epoch_history(epoch, epoch_pk)
             .await
             .map_err(|e| e.into())
     }
