@@ -12,6 +12,7 @@ use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use serde::{Deserialize, Serialize};
+
 use tracing::{error, info, instrument};
 use url::Url;
 
@@ -21,14 +22,22 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 
+use crate::query::{
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
+    ValidHistory,
+};
 use bitcoin::{Address, Amount};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::wallet::PegOutFees;
+use futures::stream::FuturesUnordered;
+
+use futures::StreamExt;
 use std::time::Duration;
 use thiserror::Error;
+use threshold_crypto::PublicKey;
 
-#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait FederationApi: Send + Sync {
     /// Fetch the outcome of an entire transaction
@@ -37,7 +46,7 @@ pub trait FederationApi: Send + Sync {
     /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId>;
 
-    async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory>;
+    async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory>;
 
     // TODO: more generic module API extensibility
     /// Fetch ln contract state
@@ -56,7 +65,7 @@ pub trait FederationApi: Send + Sync {
         amount: &Amount,
     ) -> Result<Option<PegOutFees>>;
 
-    /// Fetch available lightning gateways
+    /// Fetch available lightning gateways (assumes gateways register with all peers)
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>>;
 
     /// Register a gateway with the federation
@@ -84,6 +93,7 @@ impl<'a> dyn FederationApi + 'a {
         }
     }
 
+    // TODO should become part of the API
     pub async fn await_output_outcome<T: TryIntoOutcome + Send>(
         &self,
         outpoint: OutPoint,
@@ -93,46 +103,6 @@ impl<'a> dyn FederationApi + 'a {
             let interval = Duration::from_secs(1);
             loop {
                 match self.fetch_output_outcome(outpoint).await {
-                    Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
-                    Err(e) => return Err(e),
-                }
-            }
-        };
-        fedimint_api::task::timeout(timeout, poll())
-            .await
-            .map_err(|_| ApiError::Timeout)?
-    }
-
-    pub async fn await_offer(
-        &self,
-        payment_hash: Sha256Hash,
-        timeout: Duration,
-    ) -> Result<IncomingContractOffer> {
-        let poll = || async {
-            let interval = Duration::from_millis(100);
-            loop {
-                match self.fetch_offer(payment_hash).await {
-                    Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
-                    Err(e) => return Err(e),
-                }
-            }
-        };
-        fedimint_api::task::timeout(timeout, poll())
-            .await
-            .map_err(|_| ApiError::Timeout)?
-    }
-
-    pub async fn await_contract(
-        &self,
-        contract_id: ContractId,
-        timeout: Duration,
-    ) -> Result<ContractAccount> {
-        let poll = || async {
-            let interval = Duration::from_millis(100);
-            loop {
-                match self.fetch_contract(contract_id).await {
                     Ok(t) => return Ok(t),
                     Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
                     Err(e) => return Err(e),
@@ -201,6 +171,8 @@ pub enum ApiError {
     CoreError(#[from] CoreError),
     #[error("Timeout error awaiting outcome")]
     Timeout,
+    #[error("Unable to determine a consistent API result from peers")]
+    NoResult,
 }
 
 impl ApiError {
@@ -214,30 +186,43 @@ impl ApiError {
     }
 }
 
-#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
-        self.request("/fetch_transaction", tx).await
+        self.request("/fetch_transaction", tx, Retry404::new(self.max_evil))
+            .await
     }
 
-    /// Submit a transaction to all federtion members
+    /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         // TODO: check the id is correct
-        self.request("/transaction", tx).await
+        self.request("/transaction", tx, CurrentConsensus::new(self.max_evil))
+            .await
     }
 
-    async fn fetch_epoch_history(&self, epoch: u64) -> Result<EpochHistory> {
-        self.request("/fetch_epoch_history", epoch).await
+    async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory> {
+        self.request(
+            "/fetch_epoch_history",
+            epoch,
+            ValidHistory::new(epoch_pk, self.max_evil),
+        )
+        .await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
-        self.request("/ln/account", contract).await
+        self.request("/ln/account", contract, Retry404::new(self.max_evil))
+            .await
     }
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
-        self.request("/wallet/block_height", ()).await
+        self.request(
+            "/wallet/block_height",
+            (),
+            EventuallyConsistent::new(self.max_evil),
+        )
+        .await
     }
 
     async fn fetch_peg_out_fees(
@@ -245,20 +230,31 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         address: &Address,
         amount: &Amount,
     ) -> Result<Option<PegOutFees>> {
-        self.request("/wallet/peg_out_fees", (address, amount.as_sat()))
-            .await
+        self.request(
+            "/wallet/peg_out_fees",
+            (address, amount.as_sat()),
+            EventuallyConsistent::new(self.max_evil),
+        )
+        .await
     }
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
-        self.request("/ln/offer", payment_hash).await
+        self.request("/ln/offer", payment_hash, Retry404::new(self.max_evil))
+            .await
     }
 
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
-        self.request("/ln/list_gateways", ()).await
+        self.request("/ln/list_gateways", (), UnionResponses::new(self.max_evil))
+            .await
     }
 
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()> {
-        self.request("/ln/register_gateway", gateway).await
+        self.request(
+            "/ln/register_gateway",
+            gateway,
+            CurrentConsensus::new(self.max_evil),
+        )
+        .await
     }
 }
 
@@ -313,13 +309,14 @@ impl<C> WsFederationApi<C> {
     }
 }
 
+pub struct FedResponse<R> {
+    pub peer: PeerId,
+    pub result: std::result::Result<R, JsonRpcError>,
+}
+
 impl<C: JsonRpcClient> FederationMember<C> {
     #[instrument(fields(peer = %self.peer_id), skip_all)]
-    pub async fn request<R>(
-        &self,
-        method: &str,
-        params: &[serde_json::Value],
-    ) -> std::result::Result<R, JsonRpcError>
+    pub async fn request<R>(&self, method: &str, params: &[serde_json::Value]) -> FedResponse<R>
     where
         R: serde::de::DeserializeOwned,
     {
@@ -327,7 +324,10 @@ impl<C: JsonRpcClient> FederationMember<C> {
         let rclient = self.client.read().await;
         match &*rclient {
             Some(client) if client.is_connected() => {
-                return client.request::<R>(method, params).await;
+                return FedResponse {
+                    peer: self.peer_id,
+                    result: client.request::<R>(method, params).await,
+                };
             }
             _ => {}
         };
@@ -336,7 +336,7 @@ impl<C: JsonRpcClient> FederationMember<C> {
 
         drop(rclient);
         let mut wclient = self.client.write().await;
-        match &*wclient {
+        let response = match &*wclient {
             Some(client) if client.is_connected() => {
                 // other task has already connected it
                 let rclient = RwLockWriteGuard::downgrade(wclient);
@@ -358,6 +358,11 @@ impl<C: JsonRpcClient> FederationMember<C> {
                     }
                 }
             }
+        };
+
+        FedResponse {
+            peer: self.peer_id,
+            result: response,
         }
     }
 }
@@ -384,30 +389,32 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         &self,
         method: &str,
         param: P,
+        mut strategy: impl QueryStrategy<R>,
     ) -> Result<R> {
         let params = [serde_json::to_value(param).expect("encoding error")];
-        let requests = self
-            .members
-            .iter()
-            .map(|member| Box::pin(member.request(method, &params)));
+        let mut futures = FuturesUnordered::new();
 
-        let mut error = None;
-        let mut successes = 0;
-        for request in requests {
-            match request.await {
-                Ok(res) => {
-                    successes += 1;
-                    if successes == 2 * self.max_evil + 1 {
-                        return Ok(res);
-                    }
-                }
-                Err(e) => error = Some(e),
-            };
+        for member in &self.members {
+            futures.push(member.request(method, &params));
         }
 
-        Err(ApiError::RpcError(
-            error.expect("If there was no success there has to be an error"),
-        ))
+        // Delegates the response handling to the `QueryStrategy` which can
+        loop {
+            match futures.next().await {
+                Some(result) => match strategy.process(result) {
+                    QueryStep::Request(peers) => {
+                        for member in &self.members {
+                            if peers.contains(&member.peer_id) {
+                                futures.push(member.request(method, &params));
+                            }
+                        }
+                    }
+                    QueryStep::Continue => {}
+                    QueryStep::Finished(result) => return result,
+                },
+                None => return Err(ApiError::NoResult),
+            }
+        }
     }
 }
 
@@ -521,14 +528,14 @@ mod tests {
             "should not connect before first request"
         );
 
-        fed.request::<()>("", &[]).await.unwrap();
+        fed.request::<()>("", &[]).await.result.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
             "should connect once after first request"
         );
 
-        fed.request::<()>("", &[]).await.unwrap();
+        fed.request::<()>("", &[]).await.result.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             1,
@@ -538,7 +545,7 @@ mod tests {
         // disconnect
         CONNECTED.store(false, Ordering::SeqCst);
 
-        fed.request::<()>("", &[]).await.unwrap();
+        fed.request::<()>("", &[]).await.result.unwrap();
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             2,
@@ -589,12 +596,12 @@ mod tests {
         FAIL.lock().unwrap().insert(0);
 
         assert!(
-            fed.request::<()>("", &[]).await.is_err(),
+            fed.request::<()>("", &[]).await.result.is_err(),
             "connect for client 0 should fail"
         );
 
         // connect for client 1 should succeed
-        fed.request::<()>("", &[]).await.unwrap();
+        fed.request::<()>("", &[]).await.result.unwrap();
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -607,8 +614,8 @@ mod tests {
 
         // only connect once even for two concurrent requests
         let (reqa, reqb) = tokio::join!(fed.request::<()>("", &[]), fed.request::<()>("", &[]));
-        reqa.expect("both request should be successful");
-        reqb.expect("both request should be successful");
+        reqa.result.expect("both request should be successful");
+        reqb.result.expect("both request should be successful");
 
         assert_eq!(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -633,7 +640,7 @@ mod tests {
         );
 
         assert!(
-            reqa.is_err() ^ reqb.is_err(),
+            reqa.result.is_err() ^ reqb.result.is_err(),
             "exactly one of two request should succeed"
         );
     }

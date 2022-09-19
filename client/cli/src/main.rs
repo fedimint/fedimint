@@ -9,6 +9,7 @@ use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use core::fmt;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
+use mint_client::query::CurrentConsensus;
 use mint_client::utils::{
     from_hex, parse_bitcoin_amount, parse_coins, parse_fedimint_amount, parse_node_pub_key,
     serialize_coins,
@@ -291,10 +292,13 @@ async fn main() {
         let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
             .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
         let api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
-        let cfg: ClientConfig = api.request("/config", ()).await.or_terminate(
-            CliErrorKind::NetworkError,
-            "couldn't download config from peer",
-        );
+        let cfg: ClientConfig = api
+            .request("/config", (), CurrentConsensus::new(connect_obj.max_evil))
+            .await
+            .or_terminate(
+                CliErrorKind::NetworkError,
+                "couldn't download config from peer",
+            );
         let cfg_path = opts.workdir.join("client.json");
         std::fs::create_dir_all(&opts.workdir)
             .or_terminate(CliErrorKind::IOError, "failed to create config directory");

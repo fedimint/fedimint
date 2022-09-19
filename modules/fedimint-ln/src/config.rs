@@ -15,7 +15,7 @@ pub struct LightningModuleConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct LightningModuleClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
@@ -77,7 +77,7 @@ impl GenerateConfig for LightningModuleConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub contract_input: fedimint_api::Amount,
     pub contract_output: fedimint_api::Amount,

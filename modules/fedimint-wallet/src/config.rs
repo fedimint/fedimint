@@ -24,7 +24,7 @@ pub struct WalletConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
@@ -35,7 +35,7 @@ pub struct WalletClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub peg_in_abs: fedimint_api::Amount,
     pub peg_out_abs: fedimint_api::Amount,

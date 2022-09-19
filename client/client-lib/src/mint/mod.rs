@@ -378,6 +378,7 @@ mod tests {
     use fedimint_core::transaction::Transaction;
     use futures::executor::block_on;
     use std::sync::Arc;
+    use threshold_crypto::PublicKey;
 
     type Fed = FakeFed<Mint, MintClientConfig>;
 
@@ -442,7 +443,11 @@ mod tests {
             unimplemented!()
         }
 
-        async fn fetch_epoch_history(&self, _epoch: u64) -> crate::api::Result<EpochHistory> {
+        async fn fetch_epoch_history(
+            &self,
+            _epoch: u64,
+            _pk: PublicKey,
+        ) -> crate::api::Result<EpochHistory> {
             unimplemented!()
         }
     }

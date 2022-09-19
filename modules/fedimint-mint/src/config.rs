@@ -16,7 +16,7 @@ pub struct MintConfig {
     pub threshold: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct MintClientConfig {
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub fee_consensus: FeeConsensus,
@@ -109,7 +109,7 @@ impl GenerateConfig for MintConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct FeeConsensus {
     pub coin_issuance_abs: fedimint_api::Amount,
     pub coin_spend_abs: fedimint_api::Amount,

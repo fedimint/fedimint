@@ -10,6 +10,7 @@ use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
+use fedimint_api::task::timeout;
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
@@ -83,10 +84,9 @@ impl<'c> LnClient<'c> {
     }
 
     pub async fn get_contract_account(&self, id: ContractId) -> Result<ContractAccount> {
-        self.context
-            .api
-            .await_contract(id, Duration::from_secs(10))
+        timeout(Duration::from_secs(10), self.context.api.fetch_contract(id))
             .await
+            .unwrap_or(Err(ApiError::Timeout))
             .map_err(LnClientError::ApiError)
     }
 
@@ -154,11 +154,13 @@ impl<'c> LnClient<'c> {
     }
 
     pub async fn get_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
-        self.context
-            .api
-            .await_offer(payment_hash, Duration::from_secs(10))
-            .await
-            .map_err(LnClientError::ApiError)
+        timeout(
+            Duration::from_secs(10),
+            self.context.api.fetch_offer(payment_hash),
+        )
+        .await
+        .unwrap_or(Err(ApiError::Timeout))
+        .map_err(LnClientError::ApiError)
     }
 
     pub fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
@@ -215,6 +217,7 @@ mod tests {
     use fedimint_core::transaction::Transaction;
     use lightning_invoice::Invoice;
     use std::sync::Arc;
+    use threshold_crypto::PublicKey;
     use url::Url;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
@@ -285,7 +288,11 @@ mod tests {
             unimplemented!()
         }
 
-        async fn fetch_epoch_history(&self, _epoch: u64) -> crate::api::Result<EpochHistory> {
+        async fn fetch_epoch_history(
+            &self,
+            _epoch: u64,
+            _pk: PublicKey,
+        ) -> crate::api::Result<EpochHistory> {
             unimplemented!()
         }
     }
