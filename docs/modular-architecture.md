@@ -4,22 +4,24 @@ Below is a high-level description of the modular architecture of Fedimint.
 ## Dependency Tree
 ```mermaid
 graph BT;
-    fedimint/client-->mapi;
-    fedimint/server-->mapi;
+    fedimint/client-->core/client;
+    fedimint/server-->core/server;
     fedimint/client-->mclient;
     fedimint/server-->mserver;
-    mapi[[module/api]]-->core/api;
     mclient[[module/client]]-->core/client;
+    mapi[[module/api]]-->core/api;
     mserver[[module/server]]-->core/server;
+    mclient-->mapi;
+    mserver-->mapi;
     core/client-->core/api;
     core/server-->core/api;
 ```
 
 ## Crate Descriptions
 `core` are the libraries that we make available to module developers
-- `core/api` - module type interfaces (txs, outcomes, consensus items, etc.), database, and API encoding/decoding
-- `core/client` - client interfaces and logic (tx builder, query strategies)
-- `core/server` - server interfaces and logic (federation module, consensus/hbbft code)
+- `core/api` - module type interfaces (txs, inputs, output, etc.), database, and API encoding/decoding
+- `core/client` - client interfaces, types, and logic (tx builder, query strategies)
+- `core/server` - server interfaces, types, and logic (federation module, outcomes, consensus items, consensus/hbbft code)
 
 `module` can be any module (e.g. ln/mint/wallet)
 - `<module>/api` - api implementation (defines endpoints, implements types, module ids, custom serde logic)
