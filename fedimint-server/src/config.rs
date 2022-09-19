@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 use crate::net::connect::TlsConfig;
+use async_trait::async_trait;
+use fedimint_api::net::peers::AnyPeerConnections;
 use tokio_rustls::rustls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +62,7 @@ pub struct ServerConfigParams {
     pub bitcoind_rpc: String,
 }
 
+#[async_trait(?Send)]
 impl GenerateConfig for ServerConfig {
     type Params = ServerConfigParams;
     type ClientConfig = ClientConfig;

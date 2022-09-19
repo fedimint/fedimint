@@ -1,5 +1,7 @@
+use async_trait::async_trait;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
+use fedimint_api::net::peers::AnyPeerConnections;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -20,6 +22,7 @@ pub struct MintClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
+#[async_trait(?Send)]
 impl GenerateConfig for MintConfig {
     type Params = [Amount];
     type ClientConfig = MintClientConfig;

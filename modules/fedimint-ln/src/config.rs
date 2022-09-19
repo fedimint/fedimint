@@ -1,4 +1,6 @@
+use async_trait::async_trait;
 use fedimint_api::config::GenerateConfig;
+use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
@@ -21,6 +23,7 @@ pub struct LightningModuleClientConfig {
     pub fee_consensus: FeeConsensus,
 }
 
+#[async_trait(?Send)]
 impl GenerateConfig for LightningModuleConfig {
     type Params = ();
     type ClientConfig = LightningModuleClientConfig;

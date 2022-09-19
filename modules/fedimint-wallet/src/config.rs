@@ -1,9 +1,11 @@
 use crate::keys::CompressedPublicKey;
 use crate::{Feerate, PegInDescriptor};
+use async_trait::async_trait;
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{NumPeers, PeerId};
+use fedimint_api::net::peers::AnyPeerConnections;
 use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -49,6 +51,7 @@ impl Default for FeeConsensus {
     }
 }
 
+#[async_trait(?Send)]
 impl GenerateConfig for WalletConfig {
     type Params = BitcoindRpcCfg;
     type ClientConfig = WalletClientConfig;

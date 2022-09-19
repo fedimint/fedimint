@@ -1,9 +1,12 @@
+use crate::net::peers::AnyPeerConnections;
 use crate::PeerId;
+use async_trait::async_trait;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
+#[async_trait(?Send)]
 pub trait GenerateConfig: Sized {
     type Params: ?Sized;
     type ClientConfig;
