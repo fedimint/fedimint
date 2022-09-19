@@ -20,9 +20,11 @@
 <span id="20">20</span>
 <span id="21">21</span>
 <span id="22">22</span>
+<span id="23">23</span>
 </pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>mint_client::api::WsFederationApi;
+<span class="kw">use </span>mint_client::query::TrustAllPeers;
 <span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Parser)]
@@ -38,9 +40,9 @@
     <span class="kw">let </span>call = ApiCall::parse();
     <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>call.arg).unwrap();
     <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), call.url)]);
-    <span class="kw">let </span>response: serde_json::Value = api.request(<span class="kw-2">&amp;</span>call.method, arg).<span class="kw">await</span>.unwrap();
+    <span class="kw">let </span>response: serde_json::Value = api.request(<span class="kw-2">&amp;</span>call.method, arg, TrustAllPeers).<span class="kw">await</span>.unwrap();
     <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>response).unwrap();
     <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, formatted);
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

@@ -141,7 +141,7 @@
     <span class="kw">pub </span>threshold: usize,
 }
 
-<span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
+<span class="attribute">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintClientConfig {
     <span class="kw">pub </span>tbs_pks: Tiered&lt;AggregatePublicKey&gt;,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
@@ -234,7 +234,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>coin_issuance_abs: fedimint_api::Amount,
     <span class="kw">pub </span>coin_spend_abs: fedimint_api::Amount,
@@ -249,4 +249,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

@@ -356,14 +356,14 @@
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>EpochSignature(<span class="kw">pub </span>Signature);
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>EpochHistory {
     <span class="kw">pub </span>outcome: OutcomeHistory,
     <span class="kw">pub </span>hash: Sha256,
     <span class="kw">pub </span>signature: <span class="prelude-ty">Option</span>&lt;EpochSignature&gt;,
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutcomeHistory {
     <span class="kw">pub </span>epoch: u64,
     <span class="kw">pub </span>last_hash: <span class="prelude-ty">Option</span>&lt;Sha256&gt;,
@@ -659,4 +659,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

@@ -779,7 +779,7 @@
     <span class="kw">pub </span>contract: contracts::Contract,
 }
 
-<span class="attribute">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+<span class="attribute">#[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>ContractAccount {
     <span class="kw">pub </span>amount: fedimint_api::Amount,
     <span class="kw">pub </span>contract: contracts::FundedContract,
@@ -796,7 +796,7 @@
     },
 }
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGateway {
     <span class="kw">pub </span>mint_pub_key: secp256k1::XOnlyPublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,
@@ -1349,4 +1349,4 @@
     </span>NoOffer(secp256k1::hashes::sha256::Hash),
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

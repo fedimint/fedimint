@@ -461,13 +461,6 @@
 <span id="461">461</span>
 <span id="462">462</span>
 <span id="463">463</span>
-<span id="464">464</span>
-<span id="465">465</span>
-<span id="466">466</span>
-<span id="467">467</span>
-<span id="468">468</span>
-<span id="469">469</span>
-<span id="470">470</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -681,17 +674,9 @@
         }
         <span class="macro">info!</span>(<span class="string">&quot;Rejoining consensus: created outcome&quot;</span>);
 
-        <span class="comment">// FIXME: Should handle failing and querying other peers
-        </span><span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">self</span>.download_history(outcomes[<span class="number">0</span>].clone()).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">break</span>;
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">&quot;Download error {:?}&quot;</span>, e)
-                }
-            }
-        }
+        <span class="self">self</span>.download_history(outcomes[<span class="number">0</span>].clone())
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;Download error&quot;</span>);
     }
 
     <span class="doccomment">/// Requests, verifies and processes history from peers
@@ -710,7 +695,8 @@
                 <span class="kw">let </span>contributions = last_outcome.contributions.clone();
                 EpochHistory::new(last_outcome.epoch, contributions, <span class="kw-2">&amp;</span>prev_epoch)
             } <span class="kw">else </span>{
-                <span class="kw">let </span>result = <span class="self">self</span>.api.fetch_epoch_history(epoch_num).<span class="kw">await</span>;
+                <span class="kw">let </span>epoch_pk = <span class="self">self</span>.cfg.epoch_pk_set.public_key();
+                <span class="kw">let </span>result = <span class="self">self</span>.api.fetch_epoch_history(epoch_num, epoch_pk).<span class="kw">await</span>;
                 result.map_err(|<span class="kw">_</span>| EpochVerifyError::MissingPreviousEpoch)<span class="question-mark">?
             </span>};
 
@@ -939,4 +925,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

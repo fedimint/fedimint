@@ -301,6 +301,15 @@
 <span id="301">301</span>
 <span id="302">302</span>
 <span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
 </pre><pre class="rust"><code><span class="doccomment">//! # Threshold Blind Signatures
 //!
 //! This library implements an ad-hoc threshold blind signature scheme based on BLS signatures using
@@ -316,6 +325,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>sha3::digest::generic_array::typenum::U32;
 <span class="kw">use </span>sha3::Digest;
+<span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">pub use </span>bls12_381::G1Affine <span class="kw">as </span>MessagePoint;
 <span class="kw">pub use </span>bls12_381::G2Affine <span class="kw">as </span>PubKeyPoint;
@@ -370,6 +380,14 @@
     <span class="doccomment">/// **IMPORTANT**: `from_bytes` includes a tag in the hash, this doesn&#39;t
     </span><span class="kw">pub fn </span>from_hash(hash: <span class="kw">impl </span>Digest&lt;OutputSize = U32&gt;) -&gt; Message {
         Message(hash_to_curve::&lt;G1Projective, <span class="kw">_</span>&gt;(hash).to_affine())
+    }
+}
+
+<span class="attribute">#[allow(clippy::derive_hash_xor_eq)]
+</span><span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>AggregatePublicKey {
+    <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
+        <span class="kw">let </span>serialized = <span class="self">self</span>.<span class="number">0</span>.to_compressed();
+        state.write(<span class="kw-2">&amp;</span>serialized);
     }
 }
 
@@ -605,4 +623,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="tbs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

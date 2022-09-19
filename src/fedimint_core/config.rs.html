@@ -69,7 +69,7 @@
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>url::Url;
 
-<span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ClientConfig {
     <span class="kw">pub </span>api_endpoints: Vec&lt;Url&gt;,
     <span class="kw">pub </span>mint: MintClientConfig,
@@ -88,7 +88,7 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+<span class="attribute">#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>wallet: fedimint_wallet::config::FeeConsensus,
     <span class="kw">pub </span>mint: fedimint_mint::config::FeeConsensus,
@@ -125,4 +125,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

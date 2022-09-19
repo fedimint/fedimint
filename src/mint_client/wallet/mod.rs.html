@@ -362,6 +362,11 @@
 <span id="362">362</span>
 <span id="363">363</span>
 <span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
@@ -534,6 +539,7 @@
     <span class="kw">use </span>std::str::FromStr;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
+    <span class="kw">use </span>threshold_crypto::PublicKey;
 
     <span class="kw">type </span>Fed = FakeFed&lt;Wallet, WalletClientConfig&gt;;
     <span class="kw">type </span>SharedFed = Arc&lt;tokio::sync::Mutex&lt;Fed&gt;&gt;;
@@ -595,7 +601,11 @@
             <span class="macro">unimplemented!</span>()
         }
 
-        <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, _epoch: u64) -&gt; <span class="kw">crate</span>::api::Result&lt;EpochHistory&gt; {
+        <span class="kw">async fn </span>fetch_epoch_history(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            _epoch: u64,
+            _pk: PublicKey,
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;EpochHistory&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }
@@ -727,4 +737,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

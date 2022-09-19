@@ -1012,9 +1012,15 @@
 <span id="1012">1012</span>
 <span id="1013">1013</span>
 <span id="1014">1014</span>
+<span id="1015">1015</span>
+<span id="1016">1016</span>
+<span id="1017">1017</span>
+<span id="1018">1018</span>
+<span id="1019">1019</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
+<span class="kw">pub mod </span>query;
 <span class="kw">pub mod </span>transaction;
 <span class="kw">pub mod </span>utils;
 <span class="kw">pub mod </span>wallet;
@@ -1069,6 +1075,7 @@
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>threshold_crypto::PublicKey;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{
@@ -1397,14 +1404,12 @@
 
         <span class="kw">let </span>stream = pending
             .map(|(key, coins)| <span class="kw">async move </span>{
-                <span class="kw">loop </span>{
-                    <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(key.<span class="number">0</span>).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="kw">return </span>(key, coins),
-                        <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
-                            <span class="kw">return </span>(key, TieredMulti::&lt;SpendableNote&gt;::default())
-                        }
-                        <span class="kw">_ </span>=&gt; {}
+                <span class="kw">match </span><span class="self">self</span>.context.api.fetch_tx_outcome(key.<span class="number">0</span>).<span class="kw">await </span>{
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Rejected(<span class="kw">_</span>)) =&gt; <span class="prelude-val">Ok</span>((key, coins)),
+                    <span class="prelude-val">Ok</span>(TransactionStatus::Accepted { .. }) =&gt; {
+                        <span class="prelude-val">Ok</span>((key, TieredMulti::&lt;SpendableNote&gt;::default()))
                     }
+                    <span class="prelude-val">Err</span>(err) =&gt; <span class="prelude-val">Err</span>(err),
                 }
             })
             .collect::&lt;FuturesUnordered&lt;<span class="kw">_</span>&gt;&gt;();
@@ -1412,7 +1417,8 @@
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
         <span class="kw">let </span><span class="kw-2">mut </span>all_coins = TieredMulti::&lt;SpendableNote&gt;::default();
-        <span class="kw">for </span>(key, coins) <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
+        <span class="kw">for </span>result <span class="kw">in </span>stream.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;().<span class="kw">await </span>{
+            <span class="kw">let </span>(key, coins) = result<span class="question-mark">?</span>;
             all_coins.extend(coins);
             tx.append_delete(key);
         }
@@ -1448,10 +1454,14 @@
         <span class="self">self</span>.mint_client().list_active_issuances()
     }
 
-    <span class="kw">pub async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
+    <span class="kw">pub async fn </span>fetch_epoch_history(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        epoch: u64,
+        epoch_pk: PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
         <span class="self">self</span>.context
             .api
-            .fetch_epoch_history(epoch)
+            .fetch_epoch_history(epoch, epoch_pk)
             .<span class="kw">await
             </span>.map_err(|e| e.into())
     }
@@ -2027,4 +2037,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>

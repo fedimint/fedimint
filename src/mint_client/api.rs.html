@@ -638,6 +638,13 @@
 <span id="638">638</span>
 <span id="639">639</span>
 <span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
+<span id="644">644</span>
+<span id="645">645</span>
+<span id="646">646</span>
+<span id="647">647</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -652,6 +659,7 @@
 <span class="kw">use </span>jsonrpsee_core::Error <span class="kw">as </span>JsonRpcError;
 <span class="kw">use </span>jsonrpsee_types::error::CallError <span class="kw">as </span>RpcCallError;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+
 <span class="kw">use </span>tracing::{error, info, instrument};
 <span class="kw">use </span>url::Url;
 
@@ -661,14 +669,22 @@
 <span class="attribute">#[cfg(target_family = <span class="string">&quot;wasm&quot;</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 
+<span class="kw">use </span><span class="kw">crate</span>::query::{
+    CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
+    ValidHistory,
+};
 <span class="kw">use </span>bitcoin::{Address, Amount};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOutFees;
+<span class="kw">use </span>futures::stream::FuturesUnordered;
+
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>thiserror::Error;
+<span class="kw">use </span>threshold_crypto::PublicKey;
 
-<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">pub trait </span>FederationApi: Send + Sync {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
@@ -677,7 +693,7 @@
     <span class="doccomment">/// Submit a transaction to all federation members
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;;
 
-    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt;;
+    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt;;
 
     <span class="comment">// TODO: more generic module API extensibility
     </span><span class="doccomment">/// Fetch ln contract state
@@ -696,7 +712,7 @@
         amount: <span class="kw-2">&amp;</span>Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt;;
 
-    <span class="doccomment">/// Fetch available lightning gateways
+    <span class="doccomment">/// Fetch available lightning gateways (assumes gateways register with all peers)
     </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt;;
 
     <span class="doccomment">/// Register a gateway with the federation
@@ -724,7 +740,8 @@
         }
     }
 
-    <span class="kw">pub async fn </span>await_output_outcome&lt;T: TryIntoOutcome + Send&gt;(
+    <span class="comment">// TODO should become part of the API
+    </span><span class="kw">pub async fn </span>await_output_outcome&lt;T: TryIntoOutcome + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         outpoint: OutPoint,
         timeout: Duration,
@@ -733,46 +750,6 @@
             <span class="kw">let </span>interval = Duration::from_secs(<span class="number">1</span>);
             <span class="kw">loop </span>{
                 <span class="kw">match </span><span class="self">self</span>.fetch_output_outcome(outpoint).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
-                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
-                }
-            }
-        };
-        fedimint_api::task::timeout(timeout, poll())
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
-    </span>}
-
-    <span class="kw">pub async fn </span>await_offer(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payment_hash: Sha256Hash,
-        timeout: Duration,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; {
-        <span class="kw">let </span>poll = || <span class="kw">async </span>{
-            <span class="kw">let </span>interval = Duration::from_millis(<span class="number">100</span>);
-            <span class="kw">loop </span>{
-                <span class="kw">match </span><span class="self">self</span>.fetch_offer(payment_hash).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
-                    <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
-                    <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
-                }
-            }
-        };
-        fedimint_api::task::timeout(timeout, poll())
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ApiError::Timeout)<span class="question-mark">?
-    </span>}
-
-    <span class="kw">pub async fn </span>await_contract(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        contract_id: ContractId,
-        timeout: Duration,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
-        <span class="kw">let </span>poll = || <span class="kw">async </span>{
-            <span class="kw">let </span>interval = Duration::from_millis(<span class="number">100</span>);
-            <span class="kw">loop </span>{
-                <span class="kw">match </span><span class="self">self</span>.fetch_contract(contract_id).<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(t) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(t),
                     <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; fedimint_api::task::sleep(interval).<span class="kw">await</span>,
                     <span class="prelude-val">Err</span>(e) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(e),
@@ -841,6 +818,8 @@
     </span>CoreError(<span class="attribute">#[from] </span>CoreError),
     <span class="attribute">#[error(<span class="string">&quot;Timeout error awaiting outcome&quot;</span>)]
     </span>Timeout,
+    <span class="attribute">#[error(<span class="string">&quot;Unable to determine a consistent API result from peers&quot;</span>)]
+    </span>NoResult,
 }
 
 <span class="kw">impl </span>ApiError {
@@ -854,30 +833,43 @@
     }
 }
 
-<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">?</span>Send))]
+<span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
 </span><span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; FederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/fetch_transaction&quot;</span>, tx).<span class="kw">await
+        <span class="self">self</span>.request(<span class="string">&quot;/fetch_transaction&quot;</span>, tx, Retry404::new(<span class="self">self</span>.max_evil))
+            .<span class="kw">await
     </span>}
 
-    <span class="doccomment">/// Submit a transaction to all federtion members
+    <span class="doccomment">/// Submit a transaction to all federation members
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="comment">// TODO: check the id is correct
-        </span><span class="self">self</span>.request(<span class="string">&quot;/transaction&quot;</span>, tx).<span class="kw">await
+        </span><span class="self">self</span>.request(<span class="string">&quot;/transaction&quot;</span>, tx, CurrentConsensus::new(<span class="self">self</span>.max_evil))
+            .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/fetch_epoch_history&quot;</span>, epoch).<span class="kw">await
+    <span class="kw">async fn </span>fetch_epoch_history(<span class="kw-2">&amp;</span><span class="self">self</span>, epoch: u64, epoch_pk: PublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;EpochHistory&gt; {
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/fetch_epoch_history&quot;</span>,
+            epoch,
+            ValidHistory::new(epoch_pk, <span class="self">self</span>.max_evil),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;ContractAccount&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/ln/account&quot;</span>, contract).<span class="kw">await
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/account&quot;</span>, contract, Retry404::new(<span class="self">self</span>.max_evil))
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/wallet/block_height&quot;</span>, ()).<span class="kw">await
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/wallet/block_height&quot;</span>,
+            (),
+            EventuallyConsistent::new(<span class="self">self</span>.max_evil),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_peg_out_fees(
@@ -885,20 +877,31 @@
         address: <span class="kw-2">&amp;</span>Address,
         amount: <span class="kw-2">&amp;</span>Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/wallet/peg_out_fees&quot;</span>, (address, amount.as_sat()))
-            .<span class="kw">await
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/wallet/peg_out_fees&quot;</span>,
+            (address, amount.as_sat()),
+            EventuallyConsistent::new(<span class="self">self</span>.max_evil),
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/ln/offer&quot;</span>, payment_hash).<span class="kw">await
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/offer&quot;</span>, payment_hash, Retry404::new(<span class="self">self</span>.max_evil))
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;LightningGateway&gt;&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/ln/list_gateways&quot;</span>, ()).<span class="kw">await
+        <span class="self">self</span>.request(<span class="string">&quot;/ln/list_gateways&quot;</span>, (), UnionResponses::new(<span class="self">self</span>.max_evil))
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.request(<span class="string">&quot;/ln/register_gateway&quot;</span>, gateway).<span class="kw">await
+        <span class="self">self</span>.request(
+            <span class="string">&quot;/ln/register_gateway&quot;</span>,
+            gateway,
+            CurrentConsensus::new(<span class="self">self</span>.max_evil),
+        )
+        .<span class="kw">await
     </span>}
 }
 
@@ -953,13 +956,14 @@
     }
 }
 
+<span class="kw">pub struct </span>FedResponse&lt;R&gt; {
+    <span class="kw">pub </span>peer: PeerId,
+    <span class="kw">pub </span>result: std::result::Result&lt;R, JsonRpcError&gt;,
+}
+
 <span class="kw">impl</span>&lt;C: JsonRpcClient&gt; FederationMember&lt;C&gt; {
     <span class="attribute">#[instrument(fields(peer = %<span class="self">self</span>.peer_id), skip_all)]
-    </span><span class="kw">pub async fn </span>request&lt;R&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        method: <span class="kw-2">&amp;</span>str,
-        params: <span class="kw-2">&amp;</span>[serde_json::Value],
-    ) -&gt; std::result::Result&lt;R, JsonRpcError&gt;
+    </span><span class="kw">pub async fn </span>request&lt;R&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str, params: <span class="kw-2">&amp;</span>[serde_json::Value]) -&gt; FedResponse&lt;R&gt;
     <span class="kw">where
         </span>R: serde::de::DeserializeOwned,
     {
@@ -967,7 +971,10 @@
         <span class="kw">let </span>rclient = <span class="self">self</span>.client.read().<span class="kw">await</span>;
         <span class="kw">match </span><span class="kw-2">&amp;*</span>rclient {
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
-                <span class="kw">return </span>client.request::&lt;R&gt;(method, params).<span class="kw">await</span>;
+                <span class="kw">return </span>FedResponse {
+                    peer: <span class="self">self</span>.peer_id,
+                    result: client.request::&lt;R&gt;(method, params).<span class="kw">await</span>,
+                };
             }
             <span class="kw">_ </span>=&gt; {}
         };
@@ -976,7 +983,7 @@
 
         drop(rclient);
         <span class="kw">let </span><span class="kw-2">mut </span>wclient = <span class="self">self</span>.client.write().<span class="kw">await</span>;
-        <span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
+        <span class="kw">let </span>response = <span class="kw">match </span><span class="kw-2">&amp;*</span>wclient {
             <span class="prelude-val">Some</span>(client) <span class="kw">if </span>client.is_connected() =&gt; {
                 <span class="comment">// other task has already connected it
                 </span><span class="kw">let </span>rclient = RwLockWriteGuard::downgrade(wclient);
@@ -998,6 +1005,11 @@
                     }
                 }
             }
+        };
+
+        FedResponse {
+            peer: <span class="self">self</span>.peer_id,
+            result: response,
         }
     }
 }
@@ -1024,30 +1036,32 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         method: <span class="kw-2">&amp;</span>str,
         param: P,
+        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;R&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;R&gt; {
         <span class="kw">let </span>params = [serde_json::to_value(param).expect(<span class="string">&quot;encoding error&quot;</span>)];
-        <span class="kw">let </span>requests = <span class="self">self
-            </span>.members
-            .iter()
-            .map(|member| Box::pin(member.request(method, <span class="kw-2">&amp;</span>params)));
+        <span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::new();
 
-        <span class="kw">let </span><span class="kw-2">mut </span>error = <span class="prelude-val">None</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>successes = <span class="number">0</span>;
-        <span class="kw">for </span>request <span class="kw">in </span>requests {
-            <span class="kw">match </span>request.<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(res) =&gt; {
-                    successes += <span class="number">1</span>;
-                    <span class="kw">if </span>successes == <span class="number">2 </span>* <span class="self">self</span>.max_evil + <span class="number">1 </span>{
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(res);
-                    }
-                }
-                <span class="prelude-val">Err</span>(e) =&gt; error = <span class="prelude-val">Some</span>(e),
-            };
+        <span class="kw">for </span>member <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
+            futures.push(member.request(method, <span class="kw-2">&amp;</span>params));
         }
 
-        <span class="prelude-val">Err</span>(ApiError::RpcError(
-            error.expect(<span class="string">&quot;If there was no success there has to be an error&quot;</span>),
-        ))
+        <span class="comment">// Delegates the response handling to the `QueryStrategy` which can
+        </span><span class="kw">loop </span>{
+            <span class="kw">match </span>futures.next().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(result) =&gt; <span class="kw">match </span>strategy.process(result) {
+                    QueryStep::Request(peers) =&gt; {
+                        <span class="kw">for </span>member <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.members {
+                            <span class="kw">if </span>peers.contains(<span class="kw-2">&amp;</span>member.peer_id) {
+                                futures.push(member.request(method, <span class="kw-2">&amp;</span>params));
+                            }
+                        }
+                    }
+                    QueryStep::Continue =&gt; {}
+                    QueryStep::Finished(result) =&gt; <span class="kw">return </span>result,
+                },
+                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::NoResult),
+            }
+        }
     }
 }
 
@@ -1161,14 +1175,14 @@
             <span class="string">&quot;should not connect before first request&quot;
         </span>);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
             <span class="string">&quot;should connect once after first request&quot;
         </span>);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">1</span>,
@@ -1178,7 +1192,7 @@
         <span class="comment">// disconnect
         </span>CONNECTED.store(<span class="bool-val">false</span>, Ordering::SeqCst);
 
-        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
+        fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
             <span class="number">2</span>,
@@ -1229,12 +1243,12 @@
         FAIL.lock().unwrap().insert(<span class="number">0</span>);
 
         <span class="macro">assert!</span>(
-            fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.is_err(),
+            fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.is_err(),
             <span class="string">&quot;connect for client 0 should fail&quot;
         </span>);
 
         <span class="comment">// connect for client 1 should succeed
-        </span>fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.unwrap();
+        </span>fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>.result.unwrap();
 
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1247,8 +1261,8 @@
 
         <span class="comment">// only connect once even for two concurrent requests
         </span><span class="kw">let </span>(reqa, reqb) = <span class="macro">tokio::join!</span>(fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]), fed.request::&lt;()&gt;(<span class="string">&quot;&quot;</span>, <span class="kw-2">&amp;</span>[]));
-        reqa.expect(<span class="string">&quot;both request should be successful&quot;</span>);
-        reqb.expect(<span class="string">&quot;both request should be successful&quot;</span>);
+        reqa.result.expect(<span class="string">&quot;both request should be successful&quot;</span>);
+        reqb.result.expect(<span class="string">&quot;both request should be successful&quot;</span>);
 
         <span class="macro">assert_eq!</span>(
             CONNECTION_COUNT.load(Ordering::SeqCst),
@@ -1273,10 +1287,10 @@
         );
 
         <span class="macro">assert!</span>(
-            reqa.is_err() ^ reqb.is_err(),
+            reqa.result.is_err() ^ reqb.result.is_err(),
             <span class="string">&quot;exactly one of two request should succeed&quot;
         </span>);
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.65.0-nightly (95a992a68 2022-09-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a37499ae6 2022-09-18)" ></div></body></html>
