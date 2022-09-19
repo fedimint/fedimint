@@ -39,7 +39,7 @@ async-lock = "2.5"
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2.0", features = [ "js" ] }
 gloo-timers = { version = "0.2.4", features = ["futures"] }
-wasm-bindgen-futures = "0.4.31"
+wasm-bindgen-futures = "0.4.33"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { version = "1.21.0", features = ["rt", "rt-multi-thread", "sync", "time"] }
