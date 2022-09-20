@@ -1,6 +1,7 @@
 use fedimint_api::Amount;
 use fedimint_core_client::{
     ClientModulePlugin, FedimintClientCore, ModuleCommon, ModuleKey, Output, PendingOutput,
+    PollPendingOutputs,
 };
 use fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
@@ -79,7 +80,7 @@ impl ClientModulePlugin for MintClientModule {
         &self,
         _outputs: Vec<MintPendingOutput>,
     ) -> Result<
-        (Vec<MintSpendableOutput>, Vec<MintPendingOutput>),
+        PollPendingOutputs<MintSpendableOutput, MintPendingOutput>,
         fedimint_core_client::FinalizationError,
     > {
         todo!()

@@ -19,12 +19,18 @@ pub trait IClientModule: ModuleCommon {
     fn poll_pending_output(
         &self,
         outputs: Vec<PendingOutput>,
-    ) -> Result<(Vec<SpendableOutput>, Vec<PendingOutput>), FinalizationError>;
+    ) -> Result<PollPendingOutputs<SpendableOutput, PendingOutput>, FinalizationError>;
 }
 
 def_module_type_newtype! {
     #[derive(Clone)]
     ClientModule(Arc<IClientModule>)
+}
+
+/// Result of [`ClientModulePlugin::poll_pending_output`]
+pub struct PollPendingOutputs<S, P> {
+    done: Vec<S>,
+    pending: Vec<P>,
 }
 
 pub trait ClientModulePlugin: Sized {
@@ -39,7 +45,7 @@ pub trait ClientModulePlugin: Sized {
     fn poll_pending_outputs(
         &self,
         outputs: Vec<Self::PendingOutput>,
-    ) -> Result<(Vec<Self::SpendableOutput>, Vec<Self::PendingOutput>), FinalizationError>;
+    ) -> Result<PollPendingOutputs<Self::SpendableOutput, Self::PendingOutput>, FinalizationError>;
 }
 
 impl<T> IClientModule for T
@@ -54,7 +60,7 @@ where
     fn poll_pending_output(
         &self,
         outputs: Vec<PendingOutput>,
-    ) -> Result<(Vec<SpendableOutput>, Vec<PendingOutput>), FinalizationError> {
+    ) -> Result<PollPendingOutputs<SpendableOutput, PendingOutput>, FinalizationError> {
         let outputs: Vec<<Self as ClientModulePlugin>::PendingOutput> = outputs
             .into_iter()
             .map(|o| {
@@ -66,13 +72,13 @@ where
             })
             .collect();
 
-        let (spendable, pending) =
+        let PollPendingOutputs { done, pending } =
             <Self as ClientModulePlugin>::poll_pending_outputs(self, outputs)?;
 
-        Ok((
-            spendable.into_iter().map(Into::into).collect(),
-            pending.into_iter().map(Into::into).collect(),
-        ))
+        Ok(PollPendingOutputs {
+            done: done.into_iter().map(Into::into).collect(),
+            pending: pending.into_iter().map(Into::into).collect(),
+        })
     }
 }
 

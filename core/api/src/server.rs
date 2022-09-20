@@ -379,7 +379,7 @@ where
     fn build_verification_cache<'a>(&self, inputs: &[Input]) -> VerificationCache {
         <Self as ServerModulePlugin>::build_verification_cache(
             self,
-            inputs.into_iter().map(|i| {
+            inputs.iter().map(|i| {
                 i.as_any()
                     .downcast_ref::<<Self as ServerModulePlugin>::Input>()
                     .expect("incorrect input type passed to module plugin")
