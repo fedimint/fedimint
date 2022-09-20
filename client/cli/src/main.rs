@@ -386,7 +386,7 @@ async fn handle_command(
                 }),
             }
         }
-        Command::Spend { amount } => client.select_and_spend_coins(amount).transform(
+        Command::Spend { amount } => client.spend_ecash(amount, rng).await.transform(
             |v| CliOutput::Spend {
                 token: (serialize_coins(&v)),
             },

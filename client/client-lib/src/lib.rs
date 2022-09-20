@@ -279,12 +279,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     pub fn receive_coins<R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
-        rng: R,
+        mut rng: R,
         create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut batch = DbBatch::new();
         self.mint_client()
-            .receive_coins(amount, batch.transaction(), rng, create_tx);
+            .receive_coins(amount, batch.transaction(), &mut rng, create_tx);
         self.context.db.apply_batch(batch).expect("DB error");
     }
 
@@ -345,21 +345,50 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         address
     }
 
-    /// **WARNING** this selects and removes coins from the database without confirming whether
-    /// we have successfully spent them in a transaction.
-    pub fn select_and_spend_coins(&self, amount: Amount) -> Result<TieredMulti<SpendableNote>> {
-        let mut batch = DbBatch::new();
-        let mut tx = batch.transaction();
+    /// Issues a spendable amount of ecash
+    ///
+    /// **WARNING** the ecash will be deleted from the database, the returned ecash must be
+    /// `reissued` or it will be lost
+    pub async fn spend_ecash<R: RngCore + CryptoRng>(
+        &self,
+        amount: Amount,
+        mut rng: R,
+    ) -> Result<TieredMulti<SpendableNote>> {
         let coins = self.mint_client().select_coins(amount)?;
-        tx.append_from_iter(coins.iter_items().map(|(amount, coin)| {
-            BatchItem::delete(CoinKey {
+
+        let final_coins = if coins.total_amount() == amount {
+            coins
+        } else {
+            let mut tx = TransactionBuilder::default();
+            tx.input_coins(coins, &self.context.secp)?;
+            tx.output_coins(
+                amount,
+                &self.mint_client().context.secp,
+                &self.mint_client().config.tbs_pks,
+                &mut rng,
+            );
+            self.submit_tx_with_change(tx, DbBatch::new(), rng).await?;
+            self.fetch_all_coins().await;
+            self.mint_client().select_coins(amount)?
+        };
+        assert_eq!(
+            final_coins.total_amount(),
+            amount,
+            "should have exact change"
+        );
+
+        let mut batch = DbBatch::new();
+        let mut batch_tx = batch.transaction();
+        batch_tx.append_from_iter(final_coins.iter_items().map(|(amount, coin)| {
+            BatchItem::maybe_delete(CoinKey {
                 amount,
                 nonce: coin.coin.0.clone(),
             })
         }));
-        tx.commit();
+        batch_tx.commit();
         self.context.db.apply_batch(batch).expect("DB error");
-        Ok(coins)
+
+        Ok(final_coins)
     }
 
     /// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried
