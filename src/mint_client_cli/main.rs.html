@@ -967,7 +967,7 @@
                 }),
             }
         }
-        Command::Spend { amount } =&gt; client.select_and_spend_coins(amount).transform(
+        Command::Spend { amount } =&gt; client.spend_ecash(amount, rng).<span class="kw">await</span>.transform(
             |v| CliOutput::Spend {
                 token: (serialize_coins(<span class="kw-2">&amp;</span>v)),
             },

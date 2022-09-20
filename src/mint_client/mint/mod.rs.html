@@ -721,7 +721,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         <span class="kw-2">mut </span>tx: BatchTx,
-        rng: R,
+        rng: <span class="kw-2">&amp;mut </span>R,
         <span class="kw-2">mut </span>create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
@@ -820,7 +820,7 @@
         amount: Amount,
         amount_tiers: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;,
         ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; (CoinFinalizationData, SignRequest)
     <span class="kw">where
         </span>C: Signing,
@@ -829,7 +829,7 @@
             TieredMulti::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
-                    <span class="kw">let </span>(request, blind_msg) = CoinRequest::new(ctx, <span class="kw-2">&amp;mut </span>rng);
+                    <span class="kw">let </span>(request, blind_msg) = CoinRequest::new(ctx, rng);
                     ((amt, request), (amt, blind_msg))
                 })
                 .unzip();
@@ -894,12 +894,12 @@
     /// message
     </span><span class="kw">fn </span>new&lt;C&gt;(
         ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
-        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+        rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; (CoinRequest, BlindedMessage)
     <span class="kw">where
         </span>C: Signing,
     {
-        <span class="kw">let </span>spend_key = bitcoin::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>spend_key = bitcoin::KeyPair::new(ctx, rng);
         <span class="kw">let </span>nonce = Nonce(spend_key.public_key());
         <span class="kw">let </span>(blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 

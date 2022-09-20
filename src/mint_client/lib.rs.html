@@ -1017,6 +1017,35 @@
 <span id="1017">1017</span>
 <span id="1018">1018</span>
 <span id="1019">1019</span>
+<span id="1020">1020</span>
+<span id="1021">1021</span>
+<span id="1022">1022</span>
+<span id="1023">1023</span>
+<span id="1024">1024</span>
+<span id="1025">1025</span>
+<span id="1026">1026</span>
+<span id="1027">1027</span>
+<span id="1028">1028</span>
+<span id="1029">1029</span>
+<span id="1030">1030</span>
+<span id="1031">1031</span>
+<span id="1032">1032</span>
+<span id="1033">1033</span>
+<span id="1034">1034</span>
+<span id="1035">1035</span>
+<span id="1036">1036</span>
+<span id="1037">1037</span>
+<span id="1038">1038</span>
+<span id="1039">1039</span>
+<span id="1040">1040</span>
+<span id="1041">1041</span>
+<span id="1042">1042</span>
+<span id="1043">1043</span>
+<span id="1044">1044</span>
+<span id="1045">1045</span>
+<span id="1046">1046</span>
+<span id="1047">1047</span>
+<span id="1048">1048</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1298,12 +1327,12 @@
     <span class="kw">pub fn </span>receive_coins&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
-        rng: R,
+        <span class="kw-2">mut </span>rng: R,
         create_tx: <span class="kw">impl </span>FnMut(TieredMulti&lt;BlindNonce&gt;) -&gt; OutPoint,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="self">self</span>.mint_client()
-            .receive_coins(amount, batch.transaction(), rng, create_tx);
+            .receive_coins(amount, batch.transaction(), <span class="kw-2">&amp;mut </span>rng, create_tx);
         <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
     }
 
@@ -1364,21 +1393,50 @@
         address
     }
 
-    <span class="doccomment">/// **WARNING** this selects and removes coins from the database without confirming whether
-    /// we have successfully spent them in a transaction.
-    </span><span class="kw">pub fn </span>select_and_spend_coins(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: Amount) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>tx = batch.transaction();
+    <span class="doccomment">/// Issues a spendable amount of ecash
+    ///
+    /// **WARNING** the ecash will be deleted from the database, the returned ecash must be
+    /// `reissued` or it will be lost
+    </span><span class="kw">pub async fn </span>spend_ecash&lt;R: RngCore + CryptoRng&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        amount: Amount,
+        <span class="kw-2">mut </span>rng: R,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
         <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
-        tx.append_from_iter(coins.iter_items().map(|(amount, coin)| {
-            BatchItem::delete(CoinKey {
+
+        <span class="kw">let </span>final_coins = <span class="kw">if </span>coins.total_amount() == amount {
+            coins
+        } <span class="kw">else </span>{
+            <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+            tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+            tx.output_coins(
+                amount,
+                <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().context.secp,
+                <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks,
+                <span class="kw-2">&amp;mut </span>rng,
+            );
+            <span class="self">self</span>.submit_tx_with_change(tx, DbBatch::new(), rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.fetch_all_coins().<span class="kw">await</span>;
+            <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?
+        </span>};
+        <span class="macro">assert_eq!</span>(
+            final_coins.total_amount(),
+            amount,
+            <span class="string">&quot;should have exact change&quot;
+        </span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>batch_tx = batch.transaction();
+        batch_tx.append_from_iter(final_coins.iter_items().map(|(amount, coin)| {
+            BatchItem::maybe_delete(CoinKey {
                 amount,
                 nonce: coin.coin.<span class="number">0</span>.clone(),
             })
         }));
-        tx.commit();
+        batch_tx.commit();
         <span class="self">self</span>.context.db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
-        <span class="prelude-val">Ok</span>(coins)
+
+        <span class="prelude-val">Ok</span>(final_coins)
     }
 
     <span class="doccomment">/// Tries to fetch e-cash tokens from a certain out point. An error may just mean having queried

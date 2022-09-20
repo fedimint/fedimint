@@ -257,7 +257,7 @@
         amount: Amount,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-        rng: R,
+        rng: <span class="kw-2">&amp;mut </span>R,
     ) {
         <span class="kw">let </span>(coin_finalization_data, coin_output) =
             <span class="self">self</span>.create_output_coins(amount, secp, tbs_pks, rng);
@@ -275,7 +275,7 @@
         amount: Amount,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
-        rng: R,
+        rng: <span class="kw-2">&amp;mut </span>R,
     ) -&gt; (CoinFinalizationData, TieredMulti&lt;BlindNonce&gt;) {
         <span class="kw">let </span>(coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);
