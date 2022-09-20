@@ -450,6 +450,13 @@ mod tests {
         ) -> crate::api::Result<EpochHistory> {
             unimplemented!()
         }
+
+        async fn offer_exists(
+            &self,
+            _payment_hash: bitcoin::hashes::sha256::Hash,
+        ) -> crate::api::Result<bool> {
+            unimplemented!()
+        }
     }
 
     async fn new_mint_and_client() -> (
