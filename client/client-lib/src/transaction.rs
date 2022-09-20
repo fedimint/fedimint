@@ -89,7 +89,7 @@ impl TransactionBuilder {
         amount: Amount,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
-        rng: R,
+        rng: &mut R,
     ) {
         let (coin_finalization_data, coin_output) =
             self.create_output_coins(amount, secp, tbs_pks, rng);
@@ -107,7 +107,7 @@ impl TransactionBuilder {
         amount: Amount,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
-        rng: R,
+        rng: &mut R,
     ) -> (CoinFinalizationData, TieredMulti<BlindNonce>) {
         let (coin_finalization_data, sig_req) =
             CoinFinalizationData::new(amount, tbs_pks, secp, rng);

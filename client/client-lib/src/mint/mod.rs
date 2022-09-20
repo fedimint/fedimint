@@ -110,7 +110,7 @@ impl<'c> MintClient<'c> {
         &self,
         amount: Amount,
         mut tx: BatchTx,
-        rng: R,
+        rng: &mut R,
         mut create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
         let mut builder = TransactionBuilder::default();
@@ -209,7 +209,7 @@ impl CoinFinalizationData {
         amount: Amount,
         amount_tiers: &Tiered<K>,
         ctx: &Secp256k1<C>,
-        mut rng: impl RngCore + CryptoRng,
+        rng: &mut (impl RngCore + CryptoRng),
     ) -> (CoinFinalizationData, SignRequest)
     where
         C: Signing,
@@ -218,7 +218,7 @@ impl CoinFinalizationData {
             TieredMulti::represent_amount(amount, amount_tiers)
                 .into_iter()
                 .map(|(amt, ())| {
-                    let (request, blind_msg) = CoinRequest::new(ctx, &mut rng);
+                    let (request, blind_msg) = CoinRequest::new(ctx, rng);
                     ((amt, request), (amt, blind_msg))
                 })
                 .unzip();
@@ -283,12 +283,12 @@ impl CoinRequest {
     /// message
     fn new<C>(
         ctx: &Secp256k1<C>,
-        mut rng: impl RngCore + CryptoRng,
+        rng: &mut (impl RngCore + CryptoRng),
     ) -> (CoinRequest, BlindedMessage)
     where
         C: Signing,
     {
-        let spend_key = bitcoin::KeyPair::new(ctx, &mut rng);
+        let spend_key = bitcoin::KeyPair::new(ctx, rng);
         let nonce = Nonce(spend_key.public_key());
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 

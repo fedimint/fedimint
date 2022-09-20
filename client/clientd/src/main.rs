@@ -144,8 +144,9 @@ async fn spend(
     payload: JsonExtract<SpendPayload>,
 ) -> Result<impl IntoResponse, ClientdError> {
     let client = &state.client;
+    let rng = state.rng.clone();
 
-    let notes = client.select_and_spend_coins(payload.0.amount)?;
+    let notes = client.spend_ecash(payload.0.amount, rng).await?;
     json_success!(SpendResponse { notes })
 }
 

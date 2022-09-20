@@ -3,11 +3,13 @@
 
 set -euxo pipefail
 export RUST_LOG=info
-export PEG_IN_AMOUNT=99999
 
+export PEG_IN_AMOUNT=10000
 source ./scripts/setup-tests.sh
 ./scripts/start-fed.sh
 ./scripts/pegin.sh # peg in user
+
+export PEG_IN_AMOUNT=99999
 start_gateway
 ./scripts/pegin.sh $PEG_IN_AMOUNT 1 # peg in gateway
 
@@ -15,6 +17,7 @@ start_gateway
 
 # reissue
 TOKENS=$($FM_MINT_CLIENT spend '42000msat' | jq -r '.spend.token')
+[[ $($FM_MINT_CLIENT info | jq -r '.info.total_amount') = "9958000" ]]
 $FM_MINT_CLIENT validate $TOKENS
 $FM_MINT_CLIENT reissue $TOKENS
 $FM_MINT_CLIENT fetch
