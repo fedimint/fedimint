@@ -30,5 +30,5 @@ sled = "0.34.6"
 tokio = { version = "1.21.0", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
-serde_json = "1.0.82"
+serde_json = "1.0.85"
 url = { version = "2.2.2", features = ["serde"] }
