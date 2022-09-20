@@ -17,6 +17,7 @@ use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
+use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -188,9 +189,13 @@ impl LnGateway {
         let preimage_res = payment_params
             .maybe_internal
             .then_async(async {
-                self.buy_preimage_internal(&payment_params, &mut rng)
-                    .await
-                    .ok()
+                self.buy_preimage_internal(
+                    &payment_params.payment_hash,
+                    &payment_params.invoice_amount,
+                    &mut rng,
+                )
+                .await
+                .ok()
             })
             .await
             .flatten()
@@ -219,21 +224,22 @@ impl LnGateway {
 
     async fn buy_preimage_internal(
         &self,
-        payment_params: &PaymentParameters,
+        payment_hash: &sha256::Hash,
+        invoice_amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
     ) -> Result<[u8; 32]> {
         let (out_point, _) = self
             .federation_client
-            .buy_preimage_offer(
-                &payment_params.payment_hash,
-                &payment_params.invoice_amount,
-                &mut rng,
-            )
+            .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
             .await?;
+
+        debug!("Awaiting decryption of preimage of hash {}", payment_hash);
         let preimage = self
             .federation_client
             .await_preimage_decryption(out_point)
             .await?;
+        debug!("Decrypted preimage {:?}", preimage);
+
         Ok(preimage.0.serialize())
     }
 
@@ -282,17 +288,17 @@ impl LnGateway {
     }
 
     async fn handle_htlc_incoming_msg(&self, htlc_accepted: HtlcAccepted) -> Result<Preimage> {
-        let amount = htlc_accepted.htlc.amount;
+        let invoice_amount = htlc_accepted.htlc.amount;
         let payment_hash = htlc_accepted.htlc.payment_hash;
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng =
+            rand::rngs::OsRng::new().expect("only systems with a randomness source are supported");
 
-        tracing::debug!("Incoming htlc for payment hash {}", payment_hash);
-        let (outpoint, _) = self.buy_preimage_offer(&payment_hash, &amount, rng).await?;
-        tracing::debug!("Decrypting preimage {}", payment_hash);
-        let preimage = self.await_preimage_decryption(outpoint).await?;
-        tracing::debug!("Decrypted preimage {:?}", payment_hash);
-
-        Ok(preimage)
+        debug!("Incoming htlc for payment hash {}", payment_hash);
+        let pk_slice = self
+            .buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
+            .await?;
+        let pk = XOnlyPublicKey::from_slice(&pk_slice).expect("Invalid preimage");
+        Ok(Preimage(pk))
     }
 
     async fn handle_balance_msg(&self) -> Result<Amount> {
