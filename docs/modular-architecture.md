@@ -3,18 +3,33 @@ Below is a high-level description of the modular architecture of Fedimint.
 
 ## Dependency Tree
 ```mermaid
-graph BT;
-    fedimint/client-->core/client;
-    fedimint/server-->core/server;
-    fedimint/client-->mclient;
-    fedimint/server-->mserver;
-    mclient[[module/client]]-->core/client;
-    mapi[[module/api]]-->core/api;
-    mserver[[module/server]]-->core/server;
-    mclient-->mapi;
-    mserver-->mapi;
-    core/client-->core/api;
-    core/server-->core/api;
+flowchart BT;
+    fedimintd[[fedimintd: Final server binary]]
+    fedimint-server(fedimint-server: Fedimint server - abstract over modules)
+    fedimint-app[[fedimint-app: Final client application]]
+    fedimint-core(fedimint-core: Traits & glue between modules and generic code)
+    fedimint-api(fedimint-api: API defintion between Fedimint client & server)
+    fedimint-lib(fedimint-lib: Client side library - abstact over modules)
+
+    module-api("&lt;module>-api: Shared Fedimint module code & data")
+    module-client("&lt;module>-client: Client side Fedimint module")
+    module-server("&lt;module>-server: Server side Fedimint module")
+    
+    module-server-->module-api
+    module-api-->fedimint-core
+
+    fedimint-server-->fedimint-api
+    fedimint-server-->fedimint-core
+    fedimint-core-->fedimint-api
+    fedimintd-->module-server
+    fedimintd-->fedimint-server
+
+    module-client-->module-api
+    fedimint-lib-->fedimint-core
+    fedimint-lib-->fedimint-api
+    fedimint-app-->module-client
+    fedimint-app-->fedimint-lib  
+    fedimint-app-->fedimint-core
 ```
 
 ## Crate Descriptions
