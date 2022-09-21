@@ -15,11 +15,10 @@ pub mod contracts;
 mod db;
 
 use crate::config::LightningModuleConfig;
-use crate::contracts::incoming::{
-    DecryptedPreimage, EncryptedPreimage, IncomingContractOffer, OfferId, PreimageDecryptionShare,
-};
 use crate::contracts::{
-    Contract, ContractId, ContractOutcome, FundedContract, IdentifyableContract,
+    incoming::{IncomingContractOffer, OfferId},
+    Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
+    IdentifyableContract, Preimage, PreimageDecryptionShare,
 };
 use crate::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
@@ -80,7 +79,7 @@ pub struct ContractInput {
     /// Of the three contract types only the outgoing one needs any other witness data than a
     /// signature. The signature is aggregated on the transaction level, so only the optional
     /// preimage remains.
-    pub witness: Option<contracts::outgoing::Preimage>,
+    pub witness: Option<Preimage>,
 }
 
 /// Represents an output of the Lightning module.
@@ -223,7 +222,7 @@ impl FederationModule for LightningModule {
                             .witness
                             .as_ref()
                             .ok_or(LightningModuleError::MissingPreimage)?
-                            .0[..],
+                            .0,
                     );
 
                     // … and the spender provides a valid preimage …
@@ -245,7 +244,10 @@ impl FederationModule for LightningModule {
                     return Err(LightningModuleError::ContractNotReady);
                 }
                 // … either the user may spend the funds since they sold a valid preimage …
-                DecryptedPreimage::Some(preimage) => preimage.0,
+                DecryptedPreimage::Some(preimage) => match preimage.to_public_key() {
+                    Ok(pub_key) => pub_key,
+                    Err(_) => return Err(LightningModuleError::InvalidPreimage),
+                },
                 // … or the gateway may claim back funds for not receiving the advertised preimage.
                 DecryptedPreimage::Invalid => incoming.contract.gateway_key,
             },
@@ -512,13 +514,13 @@ impl FederationModule for LightningModule {
                 continue;
             }
 
-            let preimage = match self.cfg.threshold_pub_keys.decrypt(
+            let preimage_vec = match self.cfg.threshold_pub_keys.decrypt(
                 valid_shares
                     .iter()
                     .map(|(peer, share)| (peer.to_usize(), &share.0)),
                 &incoming_contract.encrypted_preimage.0,
             ) {
-                Ok(preimage) => preimage,
+                Ok(preimage_vec) => preimage_vec,
                 Err(_) => {
                     // TODO: check if that can happen even though shares are verified before
                     error!(contract_hash = %incoming_contract.hash, "Failed to decrypt preimage");
@@ -532,11 +534,17 @@ impl FederationModule for LightningModule {
                 batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
             }
 
-            let decrypted_preimage = if preimage.len() != 32 {
-                DecryptedPreimage::Invalid
-            } else if incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage) {
-                if let Ok(preimage_key) = secp256k1::XOnlyPublicKey::from_slice(&preimage) {
-                    DecryptedPreimage::Some(crate::contracts::incoming::Preimage(preimage_key))
+            let decrypted_preimage = if preimage_vec.len() == 32
+                && incoming_contract.hash == bitcoin_hashes::sha256::Hash::hash(&preimage_vec)
+            {
+                let preimage = Preimage(
+                    preimage_vec
+                        .as_slice()
+                        .try_into()
+                        .expect("Invalid preimage length"),
+                );
+                if preimage.to_public_key().is_ok() {
+                    DecryptedPreimage::Some(preimage)
                 } else {
                     DecryptedPreimage::Invalid
                 }

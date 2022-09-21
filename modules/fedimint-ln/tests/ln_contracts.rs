@@ -3,13 +3,11 @@ use fedimint_api::module::testing::FakeFed;
 use fedimint_api::{Amount, OutPoint};
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_ln::contracts::account::AccountContract;
-use fedimint_ln::contracts::incoming::{
-    DecryptedPreimage, EncryptedPreimage, IncomingContract, IncomingContractOffer,
-};
-use fedimint_ln::contracts::outgoing::{OutgoingContract, Preimage};
+use fedimint_ln::contracts::incoming::{IncomingContract, IncomingContractOffer};
+use fedimint_ln::contracts::outgoing::OutgoingContract;
 use fedimint_ln::contracts::{
-    AccountContractOutcome, Contract, ContractOutcome, IdentifyableContract,
-    OutgoingContractOutcome,
+    AccountContractOutcome, Contract, ContractOutcome, DecryptedPreimage, EncryptedPreimage,
+    IdentifyableContract, OutgoingContractOutcome, Preimage,
 };
 use fedimint_ln::{
     ContractInput, ContractOrOfferOutput, ContractOutput, LightningModule, LightningModuleError,
@@ -79,8 +77,8 @@ async fn test_outgoing() {
     let ctx = secp256k1::Secp256k1::new();
     let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
-    let preimage = [42u8; 32];
-    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
+    let preimage = Preimage([42u8; 32]);
+    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
 
     let contract = Contract::Outgoing(OutgoingContract {
         hash,
@@ -128,7 +126,7 @@ async fn test_outgoing() {
     let account_input_witness = ContractInput {
         contract_id: contract.contract_id(),
         amount: Amount::from_sat(42),
-        witness: Some(Preimage(preimage)),
+        witness: Some(preimage),
     };
     let meta = fed.verify_input(&account_input_witness).unwrap();
     assert_eq!(meta.keys, vec![gw_pk]);
@@ -156,13 +154,16 @@ async fn test_incoming() {
     let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
     let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
 
-    let preimage = user_pk.serialize();
-    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage);
+    let preimage = Preimage(user_pk.serialize());
+    let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
 
     let offer = IncomingContractOffer {
         amount: Amount::from_sat(42),
         hash,
-        encrypted_preimage: EncryptedPreimage::new(preimage, &fed.client_cfg().threshold_pub_key),
+        encrypted_preimage: EncryptedPreimage::new(
+            preimage.clone(),
+            &fed.client_cfg().threshold_pub_key,
+        ),
     };
     let offer_output = ContractOrOfferOutput::Offer(offer.clone());
     let offer_out_point = OutPoint {
@@ -215,9 +216,7 @@ async fn test_incoming() {
         OutputOutcome::Contract { outcome, .. } => {
             assert_eq!(
                 outcome,
-                ContractOutcome::Incoming(DecryptedPreimage::Some(
-                    fedimint_ln::contracts::incoming::Preimage(user_pk)
-                ))
+                ContractOutcome::Incoming(DecryptedPreimage::Some(preimage))
             );
         }
         _ => panic!(),
