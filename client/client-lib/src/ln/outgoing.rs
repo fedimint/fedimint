@@ -1,7 +1,8 @@
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::Amount;
-use fedimint_core::modules::ln::contracts::outgoing::{OutgoingContract, Preimage};
-use fedimint_core::modules::ln::contracts::IdentifyableContract;
+use fedimint_core::modules::ln::contracts::{
+    outgoing::OutgoingContract, IdentifyableContract, Preimage,
+};
 use fedimint_core::modules::ln::ContractInput;
 
 #[derive(Debug, Encodable, Decodable)]

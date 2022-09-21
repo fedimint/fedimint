@@ -28,11 +28,6 @@ use fedimint_api::{
     Amount, FederationModule, OutPoint, PeerId, TransactionId,
 };
 use fedimint_core::epoch::EpochHistory;
-use fedimint_core::modules::ln::contracts::incoming::{
-    DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
-};
-use fedimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-use fedimint_core::modules::ln::{ContractOutput, LightningGateway};
 use fedimint_core::modules::wallet::PegOut;
 use fedimint_core::outcome::TransactionStatus;
 use fedimint_core::transaction::{Transaction, TransactionItem};
@@ -40,8 +35,12 @@ use fedimint_core::{
     config::ClientConfig,
     modules::{
         ln::{
-            contracts::{ContractId, OutgoingContractOutcome},
-            ContractOrOfferOutput,
+            contracts::{
+                incoming::{IncomingContract, IncomingContractOffer, OfferId},
+                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
+                OutgoingContractOutcome, Preimage,
+            },
+            ContractOrOfferOutput, ContractOutput, LightningGateway,
         },
         mint::BlindNonce,
         wallet::txoproof::TxOutProof,
@@ -627,7 +626,7 @@ impl Client<UserClientConfig> {
     ) -> Result<ConfirmedInvoice> {
         let gateway = self.fetch_active_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
-        let raw_payment_secret = payment_keypair.public_key().serialize();
+        let raw_payment_secret: [u8; 32] = payment_keypair.public_key().serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
 
@@ -671,9 +670,11 @@ impl Client<UserClientConfig> {
                     .sign_ecdsa_recoverable(hash, &node_secret_key)
             })?;
 
-        let offer_output =
-            self.ln_client()
-                .create_offer_output(amount, payment_hash, raw_payment_secret);
+        let offer_output = self.ln_client().create_offer_output(
+            amount,
+            payment_hash,
+            Preimage(raw_payment_secret),
+        );
         let ln_output = Output::LN(offer_output);
 
         // There is no input here because this is just an announcement
@@ -893,14 +894,14 @@ impl Client<GatewayClientConfig> {
     pub async fn claim_outgoing_contract(
         &self,
         contract_id: ContractId,
-        preimage: [u8; 32],
+        preimage: Preimage,
         rng: impl RngCore + CryptoRng,
     ) -> Result<OutPoint> {
         let mut batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
         let contract = self.ln_client().get_outgoing_contract(contract_id).await?;
-        let input = Input::LN(contract.claim(outgoing::Preimage(preimage)));
+        let input = Input::LN(contract.claim(preimage));
 
         batch.autocommit(|batch| {
             batch.append_delete(OutgoingContractAccountKey(contract_id));
