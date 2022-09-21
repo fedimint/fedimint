@@ -1,3 +1,6 @@
+//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
+//! issues and is unmaintained. Please use `rocksdb` instead.
+
 use super::batch::{BatchItem, DbBatch};
 use super::{Database, DecodingError};
 use crate::db::PrefixIter;
@@ -8,7 +11,9 @@ use tracing::error;
 // TODO: maybe make the concrete impl its own crate
 impl Database for sled::Tree {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        Ok(self.insert(key, value)?.map(|bytes| bytes.to_vec()))
+        let ret = self.insert(key, value)?.map(|bytes| bytes.to_vec());
+        self.flush().expect("DB failure");
+        Ok(ret)
     }
 
     fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -19,10 +24,12 @@ impl Database for sled::Tree {
     }
 
     fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self
+        let ret = self
             .remove(key)
             .map_err(anyhow::Error::from)?
-            .map(|bytes| bytes.to_vec()))
+            .map(|bytes| bytes.to_vec());
+        self.flush().expect("DB failure");
+        Ok(ret)
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
@@ -35,33 +42,36 @@ impl Database for sled::Tree {
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
         let batch: Vec<_> = batch.into();
 
-        self.transaction::<_, _, TransactionError>(|t| {
-            for change in batch.iter() {
-                match change {
-                    BatchItem::InsertNewElement(element) => {
-                        if t.insert(element.key.to_bytes(), element.value.to_bytes())?
-                            .is_some()
-                        {
-                            error!("Database replaced element! {:?}", element.key);
+        let ret = self
+            .transaction::<_, _, TransactionError>(|t| {
+                for change in batch.iter() {
+                    match change {
+                        BatchItem::InsertNewElement(element) => {
+                            if t.insert(element.key.to_bytes(), element.value.to_bytes())?
+                                .is_some()
+                            {
+                                error!("Database replaced element! {:?}", element.key);
+                            }
                         }
-                    }
-                    BatchItem::InsertElement(element) => {
-                        t.insert(element.key.to_bytes(), element.value.to_bytes())?;
-                    }
-                    BatchItem::DeleteElement(key) => {
-                        if t.remove(key.to_bytes())?.is_none() {
-                            error!("Database deleted absent element! {:?}", key);
+                        BatchItem::InsertElement(element) => {
+                            t.insert(element.key.to_bytes(), element.value.to_bytes())?;
                         }
-                    }
-                    BatchItem::MaybeDeleteElement(key) => {
-                        t.remove(key.to_bytes())?;
+                        BatchItem::DeleteElement(key) => {
+                            if t.remove(key.to_bytes())?.is_none() {
+                                error!("Database deleted absent element! {:?}", key);
+                            }
+                        }
+                        BatchItem::MaybeDeleteElement(key) => {
+                            t.remove(key.to_bytes())?;
+                        }
                     }
                 }
-            }
 
-            Ok(())
-        })
-        .map_err(anyhow::Error::from)
+                Ok(())
+            })
+            .map_err(anyhow::Error::from);
+        self.flush().expect("DB failure");
+        ret
     }
 }
 
