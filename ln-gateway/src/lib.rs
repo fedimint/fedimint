@@ -9,7 +9,7 @@ use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{incoming::Preimage, ContractId};
+use fedimint_server::modules::ln::contracts::{Preimage, ContractId};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::mint::MintClientError;
@@ -224,7 +224,7 @@ impl LnGateway {
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
-    ) -> Result<[u8; 32]> {
+    ) -> Result<Preimage> {
         let (out_point, contract_id) = self
             .federation_client
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
@@ -238,7 +238,7 @@ impl LnGateway {
         {
             Ok(preimage) => {
                 debug!("Decrypted preimage {:?}", preimage);
-                Ok(preimage.0.serialize())
+                Ok(preimage)
             }
             Err(e) => {
                 warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
@@ -254,7 +254,7 @@ impl LnGateway {
         &self,
         invoice: &str,
         payment_params: &PaymentParameters,
-    ) -> Result<[u8; 32]> {
+    ) -> Result<Preimage> {
         match self
             .ln_client
             .pay(

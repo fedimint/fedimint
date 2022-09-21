@@ -2,6 +2,7 @@ use std::convert::TryInto;
 
 use async_trait::async_trait;
 use cln_rpc::model::requests::PayRequest;
+use fedimint::modules::ln::contracts::Preimage;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
@@ -13,7 +14,7 @@ pub trait LnRpc: Send + Sync + 'static {
         invoice: &str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -> Result<[u8; 32], LightningError>;
+    ) -> Result<Preimage, LightningError>;
 }
 
 #[derive(Debug)]
@@ -27,7 +28,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         invoice: &str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -> Result<[u8; 32], LightningError> {
+    ) -> Result<Preimage, LightningError> {
         debug!("Attempting to pay invoice");
 
         let pay_result = self
@@ -52,7 +53,8 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         match pay_result {
             Ok(cln_rpc::Response::Pay(pay_success)) => {
                 debug!("Successfully paid invoice");
-                Ok(pay_success.payment_preimage.to_vec().try_into().unwrap())
+                let slice: [u8; 32] = pay_success.payment_preimage.to_vec().try_into().unwrap();
+                Ok(Preimage(slice))
             }
             Ok(_) => unreachable!("unexpected response from C-lightning"),
             Err(cln_rpc::RpcError { code, message }) => {
