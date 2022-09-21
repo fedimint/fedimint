@@ -1,6 +1,7 @@
 use fedimint_api::FederationModule;
-use fedimint_ln::contracts::incoming::{DecryptedPreimage, OfferId, Preimage};
+use fedimint_ln::contracts::incoming::OfferId;
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
+use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
 use fedimint_ln::LightningModule;
 use fedimint_mint::SigResponse;
 use fedimint_wallet::{PegOutOutcome, Wallet};
@@ -52,9 +53,7 @@ impl Final for OutputOutcome {
             OutputOutcome::LN(fedimint_ln::OutputOutcome::Contract { outcome, .. }) => {
                 match outcome {
                     ContractOutcome::Account(_) => true,
-                    ContractOutcome::Incoming(
-                        fedimint_ln::contracts::incoming::DecryptedPreimage::Some(_),
-                    ) => true,
+                    ContractOutcome::Incoming(DecryptedPreimage::Some(_)) => true,
                     ContractOutcome::Incoming(_) => false,
                     ContractOutcome::Outgoing(_) => true,
                 }
