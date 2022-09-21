@@ -27,10 +27,6 @@ pub struct OutgoingContract {
     pub cancelled: bool,
 }
 
-/// Preimage in the context of [`OutgoingContract`]s
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Preimage(pub [u8; 32]);
-
 impl IdentifyableContract for OutgoingContract {
     fn contract_id(&self) -> ContractId {
         let mut engine = ContractId::engine();

@@ -15,7 +15,6 @@ use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -302,11 +301,8 @@ impl LnGateway {
             rand::rngs::OsRng::new().expect("only systems with a randomness source are supported");
 
         debug!("Incoming htlc for payment hash {}", payment_hash);
-        let pk_slice = self
-            .buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
-            .await?;
-        let pk = XOnlyPublicKey::from_slice(&pk_slice).expect("Invalid preimage");
-        Ok(Preimage(pk))
+        self.buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
+            .await
     }
 
     async fn handle_balance_msg(&self) -> Result<Amount> {
