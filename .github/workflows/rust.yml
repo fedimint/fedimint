@@ -13,17 +13,10 @@ jobs:
     strategy:
       matrix:
         build:
-          - wasm32
           - macos
           # TODO: Needs clang and possibly other binaries
           # - android
         include:
-          - build: wasm32
-            runs-on: ubuntu-22.04
-            target: wasm32-unknown-unknown
-            use-cross: false
-            extra-build-args: "--target wasm32-unknown-unknown --package mint-client"
-            build-in-pr: true
           - build: macos
             runs-on: macos-latest
             use-cross: false
