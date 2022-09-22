@@ -26,10 +26,10 @@ fedimint = { path = "../fedimint/" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-mint = { path = "../modules/fedimint-mint" }
+fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6.5"
-rocksdb = "0.19.0"
 serde = { version = "1.0.118", features = [ "derive" ] }
 tokio = { version = "1.21.0", features = ["full"] }
 tracing ="0.1.22"

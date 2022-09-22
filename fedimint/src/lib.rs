@@ -86,7 +86,7 @@ impl FedimintServer {
 
         Self::new_with(
             cfg.clone(),
-            Arc::new(rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap()),
+            Arc::new(fedimint_rocksdb::RocksDb::open(db_path).expect("Error opening DB")),
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )

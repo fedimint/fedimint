@@ -8,9 +8,9 @@ use tracing::trace;
 
 pub mod batch;
 pub mod mem_impl;
-#[cfg(feature = "rocksdb")]
-mod rocksdb_impl;
 pub mod sled_impl;
+
+pub use tests::test_db_impl;
 
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
@@ -205,7 +205,6 @@ impl DecodingError {
     }
 }
 
-#[cfg(test)]
 mod tests {
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
