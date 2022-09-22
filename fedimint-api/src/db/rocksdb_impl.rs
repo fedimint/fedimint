@@ -27,6 +27,9 @@ impl Database for rocksdb::OptimisticTransactionDB {
             self.prefix_iterator(prefix.clone())
                 .map_while(move |res| {
                     let (key_bytes, value_bytes) = res.expect("DB error");
+                    // TODO: do not bump the MSRV with it just yet, change
+                    // in a couple of months
+                    #[allow(clippy::unnecessary_lazy_evaluations)]
                     key_bytes
                         .starts_with(&prefix)
                         .then(|| (key_bytes, value_bytes))
