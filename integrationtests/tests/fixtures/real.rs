@@ -23,7 +23,7 @@ pub struct RealLightningTest {
     rpc_gateway: LightningRPC,
     rpc_other: LightningRPC,
     initial_balance: Amount,
-    pub gateway_node_pub_key: secp256k1::PublicKey,
+    pub gateway_node_pub_key: secp256k1::PublicKey, //TODO: make that private?
 }
 
 impl LightningTest for RealLightningTest {
@@ -39,6 +39,10 @@ impl LightningTest for RealLightningTest {
     fn amount_sent(&self) -> Amount {
         self.initial_balance
             .sub(Self::channel_balance(&self.rpc_gateway))
+    }
+
+    fn pub_key(&self) -> secp256k1::PublicKey {
+        self.gateway_node_pub_key
     }
 }
 
