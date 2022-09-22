@@ -45,9 +45,9 @@
         ]);
 
         fenix-toolchain-wasm32 = with fenix.packages.${system}; combine [
-          latest.cargo
-          latest.rustc
-          targets."wasm32-unknown-unknown".latest.rust-std
+          stable.cargo
+          stable.rustc
+          targets."wasm32-unknown-unknown".stable.rust-std
         ];
 
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
