@@ -24,7 +24,7 @@ name = "configgen"
 path  = "src/bin/configgen.rs"
 
 [dependencies]
-anyhow = "1.0.64"
+anyhow = "1.0.65"
 async-trait = "0.1.42"
 bincode = "1.3.1"
 bitcoin = "0.28.1"
