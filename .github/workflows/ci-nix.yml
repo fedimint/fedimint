@@ -111,6 +111,23 @@ jobs:
           files: result/lcov.info
           fail_ci_if_error: true
 
+  wasm32:
+    name: "wasm32"
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v15
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v10
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Build mint-client for wasm32
+        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#wasm32.mint-client
+
   containers:
     name: "Containers"
     runs-on: buildjet-8vcpu-ubuntu-2004

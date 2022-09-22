@@ -44,7 +44,14 @@
           "llvm-tools-preview"
         ]);
 
+        fenix-toolchain-wasm32 = with fenix.packages.${system}; combine [
+          latest.cargo
+          latest.rustc
+          targets."wasm32-unknown-unknown".latest.rust-std
+        ];
+
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
+        craneLibWasm32 = crane.lib.${system}.overrideToolchain fenix-toolchain-wasm32;
 
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
@@ -159,6 +166,10 @@
           nativeBuildInputs = with pkgs; [
             pkg-config
           ];
+
+          # Fix wasm32 compilation
+          CC_wasm32_unknown_unknown = "${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14";
+          CFLAGS_wasm32_unknown_unknown = "-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.1/include/";
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           CI = "true";
@@ -291,6 +302,28 @@
           };
         };
 
+        pkgCross = { name ? null, dirs, port ? 8000, target, craneLib }: rec {
+
+          deps = craneLib.buildDepsOnly (commonArgs // {
+            src = filterWorkspaceDepsBuildFiles ./.;
+            pname = "pkg-${name}-${target}-deps";
+            buildPhaseCargoCommand = "cargo build --profile release --target ${target} --package ${name}";
+            doCheck = false;
+            CARGO_BUILD_TARGET = target;
+          });
+
+          package = craneLib.buildPackage (commonArgs // {
+            pname = "pkg-${name}-${target}";
+            cargoArtifacts = deps;
+
+            src = filterModules (dirs) ./.;
+            cargoExtraArgs = "--package ${name} --target ${target}";
+
+            # if needed we will check the whole workspace at once with `workspaceBuild`
+            doCheck = false;
+          });
+        };
+
         fedimintd = pkg {
           name = "fedimintd";
           dir = "fedimint";
@@ -328,6 +361,21 @@
           dir = "client/cli";
           extraDirs = [
             "client/clientd"
+            "client/client-lib"
+            "crypto/tbs"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
+          ];
+        };
+
+        mint-client = { target, craneLib }: pkgCross {
+          name = "mint-client";
+          inherit target craneLib;
+          dirs = [
             "client/client-lib"
             "crypto/tbs"
             "fedimint-api"
@@ -398,6 +446,10 @@
             cli = cliTestCli;
             clientd = cliTestClientd;
             rust-tests = cliRustTests;
+          };
+
+          wasm32 = {
+            mint-client = (mint-client { target = "wasm32-unknown-unknown"; craneLib = craneLibWasm32; }).package;
           };
 
           container = {
