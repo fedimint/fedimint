@@ -29,7 +29,6 @@ anyhow = "1.0.65"
 async-trait = "0.1.57"
 bitcoin = { version = "0.28.1", features = [ "serde" ] }
 bitcoin_hashes = "0.10.0"
-sled = "0.34.6"
 reqwest = { version = "0.11.0", features = [ "json" ], default-features = false }
 tokio = { version = "1.21.0", features = ["full"] }
 serde = { version = "1.0.118", features = [ "derive" ] }

@@ -8,7 +8,6 @@ use tracing::trace;
 
 pub mod batch;
 pub mod mem_impl;
-pub mod sled_impl;
 
 pub use tests::test_db_impl;
 

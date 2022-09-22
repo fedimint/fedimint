@@ -412,7 +412,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sled",
  "thiserror",
  "tokio",
  "tower",
@@ -681,7 +680,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3",
- "sled",
  "tbs",
  "thiserror",
  "threshold_crypto",
@@ -714,9 +712,7 @@ dependencies = [
  "secp256k1-zkp",
  "serde",
  "serde_json",
- "sled",
  "tbs",
- "tempfile",
  "test-log",
  "thiserror",
  "tokio",
@@ -816,6 +812,19 @@ dependencies = [
  "anyhow",
  "fedimint-api",
  "rocksdb",
+ "tempfile",
+ "test-log",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-sled"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-api",
+ "sled",
  "tempfile",
  "test-log",
  "tracing",
@@ -1676,7 +1685,6 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
- "sled",
  "thiserror",
  "tokio",
  "tower-http",
@@ -1814,7 +1822,6 @@ dependencies = [
  "rand 0.6.5",
  "serde",
  "serde_json",
- "sled",
  "tokio",
  "tracing",
  "tracing-subscriber",

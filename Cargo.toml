@@ -7,6 +7,7 @@ members = [
     "fedimint-derive",
     "fedimint-api",
     "fedimint-rocksdb",
+    "fedimint-sled",
     "client/cli",
     "client/client-lib",
     "client/clientd",
