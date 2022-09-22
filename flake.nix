@@ -119,13 +119,16 @@
         filterSrcWithRegexes = regexes: src:
           let
             basePath = toString src + "/";
+            relPathAllCargoTomlFiles = builtins.filter
+              (pathStr: lib.strings.hasSuffix "/Cargo.toml" pathStr)
+              (builtins.map (path: lib.removePrefix basePath (toString path)) (lib.filesystem.listFilesRecursive src));
           in
           lib.cleanSourceWith {
             filter = (path: type:
               let
                 relPath = lib.removePrefix basePath (toString path);
                 includePath =
-                  (type == "directory") ||
+                  (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
                   lib.any
                     (re: builtins.match re relPath != null)
                     regexes;
