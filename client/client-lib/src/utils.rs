@@ -51,7 +51,7 @@ pub fn parse_node_pub_key(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Er
 }
 
 pub struct ClientContext {
-    pub db: Box<dyn Database>,
+    pub db: Database,
     pub api: Box<dyn FederationApi>,
     pub secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
 }

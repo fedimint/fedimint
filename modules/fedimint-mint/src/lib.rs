@@ -21,7 +21,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 use std::ops::Sub;
-use std::sync::Arc;
 use tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
     PublicKeyShare, SecretKeyShare,
@@ -44,7 +43,7 @@ pub struct Mint {
     sec_key: Tiered<SecretKeyShare>,
     pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
     pub_key: HashMap<Amount, AggregatePublicKey>,
-    db: Arc<dyn Database>,
+    db: Database,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -416,7 +415,7 @@ impl Mint {
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    pub fn new(cfg: MintConfig, db: Arc<dyn Database>) -> Mint {
+    pub fn new(cfg: MintConfig, db: Database) -> Mint {
         assert!(cfg.tbs_sks.tiers().count() > 0);
 
         // The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -748,7 +747,6 @@ mod test {
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, PeerId};
     use rand::rngs::OsRng;
-    use std::sync::Arc;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     const THRESHOLD: usize = 1;
@@ -770,7 +768,7 @@ mod test {
         let (mint_cfg, client_cfg) = build_configs();
         let mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
+            .map(|config| Mint::new(config, MemDatabase::new().into()))
             .collect::<Vec<_>>();
 
         let agg_pk = *client_cfg.tbs_pks.get(Amount::from_sat(1)).unwrap();
@@ -933,7 +931,7 @@ mod test {
                 peer_tbs_pks: mint_server_cfg2[0].peer_tbs_pks.clone(),
                 fee_consensus: FeeConsensus::default(),
             },
-            Arc::new(MemDatabase::new()),
+            MemDatabase::new().into(),
         );
     }
 }

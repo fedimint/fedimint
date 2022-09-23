@@ -10,6 +10,7 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
+use fedimint_api::db::Database;
 use futures::StreamExt;
 
 use bitcoin::util::key::KeyPair;
@@ -20,10 +21,7 @@ use futures::stream::FuturesUnordered;
 
 use fedimint_api::task::sleep;
 use fedimint_api::{
-    db::{
-        batch::{Accumulator, BatchItem, DbBatch},
-        Database,
-    },
+    db::batch::{Accumulator, BatchItem, DbBatch},
     Amount, OutPoint, PeerId, TransactionId,
 };
 use fedimint_core::epoch::EpochHistory;
@@ -167,7 +165,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.config.clone()
     }
 
-    pub fn new(config: T, db: Box<dyn Database>, secp: Secp256k1<All>) -> Self {
+    pub fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
         let api = api::WsFederationApi::new(
             config.as_ref().max_evil,
             config
@@ -187,7 +185,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     pub fn new_with_api(
         config: T,
-        db: Box<dyn Database>,
+        db: Database,
         api: Box<dyn FederationApi>,
         secp: Secp256k1<All>,
     ) -> Client<T> {

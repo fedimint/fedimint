@@ -16,7 +16,7 @@ use std::sync::Arc;
 use super::ApiError;
 
 pub struct FakeFed<M, CC> {
-    members: Vec<(PeerId, M, MemDatabase)>,
+    members: Vec<(PeerId, M, Database)>,
     client_cfg: CC,
     block_height: Arc<std::sync::atomic::AtomicU64>,
 }
@@ -42,7 +42,7 @@ where
     ) -> FakeFed<M, C::ClientConfig>
     where
         C: GenerateConfig,
-        F: Fn(C, MemDatabase) -> FF, // TODO: put constructor into Module trait
+        F: Fn(C, Database) -> FF, // TODO: put constructor into Module trait
         FF: Future<Output = M>,
     {
         let peers = (0..members)
@@ -53,7 +53,7 @@ where
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {
-            let mem_db = MemDatabase::new();
+            let mem_db: Database = MemDatabase::new().into();
             let member = constructor(cfg, mem_db.clone()).await;
             members.push((peer, member, mem_db));
         }
@@ -135,18 +135,14 @@ where
                     .expect("Faulty output");
             }
 
-            (db as &mut dyn Database)
-                .apply_batch(batch)
-                .expect("DB error");
+            db.apply_batch(batch).expect("DB error");
 
             let mut batch = DbBatch::new();
             member
                 .end_consensus_epoch(&peers, batch.transaction(), &mut rng)
                 .await;
 
-            (db as &mut dyn Database)
-                .apply_batch(batch)
-                .expect("DB error");
+            db.apply_batch(batch).expect("DB error");
         }
     }
 
@@ -164,7 +160,7 @@ where
 
     pub fn patch_dbs<U>(&mut self, update: U)
     where
-        U: Fn(&mut dyn Database),
+        U: Fn(&mut Database),
     {
         for (_, _, db) in &mut self.members {
             update(db);

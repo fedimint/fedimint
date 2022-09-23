@@ -1,6 +1,6 @@
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
-use fedimint_api::db::Database;
+use fedimint_api::db::IDatabase;
 use fedimint_api::db::PrefixIter;
 use rocksdb::OptimisticTransactionDB;
 use std::path::Path;
@@ -16,10 +16,6 @@ impl RocksDb {
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open_default(&db_path)?;
         Ok(RocksDb(db))
-    }
-
-    pub fn into_dyn(self) -> Box<dyn Database> {
-        Box::new(self)
     }
 
     pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
@@ -39,7 +35,7 @@ impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
     }
 }
 
-impl Database for RocksDb {
+impl IDatabase for RocksDb {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.inner().get(key).unwrap();
         self.inner().put(key, value)?;
@@ -115,7 +111,6 @@ impl Database for RocksDb {
 #[cfg(test)]
 mod tests {
     use crate::RocksDb;
-    use std::sync::Arc;
 
     #[test_log::test]
     fn test_basic_rw() {
@@ -126,6 +121,6 @@ mod tests {
 
         let db = RocksDb::open(path).unwrap();
 
-        fedimint_api::db::test_db_impl(Arc::new(db));
+        fedimint_api::db::test_db_impl(db.into());
     }
 }

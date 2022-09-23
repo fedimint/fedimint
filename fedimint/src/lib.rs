@@ -86,7 +86,9 @@ impl FedimintServer {
 
         Self::new_with(
             cfg.clone(),
-            Arc::new(fedimint_rocksdb::RocksDb::open(db_path).expect("Error opening DB")),
+            fedimint_rocksdb::RocksDb::open(db_path)
+                .expect("Error opening DB")
+                .into(),
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )
@@ -95,7 +97,7 @@ impl FedimintServer {
 
     pub async fn new_with(
         cfg: ServerConfig,
-        database: Arc<dyn Database>,
+        database: Database,
         bitcoind: impl Fn() -> Box<dyn BitcoindRpc>,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {

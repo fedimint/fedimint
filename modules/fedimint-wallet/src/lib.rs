@@ -2,7 +2,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryInto;
 
 use std::hash::Hasher;
-use std::sync::Arc;
 
 use crate::bitcoind::BitcoindRpc;
 use crate::config::WalletConfig;
@@ -93,7 +92,7 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: Box<dyn BitcoindRpc>,
-    db: Arc<dyn Database>,
+    db: Database,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -544,7 +543,7 @@ impl Wallet {
     // TODO: work around bitcoind_gen being a closure, maybe make clonable?
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
-        db: Arc<dyn Database>,
+        db: Database,
         bitcoind_gen: impl Fn() -> Box<dyn BitcoindRpc>,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind_gen();
@@ -1142,14 +1141,14 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Arc<dyn Database>, rpc: Box<dyn BitcoindRpc>) {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: Box<dyn BitcoindRpc>) {
     loop {
         broadcast_pending_tx(&db, rpc.as_ref()).await;
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
     }
 }
 
-pub async fn broadcast_pending_tx(db: &Arc<dyn Database>, rpc: &dyn BitcoindRpc) {
+pub async fn broadcast_pending_tx(db: &Database, rpc: &dyn BitcoindRpc) {
     let pending_tx = db
         .find_by_prefix(&PendingTransactionPrefixKey)
         .collect::<Result<Vec<_>, _>>()

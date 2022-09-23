@@ -1,7 +1,6 @@
 use crate::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
 
 use std::fmt::{Display, Formatter};
-use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Audit {
@@ -21,7 +20,7 @@ impl Audit {
         }
     }
 
-    pub fn add_items<KP, F>(&mut self, db: &Arc<dyn Database>, key_prefix: &KP, to_milli_sat: F)
+    pub fn add_items<KP, F>(&mut self, db: &Database, key_prefix: &KP, to_milli_sat: F)
     where
         KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + 'static,
         F: Fn(KP::Key, KP::Value) -> i64,

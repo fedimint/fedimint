@@ -306,7 +306,7 @@ mod tests {
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
                 4,
                 1,
-                |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
+                |cfg, db| async { LightningModule::new(cfg, db) },
                 &(),
             )
             .await,
@@ -315,7 +315,7 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client_context = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };

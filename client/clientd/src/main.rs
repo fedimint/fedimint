@@ -44,7 +44,7 @@ async fn main() {
     let cfg: UserClientConfig = load_from_file(&cfg_path);
     let db = fedimint_rocksdb::RocksDb::open(db_path)
         .expect("Error opening DB")
-        .into_dyn();
+        .into();
 
     let client = Arc::new(Client::new(cfg.clone(), db, Default::default()));
     let (tx, mut rx) = mpsc::channel(1024);

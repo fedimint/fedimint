@@ -1,8 +1,10 @@
+use crate::dyn_newtype_define;
 use crate::encoding::{Decodable, Encodable};
 use anyhow::Result;
 use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::trace;
 
@@ -35,7 +37,7 @@ pub trait DatabaseValue: Sized + SerializableDatabaseValue {
 
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
 
-pub trait Database: Send + Sync {
+pub trait IDatabase: Send + Sync {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
 
     fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
@@ -47,7 +49,13 @@ pub trait Database: Send + Sync {
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<()>;
 }
 
-impl<'a> dyn Database + 'a {
+dyn_newtype_define! {
+    /// A handle to a type-erased database implementation
+    #[derive(Clone)]
+    Database(Arc<IDatabase>)
+}
+
+impl Database {
     pub fn insert_entry<K>(&self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
@@ -208,7 +216,6 @@ mod tests {
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
-    use std::sync::Arc;
 
     const DB_PREFIX_TEST: u8 = 0x42;
     const ALT_DB_PREFIX_TEST: u8 = 0x43;
@@ -252,7 +259,7 @@ mod tests {
     #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
     struct TestVal(u64);
 
-    pub fn test_db_impl(db: Arc<dyn Database + 'static>) {
+    pub fn test_db_impl(db: Database) {
         assert!(db
             .insert_entry(&TestKey(42), &TestVal(1337))
             .unwrap()

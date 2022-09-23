@@ -1,5 +1,5 @@
 use super::batch::{BatchItem, DbBatch};
-use super::Database;
+use super::IDatabase;
 use crate::db::PrefixIter;
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -29,7 +29,7 @@ impl MemDatabase {
     }
 }
 
-impl Database for MemDatabase {
+impl IDatabase for MemDatabase {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         Ok(self.data.lock().unwrap().insert(key.to_vec(), value))
     }
@@ -102,11 +102,10 @@ impl Iterator for MemDbIter {
 #[cfg(test)]
 mod tests {
     use super::MemDatabase;
-    use std::sync::Arc;
 
     #[test_log::test]
     fn test_basic_rw() {
         let mem_db = MemDatabase::new();
-        crate::db::tests::test_db_impl(Arc::new(mem_db));
+        crate::db::tests::test_db_impl(mem_db.into());
     }
 }
