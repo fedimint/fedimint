@@ -5,7 +5,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 
-use fixtures::{fixtures, rng, sats, secp, sha256};
+use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
@@ -781,4 +781,51 @@ async fn rejoin_consensus_threshold_peers() {
 
     // confirm that the entire federation can rejoin at an epoch
     timeout(Duration::from_secs(15), rejoin).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_ln_client_adapter() {
+    let (fed, user, bitcoin, gateway, lightning, ln_client_adapter) =
+        Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+            .make_all()
+            .await;
+
+    let invoice = lightning.invoice(sats(1000));
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+    let (contract_id, outpoint) = user
+        .client
+        .fund_outgoing_ln_contract(invoice.clone(), rng())
+        .await
+        .unwrap();
+
+    let ln_client = user.client.ln_client();
+    let (contract_account, _) = tokio::join!(
+        ln_client.get_contract_account(contract_id),
+        fed.run_consensus_epochs(1)
+    );
+    assert_eq!(contract_account.unwrap().amount, sats(1010)); // 1% LN fee
+
+    user.client
+        .await_outgoing_contract_acceptance(outpoint)
+        .await
+        .unwrap();
+
+    // configure the adapter to fail the payment the first two times and succeed (try to succeed for real impl) on the third
+    ln_client_adapter.fail_invoice(invoice.to_string(), 2).await;
+    assert!(gateway
+        .server
+        .pay_invoice(contract_id, rng())
+        .await
+        .is_err());
+    assert!(gateway
+        .server
+        .pay_invoice(contract_id, rng())
+        .await
+        .is_err());
+    gateway
+        .server
+        .pay_invoice(contract_id, rng())
+        .await
+        .unwrap();
 }

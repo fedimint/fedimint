@@ -105,7 +105,7 @@ async fn initialize_gateway(
         .into_dyn();
     let ctx = secp256k1::Secp256k1::new();
     let federation_client = Arc::new(Client::new(gw_client_cfg, db, ctx));
-    let ln_client = Box::new(Mutex::new(ln_client));
+    let ln_client = Arc::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
 }

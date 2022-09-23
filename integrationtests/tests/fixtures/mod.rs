@@ -55,7 +55,7 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
-use ln_gateway::ln::LnRpc;
+use ln_gateway::ln::{LnRpc, LnRpcAdapter};
 use ln_gateway::LnGateway;
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
@@ -64,28 +64,182 @@ use real::{RealBitcoinTest, RealLightningTest};
 
 mod fake;
 mod real;
-
 static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
-
-// Helper functions for easier test writing
-pub fn rng() -> OsRng {
-    OsRng::new().unwrap()
-}
-
-pub fn sats(amount: u64) -> Amount {
-    Amount::from_sat(amount)
-}
-
-pub fn sha256(data: &[u8]) -> sha256::Hash {
-    bitcoin::hashes::sha256::Hash::hash(data)
-}
-
-pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
-    bitcoin::secp256k1::Secp256k1::new()
-}
 
 /// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
 /// federation nodes starting at port 4000.
+pub struct Fixtures {
+    num_peers: u16,
+    peers: Vec<PeerId>,
+    base_port: u16,
+
+    server_config: BTreeMap<PeerId, ServerConfig>,
+    client_config: ClientConfig,
+
+    real_dir: Option<PathBuf>,
+}
+
+impl Fixtures {
+    pub fn new(num_peers: u16, amount_tiers: &[Amount]) -> Self {
+        let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
+
+        // in case we need to output logs using 'cargo test -- --nocapture'
+        if base_port == 4000 {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
+                )
+                .init();
+        }
+
+        let params = ServerConfigParams {
+            hbbft_base_port: base_port,
+            api_base_port: base_port + num_peers,
+            amount_tiers: amount_tiers.to_vec(),
+        };
+        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
+
+        let max_evil = hbbft::util::max_faulty(peers.len());
+        let (server_config, client_config) =
+            ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
+
+        let disable_mocks = env::var("FM_TEST_DISABLE_MOCKS").is_ok();
+        let real_dir = disable_mocks.then(|| {
+            PathBuf::from(
+                env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests"),
+            )
+        });
+
+        Self {
+            num_peers,
+            peers,
+            base_port,
+            server_config,
+            client_config,
+            real_dir,
+        }
+    }
+
+    // Builds (fed, user, bitcoin)
+    pub async fn make(&self) -> (FederationTest, UserTest, Box<dyn BitcoinTest>) {
+        let bitcoin: Box<dyn BitcoinTest>;
+        let bitcoin_rpc: Box<dyn Fn() -> Box<dyn BitcoindRpc>>;
+        let fed;
+        let user_db: Box<dyn Database>;
+
+        if let Some(dir) = &self.real_dir {
+            info!("Testing with REAL Bitcoin and Lightning services");
+
+            // setup real bitcoin
+            let wallet_config = self.server_config.iter().last().unwrap().1.wallet.clone();
+            bitcoin_rpc = Box::new(bitcoincore_rpc::bitcoind_gen(wallet_config.clone()));
+            bitcoin = Box::new(RealBitcoinTest::new(wallet_config));
+            // final fed setup real
+            let connect_gen =
+                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
+            let fed_db = Box::new(|| {
+                Arc::new(rocks(dir.clone().into_os_string().into_string().unwrap()))
+                    as Arc<dyn Database>
+            });
+            fed = FederationTest::new(
+                self.server_config.clone(),
+                &fed_db,
+                &bitcoin_rpc,
+                &connect_gen,
+            )
+            .await;
+            // prepare user setup real
+            user_db = Box::new(rocks(dir.clone().into_os_string().into_string().unwrap()));
+        } else {
+            info!("Testing with FAKE Bitcoin and Lightning services");
+            // setup fake bitcoin
+            let fake_bitcoin_test = FakeBitcoinTest::new();
+            bitcoin = Box::new(fake_bitcoin_test.clone());
+            bitcoin_rpc =
+                Box::new(move || Box::new(fake_bitcoin_test.clone()) as Box<dyn BitcoindRpc>);
+            // final fed setup fake
+            let net = MockNetwork::new();
+            let net_ref = &net;
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
+            let fed_db = Box::new(|| Arc::new(MemDatabase::new()) as Arc<dyn Database>);
+            fed = FederationTest::new(
+                self.server_config.clone(),
+                &fed_db,
+                &bitcoin_rpc,
+                &connect_gen,
+            )
+            .await;
+
+            // prepare user setup fake
+            user_db = Box::new(MemDatabase::new());
+        }
+
+        // final setup user
+        let user_cfg = UserClientConfig(self.client_config.clone());
+        let user = UserTest::new(user_cfg.clone(), self.peers.clone(), user_db);
+        user.client.await_consensus_block_height(0).await;
+
+        (fed, user, bitcoin)
+    }
+
+    // Builds all (fed, user, bitcoin, lightning, gateway)
+    pub async fn make_all(
+        &self,
+    ) -> (
+        FederationTest,
+        UserTest,
+        Box<dyn BitcoinTest>,
+        GatewayTest,
+        Box<dyn LightningTest>,
+        Arc<LnRpcAdapter>,
+    ) {
+        let lightning: Box<dyn LightningTest>;
+        let lightning_rpc: Box<dyn LnRpc>;
+        let (fed, user, bitcoin) = self.make().await;
+
+        if let Some(dir) = &self.real_dir {
+            // setup real lighting
+            let mut socket_gateway = dir.clone();
+            socket_gateway.push("ln1/regtest/lightning-rpc");
+
+            let mut socket_other = dir.clone();
+            socket_other.push("ln2/regtest/lightning-rpc");
+            let lightning_prep = RealLightningTest::new(socket_gateway.clone(), socket_other).await;
+            let lightning_rpc_prep = Mutex::new(
+                ClnRpc::new(socket_gateway)
+                    .await
+                    .expect("connect to ln_socket"),
+            );
+
+            lightning = Box::new(lightning_prep);
+            lightning_rpc = Box::new(lightning_rpc_prep);
+            // setup real gateway
+        } else {
+            // setup fake lighting
+            let lightning_prep = FakeLightningTest::new();
+            lightning_rpc = Box::new(lightning_prep.clone());
+            lightning = Box::new(lightning_prep);
+            // setup fake gateway
+        }
+
+        // setup gateway
+        let ln_rpc_adapter = Arc::new(LnRpcAdapter::new(lightning_rpc));
+        let ln_client = Arc::clone(&ln_rpc_adapter) as Arc<dyn LnRpc>;
+        let gateway = GatewayTest::new(
+            ln_client,
+            self.client_config.clone(),
+            lightning.pub_key(),
+            self.base_port + self.num_peers + 1,
+        )
+        .await;
+
+        let adapter = Arc::clone(&ln_rpc_adapter);
+
+        (fed, user, bitcoin, gateway, lightning, adapter)
+    }
+}
+
 pub async fn fixtures(
     num_peers: u16,
     amount_tiers: &[Amount],
@@ -147,9 +301,9 @@ pub async fn fixtures(
             user.client.await_consensus_block_height(0).await;
 
             let gateway = GatewayTest::new(
-                Box::new(lightning_rpc),
+                Arc::new(lightning_rpc),
                 client_config.clone(),
-                lightning.gateway_node_pub_key,
+                lightning.pub_key(),
                 base_port + num_peers + 1,
             )
             .await;
@@ -174,9 +328,9 @@ pub async fn fixtures(
             user.client.await_consensus_block_height(0).await;
 
             let gateway = GatewayTest::new(
-                Box::new(lightning.clone()),
+                Arc::new(lightning.clone()),
                 client_config.clone(),
-                lightning.gateway_node_pub_key,
+                lightning.pub_key(),
                 base_port + num_peers + 1,
             )
             .await;
@@ -184,6 +338,22 @@ pub async fn fixtures(
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
     }
+}
+// Helper functions for easier test writing
+pub fn rng() -> OsRng {
+    OsRng::new().unwrap()
+}
+
+pub fn sats(amount: u64) -> Amount {
+    Amount::from_sat(amount)
+}
+
+pub fn sha256(data: &[u8]) -> sha256::Hash {
+    bitcoin::hashes::sha256::Hash::hash(data)
+}
+
+pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
+    bitcoin::secp256k1::Secp256k1::new()
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
@@ -216,6 +386,9 @@ pub trait LightningTest {
 
     /// Returns the amount that the gateway LN node has sent
     fn amount_sent(&self) -> Amount;
+    /// Returns the pub-key of itself
+
+    fn pub_key(&self) -> secp256k1::PublicKey;
 }
 
 pub struct GatewayTest {
@@ -227,7 +400,7 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     async fn new(
-        ln_client: Box<dyn LnRpc>,
+        ln_client: Arc<dyn LnRpc>,
         client_config: ClientConfig,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,

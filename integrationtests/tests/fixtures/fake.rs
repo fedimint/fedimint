@@ -23,7 +23,7 @@ use crate::fixtures::{BitcoinTest, LightningTest};
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
-    pub gateway_node_pub_key: secp256k1::PublicKey,
+    gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
 }
@@ -61,6 +61,10 @@ impl LightningTest for FakeLightningTest {
 
     fn amount_sent(&self) -> Amount {
         Amount::from_msat(*self.amount_sent.lock().unwrap())
+    }
+
+    fn pub_key(&self) -> secp256k1::PublicKey {
+        self.gateway_node_pub_key
     }
 }
 
