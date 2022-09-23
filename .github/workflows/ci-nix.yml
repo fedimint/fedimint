@@ -31,7 +31,7 @@ jobs:
 
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
-        run: nix develop --ignore-environment --extra-experimental-features nix-command --extra-experimental-features flakes .#lint --command ./misc/git-hooks/pre-commit
+        run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
   build:
     name: "Build"
@@ -48,40 +48,40 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Build workspace
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceBuild
+        run: nix build -L .#workspaceBuild
 
       - name: Clippy workspace
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceClippy
+        run: nix build -L .#workspaceClippy
 
       - name: Run cargo doc
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceDoc
+        run: nix build -L .#workspaceDoc
 
       - name: Run cargo audit
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceAudit
+        run: nix build -L .#workspaceAudit
 
       # `ccov` job will run `cargo test`, so no need to spend time on it here
       # - name: Test workspace
-      #   run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceTest
+      #   run: nix build -L .#workspaceTest
 
       - name: Reconnect Tests
         # run: nix-shell --command ./scripts/reconnect-test.sh
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.reconnect
+        run: nix build -L .#cli-test.reconnect
 
       - name: Latency Tests
         # run: nix-shell --command ./scripts/latency-test.sh
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.latency
+        run: nix build -L .#cli-test.latency
 
       - name: CLI Tests
         # run: nix-shell --command ./scripts/cli-test.sh
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.cli
+        run: nix build -L .#cli-test.cli
 
       - name: Clientd and clientd-cli tests
         # run: nix-shell --command ./scripts/clientd-tests.sh
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.clientd
+        run: nix build -L .#cli-test.clientd
 
       - name: Integration Tests (no fixtures)
         # run: nix-shell --command ./scripts/rust-tests.sh
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#cli-test.rust-tests
+        run: nix build -L .#cli-test.rust-tests
 
 
   # Code Coverage will build using a completely different profile (neither debug/release)
@@ -102,7 +102,7 @@ jobs:
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
       - name: Build and run tests with Code Coverage
-        run: nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#workspaceCov
+        run: nix build -L .#workspaceCov
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -110,6 +110,23 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: result/lcov.info
           fail_ci_if_error: true
+
+  wasm32:
+    name: "Cross-compile: wasm32"
+    runs-on: buildjet-8vcpu-ubuntu-2004
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v15
+        with:
+          nix_path: nixpkgs=channel:nixos-22.05
+      - uses: cachix/cachix-action@v10
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+
+      - name: Build mint-client for wasm32
+        run: nix build -L .#wasm32.mint-client
 
   containers:
     name: "Containers"
@@ -127,7 +144,7 @@ jobs:
 
       - name: Build fedimintd container
         run: |
-          nix build -L --extra-experimental-features nix-command --extra-experimental-features flakes .#container.fedimintd
+          nix build -L .#container.fedimintd
           echo "fedimintd_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
