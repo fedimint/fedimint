@@ -302,8 +302,6 @@
 <span id="302">302</span>
 <span id="303">303</span>
 <span id="304">304</span>
-<span id="305">305</span>
-<span id="306">306</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 <span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>batch::DbBatch;
@@ -314,9 +312,8 @@
 
 <span class="kw">pub mod </span>batch;
 <span class="kw">pub mod </span>mem_impl;
-<span class="attribute">#[cfg(feature = <span class="string">&quot;rocksdb&quot;</span>)]
-</span><span class="kw">mod </span>rocksdb_impl;
-<span class="kw">pub mod </span>sled_impl;
+
+<span class="kw">pub use </span>tests::test_db_impl;
 
 <span class="kw">pub trait </span>DatabaseKeyPrefixConst {
     <span class="kw">const </span>DB_PREFIX: u8;
@@ -511,8 +508,7 @@
     }
 }
 
-<span class="attribute">#[cfg(test)]
-</span><span class="kw">mod </span>tests {
+<span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::Database;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
