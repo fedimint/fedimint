@@ -21,28 +21,72 @@
 <span id="21">21</span>
 <span id="22">22</span>
 <span id="23">23</span>
-</pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+</pre><pre class="rust"><code><span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::PeerId;
 <span class="kw">use </span>mint_client::api::WsFederationApi;
 <span class="kw">use </span>mint_client::query::TrustAllPeers;
 <span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Parser)]
-</span><span class="kw">struct </span>ApiCall {
-    url: Url,
-    method: String,
-    <span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
-    </span>arg: String,
+#[clap(version)]
+</span><span class="kw">struct </span>Cli {
+    <span class="attribute">#[clap(subcommand)]
+    </span>command: Commands,
+}
+
+<span class="attribute">#[derive(Subcommand)]
+</span><span class="kw">enum </span>Commands {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
+    ApiCall {
+        <span class="doccomment">/// The url to use for the api call
+        </span>url: Url,
+        <span class="doccomment">/// The rpc method
+        </span>method: String,
+        <span class="doccomment">/// Args that will be serialized and send with the request
+        </span><span class="attribute">#[clap(default_value = <span class="string">&quot;null&quot;</span>)]
+        </span>arg: String,
+    },
 }
 
 <span class="attribute">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
-    <span class="kw">let </span>call = ApiCall::parse();
-    <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>call.arg).unwrap();
-    <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), call.url)]);
-    <span class="kw">let </span>response: serde_json::Value = api.request(<span class="kw-2">&amp;</span>call.method, arg, TrustAllPeers).<span class="kw">await</span>.unwrap();
-    <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>response).unwrap();
-    <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, formatted);
+    <span class="kw">let </span>cli = Cli::parse();
+    <span class="kw">match </span>cli.command {
+        Commands::VersionHash =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
+        }
+        Commands::ApiCall { url, method, arg } =&gt; {
+            <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
+            <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), url)]);
+            <span class="kw">let </span>response: serde_json::Value =
+                api.request(<span class="kw-2">&amp;</span>method, arg, TrustAllPeers).<span class="kw">await</span>.unwrap();
+            <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>response).unwrap();
+            <span class="macro">print!</span>(<span class="string">&quot;{}&quot;</span>, formatted);
+        }
+    }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9062b780b 2022-09-21)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_rpc_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>

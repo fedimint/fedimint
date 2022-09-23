@@ -579,8 +579,42 @@
 <span id="579">579</span>
 <span id="580">580</span>
 <span id="581">581</span>
+<span id="582">582</span>
+<span id="583">583</span>
+<span id="584">584</span>
+<span id="585">585</span>
+<span id="586">586</span>
+<span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
+<span id="593">593</span>
+<span id="594">594</span>
+<span id="595">595</span>
+<span id="596">596</span>
+<span id="597">597</span>
+<span id="598">598</span>
+<span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
+<span id="609">609</span>
+<span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
-<span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
@@ -608,6 +642,9 @@
 <span class="attribute">#[derive(Serialize)]
 #[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
 </span><span class="kw">enum </span>CliOutput {
+    VersionHash {
+        hash: String,
+    },
     PegInAddress {
         address: Address,
     },
@@ -739,14 +776,30 @@
 <span class="kw">impl </span>Error <span class="kw">for </span>CliError {}
 
 <span class="attribute">#[derive(Parser)]
-</span><span class="kw">struct </span>Options {
-    workdir: PathBuf,
+#[clap(version)]
+</span><span class="kw">struct </span>Cli {
+    <span class="doccomment">/// The working directory of the client containing the config and db
+    </span>workdir: PathBuf,
     <span class="attribute">#[clap(subcommand)]
     </span>command: Command,
 }
 
 <span class="attribute">#[derive(Parser)]
+#[clap(version)]
+</span><span class="kw">struct </span>CliNoWorkdir {
+    <span class="attribute">#[clap(subcommand)]
+    </span>command: CommandNoWorkdir,
+}
+
+<span class="attribute">#[derive(Subcommand)]
+</span><span class="kw">enum </span>CommandNoWorkdir {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
+}
+<span class="attribute">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Command {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
     <span class="doccomment">/// Generate a new peg-in address, funds sent to it can later be claimed
     </span>PegInAddress,
 
@@ -861,7 +914,6 @@
 
 <span class="attribute">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
-    <span class="kw">let </span>opts = Options::parse();
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>)),
@@ -869,64 +921,80 @@
         .with_writer(std::io::stderr)
         .init();
 
-    <span class="kw">if let </span>Command::JoinFederation { connect } = opts.command {
-        <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
-            .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
-        <span class="kw">let </span>api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
-        <span class="kw">let </span>cfg: ClientConfig = api
-            .request(<span class="string">&quot;/config&quot;</span>, (), CurrentConsensus::new(connect_obj.max_evil))
-            .<span class="kw">await
-            </span>.or_terminate(
-                CliErrorKind::NetworkError,
-                <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(cli) = Cli::try_parse() {
+        <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
+            <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
+                .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
+            <span class="kw">let </span>api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
+            <span class="kw">let </span>cfg: ClientConfig = api
+                .request(<span class="string">&quot;/config&quot;</span>, (), CurrentConsensus::new(connect_obj.max_evil))
+                .<span class="kw">await
+                </span>.or_terminate(
+                    CliErrorKind::NetworkError,
+                    <span class="string">&quot;couldn&#39;t download config from peer&quot;</span>,
+                );
+            <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
+            std::fs::create_dir_all(<span class="kw-2">&amp;</span>cli.workdir)
+                .or_terminate(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>);
+            <span class="kw">let </span>writer = std::fs::File::create(cfg_path)
+                .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t create config.json&quot;</span>);
+            serde_json::to_writer_pretty(writer, <span class="kw-2">&amp;</span>cfg)
+                .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t write config&quot;</span>);
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{}&quot;</span>,
+                <span class="kw-2">&amp;</span>CliOutput::JoinFederation { joined: (connect) }.to_string()
             );
-        <span class="kw">let </span>cfg_path = opts.workdir.join(<span class="string">&quot;client.json&quot;</span>);
-        std::fs::create_dir_all(<span class="kw-2">&amp;</span>opts.workdir)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;failed to create config directory&quot;</span>);
-        <span class="kw">let </span>writer = std::fs::File::create(cfg_path)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t create config.json&quot;</span>);
-        serde_json::to_writer_pretty(writer, <span class="kw-2">&amp;</span>cfg)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;couldn&#39;t write config&quot;</span>);
-        <span class="macro">println!</span>(
-            <span class="string">&quot;{}&quot;</span>,
-            <span class="kw-2">&amp;</span>CliOutput::JoinFederation { joined: (connect) }.to_string()
+            <span class="kw">return</span>;
+        };
+
+        <span class="kw">let </span>cfg_path = cli.workdir.join(<span class="string">&quot;client.json&quot;</span>);
+        <span class="kw">let </span>db_path = cli.workdir.join(<span class="string">&quot;client.db&quot;</span>);
+        <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
+        <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB&lt;rocksdb::SingleThreaded&gt; =
+            rocksdb::OptimisticTransactionDB::open_default(<span class="kw-2">&amp;</span>db_path)
+                .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
+
+        <span class="kw">let </span>rng = rand::rngs::OsRng::new().or_terminate(
+            CliErrorKind::OSError,
+            <span class="string">&quot;failed to acquire random number generator from OS&quot;</span>,
         );
-        <span class="kw">return</span>;
-    };
 
-    <span class="kw">let </span>cfg_path = opts.workdir.join(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let </span>db_path = opts.workdir.join(<span class="string">&quot;client.db&quot;</span>);
-    <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
-    <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB&lt;rocksdb::SingleThreaded&gt; =
-        rocksdb::OptimisticTransactionDB::open_default(<span class="kw-2">&amp;</span>db_path)
-            .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>);
+        <span class="kw">let </span>client = Client::new(cfg.clone(), Box::new(db), Default::default());
 
-    <span class="kw">let </span>rng = rand::rngs::OsRng::new().or_terminate(
-        CliErrorKind::OSError,
-        <span class="string">&quot;failed to acquire random number generator from OS&quot;</span>,
-    );
+        <span class="kw">let </span>cli_result = handle_command(cli, client, rng).<span class="kw">await</span>;
 
-    <span class="kw">let </span>client = Client::new(cfg.clone(), Box::new(db), Default::default());
-
-    <span class="kw">let </span>cli_result = handle_command(opts, client, rng).<span class="kw">await</span>;
-
-    <span class="kw">match </span>cli_result {
-        <span class="prelude-val">Ok</span>(output) =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, output);
+        <span class="kw">match </span>cli_result {
+            <span class="prelude-val">Ok</span>(output) =&gt; {
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, output);
+            }
+            <span class="prelude-val">Err</span>(err) =&gt; {
+                <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, err);
+                exit(<span class="number">1</span>);
+            }
         }
-        <span class="prelude-val">Err</span>(err) =&gt; {
-            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, err);
-            exit(<span class="number">1</span>);
-        }
+    } <span class="kw">else </span>{
+        <span class="comment">// Only commands that don&#39;t need the workdir can be used here
+        </span><span class="kw">let </span>cli = CliNoWorkdir::parse();
+        <span class="comment">//TODO: remove allow when there are more commands
+        </span><span class="attribute">#[allow(irrefutable_let_patterns)]
+        </span><span class="kw">if let </span>CommandNoWorkdir::VersionHash = cli.command {
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{}&quot;</span>,
+                CliOutput::VersionHash {
+                    hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string()
+                }
+            );
+        };
     }
 }
 
 <span class="kw">async fn </span>handle_command(
-    opts: Options,
+    cli: Cli,
     client: Client&lt;UserClientConfig&gt;,
     <span class="kw-2">mut </span>rng: rand::rngs::OsRng,
 ) -&gt; CliResult {
-    <span class="kw">match </span>opts.command {
+    <span class="kw">match </span>cli.command {
+        Command::VersionHash =&gt; <span class="macro">unreachable!</span>(),
         Command::PegInAddress =&gt; {
             <span class="kw">let </span>peg_in_address = client.get_new_pegin_address(<span class="kw-2">&amp;mut </span>rng);
             <span class="prelude-val">Ok</span>(CliOutput::PegInAddress {
@@ -1161,4 +1229,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (9062b780b 2022-09-21)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>
