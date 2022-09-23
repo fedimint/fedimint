@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
-use heck::SnakeCase;
+use heck::ToSnakeCase;
 use proc_macro::{self, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Index};
