@@ -19,7 +19,7 @@ jobs:
           # - android
         include:
           - build: wasm32
-            runs-on: buildjet-8vcpu-ubuntu-2004
+            runs-on: ubuntu-22.04
             target: wasm32-unknown-unknown
             use-cross: false
             extra-build-args: "--target wasm32-unknown-unknown --package mint-client"
@@ -30,7 +30,7 @@ jobs:
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             build-in-pr: false
           # - build: android
-          #   runs-on: ubuntu-latest
+          #   runs-on: ubuntu-22.04
           #   target: aarch64-linux-android
           #   use-cross: true
 
