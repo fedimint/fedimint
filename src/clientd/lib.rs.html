@@ -221,7 +221,7 @@
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
-<span class="kw">use </span>mint_client::mint::{CoinFinalizationData, SpendableNote};
+<span class="kw">use </span>mint_client::mint::{NoteIssuanceRequests, SpendableNote};
 <span class="kw">use </span>mint_client::ClientError;
 <span class="kw">use </span>reqwest::StatusCode;
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -274,7 +274,7 @@
 <span class="kw">impl </span>InfoResponse {
     <span class="kw">pub fn </span>new(
         notes: TieredMulti&lt;SpendableNote&gt;,
-        active_issuances: Vec&lt;(OutPoint, CoinFinalizationData)&gt;,
+        active_issuances: Vec&lt;(OutPoint, NoteIssuanceRequests)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             notes: notes.into(),
@@ -289,7 +289,7 @@
 }
 
 <span class="kw">impl </span>PendingResponse {
-    <span class="kw">pub fn </span>new(active_issuances: Vec&lt;(OutPoint, CoinFinalizationData)&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(active_issuances: Vec&lt;(OutPoint, NoteIssuanceRequests)&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>transactions: Vec&lt;PendingTransaction&gt; = active_issuances
             .iter()
             .map(|(out_point, cfd)| PendingTransaction {

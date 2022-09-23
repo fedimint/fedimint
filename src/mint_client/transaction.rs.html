@@ -169,7 +169,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>rand::{CryptoRng, RngCore};
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
-<span class="kw">use </span><span class="kw">crate</span>::mint::CoinFinalizationData;
+<span class="kw">use </span><span class="kw">crate</span>::mint::NoteIssuanceRequests;
 <span class="kw">use crate</span>::{MintClientError, SpendableNote};
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
@@ -181,8 +181,8 @@
 <span class="kw">use </span>tbs::AggregatePublicKey;
 
 <span class="kw">pub struct </span>TransactionBuilder {
-    input_coins: TieredMulti&lt;SpendableNote&gt;,
-    output_coins: Vec&lt;(u64, CoinFinalizationData)&gt;,
+    input_notes: TieredMulti&lt;SpendableNote&gt;,
+    output_notes: Vec&lt;(u64, NoteIssuanceRequests)&gt;,
     keys: Vec&lt;KeyPair&gt;,
     tx: Transaction,
 }
@@ -190,8 +190,8 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>TransactionBuilder {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         TransactionBuilder {
-            input_coins: Default::default(),
-            output_coins: <span class="macro">vec!</span>[],
+            input_notes: Default::default(),
+            output_notes: <span class="macro">vec!</span>[],
             keys: <span class="macro">vec!</span>[],
             tx: Transaction {
                 inputs: <span class="macro">vec!</span>[],
@@ -208,7 +208,7 @@
         coins: TieredMulti&lt;SpendableNote&gt;,
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), MintClientError&gt; {
-        <span class="self">self</span>.input_coins.extend(coins.clone());
+        <span class="self">self</span>.input_notes.extend(coins.clone());
         <span class="kw">let </span>(<span class="kw-2">mut </span>coin_keys, coin_input) = <span class="self">self</span>.create_input_from_coins(coins, secp)<span class="question-mark">?</span>;
         <span class="self">self</span>.input(<span class="kw-2">&amp;mut </span>coin_keys, Input::Mint(coin_input));
         <span class="prelude-val">Ok</span>(())
@@ -228,8 +228,8 @@
                 <span class="comment">// We check for coin validity in case we got it from an untrusted third party. We
                 // don&#39;t want to needlessly create invalid tx and bother the federation with them.
                 </span><span class="kw">let </span>spend_pub_key = spend_key.public_key();
-                <span class="kw">if </span><span class="kw-2">&amp;</span>spend_pub_key == coin.coin.spend_key() {
-                    <span class="prelude-val">Ok</span>((spend_key, (amt, coin.coin)))
+                <span class="kw">if </span><span class="kw-2">&amp;</span>spend_pub_key == coin.note.spend_key() {
+                    <span class="prelude-val">Ok</span>((spend_key, (amt, coin.note)))
                 } <span class="kw">else </span>{
                     <span class="prelude-val">Err</span>(MintClientError::ReceivedUspendableCoin)
                 }
@@ -265,7 +265,7 @@
         <span class="kw">if </span>!coin_output.is_empty() {
             <span class="kw">let </span>out_idx = <span class="self">self</span>.tx.outputs.len();
             <span class="self">self</span>.output(Output::Mint(coin_output));
-            <span class="self">self</span>.output_coins
+            <span class="self">self</span>.output_notes
                 .push((out_idx <span class="kw">as </span>u64, coin_finalization_data));
         }
     }
@@ -276,9 +276,9 @@
         secp: <span class="kw-2">&amp;</span>secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
         tbs_pks: <span class="kw-2">&amp;</span>Tiered&lt;AggregatePublicKey&gt;,
         rng: <span class="kw-2">&amp;mut </span>R,
-    ) -&gt; (CoinFinalizationData, TieredMulti&lt;BlindNonce&gt;) {
+    ) -&gt; (NoteIssuanceRequests, TieredMulti&lt;BlindNonce&gt;) {
         <span class="kw">let </span>(coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, tbs_pks, secp, rng);
+            NoteIssuanceRequests::new(amount, tbs_pks, secp, rng);
 
         <span class="kw">let </span>coin_output = sig_req
             .<span class="number">0
@@ -308,19 +308,19 @@
         }
 
         <span class="comment">// move input coins to pending state, awaiting a transaction
-        </span><span class="kw">if </span>!<span class="self">self</span>.input_coins.item_count() != <span class="number">0 </span>{
-            batch.append_from_iter(<span class="self">self</span>.input_coins.iter_items().map(|(amount, coin)| {
+        </span><span class="kw">if </span>!<span class="self">self</span>.input_notes.item_count() != <span class="number">0 </span>{
+            batch.append_from_iter(<span class="self">self</span>.input_notes.iter_items().map(|(amount, coin)| {
                 <span class="comment">// maybe_delete because coins might have been received from another user directly
                 </span>BatchItem::maybe_delete(CoinKey {
                     amount,
-                    nonce: coin.coin.<span class="number">0</span>.clone(),
+                    nonce: coin.note.<span class="number">0</span>.clone(),
                 })
             }));
-            batch.append_insert(PendingCoinsKey(txid), <span class="self">self</span>.input_coins);
+            batch.append_insert(PendingCoinsKey(txid), <span class="self">self</span>.input_notes);
         }
 
         <span class="comment">// write coin output to db to await for tx success to be fetched later
-        </span><span class="self">self</span>.output_coins.iter().for_each(|(out_idx, coins)| {
+        </span><span class="self">self</span>.output_notes.iter().for_each(|(out_idx, coins)| {
             batch.append_insert_new(
                 OutputFinalizationKey(OutPoint {
                     txid,

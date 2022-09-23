@@ -1046,6 +1046,22 @@
 <span id="1046">1046</span>
 <span id="1047">1047</span>
 <span id="1048">1048</span>
+<span id="1049">1049</span>
+<span id="1050">1050</span>
+<span id="1051">1051</span>
+<span id="1052">1052</span>
+<span id="1053">1053</span>
+<span id="1054">1054</span>
+<span id="1055">1055</span>
+<span id="1056">1056</span>
+<span id="1057">1057</span>
+<span id="1058">1058</span>
+<span id="1059">1059</span>
+<span id="1060">1060</span>
+<span id="1061">1061</span>
+<span id="1062">1062</span>
+<span id="1063">1063</span>
+<span id="1064">1064</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1100,6 +1116,7 @@
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
 <span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
 <span class="kw">use </span>ln::db::LightningGatewayKey;
+<span class="kw">use </span>mint::NoteIssuanceRequests;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1114,7 +1131,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-<span class="kw">use </span><span class="kw">crate</span>::mint::{CoinFinalizationData, MintClientError};
+<span class="kw">use </span><span class="kw">crate</span>::mint::MintClientError;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
@@ -1274,20 +1291,22 @@
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
-    <span class="doccomment">/// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent
-    /// double spends. Users must ensure that the reissuance transaction is accepted before
-    /// accepting `coins` as a valid payment.
+    <span class="doccomment">/// Spent some [`SpendableNote`]s to receive a freshly minted ones
+    ///
+    /// This is useful in scenarios where certain notes were handed over
+    /// directly to us by another user as a payment. By spending them we can make sure
+    /// they can no longer be potentially double-spent.
     ///
     /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
     /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     </span><span class="kw">pub async fn </span>reissue&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        coins: TieredMulti&lt;SpendableNote&gt;,
+        notes: TieredMulti&lt;SpendableNote&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
-        tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
+        tx.input_coins(notes, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
         <span class="kw">let </span>txid = <span class="self">self
             </span>.submit_tx_with_change(tx, DbBatch::new(), <span class="kw-2">&amp;mut </span>rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1295,12 +1314,14 @@
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
-    <span class="doccomment">/// Validate tokens without claiming them. This function checks if signatures are valid
+    <span class="doccomment">/// Validate signatures on notes.
+    ///
+    /// This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    </span><span class="kw">pub async fn </span>validate_tokens(<span class="kw-2">&amp;</span><span class="self">self</span>, coins: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">pub async fn </span>validate_note_signatures(<span class="kw-2">&amp;</span><span class="self">self</span>, notes: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span><span class="self">self</span>.mint_client().config.tbs_pks;
-        coins.iter_items().try_for_each(|(amt, coin)| {
-            <span class="kw">if </span>coin.coin.verify(<span class="kw-2">*</span>tbs_pks.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
+        notes.iter_items().try_for_each(|(amt, note)| {
+            <span class="kw">if </span>note.note.verify(<span class="kw-2">*</span>tbs_pks.tier(<span class="kw-2">&amp;</span>amt)<span class="question-mark">?</span>) {
                 <span class="prelude-val">Ok</span>(())
             } <span class="kw">else </span>{
                 <span class="prelude-val">Err</span>(ClientError::InvalidSignature)
@@ -1308,17 +1329,28 @@
         })
     }
 
-    <span class="kw">pub async fn </span>pay_for_coins&lt;R: RngCore + CryptoRng&gt;(
+    <span class="doccomment">/// Pay by creating notes provided (and most probably controlled) by the recipient.
+    ///
+    /// A standard way to facilitate a payment between users of a mint.
+    /// Generate a transaction spending notes we own as inputs and
+    /// creating new notes from [`BlindNonce`]s provided by the recipient as outputs.
+    ///
+    /// Returns a `OutPoint` of a fedimint transaction created and submitted as a payment.
+    ///
+    /// The name is derived from Bitcoin&#39;s terminology of &quot;pay to &lt;address-type&gt;&quot;.
+    </span><span class="kw">pub async fn </span>pay_to_blind_nonces&lt;R: RngCore + CryptoRng&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        coins: TieredMulti&lt;BlindNonce&gt;,
+        blind_nonces: TieredMulti&lt;BlindNonce&gt;,
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
-        <span class="kw">let </span>input_coins = <span class="self">self</span>.mint_client().select_coins(coins.total_amount())<span class="question-mark">?</span>;
+        <span class="kw">let </span>input_coins = <span class="self">self
+            </span>.mint_client()
+            .select_coins(blind_nonces.total_amount())<span class="question-mark">?</span>;
         tx.input_coins(input_coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
-        tx.output(Output::Mint(coins));
+        tx.output(Output::Mint(blind_nonces));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
@@ -1430,7 +1462,7 @@
         batch_tx.append_from_iter(final_coins.iter_items().map(|(amount, coin)| {
             BatchItem::maybe_delete(CoinKey {
                 amount,
-                nonce: coin.coin.<span class="number">0</span>.clone(),
+                nonce: coin.note.<span class="number">0</span>.clone(),
             })
         }));
         batch_tx.commit();
@@ -1508,7 +1540,7 @@
         <span class="self">self</span>.mint_client().coins()
     }
 
-    <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, CoinFinalizationData)&gt; {
+    <span class="kw">pub fn </span>list_active_issuances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(OutPoint, NoteIssuanceRequests)&gt; {
         <span class="self">self</span>.mint_client().list_active_issuances()
     }
 

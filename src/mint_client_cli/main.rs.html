@@ -1022,7 +1022,7 @@
             )
         }
         Command::Validate { coins } =&gt; {
-            <span class="kw">let </span>validate_result = client.validate_tokens(<span class="kw-2">&amp;</span>coins).<span class="kw">await</span>;
+            <span class="kw">let </span>validate_result = client.validate_note_signatures(<span class="kw-2">&amp;</span>coins).<span class="kw">await</span>;
 
             <span class="kw">match </span>validate_result {
                 <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">Ok</span>(CliOutput::Validate {
