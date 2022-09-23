@@ -621,7 +621,7 @@
     </span><span class="kw">async fn </span>listen(<span class="kw-2">&amp;</span><span class="self">self</span>, bind_addr: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConnectionListener&lt;M&gt;, anyhow::Error&gt;;
 
     <span class="doccomment">/// Transform this concrete `Connector` into an owned trait object version of itself
-    </span><span class="kw">fn </span>to_any(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyConnector&lt;M&gt;
     <span class="kw">where
         </span><span class="self">Self</span>: Sized + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>,
     {
@@ -720,7 +720,7 @@
             BidiFramed::&lt;<span class="kw">_</span>, WriteHalf&lt;TlsStream&lt;TcpStream&gt;&gt;, ReadHalf&lt;TlsStream&lt;TcpStream&gt;&gt;&gt;::new(
                 tls_conn,
             )
-            .to_any();
+            .into_dyn();
         <span class="prelude-val">Ok</span>((auth_peer, framed))
     }
 }
@@ -762,7 +762,7 @@
             BidiFramed::&lt;<span class="kw">_</span>, WriteHalf&lt;TlsStream&lt;TcpStream&gt;&gt;, ReadHalf&lt;TlsStream&lt;TcpStream&gt;&gt;&gt;::new(
                 tls_conn,
             )
-            .to_any();
+            .into_dyn();
 
         <span class="prelude-val">Ok</span>((peer, framed))
     }
@@ -852,7 +852,7 @@
                 <span class="kw">let </span>framed = BidiFramed::&lt;M, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
                     stream_our,
                 )
-                .to_any();
+                .into_dyn();
                 <span class="prelude-val">Ok</span>((peer, framed))
             } <span class="kw">else </span>{
                 <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">&quot;can&#39;t connect&quot;</span>));
@@ -879,7 +879,7 @@
                         BidiFramed::&lt;M, WriteHalf&lt;DuplexStream&gt;, ReadHalf&lt;DuplexStream&gt;&gt;::new(
                             connection,
                         )
-                        .to_any();
+                        .into_dyn();
 
                     <span class="prelude-val">Some</span>((<span class="prelude-val">Ok</span>((peer, framed)), receive))
                 })

@@ -545,7 +545,7 @@
 <span class="kw">impl </span>FedimintServer {
     <span class="kw">pub async fn </span>new(cfg: ServerConfig, db_path: PathBuf) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
-            TlsTcpConnector::new(cfg.tls_config()).to_any();
+            TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
         <span class="self">Self</span>::new_with(
             cfg.clone(),
@@ -584,7 +584,7 @@
 
         <span class="kw">let </span>connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
             .<span class="kw">await
-            </span>.to_any();
+            </span>.into_dyn();
 
         <span class="kw">let </span>net_info = NetworkInfo::new(
             cfg.identity,

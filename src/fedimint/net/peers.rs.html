@@ -729,7 +729,7 @@
     </span><span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId);
 
     <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object
-    </span><span class="kw">fn </span>to_any(<span class="self">self</span>) -&gt; AnyPeerConnections&lt;T&gt;
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyPeerConnections&lt;T&gt;
     <span class="kw">where
         </span><span class="self">Self</span>: Sized + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
@@ -1306,7 +1306,7 @@
                 bind_addr: bind.to_string(),
                 peers: peers_ref.clone(),
             };
-            <span class="kw">let </span>connect = net_ref.connector(cfg.identity).to_any();
+            <span class="kw">let </span>connect = net_ref.connector(cfg.identity).into_dyn();
             ReconnectPeerConnections::&lt;u64&gt;::new(cfg, connect).<span class="kw">await
         </span>};
 

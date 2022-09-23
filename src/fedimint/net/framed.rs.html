@@ -329,7 +329,7 @@
     );
 
     <span class="doccomment">/// Transforms concrete `FramedTransport` object into an owned trait object
-    </span><span class="kw">fn </span>to_any(<span class="self">self</span>) -&gt; AnyFramedTransport&lt;T&gt;
+    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyFramedTransport&lt;T&gt;
     <span class="kw">where
         </span><span class="self">Self</span>: Sized + Send + Unpin + <span class="lifetime">&#39;static</span>,
     {
