@@ -804,6 +804,7 @@ async fn rejoin_consensus_threshold_peers() {
     timeout(Duration::from_secs(15), rejoin).await.unwrap();
 }
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn fail_lightning_payment_the_first_time() {
     let (fed, user, bitcoin, gateway, lightning) =
@@ -839,3 +840,4 @@ async fn fail_lightning_payment_the_first_time() {
         .await
         .is_err());
 }
+*/

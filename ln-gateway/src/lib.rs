@@ -119,12 +119,12 @@ pub struct LnGateway {
 impl LnGateway {
     pub fn new(
         federation_client: Arc<GatewayClient>,
-        ln_client: Box<dyn LnRpc>,
+        ln_client: Arc<dyn LnRpc>,
         sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
         bind_addr: SocketAddr,
     ) -> Self {
-        let ln_client: Arc<dyn LnRpc> = ln_client.into();
+        // let ln_client: Arc<dyn LnRpc> = ln_client.into();
 
         // Run webserver asynchronously in tokio
         let webserver = tokio::spawn(run_webserver(bind_addr, sender));

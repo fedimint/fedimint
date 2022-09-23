@@ -104,7 +104,7 @@ async fn initialize_gateway(
         rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
     let ctx = secp256k1::Secp256k1::new();
     let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx));
-    let ln_client = Box::new(Mutex::new(ln_client));
+    let ln_client = Arc::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
 }
