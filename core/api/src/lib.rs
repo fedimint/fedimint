@@ -25,8 +25,16 @@ pub mod server;
 /// of module-specific data.
 pub type ModuleKey = u16;
 
+/// Define "dyn newtype" (a newtype over `dyn Trait`)
+///
+/// This is a simple pattern that make working with `dyn Trait`s
+/// easier, by hiding their details.
+///
+/// A "dyn newtype" `Deref`s to the underlying`&dyn Trait`, making
+/// it easy to access the encapsulated operations, while hiding
+/// the boxing details.
 #[macro_export]
-macro_rules! def_module_type_newtype {
+macro_rules! dyn_newtype_define {
     (   $(#[$outer:meta])*
         $name:ident($container:ident<$trait:ident>)
     ) => {
@@ -46,8 +54,39 @@ macro_rules! def_module_type_newtype {
     }
 }
 
+/// Implement `Clone` on a "dyn newtype"
+///
+/// ... by calling `clone` method on the underlying
+/// `dyn Trait`.
+///
+/// Cloning `dyn Trait`s is non trivial due to object-safety.
+///
+/// Note: the underlying `dyn Trait` needs to implement
+/// a `fn clone(&self) -> Newtype` for this to work,
+/// and this macro does not check or do anything about it.
+///
+/// If the newtype is using `Arc` you probably want
+/// to just use standard `#[derive(Clone)]` to clone
+/// the `Arc` itself.
 #[macro_export]
-macro_rules! impl_module_type_newtype_encode {
+macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
+    (
+        $name:ident
+    ) => {
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                self.0.clone()
+            }
+        }
+    };
+}
+
+/// Implement `Encodable` and `Decodable` for a "module dyn newtype"
+///
+/// "Module dyn newtype" is just a "dyn newtype" used by general purpose
+/// Fedimint code to abstract away details of mint modules.
+#[macro_export]
+macro_rules! module_dyn_newtype_impl_encode_decode {
     (
         $name:ident, $decode_fn:ident
     ) => {
@@ -75,21 +114,18 @@ macro_rules! impl_module_type_newtype_encode {
     };
 }
 
+/// Define a "plugin" trait
+///
+/// "Plugin trait" is a trait that a developer of a mint module
+/// needs to implement when implementing mint module. It uses associated
+/// types with trait bonds to guide the developer.
+///
+/// Blanket implementations are used to convert the "plugin trait",
+/// incompatible with `dyn Trait` into "module types" and corresponding
+/// "module dyn newtypes", erasing the exact type and used in a common
+/// Fedimint code.
 #[macro_export]
-macro_rules! impl_module_type_newtype_clone {
-    (
-        $name:ident
-    ) => {
-        impl Clone for $name {
-            fn clone(&self) -> Self {
-                self.0.clone()
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! def_module_type_plugin_type {
+macro_rules! module_plugin_trait_define {
     (   $(#[$outer:meta])*
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
@@ -156,7 +192,7 @@ pub trait ModuleInput: DynEncodable {
     fn clone(&self) -> Input;
 }
 
-def_module_type_plugin_type! {
+module_plugin_trait_define! {
     Input, PluginInput, ModuleInput,
     {
         fn amount(&self) -> Amount;
@@ -168,14 +204,14 @@ def_module_type_plugin_type! {
     }
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// An owned, immutable input to a [`Transaction`]
     Input(Box<ModuleInput>)
 }
-impl_module_type_newtype_encode! {
+module_dyn_newtype_impl_encode_decode! {
     Input, decode_input
 }
-impl_module_type_newtype_clone!(Input);
+dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
@@ -188,11 +224,11 @@ pub trait ModuleOutput: DynEncodable {
     fn clone(&self) -> Output;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`]
     Output(Box<ModuleOutput>)
 }
-def_module_type_plugin_type! {
+module_plugin_trait_define! {
     Output, PluginOutput, ModuleOutput,
     {
         fn amount(&self) -> Amount;
@@ -203,10 +239,10 @@ def_module_type_plugin_type! {
         }
     }
 }
-impl_module_type_newtype_encode! {
+module_dyn_newtype_impl_encode_decode! {
     Output, decode_output
 }
-impl_module_type_newtype_clone!(Output);
+dyn_newtype_impl_dyn_clone_passhthrough!(Output);
 
 /// A spendable output - tracked and persisted by the client
 ///
@@ -226,11 +262,11 @@ pub trait ModuleSpendableOutput: DynEncodable {
     fn key(&self) -> String;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] after it was finalized (so it's spendable)
     SpendableOutput(Box<ModuleSpendableOutput>)
 }
-def_module_type_plugin_type! {
+module_plugin_trait_define! {
     SpendableOutput, PluginSpendableOutput, ModuleSpendableOutput,
     {
         fn amount(&self) -> Amount;
@@ -245,10 +281,10 @@ def_module_type_plugin_type! {
         }
     }
 }
-impl_module_type_newtype_encode! {
+module_dyn_newtype_impl_encode_decode! {
     SpendableOutput, decode_spendable_output
 }
-impl_module_type_newtype_clone!(SpendableOutput);
+dyn_newtype_impl_dyn_clone_passhthrough!(SpendableOutput);
 
 pub enum FinalizationError {
     SomethingWentWrong,
@@ -268,11 +304,11 @@ pub trait ModulePendingOutput: DynEncodable {
     // fn key(&self) -> String;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
     PendingOutput(Box<ModulePendingOutput>)
 }
-def_module_type_plugin_type! {
+module_plugin_trait_define! {
     PendingOutput, PluginPendingOutput, ModulePendingOutput,
     {
         fn amount(&self) -> Amount;
@@ -283,10 +319,10 @@ def_module_type_plugin_type! {
         }
     }
 }
-impl_module_type_newtype_encode! {
+module_dyn_newtype_impl_encode_decode! {
     PendingOutput, decode_pending_output
 }
-impl_module_type_newtype_clone!(PendingOutput);
+dyn_newtype_impl_dyn_clone_passhthrough!(PendingOutput);
 
 pub trait ModuleOutputOutcome: DynEncodable {
     fn as_any(&self) -> &(dyn Any + '_);
@@ -295,19 +331,19 @@ pub trait ModuleOutputOutcome: DynEncodable {
     fn clone(&self) -> OutputOutcome;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
     OutputOutcome(Box<ModuleOutputOutcome>)
 }
-def_module_type_plugin_type! {
+module_plugin_trait_define! {
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
     { }
     { }
 }
-impl_module_type_newtype_encode! {
+module_dyn_newtype_impl_encode_decode! {
     OutputOutcome, decode_output_outcome
 }
-impl_module_type_newtype_clone!(OutputOutcome);
+dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
 #[derive(Encodable, Decodable)]
 pub struct Signature;

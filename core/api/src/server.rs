@@ -29,7 +29,7 @@ pub trait ModuleApiHandler {
     async fn handle(&self, params: &serde_json::Value) -> Result<serde_json::Value, ApiError>;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     /// [`ApiEndpoint`] handler exposed by the server side module
     ApiHandler(Box<ModuleApiHandler>)
 }
@@ -40,11 +40,11 @@ pub trait ModuleConsensusItem: DynEncodable {
     fn clone(&self) -> ConsensusItem;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     ConsensusItem(Box<ModuleConsensusItem>)
 }
-impl_module_type_newtype_clone!(ConsensusItem);
-def_module_type_plugin_type!(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
+dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
+module_plugin_trait_define!(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
 
 pub trait ModuleVerificationCache: DynEncodable {
     fn as_any(&self) -> &(dyn Any + '_);
@@ -52,10 +52,10 @@ pub trait ModuleVerificationCache: DynEncodable {
     fn clone(&self) -> VerificationCache;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     VerificationCache(Box<ModuleVerificationCache>)
 }
-def_module_type_plugin_type!(
+module_plugin_trait_define!(
     VerificationCache,
     PluginVerificationCache,
     ModuleVerificationCache,

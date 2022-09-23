@@ -22,7 +22,7 @@ pub trait IClientModule: ModuleCommon {
     ) -> Result<PollPendingOutputs<SpendableOutput, PendingOutput>, FinalizationError>;
 }
 
-def_module_type_newtype! {
+dyn_newtype_define! {
     #[derive(Clone)]
     ClientModule(Arc<IClientModule>)
 }
