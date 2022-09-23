@@ -30,7 +30,7 @@ sled = "0.34"
 tbs = { path = "../crypto/tbs"}
 thiserror = "1.0.23"
 tracing ="0.1.22"
-url = { version = "2.2.2", features = ["serde"] }
+url = { version = "2.3.0", features = ["serde"] }
 
 [target.'cfg(target_family="wasm")'.dependencies]
 async-lock = "2.5"
