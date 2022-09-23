@@ -68,7 +68,7 @@ mod real;
 
 static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
-pub struct FixtureBuilder {
+pub struct Fixtures {
     fed: Option<FederationTest>,
     user: Option<UserTest>,
     gateway: Option<GatewayTest>,
@@ -76,6 +76,7 @@ pub struct FixtureBuilder {
     lightning: Option<Box<dyn LightningTest>>,
 
     num_peers: u16,
+    peers: Vec<PeerId>,
     base_port: u16,
 
     server_config: BTreeMap<PeerId, ServerConfig>,
@@ -87,54 +88,145 @@ pub struct FixtureBuilder {
     bitcoin_rpc: Option<Box<dyn Fn() -> Box<dyn BitcoindRpc>>>,
     lightning_rpc: Option<Box<dyn LnRpc>>,
 }
-pub struct Fixtures {
+/*pub struct Fixtures {
     fed: Option<FederationTest>,
     user: Option<UserTest>,
     gateway: Option<GatewayTest>,
     bitcoin: Option<Box<dyn BitcoinTest>>,
     lightning: Option<Box<dyn LightningTest>>,
-}
+}*/
 
-impl FixtureBuilder {
-    pub fn build(self) -> Fixtures {
+impl Fixtures {
+    pub fn new(num_peers: u16, amount_tiers: &[Amount]) -> Self {
+        // we don't know yet if there is going to be a gateway so we might have the +1 port range unnecessary but that's fine
+        let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
+
+        // in case we need to output logs using 'cargo test -- --nocapture'
+        if base_port == 4000 {
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
+                )
+                .init();
+        }
+
+        let params = ServerConfigParams {
+            hbbft_base_port: base_port,
+            api_base_port: base_port + num_peers,
+            amount_tiers: amount_tiers.to_vec(),
+        };
+        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
+
+        let max_evil = hbbft::util::max_faulty(peers.len());
+        let (server_config, client_config) =
+            ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
+
+        let disable_mocks = env::var("FM_TEST_DISABLE_MOCKS").is_ok();
+        let mut real_dir: Option<PathBuf> = None;
+        if disable_mocks {
+            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+            real_dir = Some(PathBuf::from(dir));
+        }
+
+        Self {
+            fed: None,
+            user: None,
+            gateway: None,
+            bitcoin: None,
+            lightning: None,
+            num_peers,
+            peers,
+            base_port,
+            server_config,
+            client_config,
+            disable_mocks,
+            real_dir,
+            bitcoin_rpc: None,
+            lightning_rpc: None,
+        }
+    }
+
+    // Builds (fed, user, bitcoin)
+    pub async fn build(mut self) -> (FederationTest, UserTest, Box<dyn BitcoinTest>) {
         if self.disable_mocks {
             info!("Testing with REAL Bitcoin and Lightning services");
         } else {
             info!("Testing with FAKE Bitcoin and Lightning services");
         }
 
-        Fixtures {
-            fed: self.fed,
-            user: self.user,
-            gateway: self.gateway,
-            bitcoin: self.bitcoin,
-            lightning: self.lightning,
+        if let None = self.fed {
+            // will initialize bitcoin too, or ignore it if it is Some()
+            self = self.with_bitcoin_and_federation().await;
         }
+        if let None = self.user {
+            // will initialize lightning too, or ignore it if it is Some()
+            self = self.with_user().await;
+        }
+
+        (self.fed.unwrap(), self.user.unwrap(), self.bitcoin.unwrap())
+    }
+    // Builds all (fed, user, bitcoin, lightning, gateway)
+    pub async fn build_all(
+        mut self,
+    ) -> (
+        FederationTest,
+        UserTest,
+        Box<dyn BitcoinTest>,
+        GatewayTest,
+        Box<dyn LightningTest>,
+    ) {
+        if self.disable_mocks {
+            info!("Testing with REAL Bitcoin and Lightning services");
+        } else {
+            info!("Testing with FAKE Bitcoin and Lightning services");
+        }
+        if let None = self.fed {
+            // will initialize bitcoin too, or ignore it if it is Some()
+            self = self.with_bitcoin_and_federation().await;
+        }
+        if let None = self.gateway {
+            // will initialize lightning too, or ignore it if it is Some()
+            self = self.with_lightning_and_gateway().await;
+        }
+        if let None = self.user {
+            // will initialize lightning too, or ignore it if it is Some()
+            self = self.with_user().await;
+        }
+
+        (
+            self.fed.unwrap(),
+            self.user.unwrap(),
+            self.bitcoin.unwrap(),
+            self.gateway.unwrap(),
+            self.lightning.unwrap(),
+        )
     }
     pub fn with_bitcoin(self) -> Self {
-        let mut bitcoin: Box<dyn BitcoinTest>;
-        let mut bitcoin_rpc: Fn() -> Box<dyn BitcoindRpc>;
+        let bitcoin: Box<dyn BitcoinTest>;
+        let bitcoin_rpc: Box<dyn Fn() -> Box<dyn BitcoindRpc>>;
 
         if self.disable_mocks {
             let wallet_config = self.server_config.iter().last().unwrap().1.wallet.clone();
-            bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
+            bitcoin_rpc = Box::new(bitcoincore_rpc::bitcoind_gen(wallet_config.clone()));
             bitcoin = Box::new(RealBitcoinTest::new(wallet_config));
         } else {
             let fake_bitcoin_test = FakeBitcoinTest::new();
-            bitcoin_rpc = || Box::new(fake_bitcoin_test.clone()) as Box<dyn BitcoindRpc>;
-            bitcoin = Box::new(fake_bitcoin_test);
+            bitcoin = Box::new(fake_bitcoin_test.clone());
+            bitcoin_rpc =
+                Box::new(move || Box::new(fake_bitcoin_test.clone()) as Box<dyn BitcoindRpc>);
         }
 
         Self {
             bitcoin: Some(bitcoin),
-            bitcoin_rpc: Some(bitcoin_rpc),
+            bitcoin_rpc: Some(Box::new(bitcoin_rpc)),
             ..self
         }
     }
     //TODO: add mock options (e. g fail X times then succeed)
     pub async fn with_lightning(self) -> Self {
-        let mut lightning: Box<dyn LightningTest>;
-        let mut lightning_rpc: Box<dyn LnRpc>;
+        let lightning: Box<dyn LightningTest>;
+        let lightning_rpc: Box<dyn LnRpc>;
 
         if self.disable_mocks {
             let dir = self
@@ -198,33 +290,48 @@ impl FixtureBuilder {
             self = self.with_bitcoin()
         }
 
-        let mut fed_db: Fn() -> Arc<dyn Database>;
-        let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+        let fed;
+
         if self.disable_mocks {
             let dir = self
                 .real_dir
-                .as_ref()
+                .clone()
                 .expect("disable_mocks is true so the dir got initialized in the constructor");
 
-            fed_db = || {
+            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+            let fed_db = Box::new(move || {
                 Arc::new(rocks(dir.clone().into_os_string().into_string().unwrap()))
                     as Arc<dyn Database>
-            }; //clone for safety
-               // the distinction between mocked and real version is implicit here (self.bitcoin_rpc)
+            });
+
+            fed = FederationTest::new(
+                self.server_config.clone(), //do I need to clone here ?
+                &fed_db,
+                &self
+                    .bitcoin_rpc
+                    .take()
+                    .expect("self.with_bitcoin has been called and set it"),
+                &connect_gen,
+            )
+            .await;
         } else {
-            fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
+            let net = MockNetwork::new();
+            let net_ref = &net;
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+            let fed_db = Box::new(move || Arc::new(MemDatabase::new()) as Arc<dyn Database>);
+
+            fed = FederationTest::new(
+                self.server_config.clone(), //do I need to clone here ?
+                &fed_db,
+                &self
+                    .bitcoin_rpc
+                    .take()
+                    .expect("self.with_bitcoin has been called and set it"),
+                &connect_gen,
+            )
+            .await;
         }
-        //the bitcoin_rpc might be mocked
-        let fed = FederationTest::new(
-            self.server_config.clone(), //do I need to clone here ?
-            &fed_db,
-            &self
-                .bitcoin_rpc
-                .take()
-                .expect("self.with_bitcoin has been called and set it"),
-            &connect_gen,
-        )
-        .await;
+
         Self {
             fed: Some(fed),
             ..self
@@ -232,76 +339,25 @@ impl FixtureBuilder {
     }
     //we might want to add flavors to db mock here
     pub async fn with_user(self) -> Self {
-        let mut user_db: Box<dyn Database>;
+        let user_db: Box<dyn Database>;
 
         if self.disable_mocks {
             let dir = self
                 .real_dir
-                .as_ref()
+                .clone()
                 .expect("disable_mocks is true so the dir got initialized in the constructor");
-            user_db = Box::new(rocks(dir.clone().into_os_string().into_string().unwrap()));
-        //clone for seafty
+
+            user_db = Box::new(rocks(dir.into_os_string().into_string().unwrap()));
         } else {
             user_db = Box::new(MemDatabase::new());
         }
         let user_cfg = UserClientConfig(self.client_config.clone());
-        let user = UserTest::new(user_cfg.clone(), peers, user_db);
+        let user = UserTest::new(user_cfg.clone(), self.peers.clone(), user_db);
         user.client.await_consensus_block_height(0).await;
 
         Self {
             user: Some(user),
             ..self
-        }
-    }
-}
-
-impl Fixtures {
-    pub fn new(num_peers: u16, amount_tiers: &[Amount]) -> FixtureBuilder {
-        // we don't know yet if there is going to be a gateway so we might have the +1 port range unnecessary but that's fine
-        let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
-
-        // in case we need to output logs using 'cargo test -- --nocapture'
-        if base_port == 4000 {
-            tracing_subscriber::fmt()
-                .with_env_filter(
-                    EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
-                )
-                .init();
-        }
-
-        let params = ServerConfigParams {
-            hbbft_base_port: base_port,
-            api_base_port: base_port + num_peers,
-            amount_tiers: amount_tiers.to_vec(),
-        };
-        let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-
-        let max_evil = hbbft::util::max_faulty(peers.len());
-        let (server_config, client_config) =
-            ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
-
-        let disable_mocks = env::var("FM_TEST_DISABLE_MOCKS").is_ok();
-        let mut real_dir: Option<PathBuf> = None;
-        if disable_mocks {
-            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            real_dir = Some(PathBuf::from(dir));
-        }
-
-        FixtureBuilder {
-            fed: None,
-            user: None,
-            gateway: None,
-            bitcoin: None,
-            lightning: None,
-            num_peers,
-            base_port,
-            server_config,
-            client_config,
-            disable_mocks,
-            real_dir,
-            bitcoin_rpc: None,
-            lightning_rpc: None,
         }
     }
 }
@@ -321,108 +377,6 @@ pub fn sha256(data: &[u8]) -> sha256::Hash {
 
 pub fn secp() -> secp256k1::Secp256k1<secp256k1::All> {
     bitcoin::secp256k1::Secp256k1::new()
-}
-
-/// Generates the fixtures for an integration test and spawns API and HBBFT consensus threads for
-/// federation nodes starting at port 4000.
-pub async fn fixtures(
-    num_peers: u16,
-    amount_tiers: &[Amount],
-) -> (
-    FederationTest,
-    UserTest,
-    Box<dyn BitcoinTest>,
-    GatewayTest,
-    Box<dyn LightningTest>,
-) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
-
-    // in case we need to output logs using 'cargo test -- --nocapture'
-    if base_port == 4000 {
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| EnvFilter::new("info,fedimint::consensus=warn")),
-            )
-            .init();
-    }
-
-    let params = ServerConfigParams {
-        hbbft_base_port: base_port,
-        api_base_port: base_port + num_peers,
-        amount_tiers: amount_tiers.to_vec(),
-    };
-    let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-
-    let max_evil = hbbft::util::max_faulty(peers.len());
-    let (server_config, client_config) =
-        ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
-
-    match env::var("FM_TEST_DISABLE_MOCKS") {
-        Ok(s) if s == "1" => {
-            //TODO: put that info! in build
-            info!("Testing with REAL Bitcoin and Lightning services");
-            let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
-            let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-            let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
-            let bitcoin = RealBitcoinTest::new(wallet_config);
-            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let lightning_rpc = Mutex::new(
-                ClnRpc::new(socket_gateway.clone())
-                    .await
-                    .expect("connect to ln_socket"),
-            );
-
-            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
-            let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
-            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
-
-            let user_cfg = UserClientConfig(client_config.clone());
-            let user_db = Box::new(rocks(dir.clone()));
-            let user = UserTest::new(user_cfg.clone(), peers, user_db);
-            user.client.await_consensus_block_height(0).await;
-
-            let gateway = GatewayTest::new(
-                Box::new(lightning_rpc),
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
-            )
-            .await;
-
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
-        }
-        _ => {
-            info!("Testing with FAKE Bitcoin and Lightning services");
-            let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
-            let lightning = FakeLightningTest::new();
-            let net = MockNetwork::new();
-            let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
-
-            let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
-            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
-
-            let user_db = Box::new(MemDatabase::new());
-            let user_cfg = UserClientConfig(client_config.clone());
-            let user = UserTest::new(user_cfg.clone(), peers, user_db);
-            user.client.await_consensus_block_height(0).await;
-
-            let gateway = GatewayTest::new(
-                Box::new(lightning.clone()),
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
-            )
-            .await;
-
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
-        }
-    }
 }
 
 fn rocks(dir: String) -> OptimisticTransactionDB<rocksdb::SingleThreaded> {
