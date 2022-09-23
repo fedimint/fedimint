@@ -803,3 +803,39 @@ async fn rejoin_consensus_threshold_peers() {
     // confirm that the entire federation can rejoin at an epoch
     timeout(Duration::from_secs(15), rejoin).await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn fail_lightning_payment_the_first_time() {
+    let (fed, user, bitcoin, gateway, lightning) =
+        Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+            .fail_same_ln_payment_for(1)
+            .await //<---!
+            .build_all()
+            .await;
+    let invoice = lightning.invoice(sats(1000));
+
+    fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
+    let (contract_id, outpoint) = user
+        .client
+        .fund_outgoing_ln_contract(invoice, rng())
+        .await
+        .unwrap();
+
+    let ln_client = user.client.ln_client();
+    let (contract_account, _) = tokio::join!(
+        ln_client.get_contract_account(contract_id),
+        fed.run_consensus_epochs(1)
+    );
+    assert_eq!(contract_account.unwrap().amount, sats(1010)); // 1% LN fee
+
+    user.client
+        .await_outgoing_contract_acceptance(outpoint)
+        .await
+        .unwrap();
+
+    assert!(gateway
+        .server
+        .pay_invoice(contract_id, rng())
+        .await
+        .is_err());
+}

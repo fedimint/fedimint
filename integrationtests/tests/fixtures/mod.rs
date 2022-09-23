@@ -1,12 +1,12 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::iter::repeat;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU16;
 use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU16, AtomicU8};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,6 +28,7 @@ use rand::RngCore;
 
 use rand::rngs::OsRng;
 
+use async_trait::async_trait;
 use rocksdb::OptimisticTransactionDB;
 use tokio::sync::Mutex;
 
@@ -56,7 +57,7 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
-use ln_gateway::ln::LnRpc;
+use ln_gateway::ln::{LightningError, LnRpc};
 use ln_gateway::LnGateway;
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
@@ -87,6 +88,71 @@ pub struct Fixtures {
 
     bitcoin_rpc: Option<Box<dyn Fn() -> Box<dyn BitcoindRpc>>>,
     lightning_rpc: Option<Box<dyn LnRpc>>,
+}
+
+pub struct LnRpcConfigured {
+    ln_client: Box<dyn LnRpc>,
+    //TODO: implement right now it is not used
+    fail_mask: [u8; 8], // e.g 0 0 0 1 1 0 0 0 fail the first three times then suceed two times for DIFFERENT payments
+    fail_times: u8,     // e.g 3 fail three times before succeeding for the SAME paymen
+    //fail_times_counter: AtomicU8, //NOTE: this constrains fail_mask so fail or not is decided like fail_mask[i] && fail_times_counter == 0
+    //invoice: String,              //maybe use &str but for now ok
+    fail_invoice: Arc<Mutex<HashMap<String, AtomicU8>>>,
+    amount_sent: Arc<Mutex<u64>>, //..?
+}
+
+impl LnRpcConfigured {
+    const PREIMAGE: [u8; 32] = [1; 32];
+
+    pub fn new(ln_client: Box<dyn LnRpc>, fail_mask: [u8; 8], fail_times: u8) -> Self {
+        //let invoice = "".to_string();
+        let fail_invoice = Arc::new(Mutex::new(HashMap::new()));
+        let amount_sent = Arc::new(Mutex::new(0));
+        // let fail_times_counter = AtomicU8::new(fail_times.clone());
+
+        LnRpcConfigured {
+            ln_client,
+            fail_mask,
+            fail_times,
+            //fail_times_counter,
+            //invoice,
+            fail_invoice,
+            amount_sent,
+        }
+    }
+}
+
+#[async_trait]
+impl LnRpc for LnRpcConfigured {
+    async fn pay(
+        &self,
+        invoice_str: &str,
+        max_delay: u64,
+        max_fee_percent: f64,
+    ) -> Result<[u8; 32], LightningError> {
+        self.fail_invoice
+            .lock()
+            .await
+            .entry(invoice_str.to_string())
+            .and_modify(|counter| {
+                let _ = counter.fetch_sub(1, Ordering::Relaxed);
+            })
+            .or_insert(AtomicU8::new(self.fail_times));
+        if self
+            .fail_invoice
+            .lock()
+            .await
+            .get(invoice_str)
+            .expect("we always either already have an invoice or insert an invoice")
+            .load(Ordering::Relaxed)
+            > 0
+        {
+            return Err(LightningError(None));
+        }
+        self.ln_client
+            .pay(invoice_str, max_delay, max_fee_percent)
+            .await
+    }
 }
 /*pub struct Fixtures {
     fed: Option<FederationTest>,
@@ -202,6 +268,23 @@ impl Fixtures {
             self.lightning.unwrap(),
         )
     }
+    pub async fn fail_same_ln_payment_for(mut self, fails: u8) -> Self {
+        if let None = self.lightning_rpc {
+            self = self.with_lightning().await;
+        }
+        //take self.lightning_rpc and put it into a configurable wrapper
+        let lightning_rpc_configure = LnRpcConfigured::new(
+            self.lightning_rpc
+                .take()
+                .expect("self.lightnning_rpc is initialized"),
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            fails,
+        );
+        Self {
+            lightning_rpc: Some(Box::new(lightning_rpc_configure)),
+            ..self
+        }
+    }
     pub fn with_bitcoin(self) -> Self {
         let bitcoin: Box<dyn BitcoinTest>;
         let bitcoin_rpc: Box<dyn Fn() -> Box<dyn BitcoindRpc>>;
@@ -260,7 +343,24 @@ impl Fixtures {
             ..self
         }
     }
-    // because the gateway always needs lightning it does not make sense to expose only with_gateway
+    pub async fn with_gateway(mut self) -> Self {
+        let gateway = GatewayTest::new(
+            self.lightning_rpc
+                .take() // this is a bit weird
+                .expect("self.with_lightning() has been executed and set lightning_rpc"),
+            self.client_config.clone(),
+            self.lightning
+                .as_ref()
+                .expect("self.with_lightning() has been executed and set lightning")
+                .pub_key(),
+            self.base_port + self.num_peers + 1,
+        )
+        .await;
+        Self {
+            gateway: Some(gateway),
+            ..self
+        }
+    }
     pub async fn with_lightning_and_gateway(mut self) -> Self {
         if let None = self.lightning {
             self = self.with_lightning().await;
