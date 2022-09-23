@@ -137,7 +137,8 @@ pub async fn fixtures(
                     .expect("connect to ln_socket"),
             );
 
-            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+            let connect_gen =
+                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
             let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
@@ -163,7 +164,7 @@ pub async fn fixtures(
             let lightning = FakeLightningTest::new();
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
 
             let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
