@@ -52,6 +52,7 @@ use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
 use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
 use ln::db::LightningGatewayKey;
+use mint::NoteIssuanceRequests;
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -66,7 +67,7 @@ use crate::ln::db::{
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
 use crate::mint::db::{CoinKey, PendingCoinsKeyPrefix};
-use crate::mint::{CoinFinalizationData, MintClientError};
+use crate::mint::MintClientError;
 use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
@@ -226,20 +227,22 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             .await?)
     }
 
-    /// Exchanges `coins` received from an untrusted third party for newly issued ones to prevent
-    /// double spends. Users must ensure that the reissuance transaction is accepted before
-    /// accepting `coins` as a valid payment.
+    /// Spent some [`SpendableNote`]s to receive a freshly minted ones
+    ///
+    /// This is useful in scenarios where certain notes were handed over
+    /// directly to us by another user as a payment. By spending them we can make sure
+    /// they can no longer be potentially double-spent.
     ///
     /// On success the out point of the newly issued e-cash tokens is returned. It can be used to
     /// easily poll the transaction status using [`MintClient::fetch_coins`] until it returns
     /// `Ok(())`, indicating we received our newly issued e-cash tokens.
     pub async fn reissue<R: RngCore + CryptoRng>(
         &self,
-        coins: TieredMulti<SpendableNote>,
+        notes: TieredMulti<SpendableNote>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let mut tx = TransactionBuilder::default();
-        tx.input_coins(coins, &self.context.secp)?;
+        tx.input_coins(notes, &self.context.secp)?;
         let txid = self
             .submit_tx_with_change(tx, DbBatch::new(), &mut rng)
             .await?;
@@ -247,12 +250,14 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
-    /// Validate tokens without claiming them. This function checks if signatures are valid
+    /// Validate signatures on notes.
+    ///
+    /// This function checks if signatures are valid
     /// based on the federation public key. It does not check if the nonce is unspent.
-    pub async fn validate_tokens(&self, coins: &TieredMulti<SpendableNote>) -> Result<()> {
+    pub async fn validate_note_signatures(&self, notes: &TieredMulti<SpendableNote>) -> Result<()> {
         let tbs_pks = &self.mint_client().config.tbs_pks;
-        coins.iter_items().try_for_each(|(amt, coin)| {
-            if coin.coin.verify(*tbs_pks.tier(&amt)?) {
+        notes.iter_items().try_for_each(|(amt, note)| {
+            if note.note.verify(*tbs_pks.tier(&amt)?) {
                 Ok(())
             } else {
                 Err(ClientError::InvalidSignature)
@@ -260,17 +265,28 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         })
     }
 
-    pub async fn pay_for_coins<R: RngCore + CryptoRng>(
+    /// Pay by creating notes provided (and most probably controlled) by the recipient.
+    ///
+    /// A standard way to facilitate a payment between users of a mint.
+    /// Generate a transaction spending notes we own as inputs and
+    /// creating new notes from [`BlindNonce`]s provided by the recipient as outputs.
+    ///
+    /// Returns a `OutPoint` of a fedimint transaction created and submitted as a payment.
+    ///
+    /// The name is derived from Bitcoin's terminology of "pay to <address-type>".
+    pub async fn pay_to_blind_nonces<R: RngCore + CryptoRng>(
         &self,
-        coins: TieredMulti<BlindNonce>,
+        blind_nonces: TieredMulti<BlindNonce>,
         mut rng: R,
     ) -> Result<OutPoint> {
         let batch = DbBatch::new();
         let mut tx = TransactionBuilder::default();
 
-        let input_coins = self.mint_client().select_coins(coins.total_amount())?;
+        let input_coins = self
+            .mint_client()
+            .select_coins(blind_nonces.total_amount())?;
         tx.input_coins(input_coins, &self.context.secp)?;
-        tx.output(Output::Mint(coins));
+        tx.output(Output::Mint(blind_nonces));
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
 
         Ok(OutPoint { txid, out_idx: 0 })
@@ -382,7 +398,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         batch_tx.append_from_iter(final_coins.iter_items().map(|(amount, coin)| {
             BatchItem::maybe_delete(CoinKey {
                 amount,
-                nonce: coin.coin.0.clone(),
+                nonce: coin.note.0.clone(),
             })
         }));
         batch_tx.commit();
@@ -460,7 +476,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
         self.mint_client().coins()
     }
 
-    pub fn list_active_issuances(&self) -> Vec<(OutPoint, CoinFinalizationData)> {
+    pub fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.mint_client().list_active_issuances()
     }
 

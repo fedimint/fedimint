@@ -193,7 +193,7 @@ async fn ecash_in_wallet_can_sent_through_a_tx() {
     user_receive
         .client
         .receive_coins(sats(400), rng(), |coins| {
-            block_on(user_send.client.pay_for_coins(coins, rng())).unwrap()
+            block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
         });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 

@@ -407,7 +407,7 @@ async fn handle_command(
             )
         }
         Command::Validate { coins } => {
-            let validate_result = client.validate_tokens(&coins).await;
+            let validate_result = client.validate_note_signatures(&coins).await;
 
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
