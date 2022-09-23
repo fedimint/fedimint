@@ -5,7 +5,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
 
-use fixtures::{fixtures, rng, sats, secp, sha256, Fixtures};
+use fixtures::{rng, sats, secp, sha256, Fixtures};
 use futures::executor::block_on;
 use futures::future::{join_all, Either};
 use threshold_crypto::{SecretKey, SecretKeyShare};
@@ -29,7 +29,9 @@ use mint_client::ClientError;
 async fn peg_in_and_peg_out_with_fees() {
     let peg_in_amount: u64 = 5000;
     let peg_out_amount: u64 = 1200; // amount requires minted change
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+        .make()
+        .await;
 
     let peg_in_address = user.client.get_new_pegin_address(rng());
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(peg_in_amount));
@@ -74,7 +76,9 @@ async fn peg_in_and_peg_out_with_fees() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_are_rejected_if_fees_are_too_low() {
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+        .make()
+        .await;
     let peg_out_amount = Amount::from_sat(1000);
     let peg_out_address = bitcoin.get_new_address();
 
@@ -93,7 +97,9 @@ async fn peg_outs_are_rejected_if_fees_are_too_low() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_are_only_allowed_once_per_epoch() {
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+        .make()
+        .await;
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
@@ -115,7 +121,9 @@ async fn peg_outs_are_only_allowed_once_per_epoch() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_outs_must_wait_for_available_utxos() {
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+        .make()
+        .await;
     let address1 = bitcoin.get_new_address();
     let address2 = bitcoin.get_new_address();
 
@@ -142,7 +150,7 @@ async fn peg_outs_must_wait_for_available_utxos() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_can_be_exchanged_directly_between_users() {
-    let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let (fed, user_send, bitcoin) = Fixtures::new(4, &[sats(100), sats(1000)]).make().await;
     let user_receive = user_send.new_client(&[0, 1, 2]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
@@ -160,7 +168,7 @@ async fn ecash_can_be_exchanged_directly_between_users() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_cannot_double_spent_with_different_nodes() {
-    let (fed, user1, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user1, bitcoin) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
     fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
     let ecash = fed.spend_ecash(&user1, sats(2000)).await;
 
@@ -181,7 +189,7 @@ async fn ecash_cannot_double_spent_with_different_nodes() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn ecash_in_wallet_can_sent_through_a_tx() {
-    let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
+    let (fed, user_send, bitcoin) = Fixtures::new(2, &[sats(100), sats(500)]).make().await;
     let user_receive = user_send.new_client(&[0]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(1100)).await;
@@ -224,7 +232,9 @@ async fn drop_peer_3_during_epoch(fed: &FederationTest) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_peg_out_psbts() {
-    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(1), sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(4, &[sats(1), sats(10), sats(100), sats(1000)])
+        .make()
+        .await;
     fed.mine_and_mint(&user, &*bitcoin, sats(3000)).await;
 
     let peg_out_address = bitcoin.get_new_address();
@@ -247,7 +257,8 @@ async fn drop_peers_who_dont_contribute_peg_out_psbts() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_decryption_shares() {
-    let (fed, user, bitcoin, gateway, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, _, _) =
+        Fixtures::new(4, &[sats(100), sats(1000)]).make_all().await;
     let payment_amount = sats(2000);
     fed.mine_and_mint(&gateway.user, &*bitcoin, sats(3000))
         .await;
@@ -292,7 +303,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_dont_contribute_blind_sigs() {
-    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(4, &[sats(100), sats(1000)]).make().await;
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
     fed.database_add_coins_for_user(&user, sats(2000));
 
@@ -305,7 +316,7 @@ async fn drop_peers_who_dont_contribute_blind_sigs() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn drop_peers_who_contribute_bad_sigs() {
-    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(4, &[sats(100), sats(1000)]).make().await;
     fed.mine_spendable_utxo(&user, &*bitcoin, Amount::from_sat(2000));
     let out_point = fed.database_add_coins_for_user(&user, sats(2000));
     let bad_proposal = vec![ConsensusItem::Mint(PartiallySignedRequest {
@@ -322,8 +333,10 @@ async fn drop_peers_who_contribute_bad_sigs() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_internal_invoice() {
-    let (fed, sending_user, bitcoin, gateway, lightning) =
-        fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, sending_user, bitcoin, gateway, lightning, _) =
+        Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+            .make_all()
+            .await;
 
     // Fund the gateway so it can route internal payments
     fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
@@ -410,8 +423,10 @@ async fn lightning_gateway_pays_internal_invoice() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_outgoing_invoice() {
-    let (fed, user, bitcoin, gateway, lightning) =
-        fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning, _) =
+        Fixtures::new(2, &[sats(10), sats(100), sats(1000)])
+            .make_all()
+            .await;
     let invoice = lightning.invoice(sats(1000));
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
@@ -457,7 +472,8 @@ async fn lightning_gateway_pays_outgoing_invoice() {
 async fn receive_lightning_payment_valid_preimage() {
     let starting_balance = sats(2000);
     let preimage_price = sats(100);
-    let (fed, user, bitcoin, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    let (fed, user, bitcoin, gateway, _, _) =
+        Fixtures::new(2, &[sats(1000), sats(100)]).make_all().await;
     fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
@@ -524,7 +540,8 @@ async fn receive_lightning_payment_valid_preimage() {
 async fn receive_lightning_payment_invalid_preimage() {
     let starting_balance = sats(2000);
     let payment_amount = sats(100);
-    let (fed, user, bitcoin, gateway, _) = fixtures(2, &[sats(1000), sats(100)]).await;
+    let (fed, user, bitcoin, gateway, _, _) =
+        Fixtures::new(2, &[sats(1000), sats(100)]).make_all().await;
     fed.mine_and_mint(&gateway.user, &*bitcoin, starting_balance)
         .await;
     assert_eq!(user.total_coins(), sats(0));
@@ -589,7 +606,8 @@ async fn receive_lightning_payment_invalid_preimage() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() {
-    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning, _) =
+        Fixtures::new(2, &[sats(10), sats(1000)]).make_all().await;
     let invoice = lightning.invoice(sats(1000));
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -622,7 +640,8 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
-    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning, _) =
+        Fixtures::new(2, &[sats(10), sats(1000)]).make_all().await;
     let invoice = lightning.invoice(sats(1000));
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -642,7 +661,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_tx_submitted() {
-    let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user_send, bitcoin) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
     let user_receive = user_send.new_client(&[0]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
@@ -666,7 +685,7 @@ async fn runs_consensus_if_tx_submitted() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn runs_consensus_if_new_block() {
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
     let peg_in_address = user.client.get_new_pegin_address(rng());
     bitcoin.mine_blocks(100);
     let (proof, tx) = bitcoin.send_and_mine_block(&peg_in_address, Amount::from_sat(1000));
@@ -691,14 +710,15 @@ async fn runs_consensus_if_new_block() {
 #[tokio::test(flavor = "multi_thread")]
 #[should_panic]
 async fn audit_negative_balance_sheet_panics() {
-    let (fed, user, _, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user, _) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
     fed.mint_coins_for_user(&user, sats(2000)).await;
     fed.run_consensus_epochs(1).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unbalanced_transactions_get_rejected() {
-    let (fed, user, bitcoin, _, lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin, _, lightning, _) =
+        Fixtures::new(2, &[sats(100), sats(1000)]).make_all().await;
     // cannot make change for this invoice (results in unbalanced tx)
     let invoice = lightning.invoice(sats(777));
 
@@ -711,14 +731,14 @@ async fn unbalanced_transactions_get_rejected() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_have_federations_with_one_peer() {
-    let (fed, user, bitcoin, _, _) = fixtures(1, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(1, &[sats(100), sats(1000)]).make().await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     user.assert_total_coins(sats(1000)).await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_get_signed_epoch_history() {
-    let (fed, user, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
     fed.mine_and_mint(&user, &*bitcoin, sats(1000)).await;
@@ -734,7 +754,7 @@ async fn can_get_signed_epoch_history() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn rejoin_consensus_single_peer() {
-    let (fed, user, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin) = Fixtures::new(4, &[sats(100), sats(1000)]).make().await;
 
     // Keep peer 3 out of consensus
     bitcoin.mine_blocks(110);
@@ -763,7 +783,7 @@ async fn rejoin_consensus_single_peer() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn rejoin_consensus_threshold_peers() {
-    let (fed, _, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, _, bitcoin) = Fixtures::new(2, &[sats(100), sats(1000)]).make().await;
     let peer0 = fed.subset_peers(&[0]);
     let peer1 = fed.subset_peers(&[1]);
 
