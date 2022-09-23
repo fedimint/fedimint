@@ -70,6 +70,7 @@ mod real;
 static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
 pub struct Fixtures {
+    //get rid of optional stuff
     fed: Option<FederationTest>,
     user: Option<UserTest>,
     gateway: Option<GatewayTest>,
@@ -88,13 +89,17 @@ pub struct Fixtures {
 
     bitcoin_rpc: Option<Box<dyn Fn() -> Box<dyn BitcoindRpc>>>,
     lightning_rpc: Option<Box<dyn LnRpc>>,
+
+    fail_times: Option<u8>,
 }
 
 pub struct LnRpcConfigured {
     ln_client: Box<dyn LnRpc>,
+    lightning_test: Box<dyn LightningTest>,
     //TODO: implement right now it is not used
     fail_mask: [u8; 8], // e.g 0 0 0 1 1 0 0 0 fail the first three times then suceed two times for DIFFERENT payments
     fail_times: u8,     // e.g 3 fail three times before succeeding for the SAME paymen
+    //use fail_times_counter and wrap in RefCel<>
     //fail_times_counter: AtomicU8, //NOTE: this constrains fail_mask so fail or not is decided like fail_mask[i] && fail_times_counter == 0
     //invoice: String,              //maybe use &str but for now ok
     fail_invoice: Arc<Mutex<HashMap<String, AtomicU8>>>,
