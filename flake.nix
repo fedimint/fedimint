@@ -367,6 +367,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -382,6 +383,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -422,6 +424,42 @@
             "modules/fedimint-wallet"
           ];
         };
+
+        # Replace placeholder git hash in a binary
+        #
+        # To avoid impurity, we use a git hash placeholder when building binaries
+        # and then replace them with the real git hash in the binaries themselves.
+        replace-git-hash = { package, name }:
+          let
+            # the git hash placeholder we use in `build.rs` scripts when
+            # building in Nix (to preserve purity)
+            hash-placeholder = "01234569afbe457afa1d2683a099c7af48a523c1";
+            # the hash we will set if the tree is dirty;
+            dirty-hash = "0000000000000000000000000000000000000000";
+            # git hash to set (passed by Nix if the tree is clean, or `dirty-hash` when dirty)
+            git-hash = if (self ? rev) then self.rev else dirty-hash;
+          in
+          pkgs.stdenv.mkDerivation {
+            inherit system;
+            inherit name;
+
+            dontUnpack = true;
+
+            installPhase = ''
+              cp -a ${package} $out
+              for path in `find $out -type f -executable`; do
+                # need to use a temporary file not to overwrite source as we are reading it
+                bbe -e 's/${hash-placeholder}/${git-hash}/' $path -o ./tmp || exit 1
+                chmod +w $path
+                # use cat to keep all the original permissions etc as they were
+                cat ./tmp > "$path"
+                chmod -w $path
+              done
+            '';
+
+            buildInputs = [ pkgs.bbe ];
+          };
+
       in
       {
         packages = {
@@ -431,7 +469,7 @@
           fedimint-tests = fedimint-tests.package;
           ln-gateway = ln-gateway.package;
           clientd = clientd.package;
-          mint-client-cli = mint-client-cli.package;
+          mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli.package; };
 
           inherit workspaceDeps
             workspaceBuild
