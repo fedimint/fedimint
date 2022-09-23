@@ -27,14 +27,13 @@ futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.18.0"
 fedimint = { path = "../fedimint/" }
-fedimint-api = { path = "../fedimint-api", features = ["rocksdb"] }
+fedimint-api = { path = "../fedimint-api" }
+fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.6"
-rocksdb = "0.19.0"
 secp256k1 = "0.22.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.85"
-sled = "0.34.6"
 thiserror = "1.0.30"
 tracing = { version = "0.1.26", default-features = false, features= ["log", "attributes", "std"] }
 tokio = {version = "1.21", features = ["full"]}

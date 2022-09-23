@@ -1,23 +1,57 @@
 //! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
-use super::batch::{BatchItem, DbBatch};
-use super::{Database, DecodingError};
-use crate::db::PrefixIter;
 use anyhow::Result;
+use fedimint_api::db::batch::{BatchItem, DbBatch};
+use fedimint_api::db::Database;
+use fedimint_api::db::PrefixIter;
 use sled::transaction::TransactionError;
+use std::path::Path;
 use tracing::error;
 
+pub use sled;
+
+#[derive(Debug)]
+pub struct SledDb(sled::Tree);
+
+impl SledDb {
+    pub fn open(db_path: impl AsRef<Path>, tree: &str) -> Result<SledDb, sled::Error> {
+        let db = sled::open(db_path)?.open_tree(tree)?;
+        Ok(SledDb(db))
+    }
+
+    pub fn into_dyn(self) -> Box<dyn Database> {
+        Box::new(self)
+    }
+
+    pub fn inner(&self) -> &sled::Tree {
+        &self.0
+    }
+}
+
+impl From<sled::Tree> for SledDb {
+    fn from(db: sled::Tree) -> Self {
+        SledDb(db)
+    }
+}
+
+impl From<SledDb> for sled::Tree {
+    fn from(db: SledDb) -> Self {
+        db.0
+    }
+}
+
 // TODO: maybe make the concrete impl its own crate
-impl Database for sled::Tree {
+impl Database for SledDb {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let ret = self.insert(key, value)?.map(|bytes| bytes.to_vec());
-        self.flush().expect("DB failure");
+        let ret = self.inner().insert(key, value)?.map(|bytes| bytes.to_vec());
+        self.inner().flush().expect("DB failure");
         Ok(ret)
     }
 
     fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         Ok(self
+            .inner()
             .get(key)
             .map_err(anyhow::Error::from)?
             .map(|bytes| bytes.to_vec()))
@@ -25,15 +59,16 @@ impl Database for sled::Tree {
 
     fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         let ret = self
+            .inner()
             .remove(key)
             .map_err(anyhow::Error::from)?
             .map(|bytes| bytes.to_vec());
-        self.flush().expect("DB failure");
+        self.inner().flush().expect("DB failure");
         Ok(ret)
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
-        Box::new(self.scan_prefix(key_prefix).map(|res| {
+        Box::new(self.inner().scan_prefix(key_prefix).map(|res| {
             res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
                 .map_err(anyhow::Error::from)
         }))
@@ -43,6 +78,7 @@ impl Database for sled::Tree {
         let batch: Vec<_> = batch.into();
 
         let ret = self
+            .inner()
             .transaction::<_, _, TransactionError>(|t| {
                 for change in batch.iter() {
                     match change {
@@ -70,19 +106,14 @@ impl Database for sled::Tree {
                 Ok(())
             })
             .map_err(anyhow::Error::from);
-        self.flush().expect("DB failure");
+        self.inner().flush().expect("DB failure");
         ret
-    }
-}
-
-impl From<DecodingError> for sled::transaction::ConflictableTransactionError<DecodingError> {
-    fn from(e: DecodingError) -> Self {
-        sled::transaction::ConflictableTransactionError::Abort(e)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::SledDb;
     use std::sync::Arc;
 
     #[test_log::test]
@@ -91,7 +122,7 @@ mod tests {
             .prefix("fcb-sled-test")
             .tempdir()
             .unwrap();
-        let db = sled::open(path).unwrap();
-        crate::db::tests::test_db_impl(Arc::new(db.open_tree("default").unwrap()));
+        let db = SledDb::open(path, "default").unwrap();
+        fedimint_api::db::test_db_impl(Arc::new(db));
     }
 }

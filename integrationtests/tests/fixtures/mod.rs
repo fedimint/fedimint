@@ -28,7 +28,6 @@ use rand::RngCore;
 
 use rand::rngs::OsRng;
 
-use rocksdb::OptimisticTransactionDB;
 use tokio::sync::Mutex;
 
 use tracing::info;
@@ -187,9 +186,9 @@ pub async fn fixtures(
     }
 }
 
-fn rocks(dir: String) -> OptimisticTransactionDB<rocksdb::SingleThreaded> {
+fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
-    OptimisticTransactionDB::open_default(db_dir).unwrap()
+    fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
 }
 
 pub trait BitcoinTest {
