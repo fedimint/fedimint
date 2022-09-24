@@ -19,6 +19,7 @@ use tokio_rustls::rustls;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
+    pub federation_name: String,
     pub identity: PeerId,
     pub hbbft_bind_addr: String,
     pub api_bind_addr: String,
@@ -55,6 +56,7 @@ pub struct ServerConfigParams {
     pub hbbft_base_port: u16,
     pub api_base_port: u16,
     pub amount_tiers: Vec<fedimint_api::Amount>,
+    pub federation_name: String,
 }
 
 impl GenerateConfig for ServerConfig {
@@ -113,6 +115,7 @@ impl GenerateConfig for ServerConfig {
                 let id_u16: u16 = id.into();
                 let epoch_keys = epochinfo.get(&id).unwrap();
                 let config = ServerConfig {
+                    federation_name: params.federation_name.clone(),
                     identity: id,
                     hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
                     api_bind_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
@@ -132,15 +135,17 @@ impl GenerateConfig for ServerConfig {
             .collect();
 
         let client_config = ClientConfig {
+            federation_name: params.federation_name.clone(),
             max_evil,
-            api_endpoints: peers
+            nodes: peers
                 .iter()
-                .map(|&peer| {
-                    Url::parse(
+                .map(|&peer| Node {
+                    name: format!("node #{}", u16::from(peer)),
+                    url: Url::parse(
                         format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer))
                             .as_str(),
                     )
-                    .expect("Could not parse Url")
+                    .expect("Could not parse Url"),
                 })
                 .collect(),
             mint: mint_client_cfg,
@@ -152,14 +157,18 @@ impl GenerateConfig for ServerConfig {
     }
 
     fn to_client_config(&self) -> Self::ClientConfig {
-        let api_endpoints: Vec<Url> = self
+        let nodes = self
             .peers
             .iter()
-            .map(|(_, peer)| peer.connection.api_addr.clone())
+            .map(|(peer_id, peer)| Node {
+                url: peer.connection.api_addr.clone(),
+                name: format!("node #{}", peer_id),
+            })
             .collect();
         let max_evil = hbbft::util::max_faulty(self.peers.len());
         ClientConfig {
-            api_endpoints,
+            federation_name: self.federation_name.clone(),
+            nodes,
             max_evil,
             mint: self.mint.to_client_config(),
             wallet: self.wallet.to_client_config(),

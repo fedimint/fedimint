@@ -172,12 +172,12 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
             config.as_ref().max_evil,
             config
                 .as_ref()
-                .api_endpoints
+                .nodes
                 .iter()
                 .enumerate()
-                .map(|(id, url)| {
+                .map(|(id, node)| {
                     let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                    let url = url.clone();
+                    let url = node.url.clone();
                     (peer_id, url)
                 })
                 .collect(),

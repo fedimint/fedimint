@@ -146,12 +146,12 @@ impl From<&ClientConfig> for WsFederationConnect {
     fn from(config: &ClientConfig) -> Self {
         let max_evil = config.max_evil;
         let members: Vec<(PeerId, Url)> = config
-            .api_endpoints
+            .nodes
             .iter()
             .enumerate()
-            .map(|(id, url)| {
+            .map(|(id, node)| {
                 let peer_id = PeerId::from(id as u16); // FIXME: potentially wrong, currently works imo
-                let url = url.clone();
+                let url = node.url.clone();
                 (peer_id, url)
             })
             .collect();

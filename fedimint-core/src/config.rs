@@ -7,8 +7,15 @@ use std::path::Path;
 use url::Url;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct Node {
+    pub url: Url,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ClientConfig {
-    pub api_endpoints: Vec<Url>,
+    pub federation_name: String,
+    pub nodes: Vec<Node>,
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
