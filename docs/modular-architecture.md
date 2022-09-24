@@ -7,6 +7,7 @@ flowchart BT;
     fedimintd[[fedimintd: Final server binary]]
     fedimint-server(fedimint-server: Fedimint server - abstract over modules)
     fedimint-app[[fedimint-app: Final client application]]
+    gateway-plugin[[fedimint-gateway: Final gateway plugin]]
     fedimint-core(fedimint-core: Traits & glue between modules and generic code)
     fedimint-api(fedimint-api: API defintion between Fedimint client & server)
     fedimint-lib(fedimint-lib: Client side library - abstact over modules)
@@ -30,6 +31,9 @@ flowchart BT;
     fedimint-app-->module-client
     fedimint-app-->fedimint-lib  
     fedimint-app-->fedimint-core
+    gateway-plugin-->module-client
+    gateway-plugin-->fedimint-lib
+    gateway-plugin-->fedimint-core
 ```
 
 ## Crate Descriptions
