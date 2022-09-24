@@ -256,7 +256,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request(
             "/ln/register_gateway",
             gateway,
-            CurrentConsensus::new(self.max_evil),
+            CurrentConsensus::new(self.max_evil * 2),
         )
         .await
     }
