@@ -56,11 +56,12 @@ use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
+use tracing::debug;
 use url::Url;
 
 use crate::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
-    OutgoingPaymentClaimKeyPrefix,
+    OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
 use crate::ln::outgoing::OutgoingContractAccount;
 use crate::ln::LnClientError;
@@ -567,7 +568,37 @@ impl Client<UserClientConfig> {
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
+        debug!("Funded outgoing contract {} in {}", contract_id, outpoint);
         Ok((contract_id, outpoint))
+    }
+
+    /// Claims a refund for an expired or cancelled outgoing contract
+    ///
+    /// This can be necessary when the Lightning gateway cannot route the payment, is malicious or
+    /// offline. The function returns the out point of the e-cash output generated as change.
+    pub async fn try_refund_outgoing_contract(
+        &self,
+        contract_id: ContractId,
+        rng: impl RngCore + CryptoRng,
+    ) -> Result<OutPoint> {
+        let contract_data = self
+            .context
+            .db
+            .get_value(&OutgoingPaymentKey(contract_id))
+            .expect("DB error")
+            .ok_or(ClientError::RefundUnknownOutgoingContract)?;
+
+        let mut tx = TransactionBuilder::default();
+        let (refund_key, refund_input) = self
+            .ln_client()
+            .create_refund_outgoing_contract_input(&contract_data);
+        tx.input(&mut vec![*refund_key], Input::LN(refund_input));
+        let txid = self
+            .mint_client()
+            .submit_tx_with_change(&self.config.0.fee_consensus(), tx, DbBatch::new(), rng)
+            .await?;
+
+        Ok(OutPoint { txid, out_idx: 0 })
     }
 
     pub async fn await_outgoing_contract_acceptance(&self, outpoint: OutPoint) -> Result<()> {
@@ -683,7 +714,11 @@ impl Client<UserClientConfig> {
 
     /// Notify gateway that we've escrowed tokens they can claim by routing our payment and wait
     /// for them to do so
-    pub async fn await_outgoing_contract_execution(&self, contract_id: ContractId) -> Result<()> {
+    pub async fn await_outgoing_contract_execution(
+        &self,
+        contract_id: ContractId,
+        rng: impl RngCore + CryptoRng,
+    ) -> Result<()> {
         let gateway = self.fetch_active_gateway().await?;
         let future = reqwest::Client::new()
             .post(
@@ -695,9 +730,19 @@ impl Client<UserClientConfig> {
             )
             .json(&contract_id)
             .send();
-        fedimint_api::task::timeout(Duration::from_secs(15), future)
+        let result = fedimint_api::task::timeout(Duration::from_secs(15), future)
             .await
-            .map_err(|_| ClientError::OutgoingPaymentTimeout)??;
+            .map_err(|_| ClientError::OutgoingPaymentTimeout)?
+            .map_err(ClientError::HttpError);
+
+        if let Ok(response) = result {
+            if !response.status().is_success() {
+                // wait for gateway cancellation to be accepted by federation
+                fedimint_api::task::sleep(std::time::Duration::from_secs(1)).await;
+                self.try_refund_outgoing_contract(contract_id, rng).await?;
+            }
+        };
+
         Ok(())
     }
 }
@@ -1073,6 +1118,8 @@ pub enum ClientError {
     ViolatedFeePolicy,
     #[error("Tried to cancel outgoing contract that we don't know about")]
     CancelUnknownOutgoingContract,
+    #[error("Tried to refund outgoing contract that we don't know about")]
+    RefundUnknownOutgoingContract,
 }
 
 impl From<InvalidAmountTierError> for ClientError {

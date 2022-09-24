@@ -150,7 +150,7 @@ pub async fn fixtures(
                 Box::new(lightning_rpc),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
+                base_port + (2 * num_peers) + 1,
             )
             .await;
 
@@ -177,7 +177,7 @@ pub async fn fixtures(
                 Box::new(lightning.clone()),
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
+                base_port + (2 * num_peers) + 1,
             )
             .await;
 

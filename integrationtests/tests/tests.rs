@@ -682,7 +682,6 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
@@ -695,13 +694,29 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    // FIXME should return funds to user
+    gateway.client.save_outgoing_payment(
+        gateway
+            .client
+            .ln_client()
+            .get_outgoing_contract(contract_id)
+            .await
+            .unwrap(),
+    );
+
+    // Gateway fails to acquire preimage, so it cancels the contract so the user can try another one
     gateway
         .client
         .abort_outgoing_payment(contract_id)
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await;
+    let outpoint = user
+        .client
+        .try_refund_outgoing_contract(contract_id, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await;
+    user.client.fetch_coins(outpoint).await.unwrap();
     assert_eq!(user.total_coins(), sats(1010));
     assert_eq!(fed.max_balance_sheet(), 0);
 }

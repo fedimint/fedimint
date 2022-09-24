@@ -494,7 +494,7 @@ async fn handle_command(
                 Ok((contract_id, outpoint)) => {
                     match client.await_outgoing_contract_acceptance(outpoint).await {
                         Ok(_) => client
-                            .await_outgoing_contract_execution(contract_id)
+                            .await_outgoing_contract_execution(contract_id, &mut rng)
                             .await
                             .transform(
                                 |_| CliOutput::LnPay {
