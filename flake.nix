@@ -335,7 +335,8 @@
         };
 
         ln-gateway = pkg {
-          name = "ln_gateway";
+          name = "ln-gateway";
+          bin = "ln-gateway";
           dirs = [
             "crypto/tbs"
             "client/client-lib"
@@ -344,6 +345,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -352,6 +354,7 @@
 
         mint-client-cli = pkg {
           name = "mint-client-cli";
+          bin = "mint-client-cli";
           dirs = [
             "client/clientd"
             "client/client-lib"
@@ -385,6 +388,7 @@
 
         clientd = pkg {
           name = "clientd";
+          bin = "clientd";
           dirs = [
             "client/cli"
             "client/client-lib"
@@ -393,6 +397,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
