@@ -418,17 +418,11 @@
 <span id="418">418</span>
 <span id="419">419</span>
 <span id="420">420</span>
-<span id="421">421</span>
-<span id="422">422</span>
-<span id="423">423</span>
-<span id="424">424</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
-<span class="kw">mod </span>util;
 <span class="kw">pub mod </span>webserver;
 
 <span class="kw">use </span><span class="kw">crate</span>::ln::{LightningError, LnRpc};
-<span class="kw">use </span><span class="kw">crate</span>::util::{ThenAsync, UnwrapOrElseAsync};
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Transaction};
@@ -607,22 +601,20 @@
         <span class="self">self</span>.federation_client
             .save_outgoing_payment(contract_account.clone());
 
-        <span class="comment">// If this could be an internal payment try to buy the preimage directly. Otherwise or if
-        // this fails try to route the payment via our attached LN node.
-        </span><span class="kw">let </span>preimage_res = payment_params
-            .maybe_internal
-            .then_async(<span class="kw">async </span>{
-                <span class="self">self</span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_params, <span class="kw-2">&amp;mut </span>rng)
-                    .<span class="kw">await
-                    </span>.ok()
-            })
-            .<span class="kw">await
-            </span>.flatten()
-            .map(Result::Ok)
-            .unwrap_or_else_async(
-                <span class="self">self</span>.buy_preimage_external(<span class="kw-2">&amp;</span>contract_account.contract.invoice, <span class="kw-2">&amp;</span>payment_params),
-            )
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>is_internal_payment = payment_params.maybe_internal
+            &amp;&amp; <span class="self">self
+                </span>.federation_client
+                .ln_client()
+                .offer_exists(payment_params.payment_hash)
+                .<span class="kw">await
+                </span>.unwrap_or(<span class="bool-val">false</span>);
+
+        <span class="kw">let </span>preimage_res = <span class="kw">if </span>is_internal_payment {
+            <span class="self">self</span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_params, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await
+        </span>} <span class="kw">else </span>{
+            <span class="self">self</span>.buy_preimage_external(<span class="kw-2">&amp;</span>contract_account.contract.invoice, <span class="kw-2">&amp;</span>payment_params)
+                .<span class="kw">await
+        </span>};
 
         <span class="kw">match </span>preimage_res {
             <span class="prelude-val">Ok</span>(preimage) =&gt; {
@@ -847,4 +839,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4a1467723 2022-09-23)" ></div></body></html>

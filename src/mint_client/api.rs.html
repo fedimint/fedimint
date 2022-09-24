@@ -645,6 +645,26 @@
 <span id="645">645</span>
 <span id="646">646</span>
 <span id="647">647</span>
+<span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -701,6 +721,10 @@
 
     <span class="doccomment">/// Fetch preimage offer for incoming lightning payments
     </span><span class="kw">async fn </span>fetch_offer(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt;;
+
+    <span class="comment">// TODO: find a better abstraction for all our API endpoints that allows different strategies and timeouts
+    </span><span class="doccomment">/// Checks if there exists an offer for a payment hash
+    </span><span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt;;
 
     <span class="doccomment">/// Fetch the current consensus block height (trailing actual block height)
     </span><span class="kw">async fn </span>fetch_consensus_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
@@ -903,6 +927,22 @@
         )
         .<span class="kw">await
     </span>}
+
+    <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="kw">let </span>res: <span class="prelude-ty">Result</span>&lt;IncomingContractOffer&gt; = <span class="self">self
+            </span>.request(
+                <span class="string">&quot;/ln/offer&quot;</span>,
+                payment_hash,
+                CurrentConsensus::new(<span class="self">self</span>.max_evil),
+            )
+            .<span class="kw">await</span>;
+
+        <span class="kw">match </span>res {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
+            <span class="prelude-val">Err</span>(e) <span class="kw">if </span>e.is_retryable() =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+        }
+    }
 }
 
 <span class="attribute">#[async_trait]
@@ -1293,4 +1333,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4a1467723 2022-09-23)" ></div></body></html>

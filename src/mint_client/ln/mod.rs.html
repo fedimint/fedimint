@@ -429,6 +429,21 @@
 <span id="429">429</span>
 <span id="430">430</span>
 <span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -594,6 +609,14 @@
         .map_err(LnClientError::ApiError)
     }
 
+    <span class="kw">pub async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="self">self</span>.context
+            .api
+            .offer_exists(payment_hash)
+            .<span class="kw">await
+            </span>.map_err(LnClientError::ApiError)
+    }
+
     <span class="kw">pub fn </span>save_confirmed_invoice(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>ConfirmedInvoice) {
         <span class="self">self</span>.context
             .db
@@ -724,6 +747,13 @@
             _epoch: u64,
             _pk: PublicKey,
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;EpochHistory&gt; {
+            <span class="macro">unimplemented!</span>()
+        }
+
+        <span class="kw">async fn </span>offer_exists(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            _payment_hash: bitcoin::hashes::sha256::Hash,
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;bool&gt; {
             <span class="macro">unimplemented!</span>()
         }
     }
@@ -861,4 +891,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4a1467723 2022-09-23)" ></div></body></html>

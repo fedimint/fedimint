@@ -367,6 +367,13 @@
 <span id="367">367</span>
 <span id="368">368</span>
 <span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
@@ -608,6 +615,13 @@
         ) -&gt; <span class="kw">crate</span>::api::Result&lt;EpochHistory&gt; {
             <span class="macro">unimplemented!</span>()
         }
+
+        <span class="kw">async fn </span>offer_exists(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            _payment_hash: bitcoin::hashes::sha256::Hash,
+        ) -&gt; <span class="kw">crate</span>::api::Result&lt;bool&gt; {
+            <span class="macro">unimplemented!</span>()
+        }
     }
 
     <span class="kw">async fn </span>new_mint_and_client() -&gt; (
@@ -737,4 +751,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (e7119a030 2022-09-22)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (4a1467723 2022-09-23)" ></div></body></html>
