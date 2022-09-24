@@ -212,7 +212,7 @@ impl LnGateway {
                 Ok(outpoint)
             }
             Err(e) => {
-                warn!("LN payment failed, aborting");
+                warn!("Invoice payment failed: {}. Aborting", e);
                 self.federation_client.abort_outgoing_payment(contract_id);
                 Err(e)
             }
