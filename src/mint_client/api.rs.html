@@ -923,7 +923,7 @@
         <span class="self">self</span>.request(
             <span class="string">&quot;/ln/register_gateway&quot;</span>,
             gateway,
-            CurrentConsensus::new(<span class="self">self</span>.max_evil),
+            CurrentConsensus::new(<span class="self">self</span>.max_evil * <span class="number">2</span>),
         )
         .<span class="kw">await
     </span>}
