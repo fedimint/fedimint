@@ -10,9 +10,9 @@ fn main() {
         } else {
             // we set a fake hash here and make it easily recognizable
             // by giving it a prefix (0x0123456)
-            String::from("0x01234569afbe457afa1d2683a099c7af48a523c")
+            String::from("01234569afbe457afa1d2683a099c7af48a523c1")
         };
         println!("cargo:rustc-env=GIT_HASH={}", git_hash);
-        println!("cargo:rerun-if-env-changed=GIT_HASH");
     }
+    println!("cargo:rerun-if-env-changed=GIT_HASH");
 }
