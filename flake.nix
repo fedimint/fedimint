@@ -271,19 +271,19 @@
         });
 
 
-        # a function to define cargo&nix package, listing
-        # all the dependencies (as dir) to help limit the
-        # amount of things that need to rebuild when some
-        # file change
-        pkg = { name, port ? 8000, dirs }: rec {
-          deps = craneLib.buildDepsOnly (commonArgs // {
-            src = filterWorkspaceDepsBuildFiles ./.;
-            pname = "pkg-${name}-deps";
-            buildPhaseCargoCommand = "cargo build --profile release --package ${name}";
-            doCheck = false;
-          });
+        pkg = { name, dirs, bin }:
+          let
+            deps = craneLib.buildDepsOnly (commonArgs // {
+              src = filterWorkspaceDepsBuildFiles ./.;
+              pname = "pkg-${name}-deps";
+              buildPhaseCargoCommand = "cargo build --profile release --package ${name}";
+              doCheck = false;
+            });
 
-          package = craneLib.buildPackage (commonArgs // {
+          in
+
+          craneLib.buildPackage (commonArgs // {
+            meta = { mainProgram = bin; };
             pname = "pkg-${name}";
             cargoArtifacts = workspaceDeps;
 
@@ -294,22 +294,9 @@
             doCheck = false;
           });
 
-          container = pkgs.dockerTools.buildLayeredImage {
-            name = name;
-            contents = [ package ];
-            config = {
-              Cmd = [
-                "${package}/bin/${name}"
-              ];
-              ExposedPorts = {
-                "${builtins.toString port}/tcp" = { };
-              };
-            };
-          };
-        };
 
-        pkgCross = { name, dirs, target, craneLib }: rec {
-          deps = craneLib.buildDepsOnly (commonArgs // {
+        pkgCross = { name, dirs, target, craneLib }:
+          let deps = craneLib.buildDepsOnly (commonArgs // {
             src = filterWorkspaceDepsBuildFiles ./.;
             pname = "pkg-${name}-${target}-deps";
             buildPhaseCargoCommand = "cargo build --profile release --target ${target} --package ${name}";
@@ -317,7 +304,8 @@
             CARGO_BUILD_TARGET = target;
           });
 
-          package = craneLib.buildPackage (commonArgs // {
+          in
+          craneLib.buildPackage (commonArgs // {
             pname = "pkg-${name}-${target}";
             cargoArtifacts = deps;
 
@@ -327,10 +315,10 @@
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
           });
-        };
 
-        fedimintd = pkg {
+        fedimint = pkg {
           name = "fedimint";
+          bin = "fedimintd";
           dirs = [
             "crypto/tbs"
             "ln-gateway"
@@ -468,13 +456,13 @@
       in
       {
         packages = {
-          default = fedimintd.package;
+          default = fedimint;
 
-          fedimintd = fedimintd.package;
-          fedimint-tests = fedimint-tests.package;
-          ln-gateway = ln-gateway.package;
-          clientd = clientd.package;
-          mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli.package; };
+          fedimint = fedimint;
+          fedimint-tests = fedimint-tests;
+          ln-gateway = ln-gateway;
+          clientd = clientd;
+          mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
 
           inherit workspaceDeps
             workspaceBuild
@@ -493,11 +481,22 @@
           };
 
           wasm32 = {
-            mint-client = (mint-client { target = "wasm32-unknown-unknown"; craneLib = craneLibWasm32; }).package;
+            mint-client = mint-client { target = "wasm32-unknown-unknown"; craneLib = craneLibWasm32; };
           };
 
           container = {
-            fedimintd = fedimintd.container;
+            fedimintd = pkgs.dockerTools.buildLayeredImage {
+              name = "fedimint";
+              contents = [ fedimint ];
+              config = {
+                Cmd = [
+                  "${fedimint}/bin/fedimintd"
+                ];
+                ExposedPorts = {
+                  "${builtins.toString 8080}/tcp" = { };
+                };
+              };
+            };
           };
         };
 
