@@ -545,36 +545,6 @@
               '';
             };
 
-            # Integration test shell - meant for running all the integration tests
-            # (usually from the CI) # which meants it includes all the project binaries,
-            # but it doesn't include dev tools etc.
-            integrationTests = pkgs.mkShell {
-
-              buildInputs = workspaceDeps.buildInputs;
-              nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
-                bc
-                perl
-                bitcoind
-                clightning-dev
-                jq
-                procps
-                # This is required to prevent a mangled bash shell in nix develop
-                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                (hiPrio pkgs.bashInteractive)
-                tmux
-                tmuxinator
-                coreutils
-
-                fedimintd.package
-                fedimint-tests.package
-                ln-gateway.package
-                mint-client-cli.package
-                clientd.package
-              ];
-
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
-            };
-
             # this shell is used only in CI, so it should contain minimum amount
             # of stuff to avoid building and caching things we don't need
             lint = pkgs.mkShell {
