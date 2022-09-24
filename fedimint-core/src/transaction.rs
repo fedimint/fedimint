@@ -80,6 +80,7 @@ impl TransactionItem for Output {
             Output::Wallet(peg_out) => (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
+            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) => Amount::ZERO,
         }
     }
 
@@ -92,6 +93,7 @@ impl TransactionItem for Output {
             }
             // TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
             Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
+            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) => Amount::ZERO,
         }
     }
 }

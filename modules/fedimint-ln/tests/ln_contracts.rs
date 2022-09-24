@@ -88,6 +88,7 @@ async fn test_outgoing() {
         timelock: 42,
         user_key: user_pk,
         invoice: "not enforced yet".to_string(),
+        cancelled: false,
     });
 
     let outgoing_output = ContractOrOfferOutput::Contract(ContractOutput {

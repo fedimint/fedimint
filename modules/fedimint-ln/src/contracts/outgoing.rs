@@ -3,6 +3,8 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
 
+const CANCELLATION_TAG: &str = "outgoing contract cancellation";
+
 /// Specialized smart contract for outgoing payments.
 ///
 /// A user locks up funds that can be claimed by a lightning gateway if it pays the invoice and
@@ -21,6 +23,8 @@ pub struct OutgoingContract {
     // FIXME: use pruned, privacy friendly version without description etc.
     /// Invoice containing metadata on how to obtain the preimage
     pub invoice: String,
+    /// Flag that can be set by the gateway and allows the client to claim an early refund
+    pub cancelled: bool,
 }
 
 /// Preimage in the context of [`OutgoingContract`]s
@@ -30,7 +34,21 @@ pub struct Preimage(pub [u8; 32]);
 impl IdentifyableContract for OutgoingContract {
     fn contract_id(&self) -> ContractId {
         let mut engine = ContractId::engine();
-        Encodable::consensus_encode(self, &mut engine).expect("Hashing never fails");
+        Encodable::consensus_encode(&self.hash, &mut engine).expect("Hashing never fails");
+        Encodable::consensus_encode(&self.gateway_key, &mut engine).expect("Hashing never fails");
+        Encodable::consensus_encode(&self.timelock, &mut engine).expect("Hashing never fails");
+        Encodable::consensus_encode(&self.user_key, &mut engine).expect("Hashing never fails");
+        Encodable::consensus_encode(&self.invoice, &mut engine).expect("Hashing never fails");
         ContractId::from_engine(engine)
+    }
+}
+
+impl OutgoingContract {
+    pub fn cancellation_message(&self) -> bitcoin_hashes::sha256::Hash {
+        let mut engine = bitcoin_hashes::sha256::Hash::engine();
+        Encodable::consensus_encode(&CANCELLATION_TAG.as_bytes(), &mut engine)
+            .expect("Hashing never fails");
+        Encodable::consensus_encode(&self.contract_id(), &mut engine).expect("Hashing never fails");
+        bitcoin_hashes::sha256::Hash::from_engine(engine)
     }
 }

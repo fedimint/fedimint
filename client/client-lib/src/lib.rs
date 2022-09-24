@@ -555,7 +555,7 @@ impl Client<UserClientConfig> {
 
         let contract_id = match &contract {
             ContractOrOfferOutput::Contract(c) => c.contract.contract_id(),
-            ContractOrOfferOutput::Offer(_) => {
+            ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
                 panic!()
             } // FIXME: impl TryFrom
         };

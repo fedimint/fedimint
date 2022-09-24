@@ -696,7 +696,11 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
     // FIXME should return funds to user
-    gateway.client.abort_outgoing_payment(contract_id);
+    gateway
+        .client
+        .abort_outgoing_payment(contract_id)
+        .await
+        .unwrap();
     fed.run_consensus_epochs(1).await;
     assert_eq!(user.total_coins(), sats(1010));
     assert_eq!(fed.max_balance_sheet(), 0);

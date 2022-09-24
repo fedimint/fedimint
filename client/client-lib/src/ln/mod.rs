@@ -64,6 +64,7 @@ impl<'c> LnClient<'c> {
             timelock,
             user_key: user_sk.public_key(),
             invoice: invoice.to_string(),
+            cancelled: false,
         };
 
         let outgoing_payment = OutgoingContractData {
