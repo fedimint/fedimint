@@ -275,17 +275,23 @@
         # all the dependencies (as dir) to help limit the
         # amount of things that need to rebuild when some
         # file change
-        pkg = { name ? null, dir, port ? 8000, extraDirs ? [ ] }: rec {
+        pkg = { name, port ? 8000, dirs }: rec {
+          deps = craneLib.buildDepsOnly (commonArgs // {
+            src = filterWorkspaceDepsBuildFiles ./.;
+            pname = "pkg-${name}-deps";
+            buildPhaseCargoCommand = "cargo build --profile release --package ${name}";
+            doCheck = false;
+          });
+
           package = craneLib.buildPackage (commonArgs // {
+            pname = "pkg-${name}";
             cargoArtifacts = workspaceDeps;
 
-            src = filterModules ([ dir ] ++ extraDirs) ./.;
+            src = filterModules dirs ./.;
+            cargoExtraArgs = "--package ${name}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
-          } // lib.optionalAttrs (name != null) {
-            pname = name;
-            cargoExtraArgs = "--bin ${name}";
           });
 
           container = pkgs.dockerTools.buildLayeredImage {
@@ -302,8 +308,7 @@
           };
         };
 
-        pkgCross = { name ? null, dirs, port ? 8000, target, craneLib }: rec {
-
+        pkgCross = { name, dirs, target, craneLib }: rec {
           deps = craneLib.buildDepsOnly (commonArgs // {
             src = filterWorkspaceDepsBuildFiles ./.;
             pname = "pkg-${name}-${target}-deps";
@@ -316,7 +321,7 @@
             pname = "pkg-${name}-${target}";
             cargoArtifacts = deps;
 
-            src = filterModules (dirs) ./.;
+            src = filterModules dirs ./.;
             cargoExtraArgs = "--package ${name} --target ${target}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
@@ -325,12 +330,12 @@
         };
 
         fedimintd = pkg {
-          name = "fedimintd";
-          dir = "fedimint";
-          extraDirs = [
+          name = "fedimint";
+          dirs = [
             "crypto/tbs"
             "ln-gateway"
             "client/client-lib"
+            "fedimint"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
@@ -343,8 +348,7 @@
 
         ln-gateway = pkg {
           name = "ln_gateway";
-          dir = "ln-gateway";
-          extraDirs = [
+          dirs = [
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
@@ -352,6 +356,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
           ];
@@ -359,10 +364,10 @@
 
         mint-client-cli = pkg {
           name = "mint-client-cli";
-          dir = "client/cli";
-          extraDirs = [
+          dirs = [
             "client/clientd"
             "client/client-lib"
+            "client/cli"
             "crypto/tbs"
             "fedimint-api"
             "fedimint-core"
@@ -392,8 +397,7 @@
 
         clientd = pkg {
           name = "clientd";
-          dir = "client/clientd";
-          extraDirs = [
+          dirs = [
             "client/cli"
             "client/client-lib"
             "client/clientd"
@@ -408,7 +412,7 @@
         };
 
         fedimint-tests = pkg {
-          dir = "integrationtests";
+          name = "fedimint-tests";
           extraDirs = [
             "client/cli"
             "client/client-lib"
@@ -420,6 +424,7 @@
             "fedimint-core"
             "fedimint-derive"
             "modules/fedimint-ln"
+            "integrationtests"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
           ];
