@@ -188,6 +188,18 @@ impl<'c> LnClient<'c> {
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
         Ok(confirmed_invoice)
     }
+
+    /// Used by gateway to prematurely return funds to the user if the payment failed
+    pub fn create_cancel_outgoing_output(
+        &self,
+        contract_id: ContractId,
+        signature: secp256k1_zkp::schnorr::Signature,
+    ) -> ContractOrOfferOutput {
+        ContractOrOfferOutput::CancelOutgoing {
+            contract: contract_id,
+            gateway_signature: signature,
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, LnClientError>;

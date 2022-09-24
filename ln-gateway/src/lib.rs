@@ -213,7 +213,10 @@ impl LnGateway {
             }
             Err(e) => {
                 warn!("Invoice payment failed: {}. Aborting", e);
-                self.federation_client.abort_outgoing_payment(contract_id);
+                // FIXME: combine both errors?
+                self.federation_client
+                    .abort_outgoing_payment(contract_id)
+                    .await?;
                 Err(e)
             }
         }

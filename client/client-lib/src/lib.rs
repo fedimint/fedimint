@@ -32,7 +32,7 @@ use fedimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableCont
 use fedimint_core::modules::ln::{ContractOutput, LightningGateway};
 use fedimint_core::modules::wallet::PegOut;
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::TransactionItem;
+use fedimint_core::transaction::{Transaction, TransactionItem};
 use fedimint_core::{
     config::ClientConfig,
     modules::{
@@ -794,13 +794,32 @@ impl Client<GatewayClientConfig> {
             .collect()
     }
 
-    /// Abort payment if our node can't route it
-    pub fn abort_outgoing_payment(&self, contract_id: ContractId) {
-        // FIXME: implement abort by gateway to give funds back to user prematurely
-        self.context
+    /// Abort payment if our node can't route it and give money back to user
+    pub async fn abort_outgoing_payment(&self, contract_id: ContractId) -> Result<()> {
+        let contract_account = self
+            .context
             .db
             .remove_entry(&OutgoingContractAccountKey(contract_id))
-            .expect("DB error");
+            .expect("DB error")
+            .ok_or(ClientError::CancelUnknownOutgoingContract)?;
+
+        let cancel_signature = self.context.secp.sign_schnorr(
+            &contract_account.contract.cancellation_message().into(),
+            &self.config.redeem_key,
+        );
+        let cancel_output = self
+            .ln_client()
+            .create_cancel_outgoing_output(contract_id, cancel_signature);
+        let cancel_tx = Transaction {
+            inputs: vec![],
+            outputs: vec![Output::LN(cancel_output)],
+            signature: None,
+        };
+
+        // TODO: protect against crashes, but the timout being hit eventually anyway makes this less of an issue
+        self.context.api.submit_transaction(cancel_tx).await?;
+
+        Ok(())
     }
 
     /// Claim an outgoing contract after acquiring the preimage by paying the associated invoice and
@@ -1052,6 +1071,8 @@ pub enum ClientError {
     InvalidSignature,
     #[error("Violated fee policy")]
     ViolatedFeePolicy,
+    #[error("Tried to cancel outgoing contract that we don't know about")]
+    CancelUnknownOutgoingContract,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
