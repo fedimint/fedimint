@@ -42,10 +42,11 @@ async fn main() {
     let cfg_path = opts.workdir.join("client.json");
     let db_path = opts.workdir.join("client.db");
     let cfg: UserClientConfig = load_from_file(&cfg_path);
-    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
-        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
+    let db = fedimint_rocksdb::RocksDb::open(db_path)
+        .expect("Error opening DB")
+        .into_dyn();
 
-    let client = Arc::new(Client::new(cfg.clone(), Box::new(db), Default::default()));
+    let client = Arc::new(Client::new(cfg.clone(), db, Default::default()));
     let (tx, mut rx) = mpsc::channel(1024);
     let rng = OsRng::new().unwrap();
 

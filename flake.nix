@@ -334,6 +334,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"

@@ -406,13 +406,12 @@ dependencies = [
  "clap",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-rocksdb",
  "mint-client",
  "rand 0.6.5",
  "reqwest",
- "rocksdb",
  "serde",
  "serde_json",
- "sled",
  "thiserror",
  "tokio",
  "tower",
@@ -664,6 +663,7 @@ dependencies = [
  "fedimint-api",
  "fedimint-core",
  "fedimint-derive",
+ "fedimint-rocksdb",
  "fedimint-wallet",
  "futures",
  "hbbft",
@@ -676,12 +676,10 @@ dependencies = [
  "rand 0.6.5",
  "rayon",
  "rcgen",
- "rocksdb",
  "secp256k1-zkp",
  "serde",
  "serde_json",
  "sha3",
- "sled",
  "tbs",
  "thiserror",
  "threshold_crypto",
@@ -711,13 +709,10 @@ dependencies = [
  "lightning-invoice",
  "rand 0.6.5",
  "rand 0.7.3",
- "rocksdb",
  "secp256k1-zkp",
  "serde",
  "serde_json",
- "sled",
  "tbs",
- "tempfile",
  "test-log",
  "thiserror",
  "tokio",
@@ -811,6 +806,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-rocksdb"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-api",
+ "rocksdb",
+ "tempfile",
+ "test-log",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fedimint-sled"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fedimint-api",
+ "sled",
+ "tempfile",
+ "test-log",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fedimint-tests"
 version = "0.1.0"
 dependencies = [
@@ -824,6 +845,7 @@ dependencies = [
  "fedimint-api",
  "fedimint-ln",
  "fedimint-mint",
+ "fedimint-rocksdb",
  "fedimint-wallet",
  "futures",
  "hbbft",
@@ -833,7 +855,6 @@ dependencies = [
  "ln-gateway",
  "mint-client",
  "rand 0.6.5",
- "rocksdb",
  "serde",
  "threshold_crypto",
  "tokio",
@@ -1655,16 +1676,15 @@ dependencies = [
  "cln-rpc",
  "fedimint",
  "fedimint-api",
+ "fedimint-rocksdb",
  "futures",
  "hex",
  "lightning-invoice",
  "mint-client",
  "rand 0.6.5",
- "rocksdb",
  "secp256k1",
  "serde",
  "serde_json",
- "sled",
  "thiserror",
  "tokio",
  "tower-http",
@@ -1796,13 +1816,12 @@ dependencies = [
  "clap",
  "fedimint-api",
  "fedimint-core",
+ "fedimint-rocksdb",
  "lightning-invoice",
  "mint-client",
  "rand 0.6.5",
- "rocksdb",
  "serde",
  "serde_json",
- "sled",
  "tokio",
  "tracing",
  "tracing-subscriber",

@@ -1,30 +1,66 @@
-use super::batch::{BatchItem, DbBatch};
-use super::Database;
-use crate::db::PrefixIter;
 use anyhow::Result;
+use fedimint_api::db::batch::{BatchItem, DbBatch};
+use fedimint_api::db::Database;
+use fedimint_api::db::PrefixIter;
+use rocksdb::OptimisticTransactionDB;
+use std::path::Path;
 use tracing::{error, trace};
 
-impl Database for rocksdb::OptimisticTransactionDB {
+pub use rocksdb;
+
+#[derive(Debug)]
+pub struct RocksDb(rocksdb::OptimisticTransactionDB);
+
+impl RocksDb {
+    pub fn open(db_path: impl AsRef<Path>) -> Result<RocksDb, rocksdb::Error> {
+        let db: rocksdb::OptimisticTransactionDB =
+            rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open_default(&db_path)?;
+        Ok(RocksDb(db))
+    }
+
+    pub fn into_dyn(self) -> Box<dyn Database> {
+        Box::new(self)
+    }
+
+    pub fn inner(&self) -> &rocksdb::OptimisticTransactionDB {
+        &self.0
+    }
+}
+
+impl From<rocksdb::OptimisticTransactionDB> for RocksDb {
+    fn from(db: OptimisticTransactionDB) -> Self {
+        RocksDb(db)
+    }
+}
+
+impl From<RocksDb> for rocksdb::OptimisticTransactionDB {
+    fn from(db: RocksDb) -> Self {
+        db.0
+    }
+}
+
+impl Database for RocksDb {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        let val = self.get(key).unwrap();
-        self.put(key, value)?;
+        let val = self.inner().get(key).unwrap();
+        self.inner().put(key, value)?;
         Ok(val)
     }
 
     fn raw_get_value(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.get(key)?)
+        Ok(self.inner().get(key)?)
     }
 
     fn raw_remove_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let val = self.get(key).unwrap();
-        self.delete(key)?;
+        let val = self.inner().get(key).unwrap();
+        self.inner().delete(key)?;
         Ok(val)
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let prefix = key_prefix.to_vec();
         Box::new(
-            self.prefix_iterator(prefix.clone())
+            self.inner()
+                .prefix_iterator(prefix.clone())
                 .map_while(move |res| {
                     let (key_bytes, value_bytes) = res.expect("DB error");
                     // TODO: do not bump the MSRV with it just yet, change
@@ -41,7 +77,7 @@ impl Database for rocksdb::OptimisticTransactionDB {
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<()> {
         let batch: Vec<_> = batch.into();
-        let tx = self.transaction();
+        let tx = self.inner().transaction();
 
         for change in batch.iter() {
             match change {
@@ -78,22 +114,18 @@ impl Database for rocksdb::OptimisticTransactionDB {
 
 #[cfg(test)]
 mod tests {
+    use crate::RocksDb;
     use std::sync::Arc;
 
     #[test_log::test]
     fn test_basic_rw() {
-        use rocksdb::{OptimisticTransactionDB, Options, SingleThreaded};
-
         let path = tempfile::Builder::new()
             .prefix("fcb-rocksdb-test")
             .tempdir()
             .unwrap();
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
 
-        let db: OptimisticTransactionDB<SingleThreaded> =
-            OptimisticTransactionDB::open_default(path).unwrap();
+        let db = RocksDb::open(path).unwrap();
 
-        crate::db::tests::test_db_impl(Arc::new(db));
+        fedimint_api::db::test_db_impl(Arc::new(db));
     }
 }

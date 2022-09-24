@@ -1,10 +1,8 @@
 pub mod cln;
 pub mod ln;
-mod util;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
-use crate::util::{ThenAsync, UnwrapOrElseAsync};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
@@ -184,26 +182,25 @@ impl LnGateway {
         self.federation_client
             .save_outgoing_payment(contract_account.clone());
 
-        // If this could be an internal payment try to buy the preimage directly. Otherwise or if
-        // this fails try to route the payment via our attached LN node.
-        let preimage_res = payment_params
-            .maybe_internal
-            .then_async(async {
-                self.buy_preimage_internal(
-                    &payment_params.payment_hash,
-                    &payment_params.invoice_amount,
-                    &mut rng,
-                )
+        let is_internal_payment = payment_params.maybe_internal
+            && self
+                .federation_client
+                .ln_client()
+                .offer_exists(payment_params.payment_hash)
                 .await
-                .ok()
-            })
-            .await
-            .flatten()
-            .map(Result::Ok)
-            .unwrap_or_else_async(
-                self.buy_preimage_external(&contract_account.contract.invoice, &payment_params),
+                .unwrap_or(false);
+
+        let preimage_res = if is_internal_payment {
+            self.buy_preimage_internal(
+                &payment_params.payment_hash,
+                &payment_params.invoice_amount,
+                &mut rng,
             )
-            .await;
+            .await
+        } else {
+            self.buy_preimage_external(&contract_account.contract.invoice, &payment_params)
+                .await
+        };
 
         match preimage_res {
             Ok(preimage) => {
