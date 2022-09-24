@@ -55,6 +55,10 @@ pub trait FederationApi: Send + Sync {
     /// Fetch preimage offer for incoming lightning payments
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer>;
 
+    // TODO: find a better abstraction for all our API endpoints that allows different strategies and timeouts
+    /// Checks if there exists an offer for a payment hash
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool>;
+
     /// Fetch the current consensus block height (trailing actual block height)
     async fn fetch_consensus_block_height(&self) -> Result<u64>;
 
@@ -255,6 +259,22 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
             CurrentConsensus::new(self.max_evil),
         )
         .await
+    }
+
+    async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool> {
+        let res: Result<IncomingContractOffer> = self
+            .request(
+                "/ln/offer",
+                payment_hash,
+                CurrentConsensus::new(self.max_evil),
+            )
+            .await;
+
+        match res {
+            Ok(_) => Ok(true),
+            Err(e) if e.is_retryable() => Ok(false),
+            Err(e) => Err(e),
+        }
     }
 }
 
