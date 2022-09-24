@@ -18,6 +18,8 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    /// Print the latest git commit hash this bin. was build with
+    VersionHash,
     /// rpc-method: info()
     Info,
     /// rpc-method: pending()
@@ -49,6 +51,10 @@ async fn main() {
     let args = Cli::parse();
 
     match args.command {
+        Commands::VersionHash => {
+            //TODO: add a type to display the cli results
+            println!("{}", env!("GIT_HASH"));
+        }
         Commands::Info => {
             print_response(call("", "/get_info").await, args.raw_json);
         }

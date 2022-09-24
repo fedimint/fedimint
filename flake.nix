@@ -467,7 +467,7 @@
           fedimint = fedimint;
           fedimint-tests = fedimint-tests;
           ln-gateway = ln-gateway;
-          clientd = clientd;
+          clientd = replace-git-hash { name = "clientd"; package = clientd; };
           mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
 
           inherit workspaceDeps
