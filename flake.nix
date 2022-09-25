@@ -113,15 +113,12 @@
           "llvm-tools-preview"
         ]);
 
-        fenixToolchainCrossAll = with fenix.packages.${system}; combine [
+        fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
           stable.cargo
           stable.rustc
-          targets.wasm32-unknown-unknown.stable.rust-std
-          targets.aarch64-linux-android.stable.rust-std
-          targets.armv7-linux-androideabi.stable.rust-std
-          targets.x86_64-linux-android.stable.rust-std
-          targets.i686-linux-android.stable.rust-std
-        ];
+        ] ++ (lib.attrsets.mapAttrsToList
+          (attr: target: targets.${target.name}.stable.rust-std)
+          crossTargets));
 
         fenixToolchainCross = builtins.mapAttrs
           (attr: target: with fenix.packages.${system}; combine [
@@ -677,7 +674,7 @@
               shellHook = shellCommon.shellHook +
 
                 # Android NDK not available for Arm MacOS
-                (lib.optionals (!isArch64Darwin) androidCrossEnvVars)
+                (if isArch64Darwin then "" else androidCrossEnvVars)
                 + wasm32CrossEnvVars;
             });
 
