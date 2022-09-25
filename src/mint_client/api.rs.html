@@ -813,12 +813,12 @@
     <span class="kw">fn </span>from(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>max_evil = config.max_evil;
         <span class="kw">let </span>members: Vec&lt;(PeerId, Url)&gt; = config
-            .api_endpoints
+            .nodes
             .iter()
             .enumerate()
-            .map(|(id, url)| {
+            .map(|(id, node)| {
                 <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
-                </span><span class="kw">let </span>url = url.clone();
+                </span><span class="kw">let </span>url = node.url.clone();
                 (peer_id, url)
             })
             .collect();

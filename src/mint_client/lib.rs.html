@@ -1232,12 +1232,12 @@
             config.as_ref().max_evil,
             config
                 .as_ref()
-                .api_endpoints
+                .nodes
                 .iter()
                 .enumerate()
-                .map(|(id, url)| {
+                .map(|(id, node)| {
                     <span class="kw">let </span>peer_id = PeerId::from(id <span class="kw">as </span>u16); <span class="comment">// FIXME: potentially wrong, currently works imo
-                    </span><span class="kw">let </span>url = url.clone();
+                    </span><span class="kw">let </span>url = node.url.clone();
                     (peer_id, url)
                 })
                 .collect(),
