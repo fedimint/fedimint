@@ -163,6 +163,14 @@ impl<'c> LnClient<'c> {
         .map_err(LnClientError::ApiError)
     }
 
+    pub async fn offer_exists(&self, payment_hash: Sha256Hash) -> Result<bool> {
+        self.context
+            .api
+            .offer_exists(payment_hash)
+            .await
+            .map_err(LnClientError::ApiError)
+    }
+
     pub fn save_confirmed_invoice(&self, invoice: &ConfirmedInvoice) {
         self.context
             .db
@@ -293,6 +301,13 @@ mod tests {
             _epoch: u64,
             _pk: PublicKey,
         ) -> crate::api::Result<EpochHistory> {
+            unimplemented!()
+        }
+
+        async fn offer_exists(
+            &self,
+            _payment_hash: bitcoin::hashes::sha256::Hash,
+        ) -> crate::api::Result<bool> {
             unimplemented!()
         }
     }
