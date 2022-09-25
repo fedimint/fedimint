@@ -12,7 +12,7 @@ path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-anyhow = "1.0.64"
+anyhow = "1.0.65"
 async-trait = "0.1"
 bitcoin = { version = "0.28.1", features = [ "rand", "serde" ] }
 bitcoin_hashes = { version = "0.10", features = ["serde"] }
@@ -23,14 +23,12 @@ fedimint-derive = { path = "../fedimint-derive" }
 rand = "0.6.0"
 rand07 = { version = "0.7", package = "rand" }
 secp256k1-zkp = { version = "0.6.0", features = [ "use-serde", "bitcoin_hashes", "global-context" ] }
-rocksdb = { version = "0.19.0", optional = true }
-serde = { version = "1.0.118", features = [ "derive" ] }
-serde_json = "1.0.79"
-sled = "0.34"
+serde = { version = "1.0.145", features = [ "derive" ] }
+serde_json = "1.0.85"
 tbs = { path = "../crypto/tbs"}
 thiserror = "1.0.23"
 tracing ="0.1.22"
-url = { version = "2.2.2", features = ["serde"] }
+url = { version = "2.3.0", features = ["serde"] }
 
 [target.'cfg(target_family="wasm")'.dependencies]
 async-lock = "2.5"
@@ -39,12 +37,11 @@ async-lock = "2.5"
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
 getrandom = { version = "0.2.0", features = [ "js" ] }
 gloo-timers = { version = "0.2.4", features = ["futures"] }
-wasm-bindgen-futures = "0.4.31"
+wasm-bindgen-futures = "0.4.33"
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
 tokio = { version = "1.21.0", features = ["rt", "rt-multi-thread", "sync", "time"] }
 
 [dev-dependencies]
-tempfile = "3.3.0"
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }

@@ -28,7 +28,6 @@ use rand::RngCore;
 
 use rand::rngs::OsRng;
 
-use rocksdb::OptimisticTransactionDB;
 use tokio::sync::Mutex;
 
 use tracing::info;
@@ -49,17 +48,17 @@ use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
-use ln_gateway::ln::LnRpc;
-use ln_gateway::LnGateway;
-
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId};
+use fedimint_mint::tiered::TieredMulti;
 use fedimint_wallet::bitcoind::BitcoindRpc;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
+use ln_gateway::ln::LnRpc;
+use ln_gateway::LnGateway;
 use mint_client::api::WsFederationApi;
-
+use mint_client::mint::SpendableNote;
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use real::{RealBitcoinTest, RealLightningTest};
 
@@ -137,7 +136,8 @@ pub async fn fixtures(
                     .expect("connect to ln_socket"),
             );
 
-            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+            let connect_gen =
+                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
             let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
@@ -163,7 +163,7 @@ pub async fn fixtures(
             let lightning = FakeLightningTest::new();
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
 
             let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
@@ -186,9 +186,9 @@ pub async fn fixtures(
     }
 }
 
-fn rocks(dir: String) -> OptimisticTransactionDB<rocksdb::SingleThreaded> {
+fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
-    OptimisticTransactionDB::open_default(db_dir).unwrap()
+    fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
 }
 
 pub trait BitcoinTest {
@@ -441,6 +441,21 @@ impl FederationTest {
             last_consensus: self.last_consensus.clone(),
             max_balance_sheet: self.max_balance_sheet.clone(),
         }
+    }
+
+    /// Helper to issue change for a user
+    pub async fn spend_ecash(&self, user: &UserTest, amount: Amount) -> TieredMulti<SpendableNote> {
+        let coins = user.client.mint_client().select_coins(amount).unwrap();
+        if coins.total_amount() == amount {
+            return user.client.spend_ecash(amount, rng()).await.unwrap();
+        }
+
+        tokio::join!(
+            user.client.spend_ecash(amount, rng()),
+            self.await_consensus_epochs(2)
+        )
+        .0
+        .unwrap()
     }
 
     /// Mines a UTXO then mints coins for user, assuring that the balance sheet of the federation

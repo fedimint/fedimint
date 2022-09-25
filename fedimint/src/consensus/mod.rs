@@ -106,6 +106,11 @@ where
         &self,
         transaction: Transaction,
     ) -> Result<(), TransactionSubmissionError> {
+        // we already processed the transaction before the request was received
+        if self.transaction_status(transaction.tx_hash()).is_some() {
+            return Ok(());
+        }
+
         let tx_hash = transaction.tx_hash();
         debug!(%tx_hash, "Received mint transaction");
 

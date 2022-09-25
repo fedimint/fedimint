@@ -18,17 +18,16 @@ path = "src/main.rs"
 [dependencies]
 bitcoin = "0.28.1"
 bitcoin_hashes = "0.10.0"
-clap = { version = "3.2.20", features = ["derive"] }
+clap = { version = "3.2.22", features = ["derive"] }
 lightning-invoice = "0.18.0"
 mint-client = { path = "../client-lib" }
-fedimint-api = { path = "../../fedimint-api", features = ["rocksdb"] }
+fedimint-api = { path = "../../fedimint-api" }
 fedimint-core = { path = "../../fedimint-core" }
+fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
 rand = "0.6.5"
-rocksdb = "0.19.0"
-serde = { version = "1.0.118", features = [ "derive" ] }
-sled = "0.34.6"
+serde = { version = "1.0.145", features = [ "derive" ] }
 tokio = { version = "1.21.0", features = ["full"] }
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
-serde_json = "1.0.82"
-url = { version = "2.2.2", features = ["serde"] }
+serde_json = "1.0.85"
+url = { version = "2.3.0", features = ["serde"] }

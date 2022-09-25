@@ -100,10 +100,11 @@ async fn initialize_gateway(
     // Run the gateway
     let db_path = workdir.join("gateway.db");
     let gw_client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
-    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
-        rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap();
+    let db = fedimint_rocksdb::RocksDb::open(db_path)
+        .expect("Error opening DB")
+        .into_dyn();
     let ctx = secp256k1::Secp256k1::new();
-    let federation_client = Arc::new(Client::new(gw_client_cfg, Box::new(db), ctx));
+    let federation_client = Arc::new(Client::new(gw_client_cfg, db, ctx));
     let ln_client = Box::new(Mutex::new(ln_client));
 
     LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)

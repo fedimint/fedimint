@@ -141,7 +141,7 @@ async fn peg_outs_must_wait_for_available_utxos() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn minted_coins_can_be_exchanged_between_users() {
+async fn ecash_can_be_exchanged_directly_between_users() {
     let (fed, user_send, bitcoin, _, _) = fixtures(4, &[sats(100), sats(1000)]).await;
     let user_receive = user_send.new_client(&[0, 1, 2]);
 
@@ -149,38 +149,35 @@ async fn minted_coins_can_be_exchanged_between_users() {
     assert_eq!(user_send.total_coins(), sats(5000));
     assert_eq!(user_receive.total_coins(), sats(0));
 
-    let coins = user_send.client.select_and_spend_coins(sats(3000)).unwrap();
-    user_receive.client.reissue(coins, rng()).await.unwrap();
+    let ecash = fed.spend_ecash(&user_send, sats(3500)).await;
+    user_receive.client.reissue(ecash, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    user_send.assert_total_coins(sats(2000)).await;
-    user_receive.assert_total_coins(sats(3000)).await;
+    user_send.assert_total_coins(sats(1500)).await;
+    user_receive.assert_total_coins(sats(3500)).await;
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn minted_coins_cannot_double_spent_with_different_nodes() {
+async fn ecash_cannot_double_spent_with_different_nodes() {
     let (fed, user1, bitcoin, _, _) = fixtures(2, &[sats(100), sats(1000)]).await;
     fed.mine_and_mint(&user1, &*bitcoin, sats(5000)).await;
-    let coins = user1.client.select_and_spend_coins(sats(2000)).unwrap();
+    let ecash = fed.spend_ecash(&user1, sats(2000)).await;
 
     let (user2, user3) = (user1.new_client(&[0]), user1.new_client(&[1]));
-    let out2 = user2.client.reissue(coins.clone(), rng()).await.unwrap();
-    let out3 = user3.client.reissue(coins, rng()).await.unwrap();
+    let out2 = user2.client.reissue(ecash.clone(), rng()).await.unwrap();
+    let out3 = user3.client.reissue(ecash, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    assert!(
-        user2.client.fetch_coins(out2).await.is_err()
-            || user3.client.fetch_coins(out3).await.is_err()
-    ); //no double spend
+    let res2 = user2.client.fetch_coins(out2).await;
+    let res3 = user3.client.fetch_coins(out3).await;
+    assert!(res2.is_err() || res3.is_err()); //no double spend
     assert_eq!(user2.total_coins() + user3.total_coins(), sats(2000));
-    assert_eq!(user2.total_coins(), sats(2000));
-    assert_eq!(user3.total_coins(), sats(0));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn minted_coins_in_wallet_can_be_split_into_change() {
+async fn ecash_in_wallet_can_sent_through_a_tx() {
     let (fed, user_send, bitcoin, _, _) = fixtures(2, &[sats(100), sats(500)]).await;
     let user_receive = user_send.new_client(&[0]);
 
@@ -193,7 +190,7 @@ async fn minted_coins_in_wallet_can_be_split_into_change() {
     user_receive
         .client
         .receive_coins(sats(400), rng(), |coins| {
-            block_on(user_send.client.pay_for_coins(coins, rng())).unwrap()
+            block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
         });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
@@ -646,13 +643,13 @@ async fn runs_consensus_if_tx_submitted() {
     let user_receive = user_send.new_client(&[0]);
 
     fed.mine_and_mint(&user_send, &*bitcoin, sats(5000)).await;
-    let coins = user_send.client.select_and_spend_coins(sats(5000)).unwrap();
+    let ecash = fed.spend_ecash(&user_send, sats(5000)).await;
 
     // If epochs run before the reissue tx, then there won't be any coins to fetch
     join_all(vec![
         Either::Left(async {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            user_receive.client.reissue(coins, rng()).await.unwrap();
+            user_receive.client.reissue(ecash, rng()).await.unwrap();
         }),
         Either::Right(async {
             fed.await_consensus_epochs(2).await;

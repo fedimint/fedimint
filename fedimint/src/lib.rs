@@ -82,11 +82,11 @@ pub async fn run_fedimint(cfg: ServerConfig, db_path: PathBuf) {
 impl FedimintServer {
     pub async fn new(cfg: ServerConfig, db_path: PathBuf) -> Self {
         let connector: PeerConnector<EpochMessage> =
-            TlsTcpConnector::new(cfg.tls_config()).to_any();
+            TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
         Self::new_with(
             cfg.clone(),
-            Arc::new(rocksdb::OptimisticTransactionDB::open_default(&db_path).unwrap()),
+            Arc::new(fedimint_rocksdb::RocksDb::open(db_path).expect("Error opening DB")),
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )
@@ -121,7 +121,7 @@ impl FedimintServer {
 
         let connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
             .await
-            .to_any();
+            .into_dyn();
 
         let net_info = NetworkInfo::new(
             cfg.identity,

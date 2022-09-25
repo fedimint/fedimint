@@ -41,7 +41,7 @@ pub trait Connector<M> {
     async fn listen(&self, bind_addr: String) -> Result<ConnectionListener<M>, anyhow::Error>;
 
     /// Transform this concrete `Connector` into an owned trait object version of itself
-    fn to_any(self) -> AnyConnector<M>
+    fn into_dyn(self) -> AnyConnector<M>
     where
         Self: Sized + Send + Sync + Unpin + 'static,
     {
@@ -140,7 +140,7 @@ impl PeerCertStore {
             BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
                 tls_conn,
             )
-            .to_any();
+            .into_dyn();
         Ok((auth_peer, framed))
     }
 }
@@ -182,7 +182,7 @@ where
             BidiFramed::<_, WriteHalf<TlsStream<TcpStream>>, ReadHalf<TlsStream<TcpStream>>>::new(
                 tls_conn,
             )
-            .to_any();
+            .into_dyn();
 
         Ok((peer, framed))
     }
@@ -272,7 +272,7 @@ pub mod mock {
                 let framed = BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
                     stream_our,
                 )
-                .to_any();
+                .into_dyn();
                 Ok((peer, framed))
             } else {
                 return Err(anyhow::anyhow!("can't connect"));
@@ -299,7 +299,7 @@ pub mod mock {
                         BidiFramed::<M, WriteHalf<DuplexStream>, ReadHalf<DuplexStream>>::new(
                             connection,
                         )
-                        .to_any();
+                        .into_dyn();
 
                     Some((Ok((peer, framed)), receive))
                 })
