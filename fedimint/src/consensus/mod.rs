@@ -79,7 +79,7 @@ where
     pub ln: LightningModule,
 
     /// KV Database into which all state is persisted to recover from in case of a crash
-    pub db: Arc<dyn Database>,
+    pub db: Database,
 
     // Notifies tasks when there is a new transaction
     pub transaction_notify: Arc<Notify>,

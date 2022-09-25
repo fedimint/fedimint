@@ -264,11 +264,9 @@ mod tests {
                 move |cfg, db| {
                     let btc_rpc_clone = btc_rpc.clone();
                     async move {
-                        Wallet::new_with_bitcoind(cfg, Arc::new(db), || {
-                            Box::new(btc_rpc_clone.clone())
-                        })
-                        .await
-                        .unwrap()
+                        Wallet::new_with_bitcoind(cfg, db, || Box::new(btc_rpc_clone.clone()))
+                            .await
+                            .unwrap()
                     }
                 },
                 &(),
@@ -280,7 +278,7 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };

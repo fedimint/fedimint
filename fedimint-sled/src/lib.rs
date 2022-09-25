@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
-use fedimint_api::db::Database;
+use fedimint_api::db::IDatabase;
 use fedimint_api::db::PrefixIter;
 use sled::transaction::TransactionError;
 use std::path::Path;
@@ -18,10 +18,6 @@ impl SledDb {
     pub fn open(db_path: impl AsRef<Path>, tree: &str) -> Result<SledDb, sled::Error> {
         let db = sled::open(db_path)?.open_tree(tree)?;
         Ok(SledDb(db))
-    }
-
-    pub fn into_dyn(self) -> Box<dyn Database> {
-        Box::new(self)
     }
 
     pub fn inner(&self) -> &sled::Tree {
@@ -42,7 +38,7 @@ impl From<SledDb> for sled::Tree {
 }
 
 // TODO: maybe make the concrete impl its own crate
-impl Database for SledDb {
+impl IDatabase for SledDb {
     fn raw_insert_entry(&self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let ret = self.inner().insert(key, value)?.map(|bytes| bytes.to_vec());
         self.inner().flush().expect("DB failure");
@@ -114,8 +110,6 @@ impl Database for SledDb {
 #[cfg(test)]
 mod tests {
     use crate::SledDb;
-    use std::sync::Arc;
-
     #[test_log::test]
     fn test_basic_rw() {
         let path = tempfile::Builder::new()
@@ -123,6 +117,6 @@ mod tests {
             .tempdir()
             .unwrap();
         let db = SledDb::open(path, "default").unwrap();
-        fedimint_api::db::test_db_impl(Arc::new(db));
+        fedimint_api::db::test_db_impl(db.into());
     }
 }

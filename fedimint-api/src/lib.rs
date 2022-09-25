@@ -16,6 +16,7 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 pub mod config;
 pub mod db;
 pub mod encoding;
+pub mod macros;
 pub mod module;
 pub mod rand;
 pub mod task;

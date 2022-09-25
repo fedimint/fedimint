@@ -472,7 +472,7 @@ mod tests {
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
                 1,
-                |cfg, db| async { Mint::new(cfg, Arc::new(db)) },
+                |cfg, db| async { Mint::new(cfg, db) },
                 &[Amount::from_sat(1), Amount::from_sat(10)][..],
             )
             .await,
@@ -482,7 +482,7 @@ mod tests {
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client_context = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
@@ -493,7 +493,7 @@ mod tests {
     async fn issue_tokens<'a, R: rand::RngCore + rand::CryptoRng>(
         fed: &'a tokio::sync::Mutex<Fed>,
         client: &'a MintClient<'a>,
-        client_db: &'a dyn Database,
+        client_db: &'a Database,
         amt: Amount,
         rng: &'a mut R,
     ) {
@@ -526,14 +526,7 @@ mod tests {
         };
 
         const ISSUE_AMOUNT: Amount = Amount::from_sat(12);
-        issue_tokens(
-            &fed,
-            &client,
-            client_context.db.as_ref(),
-            ISSUE_AMOUNT,
-            &mut rng,
-        )
-        .await;
+        issue_tokens(&fed, &client, &client_context.db, ISSUE_AMOUNT, &mut rng).await;
 
         assert_eq!(client.coins().total_amount(), ISSUE_AMOUNT)
     }
@@ -553,7 +546,7 @@ mod tests {
         issue_tokens(
             &fed,
             &client,
-            client_context.db.as_ref(),
+            &client_context.db,
             SPEND_AMOUNT * 2,
             &mut rng,
         )

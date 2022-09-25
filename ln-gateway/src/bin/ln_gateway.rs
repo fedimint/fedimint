@@ -102,7 +102,7 @@ async fn initialize_gateway(
     let gw_client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
     let db = fedimint_rocksdb::RocksDb::open(db_path)
         .expect("Error opening DB")
-        .into_dyn();
+        .into();
     let ctx = secp256k1::Secp256k1::new();
     let federation_client = Arc::new(Client::new(gw_client_cfg, db, ctx));
     let ln_client = Box::new(Mutex::new(ln_client));

@@ -337,7 +337,7 @@ async fn main() {
         let cfg: UserClientConfig = load_from_file(&cfg_path);
         let db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, "could not open transaction db")
-            .into_dyn();
+            .into();
 
         let rng = rand::rngs::OsRng::new().or_terminate(
             CliErrorKind::OSError,

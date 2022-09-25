@@ -16,7 +16,6 @@ use fedimint_ln::{
     OutputOutcome,
 };
 use secp256k1::KeyPair;
-use std::sync::Arc;
 
 #[test_log::test(tokio::test)]
 async fn test_account() {
@@ -25,7 +24,7 @@ async fn test_account() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
+        |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )
     .await;
@@ -74,7 +73,7 @@ async fn test_outgoing() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
+        |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )
     .await;
@@ -150,7 +149,7 @@ async fn test_incoming() {
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
         1,
-        |cfg, db| async { LightningModule::new(cfg, Arc::new(db)) },
+        |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )
     .await;

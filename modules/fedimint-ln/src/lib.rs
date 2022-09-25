@@ -43,7 +43,6 @@ use std::collections::{HashMap, HashSet};
 use std::ops::Sub;
 use url::Url;
 
-use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error, info_span, instrument, trace, warn};
 
@@ -68,7 +67,7 @@ use tracing::{debug, error, info_span, instrument, trace, warn};
 /// [Incoming]: contracts::incoming::IncomingContract
 pub struct LightningModule {
     cfg: LightningModuleConfig,
-    db: Arc<dyn Database>,
+    db: Database,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -585,7 +584,7 @@ impl FederationModule for LightningModule {
 }
 
 impl LightningModule {
-    pub fn new(cfg: LightningModuleConfig, db: Arc<dyn Database>) -> LightningModule {
+    pub fn new(cfg: LightningModuleConfig, db: Database) -> Self {
         LightningModule { cfg, db }
     }
 

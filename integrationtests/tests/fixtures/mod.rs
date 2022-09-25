@@ -14,6 +14,7 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
+use fedimint_api::db::Database;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
@@ -47,7 +48,6 @@ use fedimint::{consensus, EpochMessage, FedimintServer};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::db::Database;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId};
 use fedimint_mint::tiered::TieredMulti;
 use fedimint_wallet::bitcoind::BitcoindRpc;
@@ -138,11 +138,11 @@ pub async fn fixtures(
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
-            let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
+            let fed_db = || rocks(dir.clone()).into();
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
             let user_cfg = UserClientConfig(client_config.clone());
-            let user_db = Box::new(rocks(dir.clone()));
+            let user_db = rocks(dir.clone()).into();
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
 
@@ -165,10 +165,10 @@ pub async fn fixtures(
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
 
-            let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
+            let fed_db = || MemDatabase::new().into();
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
-            let user_db = Box::new(MemDatabase::new());
+            let user_db = MemDatabase::new().into();
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
@@ -243,7 +243,7 @@ impl GatewayTest {
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
         };
 
-        let database = Box::new(MemDatabase::new());
+        let database: Database = MemDatabase::new().into();
         let user_cfg = UserClientConfig(client_config.clone());
         let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
         let user = UserTest {
@@ -295,7 +295,7 @@ impl UserTest {
             .iter()
             .map(|i| PeerId::from(*i))
             .collect::<Vec<PeerId>>();
-        Self::new(self.config.clone(), peers, Box::new(MemDatabase::new()))
+        Self::new(self.config.clone(), peers, MemDatabase::new().into())
     }
 
     /// Helper to simplify the peg_out method calls
@@ -324,7 +324,7 @@ impl UserTest {
         self.client.coins().total_amount()
     }
 
-    fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Box<dyn Database>) -> Self {
+    fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Database) -> Self {
         let api = Box::new(WsFederationApi::new(
             config.0.max_evil,
             config
@@ -364,7 +364,7 @@ struct ServerTest {
     fedimint: FedimintServer,
     last_consensus: Vec<ConsensusOutcome>,
     bitcoin_rpc: Box<dyn BitcoindRpc>,
-    database: Arc<dyn Database>,
+    database: Database,
     override_proposal: Option<ConsensusProposal>,
     dropped_peers: Vec<PeerId>,
 }
@@ -705,7 +705,7 @@ impl FederationTest {
 
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
-        database_gen: &impl Fn() -> Arc<dyn Database>,
+        database_gen: &impl Fn() -> Database,
         bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
     ) -> Self {
