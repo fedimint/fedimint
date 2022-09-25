@@ -1,5 +1,5 @@
 use bitcoin::{secp256k1, Address, Transaction};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::modules::ln::contracts::ContractId;
@@ -27,6 +27,9 @@ use tracing_subscriber::EnvFilter;
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
 enum CliOutput {
+    VersionHash {
+        hash: String,
+    },
     PegInAddress {
         address: Address,
     },
@@ -158,14 +161,30 @@ impl fmt::Display for CliError {
 impl Error for CliError {}
 
 #[derive(Parser)]
-struct Options {
+#[clap(version)]
+struct Cli {
+    /// The working directory of the client containing the config and db
     workdir: PathBuf,
     #[clap(subcommand)]
     command: Command,
 }
 
 #[derive(Parser)]
+#[clap(version)]
+struct CliNoWorkdir {
+    #[clap(subcommand)]
+    command: CommandNoWorkdir,
+}
+
+#[derive(Subcommand)]
+enum CommandNoWorkdir {
+    /// Print the latest git commit hash this bin. was build with
+    VersionHash,
+}
+#[derive(Subcommand)]
 enum Command {
+    /// Print the latest git commit hash this bin. was build with
+    VersionHash,
     /// Generate a new peg-in address, funds sent to it can later be claimed
     PegInAddress,
 
@@ -280,7 +299,6 @@ struct PayRequest {
 
 #[tokio::main]
 async fn main() {
-    let opts = Options::parse();
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -288,64 +306,80 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    if let Command::JoinFederation { connect } = opts.command {
-        let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
-            .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
-        let api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
-        let cfg: ClientConfig = api
-            .request("/config", (), CurrentConsensus::new(connect_obj.max_evil))
-            .await
-            .or_terminate(
-                CliErrorKind::NetworkError,
-                "couldn't download config from peer",
+    if let Ok(cli) = Cli::try_parse() {
+        if let Command::JoinFederation { connect } = cli.command {
+            let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
+                .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
+            let api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
+            let cfg: ClientConfig = api
+                .request("/config", (), CurrentConsensus::new(connect_obj.max_evil))
+                .await
+                .or_terminate(
+                    CliErrorKind::NetworkError,
+                    "couldn't download config from peer",
+                );
+            let cfg_path = cli.workdir.join("client.json");
+            std::fs::create_dir_all(&cli.workdir)
+                .or_terminate(CliErrorKind::IOError, "failed to create config directory");
+            let writer = std::fs::File::create(cfg_path)
+                .or_terminate(CliErrorKind::IOError, "couldn't create config.json");
+            serde_json::to_writer_pretty(writer, &cfg)
+                .or_terminate(CliErrorKind::IOError, "couldn't write config");
+            println!(
+                "{}",
+                &CliOutput::JoinFederation { joined: (connect) }.to_string()
             );
-        let cfg_path = opts.workdir.join("client.json");
-        std::fs::create_dir_all(&opts.workdir)
-            .or_terminate(CliErrorKind::IOError, "failed to create config directory");
-        let writer = std::fs::File::create(cfg_path)
-            .or_terminate(CliErrorKind::IOError, "couldn't create config.json");
-        serde_json::to_writer_pretty(writer, &cfg)
-            .or_terminate(CliErrorKind::IOError, "couldn't write config");
-        println!(
-            "{}",
-            &CliOutput::JoinFederation { joined: (connect) }.to_string()
+            return;
+        };
+
+        let cfg_path = cli.workdir.join("client.json");
+        let db_path = cli.workdir.join("client.db");
+        let cfg: UserClientConfig = load_from_file(&cfg_path);
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .or_terminate(CliErrorKind::IOError, "could not open transaction db")
+            .into_dyn();
+
+        let rng = rand::rngs::OsRng::new().or_terminate(
+            CliErrorKind::OSError,
+            "failed to acquire random number generator from OS",
         );
-        return;
-    };
 
-    let cfg_path = opts.workdir.join("client.json");
-    let db_path = opts.workdir.join("client.db");
-    let cfg: UserClientConfig = load_from_file(&cfg_path);
-    let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
-        rocksdb::OptimisticTransactionDB::open_default(&db_path)
-            .or_terminate(CliErrorKind::IOError, "could not open transaction db");
+        let client = Client::new(cfg.clone(), db, Default::default());
 
-    let rng = rand::rngs::OsRng::new().or_terminate(
-        CliErrorKind::OSError,
-        "failed to acquire random number generator from OS",
-    );
+        let cli_result = handle_command(cli, client, rng).await;
 
-    let client = Client::new(cfg.clone(), Box::new(db), Default::default());
-
-    let cli_result = handle_command(opts, client, rng).await;
-
-    match cli_result {
-        Ok(output) => {
-            println!("{}", output);
+        match cli_result {
+            Ok(output) => {
+                println!("{}", output);
+            }
+            Err(err) => {
+                println!("{}", err);
+                exit(1);
+            }
         }
-        Err(err) => {
-            println!("{}", err);
-            exit(1);
-        }
+    } else {
+        // Only commands that don't need the workdir can be used here
+        let cli = CliNoWorkdir::parse();
+        //TODO: remove allow when there are more commands
+        #[allow(irrefutable_let_patterns)]
+        if let CommandNoWorkdir::VersionHash = cli.command {
+            println!(
+                "{}",
+                CliOutput::VersionHash {
+                    hash: env!("GIT_HASH").to_string()
+                }
+            );
+        };
     }
 }
 
 async fn handle_command(
-    opts: Options,
+    cli: Cli,
     client: Client<UserClientConfig>,
     mut rng: rand::rngs::OsRng,
 ) -> CliResult {
-    match opts.command {
+    match cli.command {
+        Command::VersionHash => unreachable!(),
         Command::PegInAddress => {
             let peg_in_address = client.get_new_pegin_address(&mut rng);
             Ok(CliOutput::PegInAddress {
@@ -373,7 +407,7 @@ async fn handle_command(
             )
         }
         Command::Validate { coins } => {
-            let validate_result = client.validate_tokens(&coins).await;
+            let validate_result = client.validate_note_signatures(&coins).await;
 
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {

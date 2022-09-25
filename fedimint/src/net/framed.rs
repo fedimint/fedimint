@@ -28,7 +28,7 @@ pub trait FramedTransport<T>:
     );
 
     /// Transforms concrete `FramedTransport` object into an owned trait object
-    fn to_any(self) -> AnyFramedTransport<T>
+    fn into_dyn(self) -> AnyFramedTransport<T>
     where
         Self: Sized + Send + Unpin + 'static,
     {

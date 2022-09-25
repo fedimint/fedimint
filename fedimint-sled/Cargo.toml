@@ -1,0 +1,24 @@
+[package]
+name = "fedimint-sled"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint-sled provides a sled-backed database implementation for Fedimint."
+license = "MIT"
+
+[lib]
+name = "fedimint_sled"
+path = "src/lib.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.64"
+fedimint-api = { path = "../fedimint-api" }
+sled = "0.34"
+tracing = "0.1.22"
+
+[dev-dependencies]
+tempfile = "3.3.0"
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }

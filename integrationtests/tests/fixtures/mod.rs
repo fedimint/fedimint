@@ -28,7 +28,6 @@ use rand::RngCore;
 
 use rand::rngs::OsRng;
 
-use rocksdb::OptimisticTransactionDB;
 use tokio::sync::Mutex;
 
 use tracing::info;
@@ -137,7 +136,8 @@ pub async fn fixtures(
                     .expect("connect to ln_socket"),
             );
 
-            let connect_gen = |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).to_any();
+            let connect_gen =
+                |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
             let fed_db = || Arc::new(rocks(dir.clone())) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
@@ -163,7 +163,7 @@ pub async fn fixtures(
             let lightning = FakeLightningTest::new();
             let net = MockNetwork::new();
             let net_ref = &net;
-            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).to_any();
+            let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
 
             let fed_db = || Arc::new(MemDatabase::new()) as Arc<dyn Database>;
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
@@ -186,9 +186,9 @@ pub async fn fixtures(
     }
 }
 
-fn rocks(dir: String) -> OptimisticTransactionDB<rocksdb::SingleThreaded> {
+fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
-    OptimisticTransactionDB::open_default(db_dir).unwrap()
+    fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
 }
 
 pub trait BitcoinTest {

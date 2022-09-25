@@ -1,7 +1,7 @@
 use rand::{CryptoRng, RngCore};
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
-use crate::mint::CoinFinalizationData;
+use crate::mint::NoteIssuanceRequests;
 use crate::{MintClientError, SpendableNote};
 use bitcoin::KeyPair;
 use fedimint_api::db::batch::{BatchItem, BatchTx};
@@ -13,8 +13,8 @@ use fedimint_core::transaction::{Input, Output, Transaction};
 use tbs::AggregatePublicKey;
 
 pub struct TransactionBuilder {
-    input_coins: TieredMulti<SpendableNote>,
-    output_coins: Vec<(u64, CoinFinalizationData)>,
+    input_notes: TieredMulti<SpendableNote>,
+    output_notes: Vec<(u64, NoteIssuanceRequests)>,
     keys: Vec<KeyPair>,
     tx: Transaction,
 }
@@ -22,8 +22,8 @@ pub struct TransactionBuilder {
 impl Default for TransactionBuilder {
     fn default() -> Self {
         TransactionBuilder {
-            input_coins: Default::default(),
-            output_coins: vec![],
+            input_notes: Default::default(),
+            output_notes: vec![],
             keys: vec![],
             tx: Transaction {
                 inputs: vec![],
@@ -40,7 +40,7 @@ impl TransactionBuilder {
         coins: TieredMulti<SpendableNote>,
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
     ) -> Result<(), MintClientError> {
-        self.input_coins.extend(coins.clone());
+        self.input_notes.extend(coins.clone());
         let (mut coin_keys, coin_input) = self.create_input_from_coins(coins, secp)?;
         self.input(&mut coin_keys, Input::Mint(coin_input));
         Ok(())
@@ -60,8 +60,8 @@ impl TransactionBuilder {
                 // We check for coin validity in case we got it from an untrusted third party. We
                 // don't want to needlessly create invalid tx and bother the federation with them.
                 let spend_pub_key = spend_key.public_key();
-                if &spend_pub_key == coin.coin.spend_key() {
-                    Ok((spend_key, (amt, coin.coin)))
+                if &spend_pub_key == coin.note.spend_key() {
+                    Ok((spend_key, (amt, coin.note)))
                 } else {
                     Err(MintClientError::ReceivedUspendableCoin)
                 }
@@ -97,7 +97,7 @@ impl TransactionBuilder {
         if !coin_output.is_empty() {
             let out_idx = self.tx.outputs.len();
             self.output(Output::Mint(coin_output));
-            self.output_coins
+            self.output_notes
                 .push((out_idx as u64, coin_finalization_data));
         }
     }
@@ -108,9 +108,9 @@ impl TransactionBuilder {
         secp: &secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
         tbs_pks: &Tiered<AggregatePublicKey>,
         rng: &mut R,
-    ) -> (CoinFinalizationData, TieredMulti<BlindNonce>) {
+    ) -> (NoteIssuanceRequests, TieredMulti<BlindNonce>) {
         let (coin_finalization_data, sig_req) =
-            CoinFinalizationData::new(amount, tbs_pks, secp, rng);
+            NoteIssuanceRequests::new(amount, tbs_pks, secp, rng);
 
         let coin_output = sig_req
             .0
@@ -140,19 +140,19 @@ impl TransactionBuilder {
         }
 
         // move input coins to pending state, awaiting a transaction
-        if !self.input_coins.item_count() != 0 {
-            batch.append_from_iter(self.input_coins.iter_items().map(|(amount, coin)| {
+        if !self.input_notes.item_count() != 0 {
+            batch.append_from_iter(self.input_notes.iter_items().map(|(amount, coin)| {
                 // maybe_delete because coins might have been received from another user directly
                 BatchItem::maybe_delete(CoinKey {
                     amount,
-                    nonce: coin.coin.0.clone(),
+                    nonce: coin.note.0.clone(),
                 })
             }));
-            batch.append_insert(PendingCoinsKey(txid), self.input_coins);
+            batch.append_insert(PendingCoinsKey(txid), self.input_notes);
         }
 
         // write coin output to db to await for tx success to be fetched later
-        self.output_coins.iter().for_each(|(out_idx, coins)| {
+        self.output_notes.iter().for_each(|(out_idx, coins)| {
             batch.append_insert_new(
                 OutputFinalizationKey(OutPoint {
                     txid,

@@ -44,7 +44,14 @@
           "llvm-tools-preview"
         ]);
 
+        fenix-toolchain-wasm32 = with fenix.packages.${system}; combine [
+          stable.cargo
+          stable.rustc
+          targets."wasm32-unknown-unknown".stable.rust-std
+        ];
+
         craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
+        craneLibWasm32 = crane.lib.${system}.overrideToolchain fenix-toolchain-wasm32;
 
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
@@ -160,6 +167,10 @@
             pkg-config
           ];
 
+          # Fix wasm32 compilation
+          CC_wasm32_unknown_unknown = "${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14";
+          CFLAGS_wasm32_unknown_unknown = "-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.1/include/";
+
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           CI = "true";
           HOME = "/tmp";
@@ -260,47 +271,63 @@
         });
 
 
-        # a function to define cargo&nix package, listing
-        # all the dependencies (as dir) to help limit the
-        # amount of things that need to rebuild when some
-        # file change
-        pkg = { name ? null, dir, port ? 8000, extraDirs ? [ ] }: rec {
-          package = craneLib.buildPackage (commonArgs // {
+        pkg = { name, dirs, bin }:
+          let
+            deps = craneLib.buildDepsOnly (commonArgs // {
+              src = filterWorkspaceDepsBuildFiles ./.;
+              pname = "pkg-${name}-deps";
+              buildPhaseCargoCommand = "cargo build --profile release --package ${name}";
+              doCheck = false;
+            });
+
+          in
+
+          craneLib.buildPackage (commonArgs // {
+            meta = { mainProgram = bin; };
+            pname = "pkg-${name}";
             cargoArtifacts = workspaceDeps;
 
-            src = filterModules ([ dir ] ++ extraDirs) ./.;
+            src = filterModules dirs ./.;
+            cargoExtraArgs = "--package ${name}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
-          } // lib.optionalAttrs (name != null) {
-            pname = name;
-            cargoExtraArgs = "--bin ${name}";
           });
 
-          container = pkgs.dockerTools.buildLayeredImage {
-            name = name;
-            contents = [ package ];
-            config = {
-              Cmd = [
-                "${package}/bin/${name}"
-              ];
-              ExposedPorts = {
-                "${builtins.toString port}/tcp" = { };
-              };
-            };
-          };
-        };
 
-        fedimintd = pkg {
-          name = "fedimintd";
-          dir = "fedimint";
-          extraDirs = [
+        pkgCross = { name, dirs, target, craneLib }:
+          let deps = craneLib.buildDepsOnly (commonArgs // {
+            src = filterWorkspaceDepsBuildFiles ./.;
+            pname = "pkg-${name}-${target}-deps";
+            buildPhaseCargoCommand = "cargo build --profile release --target ${target} --package ${name}";
+            doCheck = false;
+            CARGO_BUILD_TARGET = target;
+          });
+
+          in
+          craneLib.buildPackage (commonArgs // {
+            pname = "pkg-${name}-${target}";
+            cargoArtifacts = deps;
+
+            src = filterModules dirs ./.;
+            cargoExtraArgs = "--package ${name} --target ${target}";
+
+            # if needed we will check the whole workspace at once with `workspaceBuild`
+            doCheck = false;
+          });
+
+        fedimint = pkg {
+          name = "fedimint";
+          bin = "fedimintd";
+          dirs = [
             "crypto/tbs"
             "ln-gateway"
             "client/client-lib"
+            "fedimint"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -308,9 +335,9 @@
         };
 
         ln-gateway = pkg {
-          name = "ln_gateway";
-          dir = "ln-gateway";
-          extraDirs = [
+          name = "ln-gateway";
+          bin = "ln-gateway";
+          dirs = [
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
@@ -318,6 +345,8 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
+            "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
           ];
@@ -325,14 +354,32 @@
 
         mint-client-cli = pkg {
           name = "mint-client-cli";
-          dir = "client/cli";
-          extraDirs = [
+          bin = "mint-client-cli";
+          dirs = [
             "client/clientd"
+            "client/client-lib"
+            "client/cli"
+            "crypto/tbs"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "fedimint-rocksdb"
+            "modules/fedimint-ln"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
+          ];
+        };
+
+        mint-client = { target, craneLib }: pkgCross {
+          name = "mint-client";
+          inherit target craneLib;
+          dirs = [
             "client/client-lib"
             "crypto/tbs"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -341,8 +388,8 @@
 
         clientd = pkg {
           name = "clientd";
-          dir = "client/clientd";
-          extraDirs = [
+          bin = "clientd";
+          dirs = [
             "client/cli"
             "client/client-lib"
             "client/clientd"
@@ -350,6 +397,7 @@
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
+            "fedimint-rocksdb"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -357,7 +405,7 @@
         };
 
         fedimint-tests = pkg {
-          dir = "integrationtests";
+          name = "fedimint-tests";
           extraDirs = [
             "client/cli"
             "client/client-lib"
@@ -369,20 +417,57 @@
             "fedimint-core"
             "fedimint-derive"
             "modules/fedimint-ln"
+            "integrationtests"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
           ];
         };
+
+        # Replace placeholder git hash in a binary
+        #
+        # To avoid impurity, we use a git hash placeholder when building binaries
+        # and then replace them with the real git hash in the binaries themselves.
+        replace-git-hash = { package, name }:
+          let
+            # the git hash placeholder we use in `build.rs` scripts when
+            # building in Nix (to preserve purity)
+            hash-placeholder = "01234569afbe457afa1d2683a099c7af48a523c1";
+            # the hash we will set if the tree is dirty;
+            dirty-hash = "0000000000000000000000000000000000000000";
+            # git hash to set (passed by Nix if the tree is clean, or `dirty-hash` when dirty)
+            git-hash = if (self ? rev) then self.rev else dirty-hash;
+          in
+          pkgs.stdenv.mkDerivation {
+            inherit system;
+            inherit name;
+
+            dontUnpack = true;
+
+            installPhase = ''
+              cp -a ${package} $out
+              for path in `find $out -type f -executable`; do
+                # need to use a temporary file not to overwrite source as we are reading it
+                bbe -e 's/${hash-placeholder}/${git-hash}/' $path -o ./tmp || exit 1
+                chmod +w $path
+                # use cat to keep all the original permissions etc as they were
+                cat ./tmp > "$path"
+                chmod -w $path
+              done
+            '';
+
+            buildInputs = [ pkgs.bbe ];
+          };
+
       in
       {
         packages = {
-          default = fedimintd.package;
+          default = fedimint;
 
-          fedimintd = fedimintd.package;
-          fedimint-tests = fedimint-tests.package;
-          ln-gateway = ln-gateway.package;
-          clientd = clientd.package;
-          mint-client-cli = mint-client-cli.package;
+          fedimint = fedimint;
+          fedimint-tests = fedimint-tests;
+          ln-gateway = ln-gateway;
+          clientd = clientd;
+          mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
 
           inherit workspaceDeps
             workspaceBuild
@@ -400,8 +485,23 @@
             rust-tests = cliRustTests;
           };
 
+          wasm32 = {
+            mint-client = mint-client { target = "wasm32-unknown-unknown"; craneLib = craneLibWasm32; };
+          };
+
           container = {
-            fedimintd = fedimintd.container;
+            fedimintd = pkgs.dockerTools.buildLayeredImage {
+              name = "fedimint";
+              contents = [ fedimint ];
+              config = {
+                Cmd = [
+                  "${fedimint}/bin/fedimintd"
+                ];
+                ExposedPorts = {
+                  "${builtins.toString 8080}/tcp" = { };
+                };
+              };
+            };
           };
         };
 
@@ -452,36 +552,6 @@
                   echo "Warning: Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
                 fi
               '';
-            };
-
-            # Integration test shell - meant for running all the integration tests
-            # (usually from the CI) # which meants it includes all the project binaries,
-            # but it doesn't include dev tools etc.
-            integrationTests = pkgs.mkShell {
-
-              buildInputs = workspaceDeps.buildInputs;
-              nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
-                bc
-                perl
-                bitcoind
-                clightning-dev
-                jq
-                procps
-                # This is required to prevent a mangled bash shell in nix develop
-                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                (hiPrio pkgs.bashInteractive)
-                tmux
-                tmuxinator
-                coreutils
-
-                fedimintd.package
-                fedimint-tests.package
-                ln-gateway.package
-                mint-client-cli.package
-                clientd.package
-              ];
-
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
             };
 
             # this shell is used only in CI, so it should contain minimum amount

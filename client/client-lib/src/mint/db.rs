@@ -1,4 +1,4 @@
-use crate::mint::{CoinFinalizationData, SpendableNote};
+use crate::mint::{NoteIssuanceRequests, SpendableNote};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TransactionId};
@@ -54,7 +54,7 @@ pub struct OutputFinalizationKey(pub OutPoint);
 impl DatabaseKeyPrefixConst for OutputFinalizationKey {
     const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
     type Key = Self;
-    type Value = CoinFinalizationData;
+    type Value = NoteIssuanceRequests;
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
@@ -63,5 +63,5 @@ pub struct OutputFinalizationKeyPrefix;
 impl DatabaseKeyPrefixConst for OutputFinalizationKeyPrefix {
     const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_FINALIZATION_DATA;
     type Key = OutputFinalizationKey;
-    type Value = CoinFinalizationData;
+    type Value = NoteIssuanceRequests;
 }

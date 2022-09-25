@@ -169,13 +169,10 @@ async fn ecash_cannot_double_spent_with_different_nodes() {
     let out3 = user3.client.reissue(ecash, rng()).await.unwrap();
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 
-    assert!(
-        user2.client.fetch_coins(out2).await.is_err()
-            || user3.client.fetch_coins(out3).await.is_err()
-    ); //no double spend
+    let res2 = user2.client.fetch_coins(out2).await;
+    let res3 = user3.client.fetch_coins(out3).await;
+    assert!(res2.is_err() || res3.is_err()); //no double spend
     assert_eq!(user2.total_coins() + user3.total_coins(), sats(2000));
-    assert_eq!(user2.total_coins(), sats(2000));
-    assert_eq!(user3.total_coins(), sats(0));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -193,7 +190,7 @@ async fn ecash_in_wallet_can_sent_through_a_tx() {
     user_receive
         .client
         .receive_coins(sats(400), rng(), |coins| {
-            block_on(user_send.client.pay_for_coins(coins, rng())).unwrap()
+            block_on(user_send.client.pay_to_blind_nonces(coins, rng())).unwrap()
         });
     fed.run_consensus_epochs(2).await; // process transaction + sign new coins
 

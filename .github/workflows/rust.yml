@@ -13,24 +13,17 @@ jobs:
     strategy:
       matrix:
         build:
-          - wasm32
           - macos
           # TODO: Needs clang and possibly other binaries
           # - android
         include:
-          - build: wasm32
-            runs-on: buildjet-8vcpu-ubuntu-2004
-            target: wasm32-unknown-unknown
-            use-cross: false
-            extra-build-args: "--target wasm32-unknown-unknown --package mint-client"
-            build-in-pr: true
           - build: macos
             runs-on: macos-latest
             use-cross: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             build-in-pr: false
           # - build: android
-          #   runs-on: ubuntu-latest
+          #   runs-on: ubuntu-22.04
           #   target: aarch64-linux-android
           #   use-cross: true
 

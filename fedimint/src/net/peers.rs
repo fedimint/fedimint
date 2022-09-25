@@ -63,7 +63,7 @@ where
     async fn ban_peer(&mut self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn to_any(self) -> AnyPeerConnections<T>
+    fn into_dyn(self) -> AnyPeerConnections<T>
     where
         Self: Sized + Send + Unpin + 'static,
     {
@@ -640,7 +640,7 @@ mod tests {
                 bind_addr: bind.to_string(),
                 peers: peers_ref.clone(),
             };
-            let connect = net_ref.connector(cfg.identity).to_any();
+            let connect = net_ref.connector(cfg.identity).into_dyn();
             ReconnectPeerConnections::<u64>::new(cfg, connect).await
         };
 

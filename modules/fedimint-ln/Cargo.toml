@@ -17,17 +17,17 @@ async-trait = "0.1"
 bincode = "1"
 bitcoin_hashes = "0.10.0"
 futures = "0.3.21"
-itertools = "0.10.1"
+itertools = "0.10.5"
 lightning = "0.0.110"
 lightning-invoice = "0.18.0"
 fedimint-api = { path = "../../fedimint-api" }
 secp256k1 = { version="0.22.1", default-features=false }
-serde = {version = "1.0.130", features = [ "derive" ] }
+serde = {version = "1.0.145", features = [ "derive" ] }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 thiserror = "1.0.23"
 tracing = "0.1.29"
 serde_json = "1.0.85"
-url = { version = "2.2.2", features = ["serde"] }
+url = { version = "2.3.0", features = ["serde"] }
 
 [dev-dependencies]
 tokio = {version = "1.21.0", features = [ "full" ] }
