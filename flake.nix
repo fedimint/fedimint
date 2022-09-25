@@ -464,7 +464,7 @@
         packages = {
           default = fedimint;
 
-          fedimint = fedimint;
+          fedimint = replace-git-hash { name = "fedimint"; package = fedimint; };
           fedimint-tests = fedimint-tests;
           ln-gateway = ln-gateway;
           clientd = replace-git-hash { name = "clientd"; package = clientd; };

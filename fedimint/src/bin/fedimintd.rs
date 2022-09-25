@@ -19,6 +19,13 @@ pub struct ServerOpts {
 
 #[tokio::main]
 async fn main() {
+    let mut args = std::env::args();
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", env!("GIT_HASH"));
+            return;
+        }
+    }
     let opts = ServerOpts::parse();
     let fmt_layer = tracing_subscriber::fmt::layer();
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
