@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+exec "$LD_aarch64_linux_android" $LDFLAGS_aarch64_linux_android "$@"

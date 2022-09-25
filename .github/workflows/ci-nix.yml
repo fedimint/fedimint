@@ -112,7 +112,15 @@ jobs:
           fail_ci_if_error: true
 
   wasm32:
-    name: "Cross-compile: wasm32"
+    name: "Cross-compile: ${{ matrix.build }}"
+
+    strategy:
+      matrix:
+        build:
+          - aarch64-android
+          - x86_64-android
+          - wasm32
+
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -125,8 +133,8 @@ jobs:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
 
-      - name: Build mint-client for wasm32
-        run: nix build -L .#wasm32.mint-client
+      - name: Build mint-client for ${{ matrix.build }}
+        run: nix build -L .#cross.${{ matrix.build }}.mint-client
 
   containers:
     name: "Containers"
