@@ -3,23 +3,74 @@ use crate::{bitcoind::BitcoindRpc, Feerate};
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-use bitcoincore_rpc::{Auth, RpcApi};
+use bitcoincore_rpc::Auth;
+use fedimint_api::module::__reexports::serde_json::Value;
+use serde::Deserialize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tracing::warn;
 
 pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
     move || -> Box<dyn BitcoindRpc> {
-        Box::new(
-            bitcoincore_rpc::Client::new(
-                &cfg.btc_rpc_address,
-                Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-            )
-            .expect("Could not connect to bitcoind"),
+        let bitcoind_client = bitcoincore_rpc::Client::new(
+            &cfg.btc_rpc_address,
+            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
         )
+        .expect("Could not connect to bitcoind");
+        let retry_client = RetryClient {
+            client: bitcoind_client,
+            retries: Default::default(),
+            max_retries: 10,
+            base_sleep: Duration::from_millis(10),
+        };
+
+        Box::new(retry_client)
+    }
+}
+
+#[derive(Debug)]
+struct RetryClient {
+    client: bitcoincore_rpc::Client,
+    retries: std::sync::atomic::AtomicU16,
+    max_retries: u16,
+    base_sleep: Duration,
+}
+
+impl bitcoincore_rpc::RpcApi for RetryClient {
+    fn call<T: for<'a> Deserialize<'a>>(
+        &self,
+        cmd: &str,
+        args: &[Value],
+    ) -> bitcoincore_rpc::Result<T> {
+        let mut fail_sleep = self.base_sleep;
+        let ret = loop {
+            match self.client.call(cmd, args) {
+                Ok(ret) => {
+                    break ret;
+                }
+                Err(e) => {
+                    warn!("bitcoind returned error on cmd '{}': {}", cmd, e);
+                    let retries = self.retries.fetch_add(1, Ordering::Relaxed);
+
+                    if retries > self.max_retries {
+                        return Err(e);
+                    }
+
+                    std::thread::sleep(fail_sleep);
+                    fail_sleep *= 2;
+                }
+            }
+        };
+        self.retries.store(0, Ordering::Relaxed);
+        Ok(ret)
     }
 }
 
 #[async_trait]
-impl BitcoindRpc for bitcoincore_rpc::Client {
+impl<T> BitcoindRpc for T
+where
+    T: bitcoincore_rpc::RpcApi + Send + Sync,
+{
     async fn get_network(&self) -> Network {
         let network = fedimint_api::task::block_in_place(|| self.get_blockchain_info())
             .expect("Bitcoind returned an error");
