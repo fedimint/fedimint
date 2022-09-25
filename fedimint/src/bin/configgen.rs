@@ -36,6 +36,10 @@ struct Options {
         required = true
     )]
     denominations: Vec<Amount>,
+
+    /// Federation name
+    #[clap(long = "federation-name", default_value = "Hal's trusty mint")]
+    federation_name: String,
 }
 
 fn main() {
@@ -45,6 +49,7 @@ fn main() {
         hbbft_base_port,
         api_base_port,
         denominations: amount_tiers,
+        federation_name,
     } = Options::parse();
     let mut rng = OsRng::new().unwrap();
 
@@ -61,6 +66,7 @@ fn main() {
         hbbft_base_port,
         api_base_port,
         amount_tiers,
+        federation_name,
     };
 
     let (server_cfg, client_cfg) =

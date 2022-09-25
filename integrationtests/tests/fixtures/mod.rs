@@ -109,6 +109,7 @@ pub async fn fixtures(
     }
 
     let params = ServerConfigParams {
+        federation_name: "Test federation".into(),
         hbbft_base_port: base_port,
         api_base_port: base_port + num_peers,
         amount_tiers: amount_tiers.to_vec(),
@@ -329,11 +330,11 @@ impl UserTest {
             config.0.max_evil,
             config
                 .0
-                .api_endpoints
+                .nodes
                 .iter()
                 .enumerate()
                 .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
-                .map(|(id, url)| (PeerId::from(id as u16), url.clone()))
+                .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
                 .collect(),
         ));
 
