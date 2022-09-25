@@ -75,6 +75,7 @@
           perl
           procps
           bash
+          which
         ];
 
         # filter source code at path `src` to include only the list of `modules`
