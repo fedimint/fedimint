@@ -75,7 +75,7 @@
 
         # Definitions of all the cross-compilation targets we support.
         # Later mapped over to conveniently loop over all posibilities.
-        cross-targets =
+        crossTargets =
           builtins.mapAttrs
             (attr: target: { attr = attr; extraEnvs = ""; } // target)
             {
@@ -101,9 +101,9 @@
               };
             };
 
-        fenix-channel = fenix.packages.${system}.stable;
+        fenixChannel = fenix.packages.${system}.stable;
 
-        fenix-toolchain = (fenix-channel.withComponents [
+        fenixToolchain = (fenixChannel.withComponents [
           "rustc"
           "cargo"
           "clippy"
@@ -113,7 +113,7 @@
           "llvm-tools-preview"
         ]);
 
-        fenix-toolchain-cross-all = with fenix.packages.${system}; combine [
+        fenixToolchainCrossAll = with fenix.packages.${system}; combine [
           stable.cargo
           stable.rustc
           targets.wasm32-unknown-unknown.stable.rust-std
@@ -123,20 +123,20 @@
           targets.i686-linux-android.stable.rust-std
         ];
 
-        fenix-toolchain-cross = builtins.mapAttrs
+        fenixToolchainCross = builtins.mapAttrs
           (attr: target: with fenix.packages.${system}; combine [
             stable.cargo
             stable.rustc
             targets.${target.name}.stable.rust-std
           ])
-          cross-targets
+          crossTargets
         ;
 
-        craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
+        craneLib = crane.lib.${system}.overrideToolchain fenixToolchain;
 
-        craneLib-cross = builtins.mapAttrs
-          (attr: target: crane.lib.${system}.overrideToolchain fenix-toolchain-cross.${attr})
-          cross-targets
+        craneLibCross = builtins.mapAttrs
+          (attr: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${attr})
+          crossTargets
         ;
 
         cargo-llvm-cov = craneLib.buildPackage rec {
@@ -388,7 +388,7 @@
 
         pkgCross = { name, dirs, target }:
           let
-            craneLib = craneLib-cross.${target.attr};
+            craneLib = craneLibCross.${target.attr};
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
               pname = "pkg-${name}-${target.attr}-deps";
@@ -592,7 +592,7 @@
             (attr: target: {
               mint-client = mint-client { inherit target; };
             })
-            cross-targets;
+            crossTargets;
 
 
           container = {
@@ -638,7 +638,7 @@
               pkgs.rnix-lsp
               pkgs.nodePackages.bash-language-server
             ] ++ cliTestsDeps;
-            RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
+            RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
             LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
 
             shellHook = ''
@@ -663,7 +663,7 @@
             # the settings and tools neccessary to build and work with the codebase.
             default = pkgs.mkShell (shellCommon
               // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenix-toolchain ];
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchain ];
             });
 
 
@@ -672,7 +672,7 @@
             # This will pull extra stuff so to save time and download time to most common developers,
             # was moved into another shell.
             cross = pkgs.mkShell (shellCommon // {
-              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenix-toolchain-cross-all ];
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
 
               shellHook = shellCommon.shellHook +
 
