@@ -18,7 +18,7 @@ path = "src/bin/ln_gateway.rs"
 
 [dependencies]
 async-trait = "0.1.52"
-axum = "0.5.15"
+axum = "0.5.16"
 bitcoin_hashes = "0.10.0"
 bitcoin = { version = "0.28.1", features = ["serde", "use-serde"] }
 cln-rpc = "0.1"

@@ -22,7 +22,7 @@ lightning = "0.0.110"
 lightning-invoice = "0.18.0"
 fedimint-api = { path = "../../fedimint-api" }
 secp256k1 = { version="0.22.1", default-features=false }
-serde = {version = "1.0.130", features = [ "derive" ] }
+serde = {version = "1.0.145", features = [ "derive" ] }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 thiserror = "1.0.23"
 tracing = "0.1.29"
