@@ -451,6 +451,71 @@ async fn lightning_gateway_pays_outgoing_invoice() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn lightning_gateway_claims_refund_for_internal_invoice() {
+    let (fed, sending_user, bitcoin, gateway, lightning) =
+        fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
+
+    // Fund the gateway so it can route internal payments
+    fed.mine_and_mint(&gateway.user, &*bitcoin, sats(2000))
+        .await;
+    fed.mine_and_mint(&sending_user, &*bitcoin, sats(2000))
+        .await;
+
+    let receiving_user = sending_user.new_client(&[0]);
+
+    let confirmed_invoice = tokio::join!(
+        receiving_user
+            .client
+            .generate_invoice(sats(1000), "".into(), rng()),
+        fed.await_consensus_epochs(1),
+    )
+    .0
+    .unwrap();
+    let invoice = confirmed_invoice.invoice;
+    debug!("Receiving User generated invoice: {:?}", invoice);
+
+    let (contract_id, funding_outpoint) = sending_user
+        .client
+        .fund_outgoing_ln_contract(invoice, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await; // send coins to LN contract
+
+    let contract_account = sending_user
+        .client
+        .ln_client()
+        .get_contract_account(contract_id)
+        .await
+        .unwrap();
+    assert_eq!(contract_account.amount, sats(1010)); // 1% LN fee
+    debug!(
+        "Sending User created outgoing contract: {:?}",
+        contract_account
+    );
+
+    sending_user
+        .client
+        .await_outgoing_contract_acceptance(funding_outpoint)
+        .await
+        .unwrap();
+    debug!("Outgoing contract accepted");
+
+    let response = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
+        // we should run 4 epocks to buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
+        // but we only run 1 epoch to simulate timeout in preimage decryption
+        // This results in an error and the gateway reclaims funds used to buy preimage
+        fed.await_consensus_epochs(1).await;
+    })
+    .0;
+    assert!(response.is_err());
+
+    // TODO: Assert that the gateway has reclaimed the funds used to buy the preimage
+
+    assert_eq!(lightning.amount_sent(), sats(0)); // We did not route any payments over the lightning network
+    assert_eq!(fed.max_balance_sheet(), 0);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() {
     let starting_balance = sats(2000);
     let preimage_price = sats(100);

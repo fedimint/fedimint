@@ -212,7 +212,7 @@ impl LnGateway {
                 Ok(outpoint)
             }
             Err(e) => {
-                warn!("LN payment failed, aborting");
+                warn!("Invoice payment failed: {}. Aborting", e);
                 self.federation_client.abort_outgoing_payment(contract_id);
                 Err(e)
             }
@@ -225,19 +225,29 @@ impl LnGateway {
         invoice_amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
     ) -> Result<[u8; 32]> {
-        let (out_point, _) = self
+        let (out_point, contract_id) = self
             .federation_client
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
             .await?;
 
         debug!("Awaiting decryption of preimage of hash {}", payment_hash);
-        let preimage = self
+        match self
             .federation_client
             .await_preimage_decryption(out_point)
-            .await?;
-        debug!("Decrypted preimage {:?}", preimage);
-
-        Ok(preimage.0.serialize())
+            .await
+        {
+            Ok(preimage) => {
+                debug!("Decrypted preimage {:?}", preimage);
+                Ok(preimage.0.serialize())
+            }
+            Err(e) => {
+                warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
+                self.federation_client
+                    .refund_incoming_contract(contract_id, rng)
+                    .await?;
+                Err(LnGatewayError::ClientError(e))
+            }
+        }
     }
 
     async fn buy_preimage_external(
