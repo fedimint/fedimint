@@ -15,6 +15,7 @@ members = [
     "modules/fedimint-ln",
     "modules/fedimint-wallet",
     "integrationtests",
+    "fedimint-build",
 ]
 resolver = "2"
 

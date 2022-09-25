@@ -405,6 +405,7 @@ dependencies = [
  "bitcoin_hashes",
  "clap",
  "fedimint-api",
+ "fedimint-build",
  "fedimint-core",
  "fedimint-rocksdb",
  "mint-client",
@@ -661,6 +662,7 @@ dependencies = [
  "bytes",
  "clap",
  "fedimint-api",
+ "fedimint-build",
  "fedimint-core",
  "fedimint-derive",
  "fedimint-rocksdb",
@@ -721,6 +723,10 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
 ]
+
+[[package]]
+name = "fedimint-build"
+version = "0.1.0"
 
 [[package]]
 name = "fedimint-core"
@@ -1667,6 +1673,7 @@ dependencies = [
  "cln-rpc",
  "fedimint",
  "fedimint-api",
+ "fedimint-build",
  "fedimint-rocksdb",
  "futures",
  "hex",
@@ -1806,6 +1813,7 @@ dependencies = [
  "bitcoin_hashes",
  "clap",
  "fedimint-api",
+ "fedimint-build",
  "fedimint-core",
  "fedimint-rocksdb",
  "lightning-invoice",

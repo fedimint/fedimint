@@ -1,0 +1,15 @@
+[package]
+name = "fedimint-build"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "fedimint is the main consensus code for processing transactions and REST API"
+license = "MIT"
+
+[features]
+
+[lib]
+name = "fedimint_build"
+path = "src/lib.rs"
+
+[dependencies]
