@@ -335,16 +335,16 @@ async fn main() {
         let cfg_path = cli.workdir.join("client.json");
         let db_path = cli.workdir.join("client.db");
         let cfg: UserClientConfig = load_from_file(&cfg_path);
-        let db: rocksdb::OptimisticTransactionDB<rocksdb::SingleThreaded> =
-            rocksdb::OptimisticTransactionDB::open_default(&db_path)
-                .or_terminate(CliErrorKind::IOError, "could not open transaction db");
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .or_terminate(CliErrorKind::IOError, "could not open transaction db")
+            .into_dyn();
 
         let rng = rand::rngs::OsRng::new().or_terminate(
             CliErrorKind::OSError,
             "failed to acquire random number generator from OS",
         );
 
-        let client = Client::new(cfg.clone(), Box::new(db), Default::default());
+        let client = Client::new(cfg.clone(), db, Default::default());
 
         let cli_result = handle_command(cli, client, rng).await;
 
