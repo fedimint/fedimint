@@ -34,6 +34,8 @@ mine_blocks 10
 RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 [[ "$RECEIVED" = "0.00000500" ]]
 
+sleep 3 # FIXME waiting for LN to catch up blocks could poll 'getinfo blockheight'
+
 # outgoing lightning
 INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
 $FM_MINT_CLIENT ln-pay $INVOICE
