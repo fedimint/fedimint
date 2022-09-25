@@ -767,7 +767,7 @@
             FakeFed::&lt;LightningModule, LightningModuleClientConfig&gt;::new(
                 <span class="number">4</span>,
                 <span class="number">1</span>,
-                |cfg, db| <span class="kw">async </span>{ LightningModule::new(cfg, Arc::new(db)) },
+                |cfg, db| <span class="kw">async </span>{ LightningModule::new(cfg, db) },
                 <span class="kw-2">&amp;</span>(),
             )
             .<span class="kw">await</span>,
@@ -776,7 +776,7 @@
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client_context = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };

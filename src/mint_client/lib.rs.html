@@ -1060,8 +1060,6 @@
 <span id="1060">1060</span>
 <span id="1061">1061</span>
 <span id="1062">1062</span>
-<span id="1063">1063</span>
-<span id="1064">1064</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1074,6 +1072,7 @@
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::SystemTime;
 
+<span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
@@ -1084,10 +1083,7 @@
 
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::{
-    db::{
-        batch::{Accumulator, BatchItem, DbBatch},
-        Database,
-    },
+    db::batch::{Accumulator, BatchItem, DbBatch},
     Amount, OutPoint, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
@@ -1231,7 +1227,7 @@
         <span class="self">self</span>.config.clone()
     }
 
-    <span class="kw">pub fn </span>new(config: T, db: Box&lt;<span class="kw">dyn </span>Database&gt;, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(config: T, db: Database, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>api = api::WsFederationApi::new(
             config.as_ref().max_evil,
             config
@@ -1251,7 +1247,7 @@
 
     <span class="kw">pub fn </span>new_with_api(
         config: T,
-        db: Box&lt;<span class="kw">dyn </span>Database&gt;,
+        db: Database,
         api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {

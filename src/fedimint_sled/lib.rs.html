@@ -120,18 +120,12 @@
 <span id="120">120</span>
 <span id="121">121</span>
 <span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
-<span id="126">126</span>
-<span id="127">127</span>
-<span id="128">128</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
 </span><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, DbBatch};
-<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::db::IDatabase;
 <span class="kw">use </span>fedimint_api::db::PrefixIter;
 <span class="kw">use </span>sled::transaction::TransactionError;
 <span class="kw">use </span>std::path::Path;
@@ -146,10 +140,6 @@
     <span class="kw">pub fn </span>open(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;, tree: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SledDb, sled::Error&gt; {
         <span class="kw">let </span>db = sled::open(db_path)<span class="question-mark">?</span>.open_tree(tree)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(SledDb(db))
-    }
-
-    <span class="kw">pub fn </span>into_dyn(<span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>Database&gt; {
-        Box::new(<span class="self">self</span>)
     }
 
     <span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>sled::Tree {
@@ -170,7 +160,7 @@
 }
 
 <span class="comment">// TODO: maybe make the concrete impl its own crate
-</span><span class="kw">impl </span>Database <span class="kw">for </span>SledDb {
+</span><span class="kw">impl </span>IDatabase <span class="kw">for </span>SledDb {
     <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span>ret = <span class="self">self</span>.inner().insert(key, value)<span class="question-mark">?</span>.map(|bytes| bytes.to_vec());
         <span class="self">self</span>.inner().flush().expect(<span class="string">&quot;DB failure&quot;</span>);
@@ -242,8 +232,6 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::SledDb;
-    <span class="kw">use </span>std::sync::Arc;
-
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_rw() {
         <span class="kw">let </span>path = tempfile::Builder::new()
@@ -251,7 +239,7 @@
             .tempdir()
             .unwrap();
         <span class="kw">let </span>db = SledDb::open(path, <span class="string">&quot;default&quot;</span>).unwrap();
-        fedimint_api::db::test_db_impl(Arc::new(db));
+        fedimint_api::db::test_db_impl(db.into());
     }
 }
 </code></pre></div>

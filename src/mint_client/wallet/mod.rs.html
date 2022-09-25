@@ -372,8 +372,6 @@
 <span id="372">372</span>
 <span id="373">373</span>
 <span id="374">374</span>
-<span id="375">375</span>
-<span id="376">376</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
@@ -640,11 +638,9 @@
                 <span class="kw">move </span>|cfg, db| {
                     <span class="kw">let </span>btc_rpc_clone = btc_rpc.clone();
                     <span class="kw">async move </span>{
-                        Wallet::new_with_bitcoind(cfg, Arc::new(db), || {
-                            Box::new(btc_rpc_clone.clone())
-                        })
-                        .<span class="kw">await
-                        </span>.unwrap()
+                        Wallet::new_with_bitcoind(cfg, db, || Box::new(btc_rpc_clone.clone()))
+                            .<span class="kw">await
+                            </span>.unwrap()
                     }
                 },
                 <span class="kw-2">&amp;</span>(),
@@ -656,7 +652,7 @@
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };

@@ -59,11 +59,9 @@
 <span id="59">59</span>
 <span id="60">60</span>
 <span id="61">61</span>
-<span id="62">62</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
 
 <span class="kw">use </span>std::fmt::{Display, Formatter};
-<span class="kw">use </span>std::sync::Arc;
 
 <span class="attribute">#[derive(Default)]
 </span><span class="kw">pub struct </span>Audit {
@@ -83,7 +81,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>add_items&lt;KP, F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Arc&lt;<span class="kw">dyn </span>Database&gt;, key_prefix: <span class="kw-2">&amp;</span>KP, to_milli_sat: F)
+    <span class="kw">pub fn </span>add_items&lt;KP, F&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database, key_prefix: <span class="kw-2">&amp;</span>KP, to_milli_sat: F)
     <span class="kw">where
         </span>KP: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="lifetime">&#39;static</span>,
         F: Fn(KP::Key, KP::Value) -&gt; i64,

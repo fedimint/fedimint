@@ -935,8 +935,6 @@
 <span id="935">935</span>
 <span id="936">936</span>
 <span id="937">937</span>
-<span id="938">938</span>
-<span id="939">939</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -960,7 +958,6 @@
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::ops::Sub;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
     PublicKeyShare, SecretKeyShare,
@@ -983,7 +980,7 @@
     sec_key: Tiered&lt;SecretKeyShare&gt;,
     pub_key_shares: BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
     pub_key: HashMap&lt;Amount, AggregatePublicKey&gt;,
-    db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+    db: Database,
 }
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -1355,7 +1352,7 @@
     /// * If there are no amount tiers
     /// * If the amount tiers for secret and public keys are inconsistent
     /// * If the pub key belonging to the secret key share is not in the pub key list.
-    </span><span class="kw">pub fn </span>new(cfg: MintConfig, db: Arc&lt;<span class="kw">dyn </span>Database&gt;) -&gt; Mint {
+    </span><span class="kw">pub fn </span>new(cfg: MintConfig, db: Database) -&gt; Mint {
         <span class="macro">assert!</span>(cfg.tbs_sks.tiers().count() &gt; <span class="number">0</span>);
 
         <span class="comment">// The amount tiers are implicitly provided by the key sets, make sure they are internally
@@ -1687,7 +1684,6 @@
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId};
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 
     <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
@@ -1709,7 +1705,7 @@
         <span class="kw">let </span>(mint_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>mints = mint_cfg
             .into_iter()
-            .map(|config| Mint::new(config, Arc::new(MemDatabase::new())))
+            .map(|config| Mint::new(config, MemDatabase::new().into()))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>agg_pk = <span class="kw-2">*</span>client_cfg.tbs_pks.get(Amount::from_sat(<span class="number">1</span>)).unwrap();
@@ -1872,7 +1868,7 @@
                 peer_tbs_pks: mint_server_cfg2[<span class="number">0</span>].peer_tbs_pks.clone(),
                 fee_consensus: FeeConsensus::default(),
             },
-            Arc::new(MemDatabase::new()),
+            MemDatabase::new().into(),
         );
     }
 }

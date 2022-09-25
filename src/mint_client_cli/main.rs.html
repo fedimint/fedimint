@@ -952,7 +952,7 @@
         <span class="kw">let </span>cfg: UserClientConfig = load_from_file(<span class="kw-2">&amp;</span>cfg_path);
         <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(db_path)
             .or_terminate(CliErrorKind::IOError, <span class="string">&quot;could not open transaction db&quot;</span>)
-            .into_dyn();
+            .into();
 
         <span class="kw">let </span>rng = rand::rngs::OsRng::new().or_terminate(
             CliErrorKind::OSError,

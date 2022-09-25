@@ -613,13 +613,6 @@
 <span id="613">613</span>
 <span id="614">614</span>
 <span id="615">615</span>
-<span id="616">616</span>
-<span id="617">617</span>
-<span id="618">618</span>
-<span id="619">619</span>
-<span id="620">620</span>
-<span id="621">621</span>
-<span id="622">622</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
@@ -1094,7 +1087,7 @@
             FakeFed::&lt;Mint, MintClientConfig&gt;::new(
                 <span class="number">4</span>,
                 <span class="number">1</span>,
-                |cfg, db| <span class="kw">async </span>{ Mint::new(cfg, Arc::new(db)) },
+                |cfg, db| <span class="kw">async </span>{ Mint::new(cfg, db) },
                 <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>), Amount::from_sat(<span class="number">10</span>)][..],
             )
             .<span class="kw">await</span>,
@@ -1104,7 +1097,7 @@
         <span class="kw">let </span>client_config = fed.lock().<span class="kw">await</span>.client_cfg().clone();
 
         <span class="kw">let </span>client_context = ClientContext {
-            db: Box::new(MemDatabase::new()),
+            db: MemDatabase::new().into(),
             api: Box::new(api),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
@@ -1115,7 +1108,7 @@
     <span class="kw">async fn </span>issue_tokens&lt;<span class="lifetime">&#39;a</span>, R: rand::RngCore + rand::CryptoRng&gt;(
         fed: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>tokio::sync::Mutex&lt;Fed&gt;,
         client: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt;,
-        client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>Database,
+        client_db: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>Database,
         amt: Amount,
         rng: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>R,
     ) {
@@ -1148,14 +1141,7 @@
         };
 
         <span class="kw">const </span>ISSUE_AMOUNT: Amount = Amount::from_sat(<span class="number">12</span>);
-        issue_tokens(
-            <span class="kw-2">&amp;</span>fed,
-            <span class="kw-2">&amp;</span>client,
-            client_context.db.as_ref(),
-            ISSUE_AMOUNT,
-            <span class="kw-2">&amp;mut </span>rng,
-        )
-        .<span class="kw">await</span>;
+        issue_tokens(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>client_context.db, ISSUE_AMOUNT, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(client.coins().total_amount(), ISSUE_AMOUNT)
     }
@@ -1175,7 +1161,7 @@
         issue_tokens(
             <span class="kw-2">&amp;</span>fed,
             <span class="kw-2">&amp;</span>client,
-            client_context.db.as_ref(),
+            <span class="kw-2">&amp;</span>client_context.db,
             SPEND_AMOUNT * <span class="number">2</span>,
             <span class="kw-2">&amp;mut </span>rng,
         )

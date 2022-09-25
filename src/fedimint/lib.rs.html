@@ -461,6 +461,8 @@
 <span id="461">461</span>
 <span id="462">462</span>
 <span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -549,7 +551,9 @@
 
         <span class="self">Self</span>::new_with(
             cfg.clone(),
-            Arc::new(fedimint_rocksdb::RocksDb::open(db_path).expect(<span class="string">&quot;Error opening DB&quot;</span>)),
+            fedimint_rocksdb::RocksDb::open(db_path)
+                .expect(<span class="string">&quot;Error opening DB&quot;</span>)
+                .into(),
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )
@@ -558,7 +562,7 @@
 
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
-        database: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+        database: Database,
         bitcoind: <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
         connector: PeerConnector&lt;EpochMessage&gt;,
     ) -&gt; <span class="self">Self </span>{

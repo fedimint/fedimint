@@ -223,10 +223,6 @@
 <span id="223">223</span>
 <span id="224">224</span>
 <span id="225">225</span>
-<span id="226">226</span>
-<span id="227">227</span>
-<span id="228">228</span>
-<span id="229">229</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
@@ -245,7 +241,7 @@
 <span class="kw">use </span><span class="kw">super</span>::ApiError;
 
 <span class="kw">pub struct </span>FakeFed&lt;M, CC&gt; {
-    members: Vec&lt;(PeerId, M, MemDatabase)&gt;,
+    members: Vec&lt;(PeerId, M, Database)&gt;,
     client_cfg: CC,
     block_height: Arc&lt;std::sync::atomic::AtomicU64&gt;,
 }
@@ -271,7 +267,7 @@
     ) -&gt; FakeFed&lt;M, C::ClientConfig&gt;
     <span class="kw">where
         </span>C: GenerateConfig,
-        F: Fn(C, MemDatabase) -&gt; FF, <span class="comment">// TODO: put constructor into Module trait
+        F: Fn(C, Database) -&gt; FF, <span class="comment">// TODO: put constructor into Module trait
         </span>FF: Future&lt;Output = M&gt;,
     {
         <span class="kw">let </span>peers = (<span class="number">0</span>..members)
@@ -282,7 +278,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>members = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
-            <span class="kw">let </span>mem_db = MemDatabase::new();
+            <span class="kw">let </span>mem_db: Database = MemDatabase::new().into();
             <span class="kw">let </span>member = constructor(cfg, mem_db.clone()).<span class="kw">await</span>;
             members.push((peer, member, mem_db));
         }
@@ -364,18 +360,14 @@
                     .expect(<span class="string">&quot;Faulty output&quot;</span>);
             }
 
-            (db <span class="kw">as </span><span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Database)
-                .apply_batch(batch)
-                .expect(<span class="string">&quot;DB error&quot;</span>);
+            db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
 
             <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
             member
                 .end_consensus_epoch(<span class="kw-2">&amp;</span>peers, batch.transaction(), <span class="kw-2">&amp;mut </span>rng)
                 .<span class="kw">await</span>;
 
-            (db <span class="kw">as </span><span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Database)
-                .apply_batch(batch)
-                .expect(<span class="string">&quot;DB error&quot;</span>);
+            db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
         }
     }
 
@@ -393,7 +385,7 @@
 
     <span class="kw">pub fn </span>patch_dbs&lt;U&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, update: U)
     <span class="kw">where
-        </span>U: Fn(<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Database),
+        </span>U: Fn(<span class="kw-2">&amp;mut </span>Database),
     {
         <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             update(db);

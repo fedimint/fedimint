@@ -727,7 +727,7 @@
     <span class="kw">pub </span>ln: LightningModule,
 
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
-    </span><span class="kw">pub </span>db: Arc&lt;<span class="kw">dyn </span>Database&gt;,
+    </span><span class="kw">pub </span>db: Database,
 
     <span class="comment">// Notifies tasks when there is a new transaction
     </span><span class="kw">pub </span>transaction_notify: Arc&lt;Notify&gt;,

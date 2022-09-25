@@ -124,14 +124,9 @@
 <span id="124">124</span>
 <span id="125">125</span>
 <span id="126">126</span>
-<span id="127">127</span>
-<span id="128">128</span>
-<span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, DbBatch};
-<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::db::IDatabase;
 <span class="kw">use </span>fedimint_api::db::PrefixIter;
 <span class="kw">use </span>rocksdb::OptimisticTransactionDB;
 <span class="kw">use </span>std::path::Path;
@@ -147,10 +142,6 @@
         <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::&lt;rocksdb::SingleThreaded&gt;::open_default(<span class="kw-2">&amp;</span>db_path)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(RocksDb(db))
-    }
-
-    <span class="kw">pub fn </span>into_dyn(<span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>Database&gt; {
-        Box::new(<span class="self">self</span>)
     }
 
     <span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>rocksdb::OptimisticTransactionDB {
@@ -170,7 +161,7 @@
     </span>}
 }
 
-<span class="kw">impl </span>Database <span class="kw">for </span>RocksDb {
+<span class="kw">impl </span>IDatabase <span class="kw">for </span>RocksDb {
     <span class="kw">fn </span>raw_insert_entry(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: Vec&lt;u8&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         <span class="kw">let </span>val = <span class="self">self</span>.inner().get(key).unwrap();
         <span class="self">self</span>.inner().put(key, value)<span class="question-mark">?</span>;
@@ -246,7 +237,6 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">crate</span>::RocksDb;
-    <span class="kw">use </span>std::sync::Arc;
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_basic_rw() {
@@ -257,7 +247,7 @@
 
         <span class="kw">let </span>db = RocksDb::open(path).unwrap();
 
-        fedimint_api::db::test_db_impl(Arc::new(db));
+        fedimint_api::db::test_db_impl(db.into());
     }
 }
 </code></pre></div>
