@@ -466,7 +466,7 @@
 
           fedimint = replace-git-hash { name = "fedimint"; package = fedimint; };
           fedimint-tests = fedimint-tests;
-          ln-gateway = ln-gateway;
+          ln-gateway = replace-git-hash { name = "ln-gateway"; package = ln-gateway; };
           clientd = replace-git-hash { name = "clientd"; package = clientd; };
           mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
 

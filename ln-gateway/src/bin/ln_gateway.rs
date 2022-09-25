@@ -175,6 +175,14 @@ async fn withdraw_rpc(
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let mut args = std::env::args();
+
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", env!("GIT_HASH"));
+            return Ok(());
+        }
+    }
     let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
         mpsc::channel(100);
     let state = Arc::new(Mutex::new(sender.clone()));
