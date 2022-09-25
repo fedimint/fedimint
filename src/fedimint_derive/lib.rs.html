@@ -287,7 +287,7 @@
 <span id="287">287</span>
 </pre><pre class="rust"><code><span class="attribute">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
 
-</span><span class="kw">use </span>heck::SnakeCase;
+</span><span class="kw">use </span>heck::ToSnakeCase;
 <span class="kw">use </span>proc_macro::{<span class="self">self</span>, TokenStream};
 <span class="kw">use </span>quote::{format_ident, quote};
 <span class="kw">use </span>syn::{parse_macro_input, Data, DataEnum, DataStruct, DeriveInput, Index};
