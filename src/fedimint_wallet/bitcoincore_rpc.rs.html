@@ -66,28 +66,130 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use crate</span>::{bitcoind::BitcoindRpc, Feerate};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-<span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
+<span class="kw">use </span>bitcoincore_rpc::Auth;
+<span class="kw">use </span>fedimint_api::module::__reexports::serde_json::Value;
+<span class="kw">use </span>serde::Deserialize;
+<span class="kw">use </span>std::sync::atomic::Ordering;
+<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tracing::warn;
 
 <span class="kw">pub fn </span>bitcoind_gen(cfg: WalletConfig) -&gt; <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt; {
     <span class="kw">move </span>|| -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt; {
-        Box::new(
-            bitcoincore_rpc::Client::new(
-                <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
-                Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-            )
-            .expect(<span class="string">&quot;Could not connect to bitcoind&quot;</span>),
+        <span class="kw">let </span>bitcoind_client = bitcoincore_rpc::Client::new(
+            <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
+            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
         )
+        .expect(<span class="string">&quot;Could not connect to bitcoind&quot;</span>);
+        <span class="kw">let </span>retry_client = RetryClient {
+            client: bitcoind_client,
+            retries: Default::default(),
+            max_retries: <span class="number">10</span>,
+            base_sleep: Duration::from_millis(<span class="number">10</span>),
+        };
+
+        Box::new(retry_client)
+    }
+}
+
+<span class="attribute">#[derive(Debug)]
+</span><span class="kw">struct </span>RetryClient {
+    client: bitcoincore_rpc::Client,
+    retries: std::sync::atomic::AtomicU16,
+    max_retries: u16,
+    base_sleep: Duration,
+}
+
+<span class="kw">impl </span>bitcoincore_rpc::RpcApi <span class="kw">for </span>RetryClient {
+    <span class="kw">fn </span>call&lt;T: <span class="kw">for</span>&lt;<span class="lifetime">&#39;a</span>&gt; Deserialize&lt;<span class="lifetime">&#39;a</span>&gt;&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cmd: <span class="kw-2">&amp;</span>str,
+        args: <span class="kw-2">&amp;</span>[Value],
+    ) -&gt; bitcoincore_rpc::Result&lt;T&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>fail_sleep = <span class="self">self</span>.base_sleep;
+        <span class="kw">let </span>ret = <span class="kw">loop </span>{
+            <span class="kw">match </span><span class="self">self</span>.client.call(cmd, args) {
+                <span class="prelude-val">Ok</span>(ret) =&gt; {
+                    <span class="kw">break </span>ret;
+                }
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">warn!</span>(<span class="string">&quot;bitcoind returned error on cmd &#39;{}&#39;: {}&quot;</span>, cmd, e);
+                    <span class="kw">let </span>retries = <span class="self">self</span>.retries.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
+
+                    <span class="kw">if </span>retries &gt; <span class="self">self</span>.max_retries {
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+                    }
+
+                    std::thread::sleep(fail_sleep);
+                    fail_sleep <span class="kw-2">*</span>= <span class="number">2</span>;
+                }
+            }
+        };
+        <span class="self">self</span>.retries.store(<span class="number">0</span>, Ordering::Relaxed);
+        <span class="prelude-val">Ok</span>(ret)
     }
 }
 
 <span class="attribute">#[async_trait]
-</span><span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>bitcoincore_rpc::Client {
+</span><span class="kw">impl</span>&lt;T&gt; BitcoindRpc <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: bitcoincore_rpc::RpcApi + Send + Sync,
+{
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
         <span class="kw">let </span>network = fedimint_api::task::block_in_place(|| <span class="self">self</span>.get_blockchain_info())
             .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>);
@@ -135,4 +237,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (3f83906b3 2022-09-24)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f5193a9fc 2022-09-25)" ></div></body></html>
