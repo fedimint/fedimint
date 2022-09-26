@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
-use fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -35,13 +35,14 @@ use fedimint_core::modules::wallet::PegOutFees;
 use futures::stream::FuturesUnordered;
 
 use futures::StreamExt;
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use threshold_crypto::PublicKey;
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-pub trait FederationApi: Send + Sync {
+pub trait IFederationApi: Send + Sync {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus>;
 
@@ -78,7 +79,11 @@ pub trait FederationApi: Send + Sync {
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()>;
 }
 
-impl<'a> dyn FederationApi + 'a {
+dyn_newtype_define! {
+    FederationApi(Arc<IFederationApi>)
+}
+
+impl FederationApi {
     pub async fn fetch_output_outcome<T>(&self, out_point: OutPoint) -> Result<T>
     where
         T: TryIntoOutcome + Send,
@@ -191,7 +196,7 @@ impl ApiError {
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
-impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
+impl<C: JsonRpcClient + Send + Sync> IFederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
         self.request(
