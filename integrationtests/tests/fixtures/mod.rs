@@ -35,6 +35,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 
+use crate::fixtures::utils::LnRpcAdapter;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint::config::ServerConfigParams;
 use fedimint::config::{ClientConfig, ServerConfig};
@@ -55,7 +56,6 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
-use ln_gateway::ln::LnRpc;
 use ln_gateway::LnGateway;
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
@@ -64,6 +64,7 @@ use real::{RealBitcoinTest, RealLightningTest};
 
 mod fake;
 mod real;
+mod utils;
 
 static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
@@ -130,11 +131,12 @@ pub async fn fixtures(
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
                 RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let lightning_rpc = Mutex::new(
+            let gateway_lightning_rpc = Mutex::new(
                 ClnRpc::new(socket_gateway.clone())
                     .await
                     .expect("connect to ln_socket"),
             );
+            let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
@@ -147,7 +149,7 @@ pub async fn fixtures(
             user.client.await_consensus_block_height(0).await;
 
             let gateway = GatewayTest::new(
-                Box::new(lightning_rpc),
+                lightning_rpc_adapter,
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
                 base_port + num_peers + 1,
@@ -161,6 +163,7 @@ pub async fn fixtures(
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
+            let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
             let net = MockNetwork::new();
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
@@ -174,7 +177,7 @@ pub async fn fixtures(
             user.client.await_consensus_block_height(0).await;
 
             let gateway = GatewayTest::new(
-                Box::new(lightning.clone()),
+                ln_rpc_adapter,
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
                 base_port + num_peers + 1,
@@ -220,6 +223,7 @@ pub trait LightningTest {
 
 pub struct GatewayTest {
     pub server: LnGateway,
+    pub adapter: Arc<LnRpcAdapter>,
     pub keys: LightningGateway,
     pub user: UserTest,
     pub client: Arc<GatewayClient>,
@@ -227,7 +231,7 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     async fn new(
-        ln_client: Box<dyn LnRpc>,
+        ln_client_adapter: LnRpcAdapter,
         client_config: ClientConfig,
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
@@ -266,6 +270,8 @@ impl GatewayTest {
             Default::default(),
         ));
         let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
+        let adapter = Arc::new(ln_client_adapter);
+        let ln_client = Arc::clone(&adapter);
         let gateway = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr);
         // Normally, this client registration with the federation is automated as part of running the gateway
         // In test cases, we want to register without running a gateway
@@ -276,6 +282,7 @@ impl GatewayTest {
 
         GatewayTest {
             server: gateway,
+            adapter,
             keys,
             user,
             client,
