@@ -175,15 +175,26 @@
 <span id="175">175</span>
 <span id="176">176</span>
 <span id="177">177</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::Feerate;
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span><span class="kw">crate</span>::Feerate;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{BlockHash, Transaction};
+<span class="kw">use </span>fedimint_api::dyn_newtype_define;
 
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if if the bitcoind node is not reachable.
 </span><span class="attribute">#[async_trait]
-</span><span class="kw">pub trait </span>BitcoindRpc: Send + Sync {
+</span><span class="kw">pub trait </span>IBitcoindRpc: Send + Sync {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
     </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::Network;
 
@@ -219,9 +230,14 @@
     </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction);
 }
 
+<span class="macro">dyn_newtype_define! </span>{
+    <span class="attribute">#[derive(Clone)]
+    </span>BitcoindRpc(Arc&lt;IBitcoindRpc&gt;)
+}
+
 <span class="attribute">#[allow(dead_code)]
 </span><span class="kw">pub mod </span>test {
-    <span class="kw">use </span><span class="kw">crate</span>::bitcoind::BitcoindRpc;
+    <span class="kw">use </span><span class="kw">super</span>::IBitcoindRpc;
     <span class="kw">use </span><span class="kw">crate</span>::Feerate;
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
@@ -237,7 +253,7 @@
         tx_in_blocks: HashMap&lt;BlockHash, Vec&lt;Transaction&gt;&gt;,
     }
 
-    <span class="attribute">#[derive(Clone, Default)]
+    <span class="attribute">#[derive(Default, Clone)]
     </span><span class="kw">pub struct </span>FakeBitcoindRpc {
         state: Arc&lt;Mutex&lt;FakeBitcoindRpcState&gt;&gt;,
     }
@@ -247,7 +263,7 @@
     }
 
     <span class="attribute">#[async_trait]
-    </span><span class="kw">impl </span>BitcoindRpc <span class="kw">for </span>FakeBitcoindRpc {
+    </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>FakeBitcoindRpc {
         <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
             bitcoin::Network::Regtest
         }

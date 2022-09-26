@@ -560,7 +560,7 @@
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
         database: Database,
-        bitcoind: <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+        bitcoind: <span class="kw">impl </span>Fn() -&gt; BitcoindRpc,
         connector: PeerConnector&lt;EpochMessage&gt;,
     ) -&gt; <span class="self">Self </span>{
         cfg.validate_config(<span class="kw-2">&amp;</span>cfg.identity);

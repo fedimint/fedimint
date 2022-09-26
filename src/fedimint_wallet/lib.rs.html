@@ -1332,7 +1332,7 @@
 <span class="kw">pub struct </span>Wallet {
     cfg: WalletConfig,
     secp: Secp256k1&lt;All&gt;,
-    btc_rpc: Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+    btc_rpc: BitcoindRpc,
     db: Database,
 }
 
@@ -1785,7 +1785,7 @@
     </span><span class="kw">pub async fn </span>new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
-        bitcoind_gen: <span class="kw">impl </span>Fn() -&gt; Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;,
+        bitcoind_gen: <span class="kw">impl </span>Fn() -&gt; BitcoindRpc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
         <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind_gen();
         <span class="kw">let </span>broadcaster_db = db.clone();
@@ -2382,14 +2382,14 @@
 }
 
 <span class="attribute">#[instrument(level = <span class="string">&quot;debug&quot;</span>, skip_all)]
-</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: Box&lt;<span class="kw">dyn </span>BitcoindRpc&gt;) {
+</span><span class="kw">pub async fn </span>run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc) {
     <span class="kw">loop </span>{
-        broadcast_pending_tx(<span class="kw-2">&amp;</span>db, rpc.as_ref()).<span class="kw">await</span>;
+        broadcast_pending_tx(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>rpc).<span class="kw">await</span>;
         fedimint_api::task::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
     }
 }
 
-<span class="kw">pub async fn </span>broadcast_pending_tx(db: <span class="kw-2">&amp;</span>Database, rpc: <span class="kw-2">&amp;</span><span class="kw">dyn </span>BitcoindRpc) {
+<span class="kw">pub async fn </span>broadcast_pending_tx(db: <span class="kw-2">&amp;</span>Database, rpc: <span class="kw-2">&amp;</span>BitcoindRpc) {
     <span class="kw">let </span>pending_tx = db
         .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
         .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
