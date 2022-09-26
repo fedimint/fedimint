@@ -320,7 +320,6 @@ mod tests {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<LightningModule, LightningModuleClientConfig>::new(
                 4,
-                1,
                 |cfg, db| async { LightningModule::new(cfg, db) },
                 &(),
             )

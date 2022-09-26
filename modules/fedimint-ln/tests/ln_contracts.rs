@@ -23,7 +23,6 @@ async fn test_account() {
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
-        1,
         |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )
@@ -72,7 +71,6 @@ async fn test_outgoing() {
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
-        1,
         |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )
@@ -148,7 +146,6 @@ async fn test_incoming() {
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
-        1,
         |cfg, db| async { LightningModule::new(cfg, db) },
         &(),
     )

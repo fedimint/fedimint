@@ -18,17 +18,17 @@ impl<R> QueryStrategy<R> for TrustAllPeers {
     }
 }
 
-/// Returns first epoch with a valid sig, otherwise wait till f+1 agree
+/// Returns first epoch with a valid sig, otherwise wait till `required` agree
 pub struct ValidHistory {
     epoch_pk: PublicKey,
     current: CurrentConsensus<EpochHistory>,
 }
 
 impl ValidHistory {
-    pub fn new(epoch_pk: PublicKey, max_evil: usize) -> Self {
+    pub fn new(epoch_pk: PublicKey, required: usize) -> Self {
         Self {
             epoch_pk,
-            current: CurrentConsensus::new(max_evil),
+            current: CurrentConsensus::new(required),
         }
     }
 }
@@ -43,21 +43,21 @@ impl QueryStrategy<EpochHistory> for ValidHistory {
     }
 }
 
-/// Returns the deduplicated union of f+1 responses
+/// Returns the deduplicated union of `required` responses
 pub struct UnionResponses<R> {
     responses: HashSet<PeerId>,
     results: HashSet<R>,
     current: CurrentConsensus<Vec<R>>,
-    max_evil: usize,
+    required: usize,
 }
 
 impl<R> UnionResponses<R> {
-    pub fn new(max_evil: usize) -> Self {
+    pub fn new(required: usize) -> Self {
         Self {
             responses: HashSet::new(),
             results: HashSet::new(),
-            current: CurrentConsensus::new(max_evil),
-            max_evil,
+            current: CurrentConsensus::new(required),
+            required,
         }
     }
 }
@@ -72,7 +72,7 @@ impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
             self.results.extend(result.into_iter());
             self.responses.insert(peer);
 
-            if self.responses.len() > self.max_evil {
+            if self.responses.len() >= self.required {
                 QueryStep::Finished(Ok(self.results.drain().collect()))
             } else {
                 QueryStep::Continue
@@ -84,15 +84,15 @@ impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
     }
 }
 
-/// Returns when f+1 responses are equal, retrying on 404 errors
+/// Returns when `required` responses are equal, retrying on 404 errors
 pub struct Retry404<R> {
     current: CurrentConsensus<R>,
 }
 
 impl<R> Retry404<R> {
-    pub fn new(max_evil: usize) -> Self {
+    pub fn new(required: usize) -> Self {
         Self {
-            current: CurrentConsensus::new(max_evil),
+            current: CurrentConsensus::new(required),
         }
     }
 }
@@ -109,32 +109,31 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for Retry404<R> {
     }
 }
 
-/// Returns when f+1 responses are equal, retrying after every 2f+1 responses
+/// Returns when `required` responses are equal, retrying after every `required` responses
 // FIXME: should be replaced by queries for specific epochs in case we cannot get enough responses
 // FIXME: for any single epoch
 pub struct EventuallyConsistent<R> {
     responses: HashSet<PeerId>,
     current: CurrentConsensus<R>,
-    max_evil: usize,
+    required: usize,
 }
 
 impl<R> EventuallyConsistent<R> {
-    pub fn new(max_evil: usize) -> Self {
+    pub fn new(required: usize) -> Self {
         Self {
             responses: HashSet::new(),
-            current: CurrentConsensus::new(max_evil),
-            max_evil,
+            current: CurrentConsensus::new(required),
+            required,
         }
     }
 }
 
 impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R> {
     fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
-        let honest_threshold = self.max_evil * 2 + 1;
         self.responses.insert(response.peer);
 
         match self.current.process(response) {
-            QueryStep::Continue if self.responses.len() == honest_threshold => {
+            QueryStep::Continue if self.responses.len() >= self.required => {
                 let result = QueryStep::Request(self.responses.clone());
                 self.responses.clear();
                 result
@@ -144,19 +143,19 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R> {
     }
 }
 
-/// Returns when f+1 responses are equal
+/// Returns when `required` responses are equal
 pub struct CurrentConsensus<R> {
     pub results: HashMap<R, HashSet<PeerId>>,
     pub errors: HashMap<PeerId, JsonRpcError>,
-    max_evil: usize,
+    required: usize,
 }
 
 impl<R> CurrentConsensus<R> {
-    pub fn new(max_evil: usize) -> Self {
+    pub fn new(required: usize) -> Self {
         Self {
             results: HashMap::new(),
             errors: HashMap::new(),
-            max_evil,
+            required,
         }
     }
 }
@@ -180,12 +179,12 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R> {
         }
 
         for (result, peers) in self.results.iter() {
-            if peers.len() > self.max_evil {
+            if peers.len() >= self.required {
                 return QueryStep::Finished(Ok(result.clone()));
             }
         }
 
-        if self.errors.len() > self.max_evil {
+        if self.errors.len() >= self.required {
             let (_, error) = self.errors.drain().next().expect("non-empty");
             return QueryStep::Finished(Err(ApiError::RpcError(error)));
         }

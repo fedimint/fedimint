@@ -36,7 +36,6 @@ where
 {
     pub async fn new<C, F, FF>(
         members: usize,
-        max_evil: usize,
         constructor: F,
         params: &C::Params,
     ) -> FakeFed<M, C::ClientConfig>
@@ -49,7 +48,7 @@ where
             .map(|idx| PeerId::from(idx as u16))
             .collect::<Vec<_>>();
         let (server_cfg, client_cfg) =
-            C::trusted_dealer_gen(&peers, max_evil, params, rand::rngs::OsRng::new().unwrap());
+            C::trusted_dealer_gen(&peers, params, rand::rngs::OsRng::new().unwrap());
 
         let mut members = vec![];
         for (peer, cfg) in server_cfg {

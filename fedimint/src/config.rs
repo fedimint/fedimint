@@ -65,7 +65,6 @@ impl GenerateConfig for ServerConfig {
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
-        max_evil: usize,
         params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
@@ -103,11 +102,11 @@ impl GenerateConfig for ServerConfig {
             .collect::<BTreeMap<_, _>>();
 
         let (wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
+            WalletConfig::trusted_dealer_gen(peers, &(), &mut rng);
         let (mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, max_evil, params.amount_tiers.as_ref(), &mut rng);
+            MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), &mut rng);
         let (ln_server_cfg, ln_client_cfg) =
-            LightningModuleConfig::trusted_dealer_gen(peers, max_evil, &(), &mut rng);
+            LightningModuleConfig::trusted_dealer_gen(peers, &(), &mut rng);
 
         let server_config = netinfo
             .iter()
@@ -136,7 +135,6 @@ impl GenerateConfig for ServerConfig {
 
         let client_config = ClientConfig {
             federation_name: params.federation_name.clone(),
-            max_evil,
             nodes: peers
                 .iter()
                 .map(|&peer| Node {
@@ -165,11 +163,9 @@ impl GenerateConfig for ServerConfig {
                 name: format!("node #{}", peer_id),
             })
             .collect();
-        let max_evil = hbbft::util::max_faulty(self.peers.len());
         ClientConfig {
             federation_name: self.federation_name.clone(),
             nodes,
-            max_evil,
             mint: self.mint.to_client_config(),
             wallet: self.wallet.to_client_config(),
             ln: self.ln.to_client_config(),
@@ -231,16 +227,6 @@ impl ServerConfig {
 
     pub fn get_incoming_count(&self) -> u16 {
         self.identity.into()
-    }
-
-    /// how many peers can be evil without breaking consensus
-    pub fn max_faulty(&self) -> usize {
-        hbbft::util::max_faulty(self.peers.len())
-    }
-
-    /// how many peers are required for consensus
-    pub fn threshold(&self) -> usize {
-        hbbft::util::max_faulty(self.peers.len()) * 2 + 1
     }
 
     pub fn fee_consensus(&self) -> fedimint_core::config::FeeConsensus {

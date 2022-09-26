@@ -19,7 +19,6 @@ pub struct ClientConfig {
     pub mint: MintClientConfig,
     pub wallet: WalletClientConfig,
     pub ln: LightningModuleClientConfig,
-    pub max_evil: usize,
 }
 
 impl ClientConfig {

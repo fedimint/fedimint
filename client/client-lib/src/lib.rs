@@ -167,7 +167,6 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
 
     pub fn new(config: T, db: Database, secp: Secp256k1<All>) -> Self {
         let api = api::WsFederationApi::new(
-            config.as_ref().max_evil,
             config
                 .as_ref()
                 .nodes
