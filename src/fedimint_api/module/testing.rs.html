@@ -222,7 +222,6 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
-<span id="225">225</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
@@ -261,7 +260,6 @@
 {
     <span class="kw">pub async fn </span>new&lt;C, F, FF&gt;(
         members: usize,
-        max_evil: usize,
         constructor: F,
         params: <span class="kw-2">&amp;</span>C::Params,
     ) -&gt; FakeFed&lt;M, C::ClientConfig&gt;
@@ -274,7 +272,7 @@
             .map(|idx| PeerId::from(idx <span class="kw">as </span>u16))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>(server_cfg, client_cfg) =
-            C::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, max_evil, params, rand::rngs::OsRng::new().unwrap());
+            C::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, params, rand::rngs::OsRng::new().unwrap());
 
         <span class="kw">let </span><span class="kw-2">mut </span>members = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {

@@ -931,10 +931,6 @@
 <span id="931">931</span>
 <span id="932">932</span>
 <span id="933">933</span>
-<span id="934">934</span>
-<span id="935">935</span>
-<span id="936">936</span>
-<span id="937">937</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -1691,12 +1687,8 @@
 
     <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;MintConfig&gt;, MintClientConfig) {
         <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>(mint_cfg, client_cfg) = MintConfig::trusted_dealer_gen(
-            <span class="kw-2">&amp;</span>peers,
-            THRESHOLD,
-            <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>)],
-            OsRng::new().unwrap(),
-        );
+        <span class="kw">let </span>(mint_cfg, client_cfg) =
+            MintConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>)], OsRng::new().unwrap());
 
         (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)
     }

@@ -89,11 +89,9 @@
 <span id="89">89</span>
 <span id="90">90</span>
 <span id="91">91</span>
-<span id="92">92</span>
-<span id="93">93</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::rand::Rand07Compat;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -120,12 +118,10 @@
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_evil: usize,
         _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
-        <span class="kw">let </span>threshold = peers.len() - max_evil;
-        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(threshold - <span class="number">1</span>, <span class="kw-2">&amp;mut </span>Rand07Compat(rng));
+        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>Rand07Compat(rng));
         <span class="kw">let </span>pks = sks.public_keys();
 
         <span class="kw">let </span>server_cfg = peers
@@ -138,7 +134,7 @@
                     LightningModuleConfig {
                         threshold_pub_keys: pks.clone(),
                         threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
-                        threshold,
+                        threshold: peers.threshold(),
                         fee_consensus: FeeConsensus::default(),
                     },
                 )

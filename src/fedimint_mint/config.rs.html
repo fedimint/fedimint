@@ -120,13 +120,10 @@
 <span id="120">120</span>
 <span id="121">121</span>
 <span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::tiered::TieredMultiZip;
 <span class="kw">use </span><span class="kw">crate</span>::Tiered;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
-<span class="kw">use </span>fedimint_api::{Amount, PeerId};
+<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -153,16 +150,13 @@
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_evil: usize,
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         _rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
-        <span class="kw">let </span>tbs_threshold = peers.len() - max_evil;
-
         <span class="kw">let </span>tbs_keys = params
             .iter()
             .map(|<span class="kw-2">&amp;</span>amount| {
-                <span class="kw">let </span>(tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(tbs_threshold, peers.len());
+                <span class="kw">let </span>(tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
                 (amount, (tbs_pk, tbs_pks, tbs_sks))
             })
             .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
@@ -171,7 +165,7 @@
             .iter()
             .map(|<span class="kw-2">&amp;</span>peer| {
                 <span class="kw">let </span>config = MintConfig {
-                    threshold: tbs_threshold,
+                    threshold: peers.threshold(),
                     tbs_sks: params
                         .iter()
                         .map(|amount| (<span class="kw-2">*</span>amount, tbs_keys[amount].<span class="number">2</span>[peer.to_usize()]))

@@ -129,13 +129,12 @@
 <span id="129">129</span>
 <span id="130">130</span>
 <span id="131">131</span>
-<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -188,7 +187,6 @@
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_evil: usize,
         _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
@@ -201,7 +199,7 @@
 
         <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(
-                peers.len() - max_evil,
+                peers.threshold(),
                 btc_pegin_keys
                     .iter()
                     .map(|(<span class="kw">_</span>, (<span class="kw">_</span>, pk))| CompressedPublicKey { key: <span class="kw-2">*</span>pk })

@@ -20,7 +20,6 @@
 <span id="20">20</span>
 <span id="21">21</span>
 <span id="22">22</span>
-<span id="23">23</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::PeerId;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -34,7 +33,6 @@
     /// testing as the generating machine would be a single point of failure/compromise.
     </span><span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_evil: usize,
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig);

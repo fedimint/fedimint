@@ -250,6 +250,51 @@
 <span id="250">250</span>
 <span id="251">251</span>
 <span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_api;
 
 <span class="kw">use </span>bitcoin::Denomination;
@@ -258,6 +303,7 @@
 <span class="kw">use </span>bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 <span class="kw">pub use </span>module::{FederationModule, InputMeta};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Error;
 <span class="kw">use </span>std::num::ParseIntError;
 <span class="kw">use </span>std::str::FromStr;
@@ -330,6 +376,50 @@
     <span class="attribute">#[error(<span class="string">&quot;Error parsing string as a bitcoin amount: {0}&quot;</span>)]
     </span>WrongBitcoinAmount(<span class="attribute">#[from] </span>bitcoin::util::amount::ParseAmountError),
 }
+
+<span class="kw">impl</span>&lt;T&gt; NumPeers <span class="kw">for </span>BTreeMap&lt;PeerId, T&gt; {
+    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.len()
+    }
+}
+
+<span class="kw">impl </span>NumPeers <span class="kw">for </span><span class="kw-2">&amp;</span>[PeerId] {
+    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.len()
+    }
+}
+
+<span class="kw">impl </span>NumPeers <span class="kw">for </span>Vec&lt;PeerId&gt; {
+    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.len()
+    }
+}
+
+<span class="doccomment">/// for consensus-related calculations given the number of peers
+</span><span class="kw">pub trait </span>NumPeers {
+    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="doccomment">/// number of peers that can be evil without disrupting the federation
+    </span><span class="kw">fn </span>max_evil(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        (<span class="self">self</span>.total() - <span class="number">1</span>) / <span class="number">3
+    </span>}
+
+    <span class="doccomment">/// number of peers to select such that one is honest (under our assumptions)
+    </span><span class="kw">fn </span>one_honest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.max_evil() + <span class="number">1
+    </span>}
+
+    <span class="doccomment">/// Degree of a underlying polynomial to require `threshold` signatures
+    </span><span class="kw">fn </span>degree(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.threshold() - <span class="number">1
+    </span>}
+
+    <span class="doccomment">/// number of peers required for a signature
+    </span><span class="kw">fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.total() - <span class="self">self</span>.max_evil()
+    }
+}
+
 <span class="kw">impl </span>PeerId {
     <span class="kw">pub fn </span>to_usize(<span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>usize

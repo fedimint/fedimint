@@ -307,20 +307,6 @@
 <span id="307">307</span>
 <span id="308">308</span>
 <span id="309">309</span>
-<span id="310">310</span>
-<span id="311">311</span>
-<span id="312">312</span>
-<span id="313">313</span>
-<span id="314">314</span>
-<span id="315">315</span>
-<span id="316">316</span>
-<span id="317">317</span>
-<span id="318">318</span>
-<span id="319">319</span>
-<span id="320">320</span>
-<span id="321">321</span>
-<span id="322">322</span>
-<span id="323">323</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 
@@ -388,7 +374,6 @@
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        max_evil: usize,
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
@@ -426,11 +411,11 @@
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::trusted_dealer_gen(peers, max_evil, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
+            WalletConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, max_evil, params.amount_tiers.as_ref(), <span class="kw-2">&amp;mut </span>rng);
+            MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) =
-            LightningModuleConfig::trusted_dealer_gen(peers, max_evil, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
+            LightningModuleConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
 
         <span class="kw">let </span>server_config = netinfo
             .iter()
@@ -459,7 +444,6 @@
 
         <span class="kw">let </span>client_config = ClientConfig {
             federation_name: params.federation_name.clone(),
-            max_evil,
             nodes: peers
                 .iter()
                 .map(|<span class="kw-2">&amp;</span>peer| Node {
@@ -488,11 +472,9 @@
                 name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, peer_id),
             })
             .collect();
-        <span class="kw">let </span>max_evil = hbbft::util::max_faulty(<span class="self">self</span>.peers.len());
         ClientConfig {
             federation_name: <span class="self">self</span>.federation_name.clone(),
             nodes,
-            max_evil,
             mint: <span class="self">self</span>.mint.to_client_config(),
             wallet: <span class="self">self</span>.wallet.to_client_config(),
             ln: <span class="self">self</span>.ln.to_client_config(),
@@ -555,16 +537,6 @@
     <span class="kw">pub fn </span>get_incoming_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u16 {
         <span class="self">self</span>.identity.into()
     }
-
-    <span class="doccomment">/// how many peers can be evil without breaking consensus
-    </span><span class="kw">pub fn </span>max_faulty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        hbbft::util::max_faulty(<span class="self">self</span>.peers.len())
-    }
-
-    <span class="doccomment">/// how many peers are required for consensus
-    </span><span class="kw">pub fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        hbbft::util::max_faulty(<span class="self">self</span>.peers.len()) * <span class="number">2 </span>+ <span class="number">1
-    </span>}
 
     <span class="kw">pub fn </span>fee_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::config::FeeConsensus {
         fedimint_core::config::FeeConsensus {

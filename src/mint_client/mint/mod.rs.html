@@ -612,7 +612,6 @@
 <span id="612">612</span>
 <span id="613">613</span>
 <span id="614">614</span>
-<span id="615">615</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
@@ -1086,7 +1085,6 @@
         <span class="kw">let </span>fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::&lt;Mint, MintClientConfig&gt;::new(
                 <span class="number">4</span>,
-                <span class="number">1</span>,
                 |cfg, db| <span class="kw">async </span>{ Mint::new(cfg, db) },
                 <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>), Amount::from_sat(<span class="number">10</span>)][..],
             )

@@ -80,7 +80,7 @@
         }
         Commands::ApiCall { url, method, arg } =&gt; {
             <span class="kw">let </span>arg: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>arg).unwrap();
-            <span class="kw">let </span>api = WsFederationApi::new(<span class="number">0</span>, <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), url)]);
+            <span class="kw">let </span>api = WsFederationApi::new(<span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), url)]);
             <span class="kw">let </span>response: serde_json::Value =
                 api.request(<span class="kw-2">&amp;</span>method, arg, TrustAllPeers).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>formatted = serde_json::to_string_pretty(<span class="kw-2">&amp;</span>response).unwrap();

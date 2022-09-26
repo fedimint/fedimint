@@ -67,7 +67,6 @@
 <span id="67">67</span>
 <span id="68">68</span>
 <span id="69">69</span>
-<span id="70">70</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_wallet::config::WalletClientConfig;
@@ -89,7 +88,6 @@
     <span class="kw">pub </span>mint: MintClientConfig,
     <span class="kw">pub </span>wallet: WalletClientConfig,
     <span class="kw">pub </span>ln: LightningModuleClientConfig,
-    <span class="kw">pub </span>max_evil: usize,
 }
 
 <span class="kw">impl </span>ClientConfig {

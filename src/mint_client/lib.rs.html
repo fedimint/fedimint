@@ -1059,7 +1059,6 @@
 <span id="1059">1059</span>
 <span id="1060">1060</span>
 <span id="1061">1061</span>
-<span id="1062">1062</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1229,7 +1228,6 @@
 
     <span class="kw">pub fn </span>new(config: T, db: Database, secp: Secp256k1&lt;All&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>api = api::WsFederationApi::new(
-            config.as_ref().max_evil,
             config
                 .as_ref()
                 .nodes

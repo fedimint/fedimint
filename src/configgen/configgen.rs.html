@@ -85,12 +85,10 @@
 <span id="85">85</span>
 <span id="86">86</span>
 <span id="87">87</span>
-<span id="88">88</span>
-<span id="89">89</span>
 </pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint::config::{ServerConfig, ServerConfigParams};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
-<span class="kw">use </span>fedimint_api::{Amount, PeerId};
+<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -146,10 +144,9 @@
     </span>std::fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
 
     <span class="kw">let </span>peers = (<span class="number">0</span>..nodes).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="kw">let </span>max_evil = hbbft::util::max_faulty(peers.len());
     <span class="macro">println!</span>(
         <span class="string">&quot;Generating keys such that up to {} peers may fail/be evil&quot;</span>,
-        max_evil
+        peers.max_evil()
     );
     <span class="kw">let </span>params = ServerConfigParams {
         hbbft_base_port,
@@ -158,8 +155,7 @@
         federation_name,
     };
 
-    <span class="kw">let </span>(server_cfg, client_cfg) =
-        ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, max_evil, <span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;mut </span>rng);
+    <span class="kw">let </span>(server_cfg, client_cfg) = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;mut </span>rng);
 
     <span class="kw">for </span>(id, cfg) <span class="kw">in </span>server_cfg {
         <span class="kw">let </span><span class="kw-2">mut </span>path: PathBuf = cfg_path.clone();

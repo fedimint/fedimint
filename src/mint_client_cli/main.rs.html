@@ -613,9 +613,13 @@
 <span id="613">613</span>
 <span id="614">614</span>
 <span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
@@ -925,9 +929,13 @@
         <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
             <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
                 .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
-            <span class="kw">let </span>api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
+            <span class="kw">let </span>api = WsFederationApi::new(connect_obj.members);
             <span class="kw">let </span>cfg: ClientConfig = api
-                .request(<span class="string">&quot;/config&quot;</span>, (), CurrentConsensus::new(connect_obj.max_evil))
+                .request(
+                    <span class="string">&quot;/config&quot;</span>,
+                    (),
+                    CurrentConsensus::new(api.peers().one_honest()),
+                )
                 .<span class="kw">await
                 </span>.or_terminate(
                     CliErrorKind::NetworkError,
