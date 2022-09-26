@@ -1,23 +1,25 @@
 use fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
-pub use fedimint_core::config::*;
-
+use crate::fedimint_api::net::peers::PeerConnections;
+use crate::net::connect::Connector;
+use crate::net::connect::TlsConfig;
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
-use fedimint_api::config::GenerateConfig;
-use fedimint_api::PeerId;
+use crate::{ReconnectPeerConnections, TlsTcpConnector};
+use async_trait::async_trait;
+use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
+use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::{Amount, NumPeers, PeerId};
+pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
 use fedimint_core::modules::mint::config::MintConfig;
 use fedimint_core::modules::wallet::config::WalletConfig;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
-use url::Url;
-
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-
-use crate::net::connect::TlsConfig;
-use async_trait::async_trait;
-use fedimint_api::net::peers::AnyPeerConnections;
+use threshold_crypto::G1Projective;
 use tokio_rustls::rustls;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -48,24 +50,34 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
-    pub connection: ConnectionConfig,
+    pub hbbft: ConnectionConfig,
     #[serde(with = "serde_tls_cert")]
     pub tls_cert: rustls::Certificate,
+    /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
+    pub api_addr: Url,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+/// network config for a server
 pub struct ServerConfigParams {
-    pub hbbft_base_port: u16,
-    pub api_base_port: u16,
-    pub amount_tiers: Vec<fedimint_api::Amount>,
+    pub tls: TlsConfig,
+    pub hbbft: NetworkConfig,
+    pub api: NetworkConfig,
+    pub server_dkg: NetworkConfig,
+    pub wallet_dkg: NetworkConfig,
+    pub lightning_dkg: NetworkConfig,
+    pub mint_dkg: NetworkConfig,
+    pub amount_tiers: Vec<Amount>,
     pub federation_name: String,
     pub bitcoind_rpc: String,
 }
 
 #[async_trait(?Send)]
 impl GenerateConfig for ServerConfig {
-    type Params = ServerConfigParams;
+    type Params = HashMap<PeerId, ServerConfigParams>;
     type ClientConfig = ClientConfig;
+    type ConfigMessage = (KeyType, DkgMessage<G1Projective>);
+    type ConfigError = ();
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
@@ -78,60 +90,30 @@ impl GenerateConfig for ServerConfig {
             hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
                 .expect("Could not generate HBBFT netinfo");
 
-        let tls_keys = peers
-            .iter()
-            .map(|peer| {
-                let (cert, key) = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
-                (*peer, (cert, key))
-            })
-            .collect::<HashMap<_, _>>();
-
-        let cfg_peers = netinfo
-            .iter()
-            .map(|(&id, _)| {
-                let id_u16: u16 = id.into();
-                let peer = Peer {
-                    connection: ConnectionConfig {
-                        hbbft_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
-                        api_addr: Url::parse(
-                            format!("ws://127.0.0.1:{}", params.api_base_port + id_u16).as_str(),
-                        )
-                        .expect("Could not parse URL"),
-                    },
-                    tls_cert: tls_keys[&id].0.clone(),
-                };
-
-                (id, peer)
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
-            peers,
-            &BitcoindRpcCfg {
-                btc_rpc_address: params.bitcoind_rpc.clone(),
+        let peer0 = &params[&PeerId::from(0)];
+        let (wallet_server_cfg, wallet_client_cfg) =
+            WalletConfig::trusted_dealer_gen(peers, &BitcoindRpcCfg {
+                btc_rpc_address: peer0.bitcoind_rpc.clone(),
                 btc_rpc_user: "bitcoin".into(),
                 btc_rpc_pass: "bitcoin".into(),
-            },
-            &mut rng,
-        );
+            }, &mut rng);
         let (mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), &mut rng);
+            MintConfig::trusted_dealer_gen(peers, &peer0.amount_tiers, &mut rng);
         let (ln_server_cfg, ln_client_cfg) =
             LightningModuleConfig::trusted_dealer_gen(peers, &(), &mut rng);
 
         let server_config = netinfo
             .iter()
             .map(|(&id, netinf)| {
-                let id_u16: u16 = id.into();
                 let epoch_keys = epochinfo.get(&id).unwrap();
                 let config = ServerConfig {
-                    federation_name: params.federation_name.clone(),
+                    federation_name: params[&id].federation_name.clone(),
                     identity: id,
-                    hbbft_bind_addr: format!("127.0.0.1:{}", params.hbbft_base_port + id_u16),
-                    api_bind_addr: format!("127.0.0.1:{}", params.api_base_port + id_u16),
-                    tls_cert: tls_keys[&id].0.clone(),
-                    tls_key: tls_keys[&id].1.clone(),
-                    peers: cfg_peers.clone(),
+                    hbbft_bind_addr: params[&id].hbbft.bind_addr.clone(),
+                    api_bind_addr: params[&id].api.bind_addr.clone(),
+                    tls_cert: params[&id].tls.our_certificate.clone(),
+                    tls_key: params[&id].tls.our_private_key.clone(),
+                    peers: params[&id].peers(),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
@@ -145,18 +127,8 @@ impl GenerateConfig for ServerConfig {
             .collect();
 
         let client_config = ClientConfig {
-            federation_name: params.federation_name.clone(),
-            nodes: peers
-                .iter()
-                .map(|&peer| Node {
-                    name: format!("node #{}", u16::from(peer)),
-                    url: Url::parse(
-                        format!("ws://127.0.0.1:{}", params.api_base_port + u16::from(peer))
-                            .as_str(),
-                    )
-                    .expect("Could not parse Url"),
-                })
-                .collect(),
+            federation_name: peer0.federation_name.clone(),
+            nodes: peer0.api.nodes("ws://"),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
@@ -170,7 +142,7 @@ impl GenerateConfig for ServerConfig {
             .peers
             .iter()
             .map(|(peer_id, peer)| Node {
-                url: peer.connection.api_addr.clone(),
+                url: peer.api_addr.clone(),
                 name: format!("node #{}", peer_id),
             })
             .collect();
@@ -209,6 +181,83 @@ impl GenerateConfig for ServerConfig {
         self.ln.validate_config(identity);
         self.wallet.validate_config(identity);
     }
+
+    async fn distributed_gen(
+        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &Self::Params,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+        // in case we are running by ourselves, avoid DKG
+        if peers.len() == 1 {
+            let (server, client) = Self::trusted_dealer_gen(peers, params, rng);
+            return Ok((server[our_id].clone(), client));
+        }
+
+        let params = params[our_id].clone();
+        // hbbft uses a lower threshold of signing keys (f+1)
+        let mut dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
+        dkg.add(KeyType::Epoch, peers.threshold());
+
+        // run DKG for epoch and hbbft keys
+        let keys = dkg.run_g1(connections, &mut rng).await;
+        let (hbbft_pks, hbbft_sks) = keys[&KeyType::Hbbft].threshold_crypto();
+        let (epoch_pks, epoch_sks) = keys[&KeyType::Epoch].threshold_crypto();
+
+        let mut wallet = connect(params.wallet_dkg.clone(), params.tls.clone()).await;
+        let bitcoin = &BitcoindRpcCfg {
+            btc_rpc_address: params.bitcoind_rpc.clone(),
+            btc_rpc_user: "bitcoin".into(),
+            btc_rpc_pass: "bitcoin".into(),
+        };
+        let (wallet_server_cfg, wallet_client_cfg) =
+            WalletConfig::distributed_gen(&mut wallet, our_id, peers, bitcoin, &mut rng)
+                .await
+                .expect("wallet error");
+
+        let mut ln = connect(params.lightning_dkg.clone(), params.tls.clone()).await;
+        let (ln_server_cfg, ln_client_cfg) =
+            LightningModuleConfig::distributed_gen(&mut ln, our_id, peers, &(), &mut rng).await?;
+
+        let mut mint = connect(params.mint_dkg.clone(), params.tls.clone()).await;
+        let param = &params.amount_tiers;
+        let (mint_server_cfg, mint_client_cfg) =
+            MintConfig::distributed_gen(&mut mint, our_id, peers, param, &mut rng).await?;
+
+        let server = ServerConfig {
+            federation_name: params.federation_name.clone(),
+            identity: *our_id,
+            hbbft_bind_addr: params.hbbft.bind_addr.clone(),
+            api_bind_addr: params.api.bind_addr.clone(),
+            tls_cert: params.tls.our_certificate.clone(),
+            tls_key: params.tls.our_private_key.clone(),
+            peers: params.peers(),
+            hbbft_sks: SerdeSecret(hbbft_sks),
+            hbbft_pk_set: hbbft_pks,
+            epoch_sks: SerdeSecret(epoch_sks),
+            epoch_pk_set: epoch_pks,
+            wallet: wallet_server_cfg,
+            mint: mint_server_cfg,
+            ln: ln_server_cfg,
+        };
+
+        let client = ClientConfig {
+            federation_name: params.federation_name,
+            nodes: params.api.nodes("ws://"),
+            mint: mint_client_cfg,
+            wallet: wallet_client_cfg,
+            ln: ln_client_cfg,
+        };
+
+        Ok((server, client))
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub enum KeyType {
+    Hbbft,
+    Epoch,
 }
 
 impl ServerConfig {
@@ -219,7 +268,7 @@ impl ServerConfig {
             peers: self
                 .peers
                 .iter()
-                .map(|(&id, peer)| (id, peer.connection.clone()))
+                .map(|(&id, peer)| (id, peer.hbbft.clone()))
                 .collect(),
         }
     }
@@ -247,6 +296,111 @@ impl ServerConfig {
             ln: self.ln.fee_consensus.clone(),
         }
     }
+}
+
+impl ServerConfigParams {
+    pub fn peers(&self) -> BTreeMap<PeerId, Peer> {
+        self.hbbft
+            .peers
+            .iter()
+            .map(|(peer, hbbft)| {
+                (
+                    *peer,
+                    Peer {
+                        hbbft: hbbft.clone(),
+                        tls_cert: self.tls.peer_certs[peer].clone(),
+                        api_addr: Url::parse(&format!("ws://{}", self.api.peers[peer].address))
+                            .expect("Could not parse URL"),
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+    }
+
+    /// config for servers running on different ports on a local network
+    pub fn gen_local(
+        peers: &[PeerId],
+        amount_tiers: Vec<Amount>,
+        base_port: u16,
+        federation_name: &str,
+        bitcoind_rpc: String,
+    ) -> HashMap<PeerId, ServerConfigParams> {
+        let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
+            .iter()
+            .map(|peer| {
+                let (cert, key) = gen_cert_and_key(&format!("peer-{}", peer.to_usize())).unwrap();
+                (*peer, (cert, key))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let certs: HashMap<PeerId, rustls::Certificate> = keys
+            .iter()
+            .map(|(peer, (cert, _))| (*peer, cert.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let tls_config: HashMap<PeerId, TlsConfig> = keys
+            .iter()
+            .map(|(peer, (cert, key))| {
+                (
+                    *peer,
+                    TlsConfig {
+                        our_certificate: cert.clone(),
+                        our_private_key: key.clone(),
+                        peer_certs: certs.clone(),
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let port = base_port as usize;
+        peers
+            .iter()
+            .map(|peer| {
+                (
+                    *peer,
+                    ServerConfigParams {
+                        tls: tls_config.get(peer).expect("exists").clone(),
+                        hbbft: Self::gen_local_network(peers, peer, port),
+                        api: Self::gen_local_network(peers, peer, port + peers.len()),
+                        server_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 2),
+                        wallet_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 3),
+                        lightning_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 4),
+                        mint_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 5),
+                        amount_tiers: amount_tiers.clone(),
+                        federation_name: federation_name.to_string(),
+                        bitcoind_rpc: bitcoind_rpc.clone()
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn gen_local_network(peers: &[PeerId], our_id: &PeerId, base_port: usize) -> NetworkConfig {
+        NetworkConfig {
+            identity: *our_id,
+            bind_addr: format!("127.0.0.1:{}", base_port + our_id.to_usize()),
+            peers: peers
+                .iter()
+                .map(|peer| {
+                    (*peer, {
+                        ConnectionConfig {
+                            address: format!("127.0.0.1:{}", base_port + peer.to_usize()),
+                        }
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+
+pub async fn connect<T>(network: NetworkConfig, certs: TlsConfig) -> AnyPeerConnections<T>
+where
+    T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
+{
+    let connector = TlsTcpConnector::new(certs).into_dyn();
+    ReconnectPeerConnections::new(network, connector)
+        .await
+        .into_dyn()
 }
 
 pub(crate) fn gen_cert_and_key(

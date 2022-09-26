@@ -110,7 +110,7 @@ impl FedimintServer {
             .peers
             .clone()
             .into_iter()
-            .map(|(id, peer)| (id, peer.connection.api_addr));
+            .map(|(id, peer)| (id, peer.api_addr));
         let api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
 
         FedimintServer {

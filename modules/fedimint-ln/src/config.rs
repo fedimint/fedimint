@@ -1,11 +1,13 @@
 use async_trait::async_trait;
-use fedimint_api::config::GenerateConfig;
+use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use threshold_crypto::serde_impl::SerdeSecret;
+use threshold_crypto::G1Projective;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningModuleConfig {
@@ -27,6 +29,8 @@ pub struct LightningModuleClientConfig {
 impl GenerateConfig for LightningModuleConfig {
     type Params = ();
     type ClientConfig = LightningModuleClientConfig;
+    type ConfigMessage = ((), DkgMessage<G1Projective>);
+    type ConfigError = ();
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
@@ -75,6 +79,31 @@ impl GenerateConfig for LightningModuleConfig {
                 .public_key_share(identity.to_usize()),
             "Lightning private key doesn't match pubkey share"
         )
+    }
+
+    async fn distributed_gen(
+        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        _params: &Self::Params,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+        let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
+        let (pks, sks) = dkg.run_g1(connections, &mut rng).await[&()].threshold_crypto();
+
+        let server = LightningModuleConfig {
+            threshold_pub_keys: pks.clone(),
+            threshold_sec_key: SerdeSecret(sks),
+            threshold: peers.threshold(),
+            fee_consensus: Default::default(),
+        };
+
+        let client = LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: Default::default(),
+        };
+
+        Ok((server, client))
     }
 }
 

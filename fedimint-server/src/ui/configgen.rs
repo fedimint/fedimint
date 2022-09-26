@@ -86,20 +86,20 @@ fn trusted_dealer_gen(
         .map(|(&id, _)| {
             let id_u16: u16 = id.into();
             let peer = ServerPeer {
-                connection: ConnectionConfig {
-                    hbbft_addr: format!(
+                hbbft: ConnectionConfig {
+                    address: format!(
                         "{}:{}",
                         hostnames[id_u16 as usize].clone(),
                         hbbft_base_port + id_u16
                     ),
-                    api_addr: {
-                        let s = format!(
-                            "ws://{}:{}",
-                            hostnames[id_u16 as usize].clone(),
-                            api_base_port + id_u16
-                        );
-                        Url::parse(&s).expect("Could not parse URL")
-                    },
+                },
+                api_addr: {
+                    let s = format!(
+                        "ws://{}:{}",
+                        hostnames[id_u16 as usize].clone(),
+                        api_base_port + id_u16
+                    );
+                    Url::parse(&s).expect("Could not parse URL")
                 },
                 tls_cert: tls_keys[&id].0.clone(),
             };

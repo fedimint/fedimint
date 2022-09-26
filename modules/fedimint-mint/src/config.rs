@@ -1,12 +1,14 @@
 use async_trait::async_trait;
-use fedimint_api::config::GenerateConfig;
-use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
+use fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::iter::FromIterator;
 use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
+use threshold_crypto::group::Curve;
+use threshold_crypto::G2Projective;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MintConfig {
@@ -26,6 +28,8 @@ pub struct MintClientConfig {
 impl GenerateConfig for MintConfig {
     type Params = [Amount];
     type ClientConfig = MintClientConfig;
+    type ConfigMessage = (Amount, DkgMessage<G2Projective>);
+    type ConfigError = ();
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
@@ -104,6 +108,57 @@ impl GenerateConfig for MintConfig {
         let pks: BTreeMap<Amount, PublicKeyShare> =
             self.peer_tbs_pks.get(identity).unwrap().as_map().clone();
         assert_eq!(sks, pks, "Mint private key doesn't match pubkey share");
+    }
+
+    async fn distributed_gen(
+        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &Self::Params,
+        mut rng: impl RngCore + CryptoRng,
+    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError> {
+        let mut dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
+        let amounts_keys = dkg
+            .run_g2(connections, &mut rng)
+            .await
+            .into_iter()
+            .map(|(amount, keys)| (amount, keys.tbs()))
+            .collect::<HashMap<_, _>>();
+
+        let server = MintConfig {
+            tbs_sks: amounts_keys
+                .iter()
+                .map(|(amount, (_, sks))| (*amount, *sks))
+                .collect(),
+            peer_tbs_pks: peers
+                .iter()
+                .map(|peer| {
+                    let pks = amounts_keys
+                        .iter()
+                        .map(|(amount, (pks, _))| {
+                            let pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                            (*amount, pks)
+                        })
+                        .collect::<Tiered<PublicKeyShare>>();
+
+                    (*peer, pks)
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+            threshold: peers.threshold(),
+        };
+
+        let client = MintClientConfig {
+            tbs_pks: amounts_keys
+                .iter()
+                .map(|(amount, (pks, _))| {
+                    (*amount, AggregatePublicKey(pks.evaluate(0).to_affine()))
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+        };
+
+        Ok((server, client))
     }
 }
 
