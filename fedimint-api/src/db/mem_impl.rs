@@ -4,12 +4,12 @@ use crate::db::PrefixIter;
 use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tracing::error;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct MemDatabase {
-    data: Arc<Mutex<BTreeMap<Vec<u8>, Vec<u8>>>>,
+    data: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
