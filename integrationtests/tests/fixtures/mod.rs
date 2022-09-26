@@ -159,7 +159,7 @@ pub async fn fixtures(
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
             let bitcoin = FakeBitcoinTest::new();
-            let bitcoin_rpc = || Box::new(bitcoin.clone()) as Box<dyn BitcoindRpc>;
+            let bitcoin_rpc = || bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
             let net = MockNetwork::new();
             let net_ref = &net;
@@ -362,7 +362,7 @@ pub struct FederationTest {
 struct ServerTest {
     fedimint: FedimintServer,
     last_consensus: Vec<ConsensusOutcome>,
-    bitcoin_rpc: Box<dyn BitcoindRpc>,
+    bitcoin_rpc: BitcoindRpc,
     database: Database,
     override_proposal: Option<ConsensusProposal>,
     dropped_peers: Vec<PeerId>,
@@ -573,7 +573,7 @@ impl FederationTest {
         for server in &self.servers {
             block_on(fedimint_wallet::broadcast_pending_tx(
                 &server.borrow().database,
-                server.borrow().bitcoin_rpc.as_ref(),
+                &server.borrow().bitcoin_rpc,
             ));
         }
     }
@@ -705,7 +705,7 @@ impl FederationTest {
     async fn new(
         server_config: BTreeMap<PeerId, ServerConfig>,
         database_gen: &impl Fn() -> Database,
-        bitcoin_gen: &impl Fn() -> Box<dyn BitcoindRpc>,
+        bitcoin_gen: &impl Fn() -> BitcoindRpc,
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {

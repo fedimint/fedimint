@@ -98,7 +98,7 @@ impl FedimintServer {
     pub async fn new_with(
         cfg: ServerConfig,
         database: Database,
-        bitcoind: impl Fn() -> Box<dyn BitcoindRpc>,
+        bitcoind: impl Fn() -> BitcoindRpc,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {
         cfg.validate_config(&cfg.identity);

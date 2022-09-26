@@ -1,3 +1,4 @@
+use crate::bitcoind::IBitcoindRpc;
 use crate::config::WalletConfig;
 use crate::{bitcoind::BitcoindRpc, Feerate};
 use async_trait::async_trait;
@@ -10,8 +11,8 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tracing::warn;
 
-pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
-    move || -> Box<dyn BitcoindRpc> {
+pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> BitcoindRpc {
+    move || -> BitcoindRpc {
         let bitcoind_client = bitcoincore_rpc::Client::new(
             &cfg.btc_rpc_address,
             Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
@@ -24,7 +25,7 @@ pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> Box<dyn BitcoindRpc> {
             base_sleep: Duration::from_millis(10),
         };
 
-        Box::new(retry_client)
+        retry_client.into()
     }
 }
 
@@ -67,7 +68,7 @@ impl bitcoincore_rpc::RpcApi for RetryClient {
 }
 
 #[async_trait]
-impl<T> BitcoindRpc for T
+impl<T> IBitcoindRpc for T
 where
     T: bitcoincore_rpc::RpcApi + Send + Sync,
 {
