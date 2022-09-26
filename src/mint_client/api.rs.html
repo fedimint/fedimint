@@ -665,6 +665,16 @@
 <span id="665">665</span>
 <span id="666">666</span>
 <span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
@@ -683,6 +693,8 @@
 <span class="kw">use </span>tracing::{error, info, instrument};
 <span class="kw">use </span>url::Url;
 
+<span class="attribute">#[cfg(target_os = <span class="string">&quot;android&quot;</span>)]
+</span><span class="kw">use </span>jsonrpsee_core::client::CertificateStore;
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 
@@ -954,7 +966,15 @@
 <span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
     <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>Url) -&gt; std::result::Result&lt;<span class="self">Self</span>, JsonRpcError&gt; {
-        WsClientBuilder::default()
+        <span class="comment">// rustls-native-certs doesn&#39;t support android
+        </span><span class="attribute">#[cfg(target_os = <span class="string">&quot;android&quot;</span>)]
+        </span><span class="kw">return </span>WsClientBuilder::default()
+            .certificate_store(CertificateStore::WebPki)
+            .build(url_to_string_with_default_port(url)) <span class="comment">// Hack for default ports, see fn docs
+            </span>.<span class="kw">await</span>;
+
+        <span class="attribute">#[cfg(not(target_os = <span class="string">&quot;android&quot;</span>))]
+        </span>WsClientBuilder::default()
             .build(url_to_string_with_default_port(url)) <span class="comment">// Hack for default ports, see fn docs
             </span>.<span class="kw">await
     </span>}
