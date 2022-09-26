@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use crate::Feerate;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Transaction};
+use fedimint_api::dyn_newtype_define;
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
 /// Functions may panic if if the bitcoind node is not reachable.
 #[async_trait]
-pub trait BitcoindRpc: Send + Sync {
+pub trait IBitcoindRpc: Send + Sync {
     /// Returns the Bitcoin network the node is connected to
     async fn get_network(&self) -> bitcoin::Network;
 
@@ -42,9 +45,14 @@ pub trait BitcoindRpc: Send + Sync {
     async fn submit_transaction(&self, transaction: Transaction);
 }
 
+dyn_newtype_define! {
+    #[derive(Clone)]
+    BitcoindRpc(Arc<IBitcoindRpc>)
+}
+
 #[allow(dead_code)]
 pub mod test {
-    use crate::bitcoind::BitcoindRpc;
+    use super::IBitcoindRpc;
     use crate::Feerate;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
@@ -60,7 +68,7 @@ pub mod test {
         tx_in_blocks: HashMap<BlockHash, Vec<Transaction>>,
     }
 
-    #[derive(Clone, Default)]
+    #[derive(Default, Clone)]
     pub struct FakeBitcoindRpc {
         state: Arc<Mutex<FakeBitcoindRpcState>>,
     }
@@ -70,7 +78,7 @@ pub mod test {
     }
 
     #[async_trait]
-    impl BitcoindRpc for FakeBitcoindRpc {
+    impl IBitcoindRpc for FakeBitcoindRpc {
         async fn get_network(&self) -> Network {
             bitcoin::Network::Regtest
         }

@@ -14,7 +14,7 @@ use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
 use rand::rngs::OsRng;
 
 use fedimint_api::Amount;
-use fedimint_wallet::bitcoind::BitcoindRpc;
+use fedimint_wallet::bitcoind::IBitcoindRpc;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::Feerate;
 use ln_gateway::ln::{LightningError, LnRpc};
@@ -195,7 +195,7 @@ impl BitcoinTest for FakeBitcoinTest {
 }
 
 #[async_trait]
-impl BitcoindRpc for FakeBitcoinTest {
+impl IBitcoindRpc for FakeBitcoinTest {
     async fn get_network(&self) -> Network {
         Network::Regtest
     }

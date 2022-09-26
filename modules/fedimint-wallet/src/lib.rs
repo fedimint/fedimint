@@ -91,7 +91,7 @@ pub struct RoundConsensus {
 pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
-    btc_rpc: Box<dyn BitcoindRpc>,
+    btc_rpc: BitcoindRpc,
     db: Database,
 }
 
@@ -544,7 +544,7 @@ impl Wallet {
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
-        bitcoind_gen: impl Fn() -> Box<dyn BitcoindRpc>,
+        bitcoind_gen: impl Fn() -> BitcoindRpc,
     ) -> Result<Wallet, WalletError> {
         let broadcaster_bitcoind_rpc = bitcoind_gen();
         let broadcaster_db = db.clone();
@@ -1141,14 +1141,14 @@ pub fn is_address_valid_for_network(address: &Address, network: Network) -> bool
 }
 
 #[instrument(level = "debug", skip_all)]
-pub async fn run_broadcast_pending_tx(db: Database, rpc: Box<dyn BitcoindRpc>) {
+pub async fn run_broadcast_pending_tx(db: Database, rpc: BitcoindRpc) {
     loop {
-        broadcast_pending_tx(&db, rpc.as_ref()).await;
+        broadcast_pending_tx(&db, &rpc).await;
         fedimint_api::task::sleep(Duration::from_secs(10)).await;
     }
 }
 
-pub async fn broadcast_pending_tx(db: &Database, rpc: &dyn BitcoindRpc) {
+pub async fn broadcast_pending_tx(db: &Database, rpc: &BitcoindRpc) {
     let pending_tx = db
         .find_by_prefix(&PendingTransactionPrefixKey)
         .collect::<Result<Vec<_>, _>>()

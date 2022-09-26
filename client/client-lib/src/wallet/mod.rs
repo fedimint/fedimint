@@ -263,7 +263,7 @@ mod tests {
                 move |cfg, db| {
                     let btc_rpc_clone = btc_rpc.clone();
                     async move {
-                        Wallet::new_with_bitcoind(cfg, db, || Box::new(btc_rpc_clone.clone()))
+                        Wallet::new_with_bitcoind(cfg, db, || btc_rpc_clone.clone().into())
                             .await
                             .unwrap()
                     }
