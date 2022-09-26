@@ -32,6 +32,24 @@ function await_server_on_port() {
   done
 }
 
+# Check that core-lightning block-proccessing is caught up
+# CLI integration tests should call this before attempting to pay invoices
+function await_cln_block_processing() {
+  EXPECTED_BLOCK_HEIGHT="$($FM_BTC_CLIENT getblockchaininfo | jq -r '.blocks')"
+
+  # ln1
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN1 getinfo | jq -r '.blockheight')" ]
+  do
+      sleep $POLL_INTERVAL
+  done
+
+  # ln2
+  until [ $EXPECTED_BLOCK_HEIGHT == "$($FM_LN2 getinfo | jq -r '.blockheight')" ]
+  do
+      sleep $POLL_INTERVAL
+  done
+}
+
 # Function for killing processes stored in FM_PID_FILE
 function kill_fedimint_processes {
   # shellcheck disable=SC2046

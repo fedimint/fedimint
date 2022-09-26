@@ -36,6 +36,7 @@ RECEIVED=$($FM_BTC_CLIENT getreceivedbyaddress $PEG_OUT_ADDR)
 
 # outgoing lightning
 INVOICE="$($FM_LN2 invoice 100000 test test 1m | jq -r '.bolt11')"
+await_cln_block_processing
 $FM_MINT_CLIENT ln-pay $INVOICE
 # Check that ln-gateway has received the ecash notes from the user payment
 # 100,000 sats + 100 sats without processing fee
