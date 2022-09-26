@@ -260,7 +260,6 @@ mod tests {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Wallet, WalletClientConfig>::new(
                 4,
-                1,
                 move |cfg, db| {
                     let btc_rpc_clone = btc_rpc.clone();
                     async move {

@@ -471,7 +471,6 @@ mod tests {
         let fed = Arc::new(tokio::sync::Mutex::new(
             FakeFed::<Mint, MintClientConfig>::new(
                 4,
-                1,
                 |cfg, db| async { Mint::new(cfg, db) },
                 &[Amount::from_sat(1), Amount::from_sat(10)][..],
             )

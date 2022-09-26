@@ -1,7 +1,7 @@
 use clap::Parser;
 use fedimint::config::{ServerConfig, ServerConfigParams};
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::{Amount, PeerId};
+use fedimint_api::{Amount, NumPeers, PeerId};
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 
@@ -57,10 +57,9 @@ fn main() {
     std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
 
     let peers = (0..nodes).map(PeerId::from).collect::<Vec<_>>();
-    let max_evil = hbbft::util::max_faulty(peers.len());
     println!(
         "Generating keys such that up to {} peers may fail/be evil",
-        max_evil
+        peers.max_evil()
     );
     let params = ServerConfigParams {
         hbbft_base_port,
@@ -69,8 +68,7 @@ fn main() {
         federation_name,
     };
 
-    let (server_cfg, client_cfg) =
-        ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, &mut rng);
+    let (server_cfg, client_cfg) = ServerConfig::trusted_dealer_gen(&peers, &params, &mut rng);
 
     for (id, cfg) in server_cfg {
         let mut path: PathBuf = cfg_path.clone();

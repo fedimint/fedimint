@@ -35,7 +35,7 @@ async fn main() {
         }
         Commands::ApiCall { url, method, arg } => {
             let arg: serde_json::Value = serde_json::from_str(&arg).unwrap();
-            let api = WsFederationApi::new(0, vec![(PeerId::from(0), url)]);
+            let api = WsFederationApi::new(vec![(PeerId::from(0), url)]);
             let response: serde_json::Value =
                 api.request(&method, arg, TrustAllPeers).await.unwrap();
             let formatted = serde_json::to_string_pretty(&response).unwrap();

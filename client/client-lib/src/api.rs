@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
-use fedimint_api::{OutPoint, PeerId, TransactionId};
+use fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -127,7 +127,6 @@ impl<'a> dyn FederationApi + 'a {
 #[derive(Debug)]
 pub struct WsFederationApi<C = WsClient> {
     members: Vec<FederationMember<C>>,
-    max_evil: usize,
 }
 
 #[derive(Debug)]
@@ -141,12 +140,10 @@ struct FederationMember<C> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WsFederationConnect {
     pub members: Vec<(PeerId, Url)>,
-    pub max_evil: usize,
 }
 
 impl From<&ClientConfig> for WsFederationConnect {
     fn from(config: &ClientConfig) -> Self {
-        let max_evil = config.max_evil;
         let members: Vec<(PeerId, Url)> = config
             .nodes
             .iter()
@@ -157,7 +154,7 @@ impl From<&ClientConfig> for WsFederationConnect {
                 (peer_id, url)
             })
             .collect();
-        WsFederationConnect { members, max_evil }
+        WsFederationConnect { members }
     }
 }
 
@@ -197,36 +194,48 @@ impl ApiError {
 impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
     /// Fetch the outcome of an entire transaction
     async fn fetch_tx_outcome(&self, tx: TransactionId) -> Result<TransactionStatus> {
-        self.request("/fetch_transaction", tx, Retry404::new(self.max_evil))
-            .await
+        self.request(
+            "/fetch_transaction",
+            tx,
+            Retry404::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     /// Submit a transaction to all federation members
     async fn submit_transaction(&self, tx: Transaction) -> Result<TransactionId> {
         // TODO: check the id is correct
-        self.request("/transaction", tx, CurrentConsensus::new(self.max_evil))
-            .await
+        self.request(
+            "/transaction",
+            tx,
+            CurrentConsensus::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     async fn fetch_epoch_history(&self, epoch: u64, epoch_pk: PublicKey) -> Result<EpochHistory> {
         self.request(
             "/fetch_epoch_history",
             epoch,
-            ValidHistory::new(epoch_pk, self.max_evil),
+            ValidHistory::new(epoch_pk, self.peers().one_honest()),
         )
         .await
     }
 
     async fn fetch_contract(&self, contract: ContractId) -> Result<ContractAccount> {
-        self.request("/ln/account", contract, Retry404::new(self.max_evil))
-            .await
+        self.request(
+            "/ln/account",
+            contract,
+            Retry404::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     async fn fetch_consensus_block_height(&self) -> Result<u64> {
         self.request(
             "/wallet/block_height",
             (),
-            EventuallyConsistent::new(self.max_evil),
+            EventuallyConsistent::new(self.peers().one_honest()),
         )
         .await
     }
@@ -239,26 +248,34 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request(
             "/wallet/peg_out_fees",
             (address, amount.as_sat()),
-            EventuallyConsistent::new(self.max_evil),
+            EventuallyConsistent::new(self.peers().one_honest()),
         )
         .await
     }
 
     async fn fetch_offer(&self, payment_hash: Sha256Hash) -> Result<IncomingContractOffer> {
-        self.request("/ln/offer", payment_hash, Retry404::new(self.max_evil))
-            .await
+        self.request(
+            "/ln/offer",
+            payment_hash,
+            Retry404::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     async fn fetch_gateways(&self) -> Result<Vec<LightningGateway>> {
-        self.request("/ln/list_gateways", (), UnionResponses::new(self.max_evil))
-            .await
+        self.request(
+            "/ln/list_gateways",
+            (),
+            UnionResponses::new(self.peers().one_honest()),
+        )
+        .await
     }
 
     async fn register_gateway(&self, gateway: LightningGateway) -> Result<()> {
         self.request(
             "/ln/register_gateway",
             gateway,
-            CurrentConsensus::new(self.max_evil * 2),
+            CurrentConsensus::new(self.peers().threshold()),
         )
         .await
     }
@@ -268,7 +285,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
             .request(
                 "/ln/offer",
                 payment_hash,
-                CurrentConsensus::new(self.max_evil),
+                CurrentConsensus::new(self.peers().one_honest()),
             )
             .await;
 
@@ -309,14 +326,18 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(max_evil: usize, members: Vec<(PeerId, Url)>) -> Self {
-        Self::new_with_client(max_evil, members)
+    pub fn new(members: Vec<(PeerId, Url)>) -> Self {
+        Self::new_with_client(members)
     }
 }
 
 impl<C> WsFederationApi<C> {
+    pub fn peers(&self) -> Vec<PeerId> {
+        self.members.iter().map(|member| member.peer_id).collect()
+    }
+
     /// Creates a new API client
-    pub fn new_with_client(max_evil: usize, members: Vec<(PeerId, Url)>) -> Self {
+    pub fn new_with_client(members: Vec<(PeerId, Url)>) -> Self {
         WsFederationApi {
             members: members
                 .into_iter()
@@ -334,7 +355,6 @@ impl<C> WsFederationApi<C> {
                     }
                 })
                 .collect(),
-            max_evil,
         }
     }
 }

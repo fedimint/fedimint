@@ -6,6 +6,7 @@ pub use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 pub use module::{FederationModule, InputMeta};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -78,6 +79,50 @@ pub enum ParseAmountError {
     #[error("Error parsing string as a bitcoin amount: {0}")]
     WrongBitcoinAmount(#[from] bitcoin::util::amount::ParseAmountError),
 }
+
+impl<T> NumPeers for BTreeMap<PeerId, T> {
+    fn total(&self) -> usize {
+        self.len()
+    }
+}
+
+impl NumPeers for &[PeerId] {
+    fn total(&self) -> usize {
+        self.len()
+    }
+}
+
+impl NumPeers for Vec<PeerId> {
+    fn total(&self) -> usize {
+        self.len()
+    }
+}
+
+/// for consensus-related calculations given the number of peers
+pub trait NumPeers {
+    fn total(&self) -> usize;
+
+    /// number of peers that can be evil without disrupting the federation
+    fn max_evil(&self) -> usize {
+        (self.total() - 1) / 3
+    }
+
+    /// number of peers to select such that one is honest (under our assumptions)
+    fn one_honest(&self) -> usize {
+        self.max_evil() + 1
+    }
+
+    /// Degree of a underlying polynomial to require `threshold` signatures
+    fn degree(&self) -> usize {
+        self.threshold() - 1
+    }
+
+    /// number of peers required for a signature
+    fn threshold(&self) -> usize {
+        self.total() - self.max_evil()
+    }
+}
+
 impl PeerId {
     pub fn to_usize(self) -> usize {
         self.0 as usize

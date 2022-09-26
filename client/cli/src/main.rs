@@ -1,6 +1,6 @@
 use bitcoin::{secp256k1, Address, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_api::{Amount, NumPeers, OutPoint, TransactionId};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::mint::tiered::TieredMulti;
@@ -310,9 +310,13 @@ async fn main() {
         if let Command::JoinFederation { connect } = cli.command {
             let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
-            let api = WsFederationApi::new(connect_obj.max_evil, connect_obj.members);
+            let api = WsFederationApi::new(connect_obj.members);
             let cfg: ClientConfig = api
-                .request("/config", (), CurrentConsensus::new(connect_obj.max_evil))
+                .request(
+                    "/config",
+                    (),
+                    CurrentConsensus::new(api.peers().one_honest()),
+                )
                 .await
                 .or_terminate(
                     CliErrorKind::NetworkError,

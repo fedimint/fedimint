@@ -754,12 +754,8 @@ mod test {
 
     fn build_configs() -> (Vec<MintConfig>, MintClientConfig) {
         let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
-        let (mint_cfg, client_cfg) = MintConfig::trusted_dealer_gen(
-            &peers,
-            THRESHOLD,
-            &[Amount::from_sat(1)],
-            OsRng::new().unwrap(),
-        );
+        let (mint_cfg, client_cfg) =
+            MintConfig::trusted_dealer_gen(&peers, &[Amount::from_sat(1)], OsRng::new().unwrap());
 
         (mint_cfg.into_iter().map(|(_, c)| c).collect(), client_cfg)
     }

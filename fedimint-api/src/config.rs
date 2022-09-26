@@ -11,7 +11,6 @@ pub trait GenerateConfig: Sized {
     /// testing as the generating machine would be a single point of failure/compromise.
     fn trusted_dealer_gen(
         peers: &[PeerId],
-        max_evil: usize,
         params: &Self::Params,
         rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig);

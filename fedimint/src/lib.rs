@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 use config::ServerConfig;
 use fedimint_api::db::Database;
-use fedimint_api::PeerId;
+use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
 use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
@@ -140,10 +140,7 @@ impl FedimintServer {
             .clone()
             .into_iter()
             .map(|(id, peer)| (id, peer.connection.api_addr));
-        let api = Arc::new(WsFederationApi::new(
-            cfg.max_faulty(),
-            api_endpoints.collect(),
-        ));
+        let api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
 
         FedimintServer {
             connections,
@@ -274,8 +271,8 @@ impl FedimintServer {
         let pks = self.cfg.epoch_pk_set.public_key();
         // last signed epoch is at most 3 epochs before the next epoch + faulty nodes because
         // faulty nodes can withhold sigs for an epoch before getting banned
-        let max_age: u64 = self.cfg.max_faulty() as u64 + 3;
-        let threshold = self.cfg.threshold();
+        let max_age: u64 = self.cfg.peers.max_evil() as u64 + 3;
+        let threshold = self.cfg.peers.threshold();
 
         // include our expected next_epoch as well in case we can contribute to the next consensus
         let last_saved = self.consensus.db.get_value(&LastEpochKey);

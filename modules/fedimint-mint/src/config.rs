@@ -1,7 +1,7 @@
 use crate::tiered::TieredMultiZip;
 use crate::Tiered;
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::{Amount, PeerId};
+use fedimint_api::{Amount, NumPeers, PeerId};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -28,16 +28,13 @@ impl GenerateConfig for MintConfig {
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
-        max_evil: usize,
         params: &Self::Params,
         _rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let tbs_threshold = peers.len() - max_evil;
-
         let tbs_keys = params
             .iter()
             .map(|&amount| {
-                let (tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(tbs_threshold, peers.len());
+                let (tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
                 (amount, (tbs_pk, tbs_pks, tbs_sks))
             })
             .collect::<HashMap<_, _>>();
@@ -46,7 +43,7 @@ impl GenerateConfig for MintConfig {
             .iter()
             .map(|&peer| {
                 let config = MintConfig {
-                    threshold: tbs_threshold,
+                    threshold: peers.threshold(),
                     tbs_sks: params
                         .iter()
                         .map(|amount| (*amount, tbs_keys[amount].2[peer.to_usize()]))

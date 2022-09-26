@@ -3,7 +3,7 @@ use crate::{Feerate, PegInDescriptor};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::PeerId;
+use fedimint_api::{NumPeers, PeerId};
 use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -56,7 +56,6 @@ impl GenerateConfig for WalletConfig {
 
     fn trusted_dealer_gen(
         peers: &[PeerId],
-        max_evil: usize,
         _params: &Self::Params,
         mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
@@ -69,7 +68,7 @@ impl GenerateConfig for WalletConfig {
 
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(
-                peers.len() - max_evil,
+                peers.threshold(),
                 btc_pegin_keys
                     .iter()
                     .map(|(_, (_, pk))| CompressedPublicKey { key: *pk })

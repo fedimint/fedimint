@@ -116,9 +116,8 @@ pub async fn fixtures(
     };
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
 
-    let max_evil = hbbft::util::max_faulty(peers.len());
     let (server_config, client_config) =
-        ServerConfig::trusted_dealer_gen(&peers, max_evil, &params, OsRng::new().unwrap());
+        ServerConfig::trusted_dealer_gen(&peers, &params, OsRng::new().unwrap());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
@@ -327,7 +326,6 @@ impl UserTest {
 
     fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Database) -> Self {
         let api = Box::new(WsFederationApi::new(
-            config.0.max_evil,
             config
                 .0
                 .nodes
