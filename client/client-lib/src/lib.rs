@@ -730,7 +730,7 @@ impl Client<UserClientConfig> {
             )
             .json(&contract_id)
             .send();
-        let result = fedimint_api::task::timeout(Duration::from_secs(15), future)
+        let result = fedimint_api::task::timeout(Duration::from_secs(120), future)
             .await
             .map_err(|_| ClientError::OutgoingPaymentTimeout)?
             .map_err(ClientError::HttpError);
