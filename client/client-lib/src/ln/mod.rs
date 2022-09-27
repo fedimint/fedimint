@@ -102,6 +102,37 @@ impl<'c> LnClient<'c> {
         }
     }
 
+    /// Determines if an outgoing contract can be refunded
+    pub async fn is_outgoing_contract_refundable(&self, id: ContractId) -> Result<bool> {
+        let contract = self.get_outgoing_contract(id).await?;
+
+        // If the contract was cancelled by the LN gateway we can get a refund instantly …
+        if contract.contract.cancelled {
+            return Ok(true);
+        }
+
+        // … otherwise we have to wait till the timeout hits
+        let consensus_block_height = self
+            .context
+            .api
+            .fetch_consensus_block_height()
+            .await
+            .map_err(LnClientError::ApiError)?;
+        if contract.contract.timelock as u64 <= consensus_block_height {
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    /// Waits for an outgoing contract to become refundable
+    pub async fn await_outgoing_refundable(&self, id: ContractId) -> Result<()> {
+        while !self.is_outgoing_contract_refundable(id).await? {
+            crate::sleep(Duration::from_secs(1)).await;
+        }
+        Ok(())
+    }
+
     pub async fn get_incoming_contract(&self, id: ContractId) -> Result<IncomingContractAccount> {
         let account = self.get_contract_account(id).await?;
         match account.contract {

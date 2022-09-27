@@ -736,12 +736,19 @@ impl Client<UserClientConfig> {
             .map_err(ClientError::HttpError);
 
         if let Ok(response) = result {
-            if !response.status().is_success() {
-                // wait for gateway cancellation to be accepted by federation
-                fedimint_api::task::sleep(std::time::Duration::from_secs(1)).await;
-                self.try_refund_outgoing_contract(contract_id, rng).await?;
-                return Err(ClientError::RefundedFailedPayment);
+            if response.status().is_success() {
+                return Ok(());
             }
+
+            fedimint_api::task::timeout(
+                Duration::from_secs(10),
+                self.ln_client().await_outgoing_refundable(contract_id),
+            )
+            .await
+            .map_err(|_| ClientError::FailedPaymentNoRefund)??;
+
+            self.try_refund_outgoing_contract(contract_id, rng).await?;
+            return Err(ClientError::RefundedFailedPayment);
         };
 
         Ok(())
@@ -1123,6 +1130,8 @@ pub enum ClientError {
     RefundUnknownOutgoingContract,
     #[error("Routing outgoing payment failed but we got a refund")]
     RefundedFailedPayment,
+    #[error("Routing outgoing payment failed, we didn't get a refund (yet)")]
+    FailedPaymentNoRefund,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
