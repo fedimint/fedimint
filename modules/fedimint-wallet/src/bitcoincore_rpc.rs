@@ -3,13 +3,19 @@ use crate::{bitcoind::BitcoindRpc, Feerate};
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
-use bitcoincore_rpc::Auth;
+use bitcoincore_rpc::jsonrpc::error::RpcError;
+use bitcoincore_rpc::{jsonrpc, Auth, Error};
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::module::__reexports::serde_json::Value;
+use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tracing::warn;
+
+// https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48
+
+const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
 pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg) -> Result<BitcoindRpc, bitcoincore_rpc::Error> {
     let bitcoind_client = bitcoincore_rpc::Client::new(
@@ -47,6 +53,17 @@ impl bitcoincore_rpc::RpcApi for RetryClient {
                     break ret;
                 }
                 Err(e) => {
+                    // Do not retry if transaction was alreadty submitted
+                    if let Error::JsonRpc(JsonError::Rpc(RpcError {
+                        code: RPC_VERIFY_ALREADY_IN_CHAIN,
+                        ..
+                    })) = e
+                    {
+                        if cmd == "sendrawtransaction" {
+                            return Err(e);
+                        }
+                    }
+
                     warn!("bitcoind returned error on cmd '{}': {}", cmd, e);
                     let retries = self.retries.fetch_add(1, Ordering::Relaxed);
 
