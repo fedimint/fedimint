@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["main",""]],"struct":[["Options","Config generator for Fedimint Federation"]]};
+window.SIDEBAR_ITEMS = {"enum":[["Command",""]],"fn":[["main",""]],"struct":[["Cli",""]]};

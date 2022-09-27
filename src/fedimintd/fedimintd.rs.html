@@ -53,6 +53,13 @@
 <span id="53">53</span>
 <span id="54">54</span>
 <span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>clap::Parser;
@@ -74,6 +81,13 @@
 
 <span class="attribute">#[tokio::main]
 </span><span class="kw">async fn </span>main() {
+    <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
+        <span class="kw">if </span>arg.as_str() == <span class="string">&quot;version-hash&quot; </span>{
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
+            <span class="kw">return</span>;
+        }
+    }
     <span class="kw">let </span>opts = ServerOpts::parse();
     <span class="kw">let </span>fmt_layer = tracing_subscriber::fmt::layer();
     <span class="kw">let </span>filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>));
@@ -109,4 +123,4 @@
     </span>opentelemetry::global::shutdown_tracer_provider();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f5193a9fc 2022-09-25)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8b705839c 2022-09-26)" ></div></body></html>

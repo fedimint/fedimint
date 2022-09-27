@@ -91,6 +91,12 @@
 <span id="91">91</span>
 <span id="92">92</span>
 <span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>bitcoin::Transaction;
 <span class="kw">use </span>clap::{Parser, Subcommand};
@@ -111,6 +117,8 @@
 }
 <span class="attribute">#[derive(Subcommand)]
 </span><span class="kw">enum </span>Commands {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
     <span class="doccomment">/// rpc-method: info()
     </span>Info,
     <span class="doccomment">/// rpc-method: pending()
@@ -142,6 +150,10 @@
     <span class="kw">let </span>args = Cli::parse();
 
     <span class="kw">match </span>args.command {
+        Commands::VersionHash =&gt; {
+            <span class="comment">//TODO: add a type to display the cli results
+            </span><span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
+        }
         Commands::Info =&gt; {
             print_response(call(<span class="string">&quot;&quot;</span>, <span class="string">&quot;/get_info&quot;</span>).<span class="kw">await</span>, args.raw_json);
         }
@@ -185,4 +197,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f5193a9fc 2022-09-25)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="clientd_cli" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8b705839c 2022-09-26)" ></div></body></html>

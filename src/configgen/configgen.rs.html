@@ -85,92 +85,124 @@
 <span id="85">85</span>
 <span id="86">86</span>
 <span id="87">87</span>
-</pre><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+</pre><pre class="rust"><code><span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint::config::{ServerConfig, ServerConfigParams};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>std::path::PathBuf;
 
-<span class="doccomment">/// Config generator for Fedimint Federation
-///
-/// Running this program will generate config
-/// files for federation member nodes in directory
-/// specified with `out-dir`
-</span><span class="attribute">#[derive(Parser)]
-</span><span class="kw">struct </span>Options {
-    <span class="doccomment">/// Directory to output all the generated config files
-    </span><span class="attribute">#[clap(long = <span class="string">&quot;out-dir&quot;</span>)]
-    </span>dir_out_path: PathBuf,
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">struct </span>Cli {
+    <span class="attribute">#[clap(subcommand)]
+    </span>command: Command,
+}
+<span class="attribute">#[derive(Subcommand)]
+</span><span class="kw">enum </span>Command {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
+    <span class="doccomment">/// Config generator for Fedimint Federation
+    ///
+    /// Running this program will generate config
+    /// files for federation member nodes in directory
+    /// specified with `out-dir`
+    </span>Generate {
+        <span class="doccomment">/// Directory to output all the generated config files
+        </span><span class="attribute">#[clap(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span>dir_out_path: PathBuf,
 
-    <span class="doccomment">/// Number of nodes in the federation
-    </span><span class="attribute">#[clap(long = <span class="string">&quot;num-nodes&quot;</span>)]
-    </span>num_nodes: u16,
+        <span class="doccomment">/// Number of nodes in the federation
+        </span><span class="attribute">#[clap(long = <span class="string">&quot;num-nodes&quot;</span>)]
+        </span>num_nodes: u16,
 
-    <span class="doccomment">/// Base hbbft port
-    </span><span class="attribute">#[clap(long = <span class="string">&quot;hbbft-base-port&quot;</span>, default_value = <span class="string">&quot;17240&quot;</span>)]
-    </span>hbbft_base_port: u16,
+        <span class="doccomment">/// Base hbbft port
+        </span><span class="attribute">#[clap(long = <span class="string">&quot;hbbft-base-port&quot;</span>, default_value = <span class="string">&quot;17240&quot;</span>)]
+        </span>hbbft_base_port: u16,
 
-    <span class="doccomment">/// Base api port
-    </span><span class="attribute">#[clap(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
-    </span>api_base_port: u16,
+        <span class="doccomment">/// Base api port
+        </span><span class="attribute">#[clap(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
+        </span>api_base_port: u16,
 
-    <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
-    </span><span class="attribute">#[clap(
-        long = <span class="string">&quot;denominations&quot;</span>,
-        value_delimiter = <span class="string">&#39;,&#39;</span>,
-        min_values = <span class="number">1</span>,
-        required = <span class="bool-val">true
-    </span>)]
-    </span>denominations: Vec&lt;Amount&gt;,
+        <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
+        </span><span class="attribute">#[clap(
+            long = <span class="string">&quot;denominations&quot;</span>,
+            value_delimiter = <span class="string">&#39;,&#39;</span>,
+            min_values = <span class="number">1</span>,
+            required = <span class="bool-val">true
+        </span>)]
+        </span>denominations: Vec&lt;Amount&gt;,
 
-    <span class="doccomment">/// Federation name
-    </span><span class="attribute">#[clap(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hal&#39;s trusty mint&quot;</span>)]
-    </span>federation_name: String,
+        <span class="doccomment">/// Federation name
+        </span><span class="attribute">#[clap(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hal&#39;s trusty mint&quot;</span>)]
+        </span>federation_name: String,
+    },
 }
 
 <span class="kw">fn </span>main() {
-    <span class="kw">let </span>Options {
-        dir_out_path: cfg_path,
-        num_nodes: nodes,
-        hbbft_base_port,
-        api_base_port,
-        denominations: amount_tiers,
-        federation_name,
-    } = Options::parse();
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
+    <span class="kw">let </span>cli = Cli::parse();
+    <span class="kw">match </span>cli.command {
+        Command::VersionHash =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
+        }
+        Command::Generate {
+            dir_out_path: cfg_path,
+            num_nodes: nodes,
+            hbbft_base_port,
+            api_base_port,
+            denominations: amount_tiers,
+            federation_name,
+        } =&gt; {
+            <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
+            <span class="comment">// Recursively create config directory if it doesn&#39;t exist
+            </span>std::fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
 
-    <span class="comment">// Recursively create config directory if it doesn&#39;t exist
-    </span>std::fs::create_dir_all(<span class="kw-2">&amp;</span>cfg_path).expect(<span class="string">&quot;Failed to create config directory&quot;</span>);
+            <span class="kw">let </span>peers = (<span class="number">0</span>..nodes).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+            <span class="macro">println!</span>(
+                <span class="string">&quot;Generating keys such that up to {} peers may fail/be evil&quot;</span>,
+                peers.max_evil()
+            );
+            <span class="kw">let </span>params = ServerConfigParams {
+                hbbft_base_port,
+                api_base_port,
+                amount_tiers,
+                federation_name,
+            };
 
-    <span class="kw">let </span>peers = (<span class="number">0</span>..nodes).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-    <span class="macro">println!</span>(
-        <span class="string">&quot;Generating keys such that up to {} peers may fail/be evil&quot;</span>,
-        peers.max_evil()
-    );
-    <span class="kw">let </span>params = ServerConfigParams {
-        hbbft_base_port,
-        api_base_port,
-        amount_tiers,
-        federation_name,
-    };
+            <span class="kw">let </span>(server_cfg, client_cfg) =
+                ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;mut </span>rng);
 
-    <span class="kw">let </span>(server_cfg, client_cfg) = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;mut </span>rng);
+            <span class="kw">for </span>(id, cfg) <span class="kw">in </span>server_cfg {
+                <span class="kw">let </span><span class="kw-2">mut </span>path: PathBuf = cfg_path.clone();
+                path.push(<span class="macro">format!</span>(<span class="string">&quot;server-{}.json&quot;</span>, id));
 
-    <span class="kw">for </span>(id, cfg) <span class="kw">in </span>server_cfg {
-        <span class="kw">let </span><span class="kw-2">mut </span>path: PathBuf = cfg_path.clone();
-        path.push(<span class="macro">format!</span>(<span class="string">&quot;server-{}.json&quot;</span>, id));
+                <span class="kw">let </span>file = std::fs::File::create(path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
+                serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>cfg).unwrap();
+            }
 
-        <span class="kw">let </span>file = std::fs::File::create(path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
-        serde_json::to_writer_pretty(file, <span class="kw-2">&amp;</span>cfg).unwrap();
+            <span class="kw">let </span><span class="kw-2">mut </span>client_cfg_file_path: PathBuf = cfg_path;
+            client_cfg_file_path.push(<span class="string">&quot;client.json&quot;</span>);
+            <span class="kw">let </span>client_cfg_file =
+                std::fs::File::create(client_cfg_file_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
+
+            serde_json::to_writer_pretty(client_cfg_file, <span class="kw-2">&amp;</span>client_cfg).unwrap();
+        }
     }
-
-    <span class="kw">let </span><span class="kw-2">mut </span>client_cfg_file_path: PathBuf = cfg_path;
-    client_cfg_file_path.push(<span class="string">&quot;client.json&quot;</span>);
-    <span class="kw">let </span>client_cfg_file =
-        std::fs::File::create(client_cfg_file_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
-
-    serde_json::to_writer_pretty(client_cfg_file, <span class="kw-2">&amp;</span>client_cfg).unwrap();
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f5193a9fc 2022-09-25)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8b705839c 2022-09-26)" ></div></body></html>
