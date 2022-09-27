@@ -69,6 +69,7 @@ as needed for [Running Fedimint for dev testing](./dev-running.md).
 
 You can preclude these problems by forcing `tmux` to always use non-login shells. Create (or edit) a `.tmux.conf`
 in your home directory with the following line:
+
 ```
 set -g default-command "${SHELL}"
 ```
@@ -87,3 +88,13 @@ new shells. This way you can preserve your shell, and your settings while using
 `nix develop`-like shell automatically.
 
 [^1]: [issues/506](https://github.com/fedimint/fedimint/issues/506): scripts/tmuxinator.sh prerequisites and issues
+
+## Cross-compilation
+
+Dev environment comes with support for cross-compilation. However since most developers
+are not going use it while it requires heavy dependencies like Android NDK, it is only
+available in a separate Nix dev shell. To start it, use:
+
+```
+nix develop .#cross
+```

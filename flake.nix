@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
-    crane.url = "github:ipetkov/crane?rev=2d5e7fbfcee984424fe4ad4b3b077c62d18fe1cf"; # v0.6
+    crane.url = "github:ipetkov/crane?rev=21e627606c5548a3f6be1f71c7397999ac76bea2";
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -25,6 +25,7 @@
           inherit system;
         };
         lib = pkgs.lib;
+        stdenv = pkgs.stdenv;
 
         clightning-dev = pkgs.clightning.overrideAttrs (oldAttrs: {
           configureFlags = [ "--enable-developer" "--disable-valgrind" ];
@@ -32,9 +33,81 @@
           NIX_CFLAGS_COMPILE = "-Wno-stringop-truncation";
         });
 
-        fenix-channel = fenix.packages.${system}.stable;
+        isArch64Darwin = stdenv.isAarch64 || stdenv.isDarwin;
 
-        fenix-toolchain = (fenix-channel.withComponents [
+        # Env vars we need for wasm32 cross compilation
+        wasm32CrossEnvVars = ''
+          export CC_wasm32_unknown_unknown="${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14"
+          export CFLAGS_wasm32_unknown_unknown="-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.1/include/"
+        '' + (if isArch64Darwin then
+          ''
+            export AR_wasm32_unknown_unknown="${pkgs.llvmPackages_14.llvm}/bin/llvm-ar"
+          '' else
+          ''
+          '');
+
+        # All the environment variables we need for all android cross compilation targets
+        androidCrossEnvVars = ''
+          # Note: rockdb seems to require uint128_t, which is not supported on 32-bit Android: https://stackoverflow.com/a/25819240/134409 (?)
+          export LLVM_CONFIG_PATH="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-config"
+
+          export CC_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export CXX_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          export LD_armv7_linux_androideabi="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/arm-linux-androideabi/bin/ld"
+          export LDFLAGS_armv7_linux_androideabi="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/arm-linux-androideabi/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/"
+
+          export CC_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export CXX_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          export LD_aarch64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
+          export LDFLAGS_aarch64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/aarch64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/"
+
+          export CC_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export CXX_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          export LD_x86_64_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
+          export LDFLAGS_x86_64_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/x86_64-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/"
+
+          export CC_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export CXX_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          export LD_i686_linux_android="${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/aarch64-linux-android/bin/ld"
+          export LDFLAGS_i686_linux_android="-L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/30/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/lib/gcc/i686-linux-android/4.9.x/ -L ${androidComposition.ndk-bundle}/libexec/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/i686-linux-android/"
+        '';
+
+        # NDK we use for android cross compilation
+        androidComposition = pkgs.androidenv.composeAndroidPackages {
+          includeNDK = true;
+        };
+
+        # Definitions of all the cross-compilation targets we support.
+        # Later mapped over to conveniently loop over all posibilities.
+        crossTargets =
+          builtins.mapAttrs
+            (attr: target: { attr = attr; extraEnvs = ""; } // target)
+            {
+              "wasm32" = {
+                name = "wasm32-unknown-unknown";
+                extraEnvs = wasm32CrossEnvVars;
+              };
+              "armv7-android" = {
+                name = "armv7-linux-androideabi";
+                extraEnvs = androidCrossEnvVars;
+              };
+              "aarch64-android" = {
+                name = "aarch64-linux-android";
+                extraEnvs = androidCrossEnvVars;
+              };
+              "i686-android" = {
+                name = "i686-linux-android";
+                extraEnvs = androidCrossEnvVars;
+              };
+              "x86_64-android" = {
+                name = "x86_64-linux-android";
+                extraEnvs = androidCrossEnvVars;
+              };
+            };
+
+        fenixChannel = fenix.packages.${system}.stable;
+
+        fenixToolchain = (fenixChannel.withComponents [
           "rustc"
           "cargo"
           "clippy"
@@ -44,14 +117,28 @@
           "llvm-tools-preview"
         ]);
 
-        fenix-toolchain-wasm32 = with fenix.packages.${system}; combine [
+        fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
           stable.cargo
           stable.rustc
-          targets."wasm32-unknown-unknown".stable.rust-std
-        ];
+        ] ++ (lib.attrsets.mapAttrsToList
+          (attr: target: targets.${target.name}.stable.rust-std)
+          crossTargets));
 
-        craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
-        craneLibWasm32 = crane.lib.${system}.overrideToolchain fenix-toolchain-wasm32;
+        fenixToolchainCross = builtins.mapAttrs
+          (attr: target: with fenix.packages.${system}; combine [
+            stable.cargo
+            stable.rustc
+            targets.${target.name}.stable.rust-std
+          ])
+          crossTargets
+        ;
+
+        craneLib = crane.lib.${system}.overrideToolchain fenixToolchain;
+
+        craneLibCross = builtins.mapAttrs
+          (attr: target: crane.lib.${system}.overrideToolchain fenixToolchainCross.${attr})
+          crossTargets
+        ;
 
         cargo-llvm-cov = craneLib.buildPackage rec {
           pname = "cargo-llvm-cov";
@@ -95,7 +182,7 @@
                   (type == "directory" && lib.any (cargoTomlPath: lib.strings.hasPrefix relPath cargoTomlPath) relPathAllCargoTomlFiles) ||
                   lib.any
                     (re: builtins.match re relPath != null)
-                    ([ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
+                    ([ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ] ++ builtins.concatLists (map (name: [ name "${name}/.*" ]) modules));
               in
               # uncomment to debug:
                 # builtins.trace "${relPath}: ${lib.boolToString includePath}"
@@ -116,13 +203,13 @@
         #
         # Lile `filterWorkspaceFiles` but doesn't even need *.rs files
         # (because they are not used for building dependencies)
-        filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ] src;
+        filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ] src;
 
         # Filter only files relevant to building the workspace
-        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ".*\.rs" ] src;
+        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ] src;
 
         # Like `filterWorkspaceFiles` but with `./scripts/` included
-        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".*/Cargo.toml" ".*\.rs" "scripts/.*" ] src;
+        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" "scripts/.*" ] src;
 
         filterSrcWithRegexes = regexes: src:
           let
@@ -145,6 +232,7 @@
             inherit src;
           };
 
+
         commonArgs = {
           src = filterWorkspaceFiles ./.;
 
@@ -154,8 +242,6 @@
             openssl
             pkg-config
             perl
-            fenix-channel.rustc
-            fenix-channel.clippy
           ] ++ lib.optionals stdenv.isDarwin [
             libiconv
             darwin.apple_sdk.frameworks.Security
@@ -168,9 +254,14 @@
             pkg-config
           ];
 
-          # Fix wasm32 compilation
-          CC_wasm32_unknown_unknown = "${pkgs.llvmPackages_14.clang-unwrapped}/bin/clang-14";
-          CFLAGS_wasm32_unknown_unknown = "-I ${pkgs.llvmPackages_14.libclang.lib}/lib/clang/14.0.1/include/";
+          # copy over the linker/ar wrapper scripts which by default would get
+          # stripped by crane
+          dummySrc = craneLib.mkDummySrc {
+            src = ./.;
+            extraDummyScript = ''
+              cp -r ${./.cargo} -T $out/.cargo
+            '';
+          };
 
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
           CI = "true";
@@ -296,25 +387,37 @@
           });
 
 
-        pkgCross = { name, dirs, target, craneLib }:
-          let deps = craneLib.buildDepsOnly (commonArgs // {
-            src = filterWorkspaceDepsBuildFiles ./.;
-            pname = "pkg-${name}-${target}-deps";
-            buildPhaseCargoCommand = "cargo build --profile release --target ${target} --package ${name}";
-            doCheck = false;
-            CARGO_BUILD_TARGET = target;
-          });
+        pkgCross = { name, dirs, target }:
+          let
+            craneLib = craneLibCross.${target.attr};
+            deps = craneLib.buildDepsOnly (commonArgs // {
+              src = filterWorkspaceDepsBuildFiles ./.;
+              pname = "pkg-${name}-${target.attr}-deps";
+              buildPhaseCargoCommand = "cargo build --profile release --target ${target.name} --package ${name}";
+              doCheck = false;
+
+              preBuild = ''
+                chmod +x .cargo/ar.*
+                chmod +x .cargo/ld.*
+                patchShebangs .cargo/
+              '' + target.extraEnvs;
+            });
 
           in
           craneLib.buildPackage (commonArgs // {
-            pname = "pkg-${name}-${target}";
+            pname = "pkg-${name}-${target.attr}";
             cargoArtifacts = deps;
 
             src = filterModules dirs ./.;
-            cargoExtraArgs = "--package ${name} --target ${target}";
+            cargoExtraArgs = "--package ${name} --target ${target.name}";
 
             # if needed we will check the whole workspace at once with `workspaceBuild`
             doCheck = false;
+            preBuild = ''
+              chmod +x .cargo/ar.*
+              chmod +x .cargo/ld.*
+              patchShebangs .cargo/
+            '' + target.extraEnvs;
           });
 
         fedimint = pkg {
@@ -374,9 +477,9 @@
           ];
         };
 
-        mint-client = { target, craneLib }: pkgCross {
+        mint-client = { target }: pkgCross {
           name = "mint-client";
-          inherit target craneLib;
+          inherit target;
           dirs = [
             "client/client-lib"
             "crypto/tbs"
@@ -442,7 +545,7 @@
             # git hash to set (passed by Nix if the tree is clean, or `dirty-hash` when dirty)
             git-hash = if (self ? rev) then self.rev else dirty-hash;
           in
-          pkgs.stdenv.mkDerivation {
+          stdenv.mkDerivation {
             inherit system;
             inherit name;
 
@@ -490,9 +593,12 @@
             rust-tests = cliRustTests;
           };
 
-          wasm32 = {
-            mint-client = mint-client { target = "wasm32-unknown-unknown"; craneLib = craneLibWasm32; };
-          };
+          cross = builtins.mapAttrs
+            (attr: target: {
+              mint-client = mint-client { inherit target; };
+            })
+            crossTargets;
+
 
           container = {
             fedimintd = pkgs.dockerTools.buildLayeredImage {
@@ -517,47 +623,68 @@
         };
 
         devShells =
+
+          let shellCommon = {
+            buildInputs = commonArgs.buildInputs;
+            nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
+              fenix.packages.${system}.rust-analyzer
+              cargo-llvm-cov
+              cargo-udeps
+
+              # This is required to prevent a mangled bash shell in nix develop
+              # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
+              (hiPrio pkgs.bashInteractive)
+              tmux
+              tmuxinator
+
+              # Nix
+              pkgs.nixpkgs-fmt
+              pkgs.shellcheck
+              pkgs.rnix-lsp
+              pkgs.nodePackages.bash-language-server
+            ] ++ cliTestsDeps;
+            RUST_SRC_PATH = "${fenixChannel.rust-src}/lib/rustlib/src/rust/library";
+            LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+
+            shellHook = ''
+              # auto-install git hooks
+              if [[ ! -d .git/hooks ]]; then mkdir .git/hooks; fi
+              for hook in misc/git-hooks/* ; do ln -sf "../../$hook" "./.git/hooks/" ; done
+              ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+
+              # workaround https://github.com/rust-lang/cargo/issues/11020
+              cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+              if (( ''${#cargo_cmd_bins[@]} != 0 )); then
+                echo "Warning: Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                echo "Warning: Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+              fi
+            '';
+          };
+
+          in
           {
             # The default shell - meant to developers working on the project,
             # so notably not building any project binaries, but including all
             # the settings and tools neccessary to build and work with the codebase.
-            default = pkgs.mkShell {
-              buildInputs = workspaceDeps.buildInputs;
-              nativeBuildInputs = with pkgs; workspaceDeps.nativeBuildInputs ++ [
-                fenix-toolchain
-                fenix.packages.${system}.rust-analyzer
-                cargo-llvm-cov
-                cargo-udeps
+            default = pkgs.mkShell (shellCommon
+              // {
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchain ];
+            });
 
-                # This is required to prevent a mangled bash shell in nix develop
-                # see: https://discourse.nixos.org/t/interactive-bash-with-nix-develop-flake/15486
-                (hiPrio pkgs.bashInteractive)
-                tmux
-                tmuxinator
 
-                # Nix
-                pkgs.nixpkgs-fmt
-                pkgs.shellcheck
-                pkgs.rnix-lsp
-                pkgs.nodePackages.bash-language-server
-              ] ++ cliTestsDeps;
-              RUST_SRC_PATH = "${fenix-channel.rust-src}/lib/rustlib/src/rust/library";
-              LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+            # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
+            #
+            # This will pull extra stuff so to save time and download time to most common developers,
+            # was moved into another shell.
+            cross = pkgs.mkShell (shellCommon // {
+              nativeBuildInputs = shellCommon.nativeBuildInputs ++ [ fenixToolchainCrossAll ];
 
-              shellHook = ''
-                # auto-install git hooks
-                if [[ ! -d .git/hooks ]]; then mkdir .git/hooks; fi
-                for hook in misc/git-hooks/* ; do ln -sf "../../$hook" "./.git/hooks/" ; done
-                ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
+              shellHook = shellCommon.shellHook +
 
-                # workaround https://github.com/rust-lang/cargo/issues/11020
-                cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
-                if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                  echo "Warning: Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                  echo "Warning: Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
-                fi
-              '';
-            };
+                # Android NDK not available for Arm MacOS
+                (if isArch64Darwin then "" else androidCrossEnvVars)
+                + wasm32CrossEnvVars;
+            });
 
             # this shell is used only in CI, so it should contain minimum amount
             # of stuff to avoid building and caching things we don't need
