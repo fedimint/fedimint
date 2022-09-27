@@ -740,6 +740,7 @@ impl Client<UserClientConfig> {
                 // wait for gateway cancellation to be accepted by federation
                 fedimint_api::task::sleep(std::time::Duration::from_secs(1)).await;
                 self.try_refund_outgoing_contract(contract_id, rng).await?;
+                return Err(ClientError::RefundedFailedPayment);
             }
         };
 
@@ -1120,6 +1121,8 @@ pub enum ClientError {
     CancelUnknownOutgoingContract,
     #[error("Tried to refund outgoing contract that we don't know about")]
     RefundUnknownOutgoingContract,
+    #[error("Routing outgoing payment failed but we got a refund")]
+    RefundedFailedPayment,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
