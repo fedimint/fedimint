@@ -22,7 +22,7 @@ use futures::stream::FuturesUnordered;
 use fedimint_api::task::sleep;
 use fedimint_api::{
     db::batch::{Accumulator, BatchItem, DbBatch},
-    Amount, OutPoint, PeerId, TransactionId,
+    Amount, FederationModule, OutPoint, PeerId, TransactionId,
 };
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::contracts::incoming::{
@@ -1008,7 +1008,7 @@ impl Client<GatewayClientConfig> {
     ) -> Result<()> {
         self.context
             .api
-            .await_output_outcome::<OutgoingContractOutcome>(outpoint, Duration::from_secs(10))
+            .await_output_outcome::<<fedimint_core::modules::mint::Mint as FederationModule>::TxOutputOutcome>(outpoint, Duration::from_secs(10))
             .await?;
         // We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need

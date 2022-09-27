@@ -368,7 +368,7 @@ async fn lightning_gateway_pays_internal_invoice() {
         .unwrap();
     debug!("Outgoing contract accepted");
 
-    tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
+    let claim_outpoint = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
         // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
         fed.await_consensus_epochs(4).await;
     })
@@ -378,7 +378,7 @@ async fn lightning_gateway_pays_internal_invoice() {
 
     gateway
         .server
-        .await_outgoing_contract_claimed(contract_id, funding_outpoint)
+        .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
     debug!("Gateway claimed outgoing contract");
@@ -430,7 +430,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
         .await
         .unwrap();
 
-    gateway
+    let claim_outpoint = gateway
         .server
         .pay_invoice(contract_id, rng())
         .await
@@ -439,7 +439,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
 
     gateway
         .server
-        .await_outgoing_contract_claimed(contract_id, outpoint)
+        .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
     user.assert_total_coins(sats(2000 - 1010)).await;
