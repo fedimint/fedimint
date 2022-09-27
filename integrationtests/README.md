@@ -56,7 +56,7 @@ You may wish to run `cargo test -p fedimint-tests <test-name>` to prevent concur
 Make sure you've [installed](https://nixos.org/manual/nix/stable/quick-start.html) Nix in order to run the correct versions of bitcoind and lightningd.
 Then you can run the following commands to start the services:
 ```shell
-nix-shell
+nix develop
 source ./scripts/setup-tests.sh
 ```
 
@@ -67,7 +67,7 @@ export FM_TEST_DISABLE_MOCKS=1
 cargo test -p fedimint-tests -- --test-threads=1
 ```
 
-If you wish to clean-up the services you either exit the nix-shell or run:
+If you wish to clean-up the services run:
 ```shell
 kill_fedimint_processes
 ```

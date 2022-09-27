@@ -18,15 +18,16 @@ git clone git@github.com:fedimint/fedimint.git
 ```
 Enter development shell: 
 ```nix
-nix-shell
+nix develop
 ```
 Setup development environment locally:
 ```nix
 nix-build default.nix
 ```
-Run integration tests with nix-shell:
+Run integration tests with nix develop:
 ```nix
-nix-shell --command ./scripts/integrationtest.sh
+nix develop
+./scripts/integrationtest.sh
 ```
 
 ### nix-flakes:

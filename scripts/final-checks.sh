@@ -12,9 +12,9 @@ export FM_TEST_DISABLE_MOCKS=0
 cargo test --release
 
 if [ "$1" == "nix" ]; then
-  nix-shell --run ./scripts/cli-test.sh
-  nix-shell --run ./scripts/rust-tests.sh
-  nix-shell --run ./scripts/clientd-tests.sh
+  ./scripts/cli-test.sh
+  ./scripts/rust-tests.sh
+  ./scripts/clientd-tests.sh
 fi
 
 echo "Tests succeeded"
