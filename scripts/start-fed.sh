@@ -9,3 +9,4 @@ for ((ID=SKIPPED_SERVERS; ID<FM_FED_SIZE; ID++)); do
   echo "starting mint $ID"
   ( ($FM_BIN_DIR/fedimintd $FM_CFG_DIR/server-$ID.json $FM_CFG_DIR/mint-$ID.db 2>&1 & echo $! >&3 ) 3>>$FM_PID_FILE | sed -e "s/^/mint $ID: /" ) &
 done
+

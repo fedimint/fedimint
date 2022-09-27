@@ -60,3 +60,7 @@ tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 tracing-opentelemetry = { version = "0.17.2", optional = true}
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
 url = { version = "2.3.0", features = ["serde"] }
+
+[build-dependencies]
+fedimint-build = { path = "../fedimint-build" }
+

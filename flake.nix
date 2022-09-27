@@ -329,6 +329,7 @@
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
+            "fedimint-build"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -347,6 +348,7 @@
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
+            "fedimint-build"
             "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -365,6 +367,7 @@
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
+            "fedimint-build"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -399,6 +402,7 @@
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
+            "fedimint-build"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -464,10 +468,10 @@
         packages = {
           default = fedimint;
 
-          fedimint = fedimint;
+          fedimint = replace-git-hash { name = "fedimint"; package = fedimint; };
           fedimint-tests = fedimint-tests;
-          ln-gateway = ln-gateway;
-          clientd = clientd;
+          ln-gateway = replace-git-hash { name = "ln-gateway"; package = ln-gateway; };
+          clientd = replace-git-hash { name = "clientd"; package = clientd; };
           mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
 
           inherit workspaceDeps
