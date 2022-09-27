@@ -27,7 +27,7 @@ miniscript = "7.0.0"
 fedimint-core = { path = "../../fedimint-core" }
 fedimint-api = { path = "../../fedimint-api" }
 rand = "0.6.5"
-reqwest = { version = "0.11.0", features = [ "json", "rustls-tls" ], default-features = false }
+reqwest = { version = "0.11.12", features = [ "json", "rustls-tls" ], default-features = false }
 secp256k1-zkp = { version = "0.6.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = "1.0.145"
 tbs = { path = "../../crypto/tbs" }
