@@ -11,6 +11,8 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use fedimint_api::db::Database;
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::TieredMulti;
 use futures::StreamExt;
 
 use bitcoin::util::key::KeyPair;
@@ -40,7 +42,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::TieredMulti, BlindNonce, InvalidAmountTierError},
+        mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},

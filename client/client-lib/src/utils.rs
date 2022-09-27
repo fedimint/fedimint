@@ -5,8 +5,7 @@ use crate::mint::SpendableNote;
 use bitcoin::{secp256k1, Network};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
-use fedimint_api::ParseAmountError;
-use fedimint_core::modules::mint::tiered::TieredMulti;
+use fedimint_api::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
 
 pub fn parse_coins(s: &str) -> TieredMulti<SpendableNote> {
