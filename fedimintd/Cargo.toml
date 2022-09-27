@@ -1,5 +1,5 @@
 [package]
-name = "fedimint"
+name = "fedimintd"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
@@ -11,13 +11,9 @@ license = "MIT"
 [features]
 telemetry = ["opentelemetry", "opentelemetry-jaeger", "tracing-opentelemetry"]
 
-[lib]
-name = "fedimint"
-path = "src/lib.rs"
-
 [[bin]]
 name = "fedimintd"
-path = "src/bin/fedimintd.rs"
+path = "src/main.rs"
 
 [[bin]]
 name = "configgen"
@@ -40,6 +36,7 @@ fedimint-api = { path = "../fedimint-api" }
 fedimint-core = { path = "../fedimint-core" }
 fedimint-derive = { path = "../fedimint-derive" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
+fedimint-server = { path = "../fedimint-server" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
 opentelemetry = { version = "0.18.0", optional = true }
 opentelemetry-jaeger = { version = "0.17.0", optional = true }

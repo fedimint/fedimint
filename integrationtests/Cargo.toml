@@ -22,7 +22,7 @@ itertools = "0.10.5"
 lightning-invoice = "0.18.0"
 ln-gateway = { path = "../ln-gateway" }
 lightning = "0.0.110"
-fedimint = { path = "../fedimint/" }
+fedimint-server = { path = "../fedimint-server/" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-mint = { path = "../modules/fedimint-mint" }

@@ -8,7 +8,7 @@ use tracing::{debug, instrument};
 
 use crate::GatewayRequestInner;
 use crate::{GatewayRequest, LnGatewayError};
-use fedimint::modules::ln::contracts::ContractId;
+use fedimint_server::modules::ln::contracts::ContractId;
 
 #[instrument(skip_all, err)]
 pub async fn pay_invoice(
