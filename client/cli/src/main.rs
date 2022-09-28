@@ -16,7 +16,7 @@ use mint_client::utils::{
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ enum CliOutput {
 
     Validate {
         all_valid: bool,
-        details: HashMap<SpendableNote, bool>,
+        details: BTreeMap<Amount, usize>,
     },
 
     Spend {
@@ -65,7 +65,7 @@ enum CliOutput {
     Info {
         total_amount: Amount,
         total_num_notes: usize,
-        details: HashMap<Amount, usize>,
+        details: BTreeMap<Amount, usize>,
     },
 
     LnInvoice {
@@ -411,15 +411,19 @@ async fn handle_command(
         }
         Command::Validate { coins } => {
             let validate_result = client.validate_note_signatures(&coins).await;
+            let details_vec = coins
+                .iter_tiers()
+                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .collect();
 
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
                     all_valid: true,
-                    details: ([].iter().cloned().collect()),
+                    details: (details_vec),
                 }),
                 Err(_) => Ok(CliOutput::Validate {
                     all_valid: false,
-                    details: ([].iter().cloned().collect()),
+                    details: (details_vec),
                 }),
             }
         }
