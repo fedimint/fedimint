@@ -1,9 +1,8 @@
 use bitcoin::{secp256k1, Address, Transaction};
 use clap::{Parser, Subcommand};
-use fedimint_api::{Amount, NumPeers, OutPoint, TransactionId};
+use fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::modules::ln::contracts::ContractId;
-use fedimint_core::modules::mint::tiered::TieredMulti;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
 
 use core::fmt;

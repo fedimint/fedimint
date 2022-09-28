@@ -14,6 +14,9 @@ use thiserror::Error;
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 
+pub use tiered::Tiered;
+pub use tiered_multi::*;
+
 pub mod config;
 pub mod db;
 pub mod encoding;
@@ -21,6 +24,8 @@ pub mod macros;
 pub mod module;
 pub mod rand;
 pub mod task;
+pub mod tiered;
+pub mod tiered_multi;
 
 hash_newtype!(
     TransactionId,

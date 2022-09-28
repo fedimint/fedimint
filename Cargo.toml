@@ -2,11 +2,12 @@
 members = [
     "crypto/tbs",
     "ln-gateway",
-    "fedimint",
+    "fedimintd",
     "fedimint-core",
     "fedimint-derive",
     "fedimint-api",
     "fedimint-rocksdb",
+    "fedimint-server",
     "fedimint-sled",
     "client/cli",
     "client/client-lib",
@@ -15,6 +16,7 @@ members = [
     "modules/fedimint-ln",
     "modules/fedimint-wallet",
     "integrationtests",
+    "fedimint-build",
 ]
 resolver = "2"
 

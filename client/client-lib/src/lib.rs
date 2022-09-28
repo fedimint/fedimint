@@ -10,7 +10,10 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
+use api::FederationApi;
 use fedimint_api::db::Database;
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::TieredMulti;
 use futures::StreamExt;
 
 use bitcoin::util::key::KeyPair;
@@ -40,7 +43,7 @@ use fedimint_core::{
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::TieredMulti, BlindNonce, InvalidAmountTierError},
+        mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},
@@ -71,7 +74,7 @@ use crate::transaction::TransactionBuilder;
 use crate::utils::{network_to_currency, ClientContext};
 use crate::wallet::WalletClientError;
 use crate::{
-    api::{ApiError, FederationApi},
+    api::ApiError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -180,13 +183,13 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
                 })
                 .collect(),
         );
-        Self::new_with_api(config, db, Box::new(api), secp)
+        Self::new_with_api(config, db, api.into(), secp)
     }
 
     pub fn new_with_api(
         config: T,
         db: Database,
-        api: Box<dyn FederationApi>,
+        api: FederationApi,
         secp: Secp256k1<All>,
     ) -> Client<T> {
         Self {

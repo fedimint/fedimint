@@ -5,10 +5,9 @@ use crate::mint::NoteIssuanceRequests;
 use crate::{MintClientError, SpendableNote};
 use bitcoin::KeyPair;
 use fedimint_api::db::batch::{BatchItem, BatchTx};
-use fedimint_api::{Amount, OutPoint};
+use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_core::config::FeeConsensus;
-use fedimint_core::modules::mint::tiered::TieredMulti;
-use fedimint_core::modules::mint::{BlindNonce, Note, Tiered};
+use fedimint_core::modules::mint::{BlindNonce, Note};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use tbs::AggregatePublicKey;
 

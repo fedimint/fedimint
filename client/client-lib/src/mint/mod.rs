@@ -7,13 +7,11 @@ use crate::utils::ClientContext;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_core::config::FeeConsensus;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::tiered::TieredMulti;
-use fedimint_core::modules::mint::{
-    BlindNonce, InvalidAmountTierError, Nonce, Note, SigResponse, SignRequest, Tiered,
-};
+use fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 
@@ -359,7 +357,7 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::FederationApi;
+    use crate::api::IFederationApi;
 
     use crate::mint::MintClient;
     use crate::{ClientContext, TransactionBuilder};
@@ -391,7 +389,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl FederationApi for FakeApi {
+    impl IFederationApi for FakeApi {
         async fn fetch_tx_outcome(
             &self,
             tx: TransactionId,
@@ -482,7 +480,7 @@ mod tests {
 
         let client_context = ClientContext {
             db: MemDatabase::new().into(),
-            api: Box::new(api),
+            api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 

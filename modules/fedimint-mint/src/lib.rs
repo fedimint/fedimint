@@ -11,7 +11,10 @@ use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
-use fedimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::{
+    Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
+};
 use itertools::Itertools;
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
@@ -26,16 +29,12 @@ use tbs::{
     PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
-pub use tiered::Tiered;
-use tiered::TieredMulti;
-use tiered::TieredMultiZip;
 use tracing::{debug, error, warn};
 
 pub mod config;
 
 mod db;
 /// Data structures taking into account different amount tiers
-pub mod tiered;
 
 /// Federated mint member mint
 pub struct Mint {
@@ -684,15 +683,6 @@ impl From<SignRequest> for TieredMulti<BlindNonce> {
     }
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
-pub struct InvalidAmountTierError(pub Amount);
-
-impl std::fmt::Display for InvalidAmountTierError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Amount tier unknown to mint: {}", self.0)
-    }
-}
-
 /// Represents an array of mint indexes that delivered faulty shares
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MintShareErrors(pub Vec<(PeerId, PeerErrorType)>);
@@ -742,10 +732,10 @@ impl From<InvalidAmountTierError> for MintError {
 #[cfg(test)]
 mod test {
     use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType, TieredMulti};
+    use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
     use fedimint_api::config::GenerateConfig;
     use fedimint_api::db::mem_impl::MemDatabase;
-    use fedimint_api::{Amount, PeerId};
+    use fedimint_api::{Amount, PeerId, TieredMulti};
     use rand::rngs::OsRng;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 

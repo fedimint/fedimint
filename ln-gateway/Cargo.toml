@@ -26,7 +26,7 @@ cln-plugin = "0.1"
 futures = "0.3.21"
 hex = "0.4.3"
 lightning-invoice = "0.18.0"
-fedimint = { path = "../fedimint/" }
+fedimint-server = { path = "../fedimint-server/" }
 fedimint-api = { path = "../fedimint-api" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 mint-client = { path = "../client/client-lib" }
@@ -38,4 +38,8 @@ thiserror = "1.0.30"
 tracing = { version = "0.1.26", default-features = false, features= ["log", "attributes", "std"] }
 tokio = {version = "1.21", features = ["full"]}
 tower-http = { version = "0.3.4", features = ["cors"] }
-url = { version = "2.3.0", features = ["serde"] }
+url = { version = "2.3.1", features = ["serde"] }
+
+[build-dependencies]
+fedimint-build = { path = "../fedimint-build" }
+

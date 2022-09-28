@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use fedimint::config::{load_from_file, ServerConfig};
-use fedimint::run_fedimint;
+use fedimint_server::config::{load_from_file, ServerConfig};
+use fedimint_server::run_fedimint;
 
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -19,6 +19,13 @@ pub struct ServerOpts {
 
 #[tokio::main]
 async fn main() {
+    let mut args = std::env::args();
+    if let Some(ref arg) = args.nth(1) {
+        if arg.as_str() == "version-hash" {
+            println!("{}", env!("GIT_HASH"));
+            return;
+        }
+    }
     let opts = ServerOpts::parse();
     let fmt_layer = tracing_subscriber::fmt::layer();
     let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));

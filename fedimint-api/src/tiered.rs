@@ -1,12 +1,17 @@
-use crate::InvalidAmountTierError;
 use fedimint_api::Amount;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use tbs::{PublicKeyShare, SecretKeyShare};
 
-mod tiered_multi;
-pub use tiered_multi::*;
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
+pub struct InvalidAmountTierError(pub Amount);
+
+impl std::fmt::Display for InvalidAmountTierError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Amount tier unknown to mint: {}", self.0)
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(transparent)]
@@ -22,7 +27,7 @@ impl<T> Tiered<T> {
         self.0.get(amount).ok_or(InvalidAmountTierError(*amount))
     }
 
-    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+    pub fn tiers(&self) -> impl DoubleEndedIterator<Item = &Amount> {
         self.0.keys()
     }
 

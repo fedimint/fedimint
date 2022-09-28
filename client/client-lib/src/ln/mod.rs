@@ -252,7 +252,7 @@ pub enum LnClientError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::FederationApi;
+    use crate::api::IFederationApi;
     use crate::ln::LnClient;
     use crate::ClientContext;
     use async_trait::async_trait;
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl FederationApi for FakeApi {
+    impl IFederationApi for FakeApi {
         async fn fetch_tx_outcome(
             &self,
             tx: TransactionId,
@@ -377,7 +377,7 @@ mod tests {
 
         let client_context = ClientContext {
             db: MemDatabase::new().into(),
-            api: Box::new(api),
+            api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 

@@ -142,7 +142,7 @@ pub enum WalletClientError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::FederationApi;
+    use crate::api::IFederationApi;
     use crate::wallet::WalletClient;
     use crate::ClientContext;
     use async_trait::async_trait;
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl FederationApi for FakeApi {
+    impl IFederationApi for FakeApi {
         async fn fetch_tx_outcome(
             &self,
             _tx: TransactionId,
@@ -273,12 +273,12 @@ mod tests {
             .await,
         ));
 
-        let api = FakeApi { _mint: fed.clone() };
+        let api = FakeApi { _mint: fed.clone() }.into();
         let client_config = fed.lock().await.client_cfg().clone();
 
         let client = ClientContext {
             db: MemDatabase::new().into(),
-            api: Box::new(api),
+            api,
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 
