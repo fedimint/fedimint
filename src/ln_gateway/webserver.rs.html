@@ -58,7 +58,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::GatewayRequestInner;
 <span class="kw">use crate</span>::{GatewayRequest, LnGatewayError};
-<span class="kw">use </span>fedimint::modules::ln::contracts::ContractId;
+<span class="kw">use </span>fedimint_server::modules::ln::contracts::ContractId;
 
 <span class="attribute">#[instrument(skip_all, err)]
 </span><span class="kw">pub async fn </span>pay_invoice(

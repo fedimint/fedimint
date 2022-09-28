@@ -445,9 +445,9 @@
 <span class="kw">use </span>bitcoin::{Address, Transaction};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>cln::HtlcAccepted;
-<span class="kw">use </span>fedimint::modules::ln::contracts::{incoming::Preimage, ContractId};
-<span class="kw">use </span>fedimint::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_server::modules::ln::contracts::{incoming::Preimage, ContractId};
+<span class="kw">use </span>fedimint_server::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>mint_client::mint::MintClientError;
 <span class="kw">use </span>mint_client::{ClientError, GatewayClient, PaymentParameters};
