@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":[["bitcoind_gen",""]],"struct":[["RetryClient",""]]};
+window.SIDEBAR_ITEMS = {"fn":[["make_bitcoind_rpc",""]],"struct":[["RetryClient",""]]};

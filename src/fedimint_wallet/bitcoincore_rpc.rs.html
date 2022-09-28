@@ -115,38 +115,32 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
-<span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::bitcoind::IBitcoindRpc;
-<span class="kw">use </span><span class="kw">crate</span>::config::WalletConfig;
 <span class="kw">use crate</span>::{bitcoind::BitcoindRpc, Feerate};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>bitcoincore_rpc::Auth;
+<span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json::Value;
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>std::sync::atomic::Ordering;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tracing::warn;
 
-<span class="kw">pub fn </span>bitcoind_gen(cfg: WalletConfig) -&gt; <span class="kw">impl </span>Fn() -&gt; BitcoindRpc {
-    <span class="kw">move </span>|| -&gt; BitcoindRpc {
-        <span class="kw">let </span>bitcoind_client = bitcoincore_rpc::Client::new(
-            <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
-            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-        )
-        .expect(<span class="string">&quot;Could not connect to bitcoind&quot;</span>);
-        <span class="kw">let </span>retry_client = RetryClient {
-            client: bitcoind_client,
-            retries: Default::default(),
-            max_retries: <span class="number">10</span>,
-            base_sleep: Duration::from_millis(<span class="number">10</span>),
-        };
+<span class="kw">pub fn </span>make_bitcoind_rpc(cfg: <span class="kw-2">&amp;</span>BitcoindRpcCfg) -&gt; <span class="prelude-ty">Result</span>&lt;BitcoindRpc, bitcoincore_rpc::Error&gt; {
+    <span class="kw">let </span>bitcoind_client = bitcoincore_rpc::Client::new(
+        <span class="kw-2">&amp;</span>cfg.btc_rpc_address,
+        Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
+    )<span class="question-mark">?</span>;
+    <span class="kw">let </span>retry_client = RetryClient {
+        client: bitcoind_client,
+        retries: Default::default(),
+        max_retries: <span class="number">10</span>,
+        base_sleep: Duration::from_millis(<span class="number">10</span>),
+    };
 
-        retry_client.into()
-    }
+    <span class="prelude-val">Ok</span>(retry_client.into())
 }
 
 <span class="attribute">#[derive(Debug)]

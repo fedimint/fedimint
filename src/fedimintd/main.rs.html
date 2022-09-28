@@ -60,12 +60,21 @@
 <span id="60">60</span>
 <span id="61">61</span>
 <span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_server::config::{load_from_file, ServerConfig};
-<span class="kw">use </span>fedimint_server::run_fedimint;
+<span class="kw">use </span>fedimint_server::FedimintServer;
 
+<span class="kw">use </span>fedimint_wallet::bitcoincore_rpc;
 <span class="kw">use </span>tracing_subscriber::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 <span class="kw">use </span>tracing_subscriber::Layer;
@@ -80,12 +89,12 @@
 }
 
 <span class="attribute">#[tokio::main]
-</span><span class="kw">async fn </span>main() {
+</span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>args = std::env::args();
     <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref </span>arg) = args.nth(<span class="number">1</span>) {
         <span class="kw">if </span>arg.as_str() == <span class="string">&quot;version-hash&quot; </span>{
             <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
-            <span class="kw">return</span>;
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
     }
     <span class="kw">let </span>opts = ServerOpts::parse();
@@ -116,11 +125,18 @@
     }
 
     <span class="kw">let </span>cfg: ServerConfig = load_from_file(<span class="kw-2">&amp;</span>opts.cfg_path);
-    <span class="kw">let </span>db_path = opts.db_path;
-    run_fedimint(cfg, db_path).<span class="kw">await</span>;
+
+    <span class="kw">let </span>db = fedimint_rocksdb::RocksDb::open(opts.db_path)
+        .expect(<span class="string">&quot;Error opening DB&quot;</span>)
+        .into();
+
+    <span class="kw">let </span>btc_rpc = bitcoincore_rpc::make_bitcoind_rpc(<span class="kw-2">&amp;</span>cfg.wallet.btc_rpc)<span class="question-mark">?</span>;
+    FedimintServer::run(cfg, db, btc_rpc).<span class="kw">await</span>;
 
     <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
     </span>opentelemetry::global::shutdown_tracer_provider();
+
+    <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimintd" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>

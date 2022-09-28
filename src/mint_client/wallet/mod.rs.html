@@ -636,7 +636,7 @@
                 <span class="kw">move </span>|cfg, db| {
                     <span class="kw">let </span>btc_rpc_clone = btc_rpc.clone();
                     <span class="kw">async move </span>{
-                        Wallet::new_with_bitcoind(cfg, db, || btc_rpc_clone.clone().into())
+                        Wallet::new_with_bitcoind(cfg, db, btc_rpc_clone.clone().into())
                             .<span class="kw">await
                             </span>.unwrap()
                     }

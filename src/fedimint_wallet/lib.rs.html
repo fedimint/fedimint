@@ -1785,15 +1785,15 @@
     </span><span class="kw">pub async fn </span>new_with_bitcoind(
         cfg: WalletConfig,
         db: Database,
-        bitcoind_gen: <span class="kw">impl </span>Fn() -&gt; BitcoindRpc,
+        bitcoind: BitcoindRpc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletError&gt; {
-        <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind_gen();
+        <span class="kw">let </span>broadcaster_bitcoind_rpc = bitcoind.clone();
         <span class="kw">let </span>broadcaster_db = db.clone();
         fedimint_api::task::spawn(<span class="kw">async move </span>{
             run_broadcast_pending_tx(broadcaster_db, broadcaster_bitcoind_rpc).<span class="kw">await</span>;
         });
 
-        <span class="kw">let </span>bitcoind_rpc = bitcoind_gen();
+        <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
         <span class="kw">let </span>bitcoind_net = bitcoind_rpc.get_network().<span class="kw">await</span>;
         <span class="kw">if </span>bitcoind_net != cfg.network {

@@ -129,11 +129,12 @@
 <span id="129">129</span>
 <span id="130">130</span>
 <span id="131">131</span>
+<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -149,10 +150,9 @@
     <span class="kw">pub </span>peg_in_key: secp256k1::SecretKey,
     <span class="kw">pub </span>finality_delay: u32,
     <span class="kw">pub </span>default_fee: Feerate,
-    <span class="kw">pub </span>btc_rpc_address: String,
-    <span class="kw">pub </span>btc_rpc_user: String,
-    <span class="kw">pub </span>btc_rpc_pass: String,
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
+    <span class="attribute">#[serde(flatten)]
+    </span><span class="kw">pub </span>btc_rpc: BitcoindRpcCfg,
 }
 
 <span class="attribute">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -221,9 +221,11 @@
                     peg_in_key: <span class="kw-2">*</span>sk,
                     finality_delay: FINALITY_DELAY,
                     default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
-                    btc_rpc_address: <span class="string">&quot;127.0.0.1:18443&quot;</span>.to_string(),
-                    btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                    btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
+                    btc_rpc: BitcoindRpcCfg {
+                        btc_rpc_address: <span class="string">&quot;127.0.0.1:18443&quot;</span>.to_string(),
+                        btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
+                        btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
+                    },
                     fee_consensus: FeeConsensus::default(),
                 };
 
