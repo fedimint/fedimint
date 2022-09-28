@@ -8,6 +8,8 @@
 //! If this module is active the consensus' conflict filter must ensure that at most one operation
 //! (spend, funding) happens per contract per round
 
+extern crate core;
+
 pub mod config;
 pub mod contracts;
 mod db;
@@ -83,9 +85,10 @@ pub struct ContractInput {
 
 /// Represents an output of the Lightning module.
 ///
-/// There are two sub-types:
+/// There are three sub-types:
 ///   * Normal contracts users may lock funds in
 ///   * Offers to buy preimages (see `contracts::incoming` docs)
+///   * Early cancellation of outgoing contracts before their timeout
 ///
 /// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
 /// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
@@ -93,8 +96,17 @@ pub struct ContractInput {
 /// to receive their fist tokens via LN without already having tokens.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum ContractOrOfferOutput {
+    /// Fund contract
     Contract(ContractOutput),
+    /// Creat incoming contract offer
     Offer(contracts::incoming::IncomingContractOffer),
+    /// Allow early refund of outgoing contract
+    CancelOutgoing {
+        /// Contract to update
+        contract: ContractId,
+        /// Signature of gateway
+        gateway_signature: secp256k1::schnorr::Signature,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -204,7 +216,7 @@ impl FederationModule for LightningModule {
 
         let pub_key = match account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock > block_height(interconnect) {
+                if outgoing.timelock > block_height(interconnect) && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -300,6 +312,33 @@ impl FederationModule for LightningModule {
                     Ok(Amount::ZERO)
                 }
             }
+            ContractOrOfferOutput::CancelOutgoing {
+                contract,
+                gateway_signature,
+            } => {
+                let contract_account = self
+                    .db
+                    .get_value(&ContractKey(*contract))
+                    .expect("DB error")
+                    .ok_or(LightningModuleError::UnknownContract(*contract))?;
+
+                let outgoing_contract = match &contract_account.contract {
+                    FundedContract::Outgoing(contract) => contract,
+                    _ => {
+                        return Err(LightningModuleError::NotOutgoingContract);
+                    }
+                };
+
+                secp256k1::global::SECP256K1
+                    .verify_schnorr(
+                        gateway_signature,
+                        &outgoing_contract.cancellation_message().into(),
+                        &outgoing_contract.gateway_key,
+                    )
+                    .map_err(|_| LightningModuleError::InvalidCancellationSignature)?;
+
+                Ok(Amount::ZERO)
+            }
         }
     }
 
@@ -362,6 +401,28 @@ impl FederationModule for LightningModule {
                 );
                 // TODO: sanity-check encrypted preimage size
                 batch.append_insert_new(OfferKey(offer.hash), (*offer).clone());
+            }
+            ContractOrOfferOutput::CancelOutgoing { contract, .. } => {
+                let updated_contract_account = {
+                    let mut contract_account = self
+                        .db
+                        .get_value(&ContractKey(*contract))
+                        .expect("DB error")
+                        .expect("Contract exists if output is valid");
+
+                    let outgoing_contract = match &mut contract_account.contract {
+                        FundedContract::Outgoing(contract) => contract,
+                        _ => {
+                            panic!("Contract type was checked in validate_output");
+                        }
+                    };
+
+                    outgoing_contract.cancelled = true;
+
+                    contract_account
+                };
+
+                batch.append_insert(ContractKey(*contract), updated_contract_account);
             }
         }
 
@@ -671,4 +732,8 @@ pub enum LightningModuleError {
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
     NoOffer(secp256k1::hashes::sha256::Hash),
+    #[error("Only outgoing contracts support cancellation")]
+    NotOutgoingContract,
+    #[error("Cancellation request wasn't properly signed")]
+    InvalidCancellationSignature,
 }

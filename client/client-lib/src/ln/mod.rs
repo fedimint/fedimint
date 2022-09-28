@@ -64,6 +64,7 @@ impl<'c> LnClient<'c> {
             timelock,
             user_key: user_sk.public_key(),
             invoice: invoice.to_string(),
+            cancelled: false,
         };
 
         let outgoing_payment = OutgoingContractData {
@@ -101,6 +102,37 @@ impl<'c> LnClient<'c> {
         }
     }
 
+    /// Determines if an outgoing contract can be refunded
+    pub async fn is_outgoing_contract_refundable(&self, id: ContractId) -> Result<bool> {
+        let contract = self.get_outgoing_contract(id).await?;
+
+        // If the contract was cancelled by the LN gateway we can get a refund instantly …
+        if contract.contract.cancelled {
+            return Ok(true);
+        }
+
+        // … otherwise we have to wait till the timeout hits
+        let consensus_block_height = self
+            .context
+            .api
+            .fetch_consensus_block_height()
+            .await
+            .map_err(LnClientError::ApiError)?;
+        if contract.contract.timelock as u64 <= consensus_block_height {
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    /// Waits for an outgoing contract to become refundable
+    pub async fn await_outgoing_refundable(&self, id: ContractId) -> Result<()> {
+        while !self.is_outgoing_contract_refundable(id).await? {
+            crate::sleep(Duration::from_secs(1)).await;
+        }
+        Ok(())
+    }
+
     pub async fn get_incoming_contract(&self, id: ContractId) -> Result<IncomingContractAccount> {
         let account = self.get_contract_account(id).await?;
         match account.contract {
@@ -118,7 +150,10 @@ impl<'c> LnClient<'c> {
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
-                if outgoing_data.contract_account.contract.timelock as u64 <= block_height {
+                let cancelled = outgoing_data.contract_account.contract.cancelled;
+                let timed_out =
+                    outgoing_data.contract_account.contract.timelock as u64 <= block_height;
+                if cancelled || timed_out {
                     Some(outgoing_data)
                 } else {
                     None
@@ -186,6 +221,18 @@ impl<'c> LnClient<'c> {
             .expect("Db error")
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))?;
         Ok(confirmed_invoice)
+    }
+
+    /// Used by gateway to prematurely return funds to the user if the payment failed
+    pub fn create_cancel_outgoing_output(
+        &self,
+        contract_id: ContractId,
+        signature: secp256k1_zkp::schnorr::Signature,
+    ) -> ContractOrOfferOutput {
+        ContractOrOfferOutput::CancelOutgoing {
+            contract: contract_id,
+            gateway_signature: signature,
+        }
     }
 }
 

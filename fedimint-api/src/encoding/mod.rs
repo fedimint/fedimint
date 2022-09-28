@@ -8,7 +8,7 @@ mod tbs;
 
 pub use fedimint_derive::{Decodable, Encodable};
 use std::fmt::{Debug, Formatter};
-use std::io::Error;
+use std::io::{Error, Read, Write};
 use thiserror::Error;
 use url::Url;
 
@@ -241,6 +241,27 @@ impl Decodable for lightning_invoice::Invoice {
         String::consensus_decode(d)?
             .parse::<lightning_invoice::Invoice>()
             .map_err(DecodeError::from_err)
+    }
+}
+
+impl Encodable for bool {
+    fn consensus_encode<W: Write>(&self, mut writer: W) -> Result<usize, Error> {
+        let bool_as_u8 = if *self { 1 } else { 0 };
+        writer.write_all(&[bool_as_u8])?;
+        Ok(1)
+    }
+}
+
+impl Decodable for bool {
+    fn consensus_decode<D: Read>(mut d: D) -> Result<Self, DecodeError> {
+        let mut bool_as_u8 = [0u8];
+        d.read_exact(&mut bool_as_u8)
+            .map_err(DecodeError::from_err)?;
+        match bool_as_u8[0] {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(DecodeError::from_str("Out of range, expected 0 or 1")),
+        }
     }
 }
 

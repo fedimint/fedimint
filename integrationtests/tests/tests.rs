@@ -368,7 +368,7 @@ async fn lightning_gateway_pays_internal_invoice() {
         .unwrap();
     debug!("Outgoing contract accepted");
 
-    tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
+    let claim_outpoint = tokio::join!(gateway.server.pay_invoice(contract_id, rng()), async {
         // buy preimage from offer, decrypt preimage, claim outgoing contract, mint the tokens
         fed.await_consensus_epochs(4).await;
     })
@@ -378,7 +378,7 @@ async fn lightning_gateway_pays_internal_invoice() {
 
     gateway
         .server
-        .await_outgoing_contract_claimed(contract_id, funding_outpoint)
+        .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
     debug!("Gateway claimed outgoing contract");
@@ -430,7 +430,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
         .await
         .unwrap();
 
-    gateway
+    let claim_outpoint = gateway
         .server
         .pay_invoice(contract_id, rng())
         .await
@@ -439,7 +439,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
 
     gateway
         .server
-        .await_outgoing_contract_claimed(contract_id, outpoint)
+        .await_outgoing_contract_claimed(contract_id, claim_outpoint)
         .await
         .unwrap();
     user.assert_total_coins(sats(2000 - 1010)).await;
@@ -682,7 +682,6 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000));
@@ -695,9 +694,29 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    // FIXME should return funds to user
-    gateway.client.abort_outgoing_payment(contract_id);
+    gateway.client.save_outgoing_payment(
+        gateway
+            .client
+            .ln_client()
+            .get_outgoing_contract(contract_id)
+            .await
+            .unwrap(),
+    );
+
+    // Gateway fails to acquire preimage, so it cancels the contract so the user can try another one
+    gateway
+        .client
+        .abort_outgoing_payment(contract_id)
+        .await
+        .unwrap();
     fed.run_consensus_epochs(1).await;
+    let outpoint = user
+        .client
+        .try_refund_outgoing_contract(contract_id, rng())
+        .await
+        .unwrap();
+    fed.run_consensus_epochs(2).await;
+    user.client.fetch_coins(outpoint).await.unwrap();
     assert_eq!(user.total_coins(), sats(1010));
     assert_eq!(fed.max_balance_sheet(), 0);
 }

@@ -69,6 +69,9 @@ fn item_message(item: &ConsensusItem) -> String {
                     Output::LN(ContractOrOfferOutput::Offer(o)) => {
                         format!("LN Offer for {} with hash {}", o.amount, o.hash)
                     }
+                    Output::LN(ContractOrOfferOutput::CancelOutgoing { contract, .. }) => {
+                        format!("LN Outgoing contract {} cancellation", contract)
+                    }
                     Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
                         amount,
                         contract,

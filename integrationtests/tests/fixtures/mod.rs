@@ -162,7 +162,7 @@ pub async fn fixtures(
                 lightning_rpc_adapter,
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
+                base_port + (2 * num_peers) + 1,
             )
             .await;
 
@@ -190,7 +190,7 @@ pub async fn fixtures(
                 ln_rpc_adapter,
                 client_config.clone(),
                 lightning.gateway_node_pub_key,
-                base_port + num_peers + 1,
+                base_port + (2 * num_peers) + 1,
             )
             .await;
 
