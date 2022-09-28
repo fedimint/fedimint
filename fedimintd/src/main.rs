@@ -54,8 +54,12 @@ async fn main() {
     }
 
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-    let db_path = opts.db_path;
-    run_fedimint(cfg, db_path).await;
+
+    let db = fedimint_rocksdb::RocksDb::open(opts.db_path)
+        .expect("Error opening DB")
+        .into();
+
+    run_fedimint(cfg, db).await;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();

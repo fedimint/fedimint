@@ -2,7 +2,6 @@ extern crate fedimint_api;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -73,22 +72,20 @@ pub struct FedimintServer {
 }
 
 /// Start all the components of the mint and plug them together
-pub async fn run_fedimint(cfg: ServerConfig, db_path: PathBuf) {
-    let server = FedimintServer::new(cfg.clone(), db_path.clone()).await;
+pub async fn run_fedimint(cfg: ServerConfig, db: Database) {
+    let server = FedimintServer::new(cfg.clone(), db).await;
     spawn(net::api::run_server(cfg, server.consensus.clone()));
     server.run_consensus().await;
 }
 
 impl FedimintServer {
-    pub async fn new(cfg: ServerConfig, db_path: PathBuf) -> Self {
+    pub async fn new(cfg: ServerConfig, db: Database) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
         Self::new_with(
             cfg.clone(),
-            fedimint_rocksdb::RocksDb::open(db_path)
-                .expect("Error opening DB")
-                .into(),
+            db,
             bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
             connector,
         )
