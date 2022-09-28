@@ -650,7 +650,7 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
+    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
     <span class="kw">use </span><span class="kw">crate</span>::ln::LnClient;
     <span class="kw">use </span><span class="kw">crate</span>::ClientContext;
     <span class="kw">use </span>async_trait::async_trait;
@@ -680,7 +680,7 @@
     }
 
     <span class="attribute">#[async_trait]
-    </span><span class="kw">impl </span>FederationApi <span class="kw">for </span>FakeApi {
+    </span><span class="kw">impl </span>IFederationApi <span class="kw">for </span>FakeApi {
         <span class="kw">async fn </span>fetch_tx_outcome(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             tx: TransactionId,
@@ -775,7 +775,7 @@
 
         <span class="kw">let </span>client_context = ClientContext {
             db: MemDatabase::new().into(),
-            api: Box::new(api),
+            api: api.into(),
             secp: secp256k1_zkp::Secp256k1::new(),
         };
 

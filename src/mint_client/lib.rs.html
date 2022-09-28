@@ -1061,6 +1061,7 @@
 <span id="1061">1061</span>
 <span id="1062">1062</span>
 <span id="1063">1063</span>
+<span id="1064">1064</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1073,6 +1074,7 @@
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::SystemTime;
 
+<span class="kw">use </span>api::FederationApi;
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::TieredMulti;
@@ -1135,7 +1137,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::utils::{network_to_currency, ClientContext};
 <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClientError;
 <span class="kw">use crate</span>::{
-    api::{ApiError, FederationApi},
+    api::ApiError,
     ln::{incoming::ConfirmedInvoice, LnClient},
     mint::{MintClient, SpendableNote},
     wallet::WalletClient,
@@ -1244,13 +1246,13 @@
                 })
                 .collect(),
         );
-        <span class="self">Self</span>::new_with_api(config, db, Box::new(api), secp)
+        <span class="self">Self</span>::new_with_api(config, db, api.into(), secp)
     }
 
     <span class="kw">pub fn </span>new_with_api(
         config: T,
         db: Database,
-        api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
+        api: FederationApi,
         secp: Secp256k1&lt;All&gt;,
     ) -&gt; Client&lt;T&gt; {
         <span class="self">Self </span>{

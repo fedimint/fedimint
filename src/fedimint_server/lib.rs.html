@@ -488,7 +488,7 @@
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
-<span class="kw">use </span>mint_client::api::{FederationApi, WsFederationApi};
+<span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{
@@ -531,7 +531,7 @@
     <span class="kw">pub </span>connections: AnyPeerConnections&lt;EpochMessage&gt;,
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;,
-    <span class="kw">pub </span>api: Arc&lt;<span class="kw">dyn </span>FederationApi&gt;,
+    <span class="kw">pub </span>api: Arc&lt;<span class="kw">dyn </span>IFederationApi&gt;,
 }
 
 <span class="doccomment">/// Start all the components of the mint and plug them together

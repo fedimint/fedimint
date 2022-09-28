@@ -695,10 +695,15 @@
 <span id="695">695</span>
 <span id="696">696</span>
 <span id="697">697</span>
+<span id="698">698</span>
+<span id="699">699</span>
+<span id="700">700</span>
+<span id="701">701</span>
+<span id="702">702</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::task::{RwLock, RwLockWriteGuard};
-<span class="kw">use </span>fedimint_api::{NumPeers, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractAccount, LightningGateway};
@@ -732,13 +737,14 @@
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 
 <span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
 
 <span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">pub trait </span>FederationApi: Send + Sync {
+</span><span class="kw">pub trait </span>IFederationApi: Send + Sync {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt;;
 
@@ -775,7 +781,11 @@
     </span><span class="kw">async fn </span>register_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: LightningGateway) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; <span class="kw">dyn </span>FederationApi + <span class="lifetime">&#39;a </span>{
+<span class="macro">dyn_newtype_define! </span>{
+    FederationApi(Arc&lt;IFederationApi&gt;)
+}
+
+<span class="kw">impl </span>FederationApi {
     <span class="kw">pub async fn </span>fetch_output_outcome&lt;T&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, out_point: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;T&gt;
     <span class="kw">where
         </span>T: TryIntoOutcome + Send,
@@ -888,7 +898,7 @@
 
 <span class="attribute">#[cfg_attr(target_family = <span class="string">&quot;wasm&quot;</span>, async_trait(<span class="question-mark">? </span>Send))]
 #[cfg_attr(not(target_family = <span class="string">&quot;wasm&quot;</span>), async_trait)]
-</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; FederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
+</span><span class="kw">impl</span>&lt;C: JsonRpcClient + Send + Sync&gt; IFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {
     <span class="doccomment">/// Fetch the outcome of an entire transaction
     </span><span class="kw">async fn </span>fetch_tx_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>, tx: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionStatus&gt; {
         <span class="self">self</span>.request(

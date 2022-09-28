@@ -116,7 +116,7 @@
 
 <span class="kw">pub struct </span>ClientContext {
     <span class="kw">pub </span>db: Database,
-    <span class="kw">pub </span>api: Box&lt;<span class="kw">dyn </span>FederationApi&gt;,
+    <span class="kw">pub </span>api: FederationApi,
     <span class="kw">pub </span>secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
 }
 
