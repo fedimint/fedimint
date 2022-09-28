@@ -15,7 +15,7 @@ use tracing::debug;
 use crate::fixtures::FederationTest;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::TieredMulti;
-use fedimint_ln::contracts::incoming::PreimageDecryptionShare;
+use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::DecryptionShareCI;
 use fedimint_mint::{PartialSigResponse, PartiallySignedRequest};
 use fedimint_server::epoch::ConsensusItem;
@@ -563,7 +563,7 @@ async fn receive_lightning_payment_valid_preimage() {
 
     // Check that the preimage matches user pubkey & lightning invoice preimage
     let pubkey = invoice.keypair.public_key();
-    assert_eq!(pubkey, preimage.0);
+    assert_eq!(pubkey, preimage.to_public_key().unwrap());
     assert_eq!(&sha256(&pubkey.serialize()), invoice.invoice.payment_hash());
 
     // User claims their ecash
@@ -598,7 +598,7 @@ async fn receive_lightning_payment_invalid_preimage() {
     let offer_output = user.client.ln_client().create_offer_output(
         payment_amount,
         payment_hash,
-        kp.public_key().serialize(),
+        Preimage(kp.public_key().serialize()),
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
@@ -662,7 +662,9 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
 
-    let bad_preimage: [u8; 32] = rand::random();
+    // Create a random preimage that has no association to the contract invoice
+    let rand_slice: [u8; 32] = rand::random();
+    let bad_preimage = Preimage(rand_slice);
     let response = gateway
         .client
         .claim_outgoing_contract(contract_id, bad_preimage, rng())

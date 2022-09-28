@@ -133,9 +133,10 @@ async fn htlc_accepted_hook(
 ) -> Result<serde_json::Value, Error> {
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
     let preimage = gw_rpc(plugin, htlc_accepted).await?;
+    let pk = preimage.to_public_key()?;
     Ok(serde_json::json!({
       "result": "resolve",
-      "payment_key": preimage,
+      "payment_key": pk.to_string(),
     }))
 }
 

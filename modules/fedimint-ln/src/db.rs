@@ -1,5 +1,4 @@
-use crate::contracts::incoming::{IncomingContractOffer, PreimageDecryptionShare};
-use crate::contracts::ContractId;
+use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 use crate::{ContractAccount, LightningGateway, OutputOutcome};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};

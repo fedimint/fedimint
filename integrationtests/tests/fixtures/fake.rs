@@ -14,6 +14,7 @@ use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
 use rand::rngs::OsRng;
 
 use fedimint_api::Amount;
+use fedimint_server::modules::ln::contracts::Preimage;
 use fedimint_wallet::bitcoind::IBitcoindRpc;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::Feerate;
@@ -23,20 +24,20 @@ use crate::fixtures::{BitcoinTest, LightningTest};
 
 #[derive(Clone, Debug)]
 pub struct FakeLightningTest {
+    pub preimage: Preimage,
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
 }
 
 impl FakeLightningTest {
-    const PREIMAGE: [u8; 32] = [1; 32];
-
     pub fn new() -> Self {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut OsRng::new().unwrap());
         let amount_sent = Arc::new(Mutex::new(0));
 
         FakeLightningTest {
+            preimage: Preimage([1; 32]),
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
@@ -50,7 +51,7 @@ impl LightningTest for FakeLightningTest {
 
         InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
-            .payment_hash(sha256::Hash::hash(&FakeLightningTest::PREIMAGE))
+            .payment_hash(sha256::Hash::hash(&self.preimage.0))
             .current_timestamp()
             .min_final_cltv_expiry(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -71,11 +72,11 @@ impl LnRpc for FakeLightningTest {
         invoice_str: &str,
         _max_delay: u64,
         _max_fee_percent: f64,
-    ) -> Result<[u8; 32], LightningError> {
+    ) -> Result<Preimage, LightningError> {
         let invoice: Invoice = invoice_str.parse().unwrap();
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
-        Ok(FakeLightningTest::PREIMAGE)
+        Ok(self.preimage.clone())
     }
 }
 

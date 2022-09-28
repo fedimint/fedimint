@@ -9,13 +9,12 @@ use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{incoming::Preimage, ContractId};
+use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use secp256k1::XOnlyPublicKey;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -225,7 +224,7 @@ impl LnGateway {
         payment_hash: &sha256::Hash,
         invoice_amount: &Amount,
         mut rng: impl RngCore + CryptoRng,
-    ) -> Result<[u8; 32]> {
+    ) -> Result<Preimage> {
         let (out_point, contract_id) = self
             .federation_client
             .buy_preimage_offer(payment_hash, invoice_amount, &mut rng)
@@ -239,7 +238,7 @@ impl LnGateway {
         {
             Ok(preimage) => {
                 debug!("Decrypted preimage {:?}", preimage);
-                Ok(preimage.0.serialize())
+                Ok(preimage)
             }
             Err(e) => {
                 warn!("Failed to decrypt preimage. Now requesting a refund: {}", e);
@@ -255,7 +254,7 @@ impl LnGateway {
         &self,
         invoice: &str,
         payment_params: &PaymentParameters,
-    ) -> Result<[u8; 32]> {
+    ) -> Result<Preimage> {
         match self
             .ln_client
             .pay(
@@ -302,11 +301,8 @@ impl LnGateway {
             rand::rngs::OsRng::new().expect("only systems with a randomness source are supported");
 
         debug!("Incoming htlc for payment hash {}", payment_hash);
-        let pk_slice = self
-            .buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
-            .await?;
-        let pk = XOnlyPublicKey::from_slice(&pk_slice).expect("Invalid preimage");
-        Ok(Preimage(pk))
+        self.buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
+            .await
     }
 
     async fn handle_balance_msg(&self) -> Result<Amount> {

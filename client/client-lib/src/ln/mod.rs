@@ -13,10 +13,10 @@ use fedimint_api::db::batch::BatchTx;
 use fedimint_api::task::timeout;
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
-use fedimint_core::modules::ln::contracts::incoming::{EncryptedPreimage, IncomingContractOffer};
+use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
 use fedimint_core::modules::ln::contracts::{
-    Contract, ContractId, FundedContract, IdentifyableContract,
+    Contract, ContractId, EncryptedPreimage, FundedContract, IdentifyableContract, Preimage,
 };
 use fedimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
@@ -176,7 +176,7 @@ impl<'c> LnClient<'c> {
         &self,
         amount: Amount,
         payment_hash: Sha256Hash,
-        payment_secret: [u8; 32],
+        payment_secret: Preimage,
     ) -> ContractOrOfferOutput {
         ContractOrOfferOutput::Offer(IncomingContractOffer {
             amount,

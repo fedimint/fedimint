@@ -2,7 +2,6 @@ pub mod account;
 pub mod incoming;
 pub mod outgoing;
 
-use crate::contracts::incoming::{DecryptedPreimage, FundedIncomingContract};
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
@@ -47,7 +46,7 @@ pub enum FundedContract {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum ContractOutcome {
     Account(AccountContractOutcome),
-    Incoming(incoming::DecryptedPreimage),
+    Incoming(DecryptedPreimage),
     Outgoing(OutgoingContractOutcome),
 }
 
@@ -92,10 +91,12 @@ impl Contract {
     pub fn to_funded(self, out_point: OutPoint) -> FundedContract {
         match self {
             Contract::Account(account) => FundedContract::Account(account),
-            Contract::Incoming(incoming) => FundedContract::Incoming(FundedIncomingContract {
-                contract: incoming,
-                out_point,
-            }),
+            Contract::Incoming(incoming) => {
+                FundedContract::Incoming(incoming::FundedIncomingContract {
+                    contract: incoming,
+                    out_point,
+                })
+            }
             Contract::Outgoing(outgoing) => FundedContract::Outgoing(outgoing),
         }
     }
@@ -110,5 +111,78 @@ impl Encodable for ContractId {
 impl Decodable for ContractId {
     fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
         Ok(ContractId::from_inner(Decodable::consensus_decode(d)?))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Preimage(pub [u8; 32]);
+
+impl Preimage {
+    /// Create a Schnorr public key from this preimage
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidPublicKey`] if the Preimage does not represent a valid Secp256k1 point x coordinate.
+    pub fn to_public_key(&self) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
+        secp256k1::XOnlyPublicKey::from_slice(&self.0)
+    }
+}
+
+/// Possible outcomes of preimage decryption
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum DecryptedPreimage {
+    /// There aren't enough decryption shares yet
+    Pending,
+    /// The decrypted preimage was valid
+    Some(Preimage),
+    /// The decrypted preimage was invalid
+    Invalid,
+}
+
+/// Threshold-encrypted [`Preimage`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);
+
+/// Share to decrypt an [`EncryptedPreimage`]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
+
+impl EncryptedPreimage {
+    pub fn new(preimage: Preimage, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
+        EncryptedPreimage(key.encrypt(preimage.0))
+    }
+}
+
+impl Encodable for EncryptedPreimage {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        // TODO: get rid of bincode
+        let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
+        bytes.consensus_encode(writer)
+    }
+}
+
+impl Decodable for EncryptedPreimage {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        let bytes = Vec::<u8>::consensus_decode(d)?;
+        Ok(EncryptedPreimage(
+            bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
+        ))
+    }
+}
+
+impl Encodable for PreimageDecryptionShare {
+    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+        // TODO: get rid of bincode
+        let bytes = bincode::serialize(&self.0).expect("Serialization shouldn't fail");
+        bytes.consensus_encode(writer)
+    }
+}
+
+impl Decodable for PreimageDecryptionShare {
+    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+        let bytes = Vec::<u8>::consensus_decode(d)?;
+        Ok(PreimageDecryptionShare(
+            bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
+        ))
     }
 }

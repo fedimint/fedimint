@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use fedimint_ln::contracts::Preimage;
 use ln_gateway::ln::{LightningError, LnRpc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,7 +37,7 @@ impl LnRpc for LnRpcAdapter {
         invoice_str: &str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -> Result<[u8; 32], LightningError> {
+    ) -> Result<Preimage, LightningError> {
         self.fail_invoices
             .lock()
             .await
