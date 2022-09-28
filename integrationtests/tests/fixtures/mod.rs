@@ -14,8 +14,10 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
-use fedimint_api::db::Database;
-use fedimint_api::TieredMulti;
+use fedimint_api::Amount;
+use fedimint_api::FederationModule;
+use fedimint_api::OutPoint;
+use fedimint_api::PeerId;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
@@ -37,19 +39,20 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 
 use fake::{FakeBitcoinTest, FakeLightningTest};
-use fedimint::config::ServerConfigParams;
-use fedimint::config::{ClientConfig, ServerConfig};
-use fedimint::consensus::{ConsensusOutcome, ConsensusProposal};
-use fedimint::epoch::ConsensusItem;
-use fedimint::net::connect::mock::MockNetwork;
-use fedimint::net::connect::{Connector, TlsTcpConnector};
-use fedimint::net::peers::PeerConnector;
-use fedimint::transaction::Output;
-use fedimint::{consensus, EpochMessage, FedimintServer};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
-use fedimint_api::{Amount, FederationModule, OutPoint, PeerId};
+use fedimint_api::db::Database;
+use fedimint_api::TieredMulti;
+use fedimint_server::config::ServerConfigParams;
+use fedimint_server::config::{ClientConfig, ServerConfig};
+use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
+use fedimint_server::epoch::ConsensusItem;
+use fedimint_server::net::connect::mock::MockNetwork;
+use fedimint_server::net::connect::{Connector, TlsTcpConnector};
+use fedimint_server::net::peers::PeerConnector;
+use fedimint_server::transaction::Output;
+use fedimint_server::{consensus, EpochMessage, FedimintServer};
 use fedimint_wallet::bitcoind::BitcoindRpc;
 use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
@@ -409,7 +412,7 @@ impl FederationTest {
     }
 
     /// Submit a fedimint transaction to all federation servers
-    pub fn submit_transaction(&self, transaction: fedimint::transaction::Transaction) {
+    pub fn submit_transaction(&self, transaction: fedimint_server::transaction::Transaction) {
         for server in &self.servers {
             server
                 .borrow_mut()
@@ -538,15 +541,15 @@ impl FederationTest {
                 for server in &self.servers {
                     let mut batch = DbBatch::new();
                     let mut batch_tx = batch.transaction();
-                    let transaction = fedimint::transaction::Transaction {
+                    let transaction = fedimint_server::transaction::Transaction {
                         inputs: vec![],
                         outputs: vec![Output::Mint(tokens.clone())],
                         signature: None,
                     };
 
                     batch_tx.append_insert(
-                        fedimint::db::AcceptedTransactionKey(out_point.txid),
-                        fedimint::consensus::AcceptedTransaction {
+                        fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                        fedimint_server::consensus::AcceptedTransaction {
                             epoch: 0,
                             transaction,
                         },
@@ -720,7 +723,7 @@ impl FederationTest {
             )
             .await;
 
-            spawn(fedimint::net::api::run_server(
+            spawn(fedimint_server::net::api::run_server(
                 cfg.clone(),
                 fedimint.consensus.clone(),
             ));

@@ -652,49 +652,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "bitcoin",
- "bytes",
- "clap",
- "fedimint-api",
- "fedimint-build",
- "fedimint-core",
- "fedimint-derive",
- "fedimint-rocksdb",
- "fedimint-wallet",
- "futures",
- "hbbft",
- "hex",
- "itertools",
- "jsonrpsee",
- "mint-client",
- "opentelemetry 0.18.0",
- "opentelemetry-jaeger",
- "rand 0.6.5",
- "rayon",
- "rcgen",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "sha3",
- "tbs",
- "thiserror",
- "threshold_crypto",
- "tokio",
- "tokio-rustls",
- "tokio-util 0.7.4",
- "tracing",
- "tracing-opentelemetry",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
 name = "fedimint-api"
 version = "0.1.0"
 dependencies = [
@@ -825,6 +782,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "bytes",
+ "clap",
+ "fedimint-api",
+ "fedimint-build",
+ "fedimint-core",
+ "fedimint-derive",
+ "fedimint-rocksdb",
+ "fedimint-wallet",
+ "futures",
+ "hbbft",
+ "hex",
+ "itertools",
+ "jsonrpsee",
+ "mint-client",
+ "rand 0.6.5",
+ "rayon",
+ "rcgen",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tbs",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util 0.7.4",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "fedimint-sled"
 version = "0.1.0"
 dependencies = [
@@ -847,11 +844,11 @@ dependencies = [
  "bitcoincore-rpc",
  "clightningrpc",
  "cln-rpc",
- "fedimint",
  "fedimint-api",
  "fedimint-ln",
  "fedimint-mint",
  "fedimint-rocksdb",
+ "fedimint-server",
  "fedimint-wallet",
  "futures",
  "hbbft",
@@ -890,6 +887,50 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "validator",
+]
+
+[[package]]
+name = "fedimintd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bitcoin",
+ "bytes",
+ "clap",
+ "fedimint-api",
+ "fedimint-build",
+ "fedimint-core",
+ "fedimint-derive",
+ "fedimint-rocksdb",
+ "fedimint-server",
+ "fedimint-wallet",
+ "futures",
+ "hbbft",
+ "hex",
+ "itertools",
+ "jsonrpsee",
+ "mint-client",
+ "opentelemetry 0.18.0",
+ "opentelemetry-jaeger",
+ "rand 0.6.5",
+ "rayon",
+ "rcgen",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tbs",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util 0.7.4",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -1671,10 +1712,10 @@ dependencies = [
  "bitcoin_hashes",
  "cln-plugin",
  "cln-rpc",
- "fedimint",
  "fedimint-api",
  "fedimint-build",
  "fedimint-rocksdb",
+ "fedimint-server",
  "futures",
  "hex",
  "lightning-invoice",

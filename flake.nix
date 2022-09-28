@@ -420,19 +420,20 @@
             '' + target.extraEnvs;
           });
 
-        fedimint = pkg {
-          name = "fedimint";
+        fedimintd = pkg {
+          name = "fedimintd";
           bin = "fedimintd";
           dirs = [
-            "crypto/tbs"
-            "ln-gateway"
             "client/client-lib"
-            "fedimint"
+            "crypto/tbs"
+            "fedimintd"
             "fedimint-api"
+            "fedimint-build"
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
-            "fedimint-build"
+            "fedimint-server"
+            "ln-gateway"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -446,11 +447,11 @@
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
-            "fedimint"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
             "fedimint-rocksdb"
+            "fedimint-server"
             "fedimint-build"
             "ln-gateway"
             "modules/fedimint-mint"
@@ -520,12 +521,12 @@
             "client/clientd"
             "crypto/tbs"
             "ln-gateway"
-            "fedimint"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
-            "modules/fedimint-ln"
+            "fedimint-server"
             "integrationtests"
+            "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
           ];
@@ -569,9 +570,9 @@
       in
       {
         packages = {
-          default = fedimint;
+          default = fedimintd;
 
-          fedimint = replace-git-hash { name = "fedimint"; package = fedimint; };
+          fedimintd = replace-git-hash { name = "fedimint"; package = fedimintd; };
           fedimint-tests = fedimint-tests;
           ln-gateway = replace-git-hash { name = "ln-gateway"; package = ln-gateway; };
           clientd = replace-git-hash { name = "clientd"; package = clientd; };
@@ -603,10 +604,10 @@
           container = {
             fedimintd = pkgs.dockerTools.buildLayeredImage {
               name = "fedimint";
-              contents = [ fedimint ];
+              contents = [ fedimintd ];
               config = {
                 Cmd = [
-                  "${fedimint}/bin/fedimintd"
+                  "${fedimintd}/bin/fedimintd"
                 ];
                 ExposedPorts = {
                   "${builtins.toString 8080}/tcp" = { };

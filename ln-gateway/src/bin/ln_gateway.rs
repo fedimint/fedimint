@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
 use url::Url;
 
-use fedimint::config::load_from_file;
+use fedimint_server::config::load_from_file;
 use ln_gateway::{
     cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
     GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
@@ -24,7 +24,7 @@ type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 /// Create [`gateway.json`] config files
 async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &SocketAddr) {
     let client_cfg_path = workdir.join("client.json");
-    let client_cfg: fedimint::config::ClientConfig = load_from_file(&client_cfg_path);
+    let client_cfg: fedimint_server::config::ClientConfig = load_from_file(&client_cfg_path);
 
     let mut rng = thread_rng();
     let ctx = secp256k1::Secp256k1::new();
