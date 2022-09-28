@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
+use ln_gateway::builder::GatewayBuilder;
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -15,8 +16,9 @@ use url::Url;
 
 use fedimint_server::config::load_from_file;
 use ln_gateway::{
-    cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
+    cln::{build_rpc, HtlcAccepted},
+    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, GatewayRequestTrait,
+    LnGateway, LnGatewayError, WithdrawPayload,
 };
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
@@ -106,6 +108,8 @@ async fn initialize_gateway(
     let ctx = secp256k1::Secp256k1::new();
     let federation_client = Arc::new(Client::new(gw_client_cfg, db, ctx));
     let ln_client = Arc::new(Mutex::new(ln_client));
+
+    let builder = GatewayBuilder::new().with_lightning_rpc(build_rpc).await;
 
     LnGateway::new(federation_client, ln_client, sender, receiver, bind_addr)
 }

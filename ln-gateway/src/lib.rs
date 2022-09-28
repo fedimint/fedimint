@@ -1,5 +1,7 @@
+pub mod builder;
 pub mod cln;
 pub mod ln;
+pub mod rpc;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
