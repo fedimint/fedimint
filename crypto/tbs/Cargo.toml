@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [dependencies]
 bls12_381 = "0.6.0"
 ff = "0.11.1"
-group = "0.11.0"
+group = "0.12.0"
 hex = "0.4.2"
 rand = "0.8.4"
 rand_chacha = "0.3.1"
