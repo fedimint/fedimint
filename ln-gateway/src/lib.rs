@@ -9,7 +9,7 @@ use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{Preimage, ContractId};
+use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
 use futures::Future;
 use mint_client::mint::MintClientError;

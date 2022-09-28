@@ -2,7 +2,7 @@ use std::convert::TryInto;
 
 use async_trait::async_trait;
 use cln_rpc::model::requests::PayRequest;
-use fedimint::modules::ln::contracts::Preimage;
+use fedimint_server::modules::ln::contracts::Preimage;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument};
 
