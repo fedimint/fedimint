@@ -6,13 +6,18 @@ use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::time::Duration;
 use threshold_crypto::PublicKey;
 
 /// Returns a result from the first responding peer
 pub struct TrustAllPeers;
 
-impl<R> QueryStrategy<R> for TrustAllPeers {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
+#[async_trait::async_trait]
+impl<R> QueryStrategy<R> for TrustAllPeers
+where
+    R: Send + 'static,
+{
+    async fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         let FedResponse { peer: _, result } = response;
         QueryStep::Finished(result.map_err(ApiError::RpcError))
     }
@@ -33,12 +38,13 @@ impl ValidHistory {
     }
 }
 
+#[async_trait::async_trait]
 impl QueryStrategy<EpochHistory> for ValidHistory {
-    fn process(&mut self, response: FedResponse<EpochHistory>) -> QueryStep<EpochHistory> {
+    async fn process(&mut self, response: FedResponse<EpochHistory>) -> QueryStep<EpochHistory> {
         let FedResponse { peer, result } = response;
         match result {
             Ok(epoch) if epoch.verify_sig(&self.epoch_pk).is_ok() => QueryStep::Finished(Ok(epoch)),
-            result => self.current.process(FedResponse { peer, result }),
+            result => self.current.process(FedResponse { peer, result }).await,
         }
     }
 }
@@ -62,8 +68,12 @@ impl<R> UnionResponses<R> {
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, response: FedResponse<Vec<R>>) -> QueryStep<Vec<R>> {
+#[async_trait::async_trait]
+impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R>
+where
+    R: Send + 'static,
+{
+    async fn process(&mut self, response: FedResponse<Vec<R>>) -> QueryStep<Vec<R>> {
         if let FedResponse {
             peer,
             result: Ok(result),
@@ -79,7 +89,7 @@ impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
             }
         } else {
             // handle error case using the CurrentConsensus method
-            self.current.process(response)
+            self.current.process(response).await
         }
     }
 }
@@ -87,24 +97,31 @@ impl<R: Hash + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
 /// Returns when `required` responses are equal, retrying on 404 errors
 pub struct Retry404<R> {
     current: CurrentConsensus<R>,
+    retry_delay: Duration,
 }
 
 impl<R> Retry404<R> {
-    pub fn new(required: usize) -> Self {
+    pub fn new(required: usize, retry_delay: Duration) -> Self {
         Self {
             current: CurrentConsensus::new(required),
+            retry_delay,
         }
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for Retry404<R> {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
+#[async_trait::async_trait]
+impl<R: Hash + Eq + Clone> QueryStrategy<R> for Retry404<R>
+where
+    R: Send + 'static,
+{
+    async fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         let FedResponse { peer, result } = response;
         match result {
             Err(JsonRpcError::Call(RpcCallError::Custom(e))) if e.code() == 404 => {
+                fedimint_api::task::sleep(self.retry_delay).await;
                 QueryStep::Request(HashSet::from([peer]))
             }
-            result => self.current.process(FedResponse { peer, result }),
+            result => self.current.process(FedResponse { peer, result }).await,
         }
     }
 }
@@ -128,11 +145,15 @@ impl<R> EventuallyConsistent<R> {
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R> {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
+#[async_trait::async_trait]
+impl<R: Hash + Eq + Clone> QueryStrategy<R> for EventuallyConsistent<R>
+where
+    R: Send + 'static,
+{
+    async fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         self.responses.insert(response.peer);
 
-        match self.current.process(response) {
+        match self.current.process(response).await {
             QueryStep::Continue if self.responses.len() >= self.required => {
                 let result = QueryStep::Request(self.responses.clone());
                 self.responses.clear();
@@ -160,8 +181,12 @@ impl<R> CurrentConsensus<R> {
     }
 }
 
-impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R> {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
+#[async_trait::async_trait]
+impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R>
+where
+    R: Send + 'static,
+{
+    async fn process(&mut self, response: FedResponse<R>) -> QueryStep<R> {
         match response {
             FedResponse {
                 peer,
@@ -193,8 +218,9 @@ impl<R: Hash + Eq + Clone> QueryStrategy<R> for CurrentConsensus<R> {
     }
 }
 
+#[async_trait::async_trait]
 pub trait QueryStrategy<R> {
-    fn process(&mut self, response: FedResponse<R>) -> QueryStep<R>;
+    async fn process(&mut self, response: FedResponse<R>) -> QueryStep<R>;
 }
 
 /// Results from the strategy handling a response from a peer

@@ -197,7 +197,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request(
             "/fetch_transaction",
             tx,
-            Retry404::new(self.peers().one_honest()),
+            Retry404::new(self.peers().one_honest(), Duration::from_millis(100)),
         )
         .await
     }
@@ -226,7 +226,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request(
             "/ln/account",
             contract,
-            Retry404::new(self.peers().one_honest()),
+            Retry404::new(self.peers().one_honest(), Duration::from_millis(100)),
         )
         .await
     }
@@ -257,7 +257,7 @@ impl<C: JsonRpcClient + Send + Sync> FederationApi for WsFederationApi<C> {
         self.request(
             "/ln/offer",
             payment_hash,
-            Retry404::new(self.peers().one_honest()),
+            Retry404::new(self.peers().one_honest(), Duration::from_millis(100)),
         )
         .await
     }
@@ -451,7 +451,7 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
         // Delegates the response handling to the `QueryStrategy` which can
         loop {
             match futures.next().await {
-                Some(result) => match strategy.process(result) {
+                Some(result) => match strategy.process(result).await {
                     QueryStep::Request(peers) => {
                         for member in &self.members {
                             if peers.contains(&member.peer_id) {
