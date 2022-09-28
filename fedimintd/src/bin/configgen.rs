@@ -21,32 +21,32 @@ enum Command {
     /// specified with `out-dir`
     Generate {
         /// Directory to output all the generated config files
-        #[clap(long = "out-dir")]
+        #[arg(long = "out-dir")]
         dir_out_path: PathBuf,
 
         /// Number of nodes in the federation
-        #[clap(long = "num-nodes")]
+        #[arg(long = "num-nodes")]
         num_nodes: u16,
 
         /// Base hbbft port
-        #[clap(long = "hbbft-base-port", default_value = "17240")]
+        #[arg(long = "hbbft-base-port", default_value = "17240")]
         hbbft_base_port: u16,
 
         /// Base api port
-        #[clap(long = "api-base-port", default_value = "17340")]
+        #[arg(long = "api-base-port", default_value = "17340")]
         api_base_port: u16,
 
         /// Available denominations of notes issues by the federation (comma separated)
-        #[clap(
+        #[arg(
             long = "denominations",
             value_delimiter = ',',
-            min_values = 1,
+            num_args = 1..,
             required = true
         )]
         denominations: Vec<Amount>,
 
         /// Federation name
-        #[clap(long = "federation-name", default_value = "Hal's trusty mint")]
+        #[arg(long = "federation-name", default_value = "Hal's trusty mint")]
         federation_name: String,
     },
 }

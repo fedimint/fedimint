@@ -5,9 +5,9 @@ use mint_client::query::TrustAllPeers;
 use url::Url;
 
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct Cli {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: Commands,
 }
 

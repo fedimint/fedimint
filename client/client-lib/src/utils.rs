@@ -8,9 +8,9 @@ use fedimint_api::encoding::Decodable;
 use fedimint_api::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
 
-pub fn parse_coins(s: &str) -> TieredMulti<SpendableNote> {
-    let bytes = base64::decode(s).unwrap();
-    bincode::deserialize(&bytes).unwrap()
+pub fn parse_coins(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
+    let bytes = base64::decode(s)?;
+    Ok(bincode::deserialize(&bytes)?)
 }
 
 pub fn serialize_coins(c: &TieredMulti<SpendableNote>) -> String {
