@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         # Note: making the whole job conditional w.r.t matrix, instead of every step
         # is not supported and workarounds are very gnarly
         if: github.ref == 'refs/heads/master' || matrix.build-in-pr
