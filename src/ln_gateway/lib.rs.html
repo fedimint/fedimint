@@ -433,8 +433,6 @@
 <span id="433">433</span>
 <span id="434">434</span>
 <span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -555,13 +553,11 @@
 <span class="kw">impl </span>LnGateway {
     <span class="kw">pub fn </span>new(
         federation_client: Arc&lt;GatewayClient&gt;,
-        ln_client: Box&lt;<span class="kw">dyn </span>LnRpc&gt;,
+        ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
         sender: mpsc::Sender&lt;GatewayRequest&gt;,
         receiver: mpsc::Receiver&lt;GatewayRequest&gt;,
         bind_addr: SocketAddr,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>LnRpc&gt; = ln_client.into();
-
         <span class="comment">// Run webserver asynchronously in tokio
         </span><span class="kw">let </span>webserver = tokio::spawn(run_webserver(bind_addr, sender));
 

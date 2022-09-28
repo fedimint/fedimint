@@ -85,7 +85,7 @@
 }
 
 <span class="attribute">#[derive(Debug)]
-</span><span class="kw">pub struct </span>LightningError(<span class="prelude-ty">Option</span>&lt;i32&gt;);
+</span><span class="kw">pub struct </span>LightningError(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;i32&gt;);
 
 <span class="attribute">#[async_trait]
 </span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
