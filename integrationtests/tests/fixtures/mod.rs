@@ -328,7 +328,7 @@ impl UserTest {
     }
 
     fn new(config: UserClientConfig, peers: Vec<PeerId>, db: Database) -> Self {
-        let api = Box::new(WsFederationApi::new(
+        let api = WsFederationApi::new(
             config
                 .0
                 .nodes
@@ -337,7 +337,8 @@ impl UserTest {
                 .filter(|(id, _)| peers.contains(&PeerId::from(*id as u16)))
                 .map(|(id, node)| (PeerId::from(id as u16), node.url.clone()))
                 .collect(),
-        ));
+        )
+        .into();
 
         let client = UserClient::new_with_api(config.clone(), db, api, Default::default());
 

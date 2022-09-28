@@ -26,7 +26,7 @@ use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
 use fedimint_api::config::GenerateConfig;
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
-use mint_client::api::{FederationApi, WsFederationApi};
+use mint_client::api::{IFederationApi, WsFederationApi};
 use serde::{Deserialize, Serialize};
 
 use crate::consensus::{
@@ -69,7 +69,7 @@ pub struct FedimintServer {
     pub connections: AnyPeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<ConsensusItem>, PeerId>,
-    pub api: Arc<dyn FederationApi>,
+    pub api: Arc<dyn IFederationApi>,
 }
 
 /// Start all the components of the mint and plug them together
