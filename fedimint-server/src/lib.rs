@@ -2,7 +2,6 @@ extern crate fedimint_api;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,7 +20,7 @@ use fedimint_api::db::Database;
 use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
-use fedimint_core::modules::wallet::{bitcoincore_rpc, Wallet};
+use fedimint_core::modules::wallet::Wallet;
 
 use fedimint_api::config::GenerateConfig;
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
@@ -72,33 +71,24 @@ pub struct FedimintServer {
     pub api: Arc<dyn IFederationApi>,
 }
 
-/// Start all the components of the mint and plug them together
-pub async fn run_fedimint(cfg: ServerConfig, db_path: PathBuf) {
-    let server = FedimintServer::new(cfg.clone(), db_path.clone()).await;
-    spawn(net::api::run_server(cfg, server.consensus.clone()));
-    server.run_consensus().await;
-}
-
 impl FedimintServer {
-    pub async fn new(cfg: ServerConfig, db_path: PathBuf) -> Self {
+    /// Start all the components of the mint and plug them together
+    pub async fn run(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) {
+        let server = FedimintServer::new(cfg.clone(), db, bitcoincore_rpc).await;
+        spawn(net::api::run_server(cfg, server.consensus.clone()));
+        server.run_consensus().await;
+    }
+    pub async fn new(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        Self::new_with(
-            cfg.clone(),
-            fedimint_rocksdb::RocksDb::open(db_path)
-                .expect("Error opening DB")
-                .into(),
-            bitcoincore_rpc::bitcoind_gen(cfg.wallet.clone()),
-            connector,
-        )
-        .await
+        Self::new_with(cfg.clone(), db, bitcoincore_rpc, connector).await
     }
 
     pub async fn new_with(
         cfg: ServerConfig,
         database: Database,
-        bitcoind: impl Fn() -> BitcoindRpc,
+        bitcoind: BitcoindRpc,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {
         cfg.validate_config(&cfg.identity);

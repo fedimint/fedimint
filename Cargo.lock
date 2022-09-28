@@ -795,7 +795,6 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-derive",
- "fedimint-rocksdb",
  "fedimint-wallet",
  "futures",
  "hbbft",

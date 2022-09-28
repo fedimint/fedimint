@@ -128,8 +128,9 @@ pub async fn fixtures(
             info!("Testing with REAL Bitcoin and Lightning services");
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
-            let bitcoin_rpc = bitcoincore_rpc::bitcoind_gen(wallet_config.clone());
-            let bitcoin = RealBitcoinTest::new(wallet_config);
+            let bitcoin_rpc = bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
+                .expect("Could not create bitcoinrpc");
+            let bitcoin = RealBitcoinTest::new(&wallet_config.btc_rpc);
             let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
             let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
             let lightning =
@@ -144,7 +145,13 @@ pub async fn fixtures(
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
             let fed_db = || rocks(dir.clone()).into();
-            let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
+            let fed = FederationTest::new(
+                server_config,
+                &fed_db,
+                &|| bitcoin_rpc.clone(),
+                &connect_gen,
+            )
+            .await;
 
             let user_cfg = UserClientConfig(client_config.clone());
             let user_db = rocks(dir.clone()).into();
@@ -726,7 +733,7 @@ impl FederationTest {
             let fedimint = FedimintServer::new_with(
                 cfg.clone(),
                 database.clone(),
-                bitcoin_gen,
+                bitcoin_gen(),
                 connect_gen(cfg),
             )
             .await;

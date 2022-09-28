@@ -13,8 +13,8 @@ use fedimint_api::Amount;
 use lightning_invoice::Invoice;
 use serde::Serialize;
 
+use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::encoding::Decodable;
-use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::txoproof::TxOutProof;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
@@ -88,13 +88,10 @@ pub struct RealBitcoinTest {
 impl RealBitcoinTest {
     const ERROR: &'static str = "Bitcoin RPC returned an error";
 
-    pub fn new(wallet_config: WalletConfig) -> Self {
+    pub fn new(rpc_cfg: &BitcoindRpcCfg) -> Self {
         let client = Client::new(
-            &(wallet_config.btc_rpc_address),
-            Auth::UserPass(
-                wallet_config.btc_rpc_user.clone(),
-                wallet_config.btc_rpc_pass.clone(),
-            ),
+            &(rpc_cfg.btc_rpc_address),
+            Auth::UserPass(rpc_cfg.btc_rpc_user.clone(), rpc_cfg.btc_rpc_pass.clone()),
         )
         .expect(Self::ERROR);
 

@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use fedimint_server::config::{load_from_file, ServerConfig};
-use fedimint_server::run_fedimint;
+use fedimint_server::FedimintServer;
 
+use fedimint_wallet::bitcoincore_rpc;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
@@ -18,12 +19,12 @@ pub struct ServerOpts {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
             println!("{}", env!("GIT_HASH"));
-            return;
+            return Ok(());
         }
     }
     let opts = ServerOpts::parse();
@@ -54,9 +55,16 @@ async fn main() {
     }
 
     let cfg: ServerConfig = load_from_file(&opts.cfg_path);
-    let db_path = opts.db_path;
-    run_fedimint(cfg, db_path).await;
+
+    let db = fedimint_rocksdb::RocksDb::open(opts.db_path)
+        .expect("Error opening DB")
+        .into();
+
+    let btc_rpc = bitcoincore_rpc::make_bitcoind_rpc(&cfg.wallet.btc_rpc)?;
+    FedimintServer::run(cfg, db, btc_rpc).await;
 
     #[cfg(feature = "telemetry")]
     opentelemetry::global::shutdown_tracer_provider();
+
+    Ok(())
 }
