@@ -2,7 +2,7 @@ use crate::keys::CompressedPublicKey;
 use crate::{Feerate, PegInDescriptor};
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
-use fedimint_api::config::GenerateConfig;
+use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{NumPeers, PeerId};
 use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
@@ -18,10 +18,9 @@ pub struct WalletConfig {
     pub peg_in_key: secp256k1::SecretKey,
     pub finality_delay: u32,
     pub default_fee: Feerate,
-    pub btc_rpc_address: String,
-    pub btc_rpc_user: String,
-    pub btc_rpc_pass: String,
     pub fee_consensus: FeeConsensus,
+    #[serde(flatten)]
+    pub btc_rpc: BitcoindRpcCfg,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -90,9 +89,11 @@ impl GenerateConfig for WalletConfig {
                     peg_in_key: *sk,
                     finality_delay: FINALITY_DELAY,
                     default_fee: Feerate { sats_per_kvb: 1000 },
-                    btc_rpc_address: "127.0.0.1:18443".to_string(),
-                    btc_rpc_user: "bitcoin".to_string(),
-                    btc_rpc_pass: "bitcoin".to_string(),
+                    btc_rpc: BitcoindRpcCfg {
+                        btc_rpc_address: "127.0.0.1:18443".to_string(),
+                        btc_rpc_user: "bitcoin".to_string(),
+                        btc_rpc_pass: "bitcoin".to_string(),
+                    },
                     fee_consensus: FeeConsensus::default(),
                 };
 

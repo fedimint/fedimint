@@ -1,32 +1,29 @@
 use crate::bitcoind::IBitcoindRpc;
-use crate::config::WalletConfig;
 use crate::{bitcoind::BitcoindRpc, Feerate};
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::Auth;
+use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::module::__reexports::serde_json::Value;
 use serde::Deserialize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tracing::warn;
 
-pub fn bitcoind_gen(cfg: WalletConfig) -> impl Fn() -> BitcoindRpc {
-    move || -> BitcoindRpc {
-        let bitcoind_client = bitcoincore_rpc::Client::new(
-            &cfg.btc_rpc_address,
-            Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
-        )
-        .expect("Could not connect to bitcoind");
-        let retry_client = RetryClient {
-            client: bitcoind_client,
-            retries: Default::default(),
-            max_retries: 10,
-            base_sleep: Duration::from_millis(10),
-        };
+pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg) -> Result<BitcoindRpc, bitcoincore_rpc::Error> {
+    let bitcoind_client = bitcoincore_rpc::Client::new(
+        &cfg.btc_rpc_address,
+        Auth::UserPass(cfg.btc_rpc_user.clone(), cfg.btc_rpc_pass.clone()),
+    )?;
+    let retry_client = RetryClient {
+        client: bitcoind_client,
+        retries: Default::default(),
+        max_retries: 10,
+        base_sleep: Duration::from_millis(10),
+    };
 
-        retry_client.into()
-    }
+    Ok(retry_client.into())
 }
 
 #[derive(Debug)]
