@@ -43,7 +43,7 @@ enum CliOutput {
 
     Validate {
         all_valid: bool,
-        details: HashMap<SpendableNote, bool>,
+        details: HashMap<Amount, usize>,
     },
 
     Spend {
@@ -411,15 +411,19 @@ async fn handle_command(
         }
         Command::Validate { coins } => {
             let validate_result = client.validate_note_signatures(&coins).await;
+            let details_vec = coins
+                .iter_tiers()
+                .map(|(amount, coins)| (amount.to_owned(), coins.len()))
+                .collect();
 
             match validate_result {
                 Ok(()) => Ok(CliOutput::Validate {
                     all_valid: true,
-                    details: ([].iter().cloned().collect()),
+                    details: (details_vec),
                 }),
                 Err(_) => Ok(CliOutput::Validate {
                     all_valid: false,
-                    details: ([].iter().cloned().collect()),
+                    details: (details_vec),
                 }),
             }
         }
