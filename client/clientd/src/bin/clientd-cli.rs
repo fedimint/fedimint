@@ -7,13 +7,13 @@ use fedimint_core::modules::wallet::txoproof::TxOutProof;
 use mint_client::utils::{from_hex, parse_fedimint_amount};
 
 #[derive(Parser)]
-#[clap(author, version, about = "a json-rpc cli application")]
+#[command(author, version, about = "a json-rpc cli application")]
 struct Cli {
     /// print unformatted json
-    #[clap(takes_value = false, long = "raw", short = 'r')]
+    #[arg(long = "raw", short = 'r')]
     raw_json: bool,
     /// call JSON-2.0 RPC method
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: Commands,
 }
 #[derive(Subcommand)]
@@ -32,17 +32,17 @@ enum Commands {
     /// rpc-method peg_in()
     PegIn {
         /// The TxOutProof which was created from sending BTC to the pegin-address
-        #[clap(parse(try_from_str = from_hex))]
+        #[arg(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
         /// The Bitcoin Transaction
-        #[clap(parse(try_from_str = from_hex))]
+        #[arg(value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
     //TODO: Encode coins and/or give option (flag) to get them raw
     /// rpc-method_ spend()
     Spend {
         /// A minimint (ecash) amount
-        #[clap(parse(try_from_str = parse_fedimint_amount))]
+        #[arg(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
 }

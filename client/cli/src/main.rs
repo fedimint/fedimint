@@ -160,7 +160,7 @@ impl fmt::Display for CliError {
 impl Error for CliError {}
 
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct Cli {
     /// The working directory of the client containing the config and db
     workdir: PathBuf,
@@ -169,7 +169,7 @@ struct Cli {
 }
 
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct CliNoWorkdir {
     #[clap(subcommand)]
     command: CommandNoWorkdir,
@@ -189,34 +189,34 @@ enum Command {
 
     /// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     PegIn {
-        #[clap(parse(try_from_str = from_hex))]
+        #[clap(value_parser = from_hex::<TxOutProof>)]
         txout_proof: TxOutProof,
-        #[clap(parse(try_from_str = from_hex))]
+        #[clap(value_parser = from_hex::<Transaction>)]
         transaction: Transaction,
     },
 
     /// Reissue tokens received from a third party to avoid double spends
     Reissue {
-        #[clap(parse(from_str = parse_coins))]
+        #[clap(value_parser = parse_coins)]
         coins: TieredMulti<SpendableNote>,
     },
 
     /// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     Validate {
-        #[clap(parse(from_str = parse_coins))]
+        #[clap(value_parser = parse_coins)]
         coins: TieredMulti<SpendableNote>,
     },
 
     /// Prepare notes to send to a third party as a payment
     Spend {
-        #[clap(parse(try_from_str = parse_fedimint_amount))]
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
     },
 
     /// Withdraw funds from the federation
     PegOut {
         address: Address,
-        #[clap(parse(try_from_str = parse_bitcoin_amount))]
+        #[clap(value_parser = parse_bitcoin_amount)]
         satoshis: bitcoin::Amount,
     },
 
@@ -231,7 +231,7 @@ enum Command {
 
     /// Create a lightning invoice to receive payment via gateway
     LnInvoice {
-        #[clap(parse(try_from_str = parse_fedimint_amount))]
+        #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
         description: String,
     },
@@ -254,7 +254,7 @@ enum Command {
     /// Switch active gateway
     SwitchGateway {
         /// node public key for a gateway
-        #[clap(parse(try_from_str = parse_node_pub_key))]
+        #[clap(value_parser = parse_node_pub_key)]
         pubkey: secp256k1::PublicKey,
     },
 }
