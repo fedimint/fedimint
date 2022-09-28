@@ -73,9 +73,9 @@
 <span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
-<span class="kw">pub fn </span>parse_coins(s: <span class="kw-2">&amp;</span>str) -&gt; TieredMulti&lt;SpendableNote&gt; {
-    <span class="kw">let </span>bytes = base64::decode(s).unwrap();
-    bincode::deserialize(<span class="kw-2">&amp;</span>bytes).unwrap()
+<span class="kw">pub fn </span>parse_coins(s: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
+    <span class="kw">let </span>bytes = base64::decode(s)<span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(bincode::deserialize(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>)
 }
 
 <span class="kw">pub fn </span>serialize_coins(c: <span class="kw-2">&amp;</span>TieredMulti&lt;SpendableNote&gt;) -&gt; String {

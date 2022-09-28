@@ -124,32 +124,32 @@
     /// specified with `out-dir`
     </span>Generate {
         <span class="doccomment">/// Directory to output all the generated config files
-        </span><span class="attribute">#[clap(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
         </span>dir_out_path: PathBuf,
 
         <span class="doccomment">/// Number of nodes in the federation
-        </span><span class="attribute">#[clap(long = <span class="string">&quot;num-nodes&quot;</span>)]
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;num-nodes&quot;</span>)]
         </span>num_nodes: u16,
 
         <span class="doccomment">/// Base hbbft port
-        </span><span class="attribute">#[clap(long = <span class="string">&quot;hbbft-base-port&quot;</span>, default_value = <span class="string">&quot;17240&quot;</span>)]
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;hbbft-base-port&quot;</span>, default_value = <span class="string">&quot;17240&quot;</span>)]
         </span>hbbft_base_port: u16,
 
         <span class="doccomment">/// Base api port
-        </span><span class="attribute">#[clap(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
         </span>api_base_port: u16,
 
         <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
-        </span><span class="attribute">#[clap(
+        </span><span class="attribute">#[arg(
             long = <span class="string">&quot;denominations&quot;</span>,
             value_delimiter = <span class="string">&#39;,&#39;</span>,
-            min_values = <span class="number">1</span>,
+            num_args = <span class="number">1</span>..,
             required = <span class="bool-val">true
         </span>)]
         </span>denominations: Vec&lt;Amount&gt;,
 
         <span class="doccomment">/// Federation name
-        </span><span class="attribute">#[clap(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hal&#39;s trusty mint&quot;</span>)]
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hal&#39;s trusty mint&quot;</span>)]
         </span>federation_name: String,
     },
 }

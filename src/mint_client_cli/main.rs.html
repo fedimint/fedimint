@@ -778,7 +778,7 @@
 <span class="kw">impl </span>Error <span class="kw">for </span>CliError {}
 
 <span class="attribute">#[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// The working directory of the client containing the config and db
     </span>workdir: PathBuf,
@@ -787,7 +787,7 @@
 }
 
 <span class="attribute">#[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 </span><span class="kw">struct </span>CliNoWorkdir {
     <span class="attribute">#[clap(subcommand)]
     </span>command: CommandNoWorkdir,
@@ -807,34 +807,34 @@
 
     <span class="doccomment">/// Issue tokens in exchange for a peg-in proof (not yet implemented, just creates notes)
     </span>PegIn {
-        <span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        <span class="attribute">#[clap(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
-        <span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        <span class="attribute">#[clap(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
 
     <span class="doccomment">/// Reissue tokens received from a third party to avoid double spends
     </span>Reissue {
-        <span class="attribute">#[clap(parse(from_str = parse_coins))]
+        <span class="attribute">#[clap(value_parser = parse_coins)]
         </span>coins: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Validate tokens without claiming them (only checks if signatures valid, does not check if nonce unspent)
     </span>Validate {
-        <span class="attribute">#[clap(parse(from_str = parse_coins))]
+        <span class="attribute">#[clap(value_parser = parse_coins)]
         </span>coins: TieredMulti&lt;SpendableNote&gt;,
     },
 
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
     </span>Spend {
-        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]
+        <span class="attribute">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
     },
 
     <span class="doccomment">/// Withdraw funds from the federation
     </span>PegOut {
         address: Address,
-        <span class="attribute">#[clap(parse(try_from_str = parse_bitcoin_amount))]
+        <span class="attribute">#[clap(value_parser = parse_bitcoin_amount)]
         </span>satoshis: bitcoin::Amount,
     },
 
@@ -849,7 +849,7 @@
 
     <span class="doccomment">/// Create a lightning invoice to receive payment via gateway
     </span>LnInvoice {
-        <span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]
+        <span class="attribute">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
         description: String,
     },
@@ -872,7 +872,7 @@
     <span class="doccomment">/// Switch active gateway
     </span>SwitchGateway {
         <span class="doccomment">/// node public key for a gateway
-        </span><span class="attribute">#[clap(parse(try_from_str = parse_node_pub_key))]
+        </span><span class="attribute">#[clap(value_parser = parse_node_pub_key)]
         </span>pubkey: secp256k1::PublicKey,
     },
 }

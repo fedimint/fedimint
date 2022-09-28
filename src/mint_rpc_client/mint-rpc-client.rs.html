@@ -50,9 +50,9 @@
 <span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 </span><span class="kw">struct </span>Cli {
-    <span class="attribute">#[clap(subcommand)]
+    <span class="attribute">#[command(subcommand)]
     </span>command: Commands,
 }
 

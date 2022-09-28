@@ -106,13 +106,13 @@
 <span class="kw">use </span>mint_client::utils::{from_hex, parse_fedimint_amount};
 
 <span class="attribute">#[derive(Parser)]
-#[clap(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]
+#[command(author, version, about = <span class="string">&quot;a json-rpc cli application&quot;</span>)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// print unformatted json
-    </span><span class="attribute">#[clap(takes_value = <span class="bool-val">false</span>, long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]
+    </span><span class="attribute">#[arg(long = <span class="string">&quot;raw&quot;</span>, short = <span class="string">&#39;r&#39;</span>)]
     </span>raw_json: bool,
     <span class="doccomment">/// call JSON-2.0 RPC method
-    </span><span class="attribute">#[clap(subcommand)]
+    </span><span class="attribute">#[command(subcommand)]
     </span>command: Commands,
 }
 <span class="attribute">#[derive(Subcommand)]
@@ -131,17 +131,17 @@
     <span class="doccomment">/// rpc-method peg_in()
     </span>PegIn {
         <span class="doccomment">/// The TxOutProof which was created from sending BTC to the pegin-address
-        </span><span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span><span class="attribute">#[arg(value_parser = from_hex::&lt;TxOutProof&gt;)]
         </span>txout_proof: TxOutProof,
         <span class="doccomment">/// The Bitcoin Transaction
-        </span><span class="attribute">#[clap(parse(try_from_str = from_hex))]
+        </span><span class="attribute">#[arg(value_parser = from_hex::&lt;Transaction&gt;)]
         </span>transaction: Transaction,
     },
     <span class="comment">//TODO: Encode coins and/or give option (flag) to get them raw
     </span><span class="doccomment">/// rpc-method_ spend()
     </span>Spend {
         <span class="doccomment">/// A minimint (ecash) amount
-        </span><span class="attribute">#[clap(parse(try_from_str = parse_fedimint_amount))]
+        </span><span class="attribute">#[arg(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
     },
 }
