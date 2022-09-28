@@ -16,7 +16,7 @@ use mint_client::utils::{
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ enum CliOutput {
 
     Validate {
         all_valid: bool,
-        details: HashMap<Amount, usize>,
+        details: BTreeMap<Amount, usize>,
     },
 
     Spend {
@@ -65,7 +65,7 @@ enum CliOutput {
     Info {
         total_amount: Amount,
         total_num_notes: usize,
-        details: HashMap<Amount, usize>,
+        details: BTreeMap<Amount, usize>,
     },
 
     LnInvoice {
