@@ -4,6 +4,15 @@ use crate::Feerate;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Transaction};
 use fedimint_api::dyn_newtype_define;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Rpc error")]
+    Rpc(#[from] anyhow::Error),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
@@ -11,10 +20,10 @@ use fedimint_api::dyn_newtype_define;
 #[async_trait]
 pub trait IBitcoindRpc: Send + Sync {
     /// Returns the Bitcoin network the node is connected to
-    async fn get_network(&self) -> bitcoin::Network;
+    async fn get_network(&self) -> Result<bitcoin::Network>;
 
     /// Returns the current block height
-    async fn get_block_height(&self) -> u64;
+    async fn get_block_height(&self) -> Result<u64>;
 
     /// Returns the block hash at a given height
     ///
@@ -25,24 +34,21 @@ pub trait IBitcoindRpc: Send + Sync {
     /// While there is a corner case that the blockchain shrinks between these two calls (through on
     /// average heavier blocks on a fork) this is prevented by only querying hashes for blocks
     /// tailing the chain tip by a certain number of blocks.
-    async fn get_block_hash(&self, height: u64) -> BlockHash;
+    async fn get_block_hash(&self, height: u64) -> Result<BlockHash>;
 
     /// Returns the block with the given hash
     ///
     /// # Panics
     /// If the block doesn't exist.
-    async fn get_block(&self, hash: &BlockHash) -> bitcoin::Block;
+    async fn get_block(&self, hash: &BlockHash) -> Result<bitcoin::Block>;
 
     /// Estimates the fee rate for a given confirmation target. Make sure that all federation
     /// members use the same algorithm to avoid widely diverging results. If the node is not ready
     /// yet to return a fee rate estimation this function returns `None`.
-    async fn get_fee_rate(&self, confirmation_target: u16) -> Option<Feerate>;
+    async fn get_fee_rate(&self, confirmation_target: u16) -> Result<Option<Feerate>>;
 
     /// Submits a transaction to the Bitcoin network
-    ///
-    /// # Panics
-    /// If the transaction is deemed invalid by the node it was submitted to
-    async fn submit_transaction(&self, transaction: Transaction);
+    async fn submit_transaction(&self, transaction: Transaction) -> Result<()>;
 }
 
 dyn_newtype_define! {
@@ -52,7 +58,7 @@ dyn_newtype_define! {
 
 #[allow(dead_code)]
 pub mod test {
-    use super::IBitcoindRpc;
+    use super::{IBitcoindRpc, Result};
     use crate::Feerate;
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
@@ -79,19 +85,19 @@ pub mod test {
 
     #[async_trait]
     impl IBitcoindRpc for FakeBitcoindRpc {
-        async fn get_network(&self) -> Network {
-            bitcoin::Network::Regtest
+        async fn get_network(&self) -> Result<Network> {
+            Ok(bitcoin::Network::Regtest)
         }
 
-        async fn get_block_height(&self) -> u64 {
-            self.state.lock().unwrap().block_height
+        async fn get_block_height(&self) -> Result<u64> {
+            Ok(self.state.lock().unwrap().block_height)
         }
 
-        async fn get_block_hash(&self, height: u64) -> BlockHash {
-            height_hash(height)
+        async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
+            Ok(height_hash(height))
         }
 
-        async fn get_block(&self, hash: &BlockHash) -> Block {
+        async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
             let txdata = self
                 .state
                 .lock()
@@ -100,7 +106,7 @@ pub mod test {
                 .get(hash)
                 .cloned()
                 .unwrap_or_default();
-            Block {
+            Ok(Block {
                 header: BlockHeader {
                     version: 0,
                     prev_blockhash: Default::default(),
@@ -110,19 +116,21 @@ pub mod test {
                     nonce: 0,
                 },
                 txdata,
-            }
+            })
         }
 
-        async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
-            self.state.lock().unwrap().fee_rate
+        async fn get_fee_rate(&self, _confirmation_target: u16) -> Result<Option<Feerate>> {
+            Ok(self.state.lock().unwrap().fee_rate)
         }
 
-        async fn submit_transaction(&self, transaction: Transaction) {
+        async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {
             self.state
                 .lock()
                 .unwrap()
                 .transactions
                 .push_back(transaction);
+
+            Ok(())
         }
     }
 
