@@ -51,3 +51,16 @@ INVOICE="$($FM_MINT_CLIENT ln-invoice '100000msat' 'integration test' | jq -r '.
 INVOICE_RESULT=$($FM_LN2 pay $INVOICE)
 INVOICE_STATUS="$(echo $INVOICE_RESULT | jq -r '.status')"
 [[ "$INVOICE_STATUS" = "complete" ]]
+
+# iternal lightning from primary to alternative client
+FUNDS_BEFORE="$($FM_MINT_CLIENT info | jq -r '.info.total_amount')"
+FUNDS_BEFORE_ALT="$($FM_MINT_CLIENT_ALT info | jq -r '.info.total_amount')"
+INVOICE="$($FM_MINT_CLIENT_ALT ln-invoice '100000msat' 'integration test' | jq -r '.ln_invoice.invoice')"
+$FM_MINT_CLIENT ln-pay $INVOICE
+$FM_MINT_CLIENT_ALT wait-invoice $INVOICE
+$FM_MINT_CLIENT_ALT fetch
+$FM_MINT_CLIENT fetch
+FUNDS_AFTER_ALT="$($FM_MINT_CLIENT_ALT info | jq -r '.info.total_amount')"
+[[ "$FUNDS_AFTER_ALT" = "$(( $FUNDS_BEFORE_ALT + 100000 ))" ]]
+FUNDS_AFTER="$($FM_MINT_CLIENT info | jq -r '.info.total_amount')"
+[[ "$FUNDS_AFTER" = "$(( $FUNDS_BEFORE - 101000 ))" ]]

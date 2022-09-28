@@ -28,12 +28,17 @@ mkdir -p $FM_CFG_DIR
 
 # Generate federation client config
 $FM_BIN_DIR/configgen --out-dir $FM_CFG_DIR --num-nodes $FM_FED_SIZE --hbbft-base-port 4000 --api-base-port 5000 --denominations 1000,10000,100000,1000000,10000000
+mkdir "$FM_CFG_DIR/client"
+mkdir "$FM_CFG_DIR/alt_client"
+cp "$FM_CFG_DIR/client.json" "$FM_CFG_DIR/client"
+cp "$FM_CFG_DIR/client.json" "$FM_CFG_DIR/alt_client"
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
 export FM_LN2="lightning-cli --network regtest --lightning-dir=$FM_LN2_DIR"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
-export FM_MINT_CLIENT="$FM_BIN_DIR/mint-client-cli $FM_CFG_DIR"
+export FM_MINT_CLIENT="$FM_BIN_DIR/mint-client-cli $FM_CFG_DIR/client"
+export FM_MINT_CLIENT_ALT="$FM_BIN_DIR/mint-client-cli $FM_CFG_DIR/alt_client"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_CLIENTD="$FM_BIN_DIR/clientd"
 export FM_CLIENTD_CLI="$FM_BIN_DIR/clientd-cli"
