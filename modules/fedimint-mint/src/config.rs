@@ -1,7 +1,5 @@
-use crate::tiered::TieredMultiZip;
-use crate::Tiered;
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::{Amount, NumPeers, PeerId};
+use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

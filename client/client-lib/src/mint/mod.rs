@@ -7,13 +7,11 @@ use crate::utils::ClientContext;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{Amount, OutPoint, TransactionId};
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 use fedimint_core::config::FeeConsensus;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::tiered::TieredMulti;
-use fedimint_core::modules::mint::{
-    BlindNonce, InvalidAmountTierError, Nonce, Note, SigResponse, SignRequest, Tiered,
-};
+use fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 

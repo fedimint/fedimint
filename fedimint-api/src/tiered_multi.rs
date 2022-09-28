@@ -1,4 +1,5 @@
-use crate::{Amount, InvalidAmountTierError, Tiered};
+use crate::tiered::InvalidAmountTierError;
+use crate::{Amount, Tiered};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -84,7 +85,7 @@ impl<T> TieredMulti<T> {
     }
 
     pub fn check_tiers<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
-        match self.0.keys().find(|amt| !keys.0.contains_key(amt)) {
+        match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {
             Some(amt) => Err(InvalidAmountTierError(*amt)),
             None => Ok(()),
         }
@@ -138,8 +139,7 @@ impl TieredMulti<()> {
     // TODO: move somewhere else?
     pub fn represent_amount<K>(mut amount: Amount, tiers: &Tiered<K>) -> TieredMulti<()> {
         let coins = tiers
-            .0
-            .keys()
+            .tiers()
             .rev()
             .map(|&amount_tier| {
                 let res = amount / amount_tier;
