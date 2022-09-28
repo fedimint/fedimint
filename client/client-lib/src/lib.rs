@@ -598,6 +598,12 @@ impl Client<UserClientConfig> {
             .submit_tx_with_change(&self.config.0.fee_consensus(), tx, DbBatch::new(), rng)
             .await?;
 
+        self.context
+            .db
+            .remove_entry(&OutgoingPaymentKey(contract_id))
+            .expect("DB error")
+            .ok_or(ClientError::DeleteUnknownOutgoingContract)?;
+
         Ok(OutPoint { txid, out_idx: 0 })
     }
 
@@ -1132,6 +1138,8 @@ pub enum ClientError {
     RefundedFailedPayment,
     #[error("Routing outgoing payment failed, we didn't get a refund (yet)")]
     FailedPaymentNoRefund,
+    #[error("Failed to delete unknown outgoing contract")]
+    DeleteUnknownOutgoingContract,
 }
 
 impl From<InvalidAmountTierError> for ClientError {
