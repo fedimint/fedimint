@@ -17,7 +17,7 @@ pub trait LnRpc: Send + Sync + 'static {
 }
 
 #[derive(Debug)]
-pub struct LightningError(Option<i32>);
+pub struct LightningError(pub Option<i32>);
 
 #[async_trait]
 impl LnRpc for Mutex<cln_rpc::ClnRpc> {
