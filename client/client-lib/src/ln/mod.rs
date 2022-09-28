@@ -150,7 +150,10 @@ impl<'c> LnClient<'c> {
             .find_by_prefix(&OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 let (_key, outgoing_data) = res.expect("DB error");
-                if outgoing_data.contract_account.contract.timelock as u64 <= block_height {
+                let cancelled = outgoing_data.contract_account.contract.cancelled;
+                let timed_out =
+                    outgoing_data.contract_account.contract.timelock as u64 <= block_height;
+                if cancelled || timed_out {
                     Some(outgoing_data)
                 } else {
                     None
