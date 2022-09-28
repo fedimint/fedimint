@@ -281,6 +281,8 @@
 <span id="281">281</span>
 <span id="282">282</span>
 <span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::FeeConsensus;
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
@@ -363,6 +365,7 @@
             Output::Wallet(peg_out) =&gt; (peg_out.amount + peg_out.fees.amount()).into(),
             Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(output)) =&gt; output.amount,
             Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(<span class="kw">_</span>)) =&gt; Amount::ZERO,
+            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) =&gt; Amount::ZERO,
         }
     }
 
@@ -375,6 +378,7 @@
             }
             <span class="comment">// TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
             </span>Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(<span class="kw">_</span>)) =&gt; Amount::ZERO,
+            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) =&gt; Amount::ZERO,
         }
     }
 }

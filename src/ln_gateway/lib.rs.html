@@ -433,6 +433,9 @@
 <span id="433">433</span>
 <span id="434">434</span>
 <span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -646,7 +649,10 @@
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">warn!</span>(<span class="string">&quot;Invoice payment failed: {}. Aborting&quot;</span>, e);
-                <span class="self">self</span>.federation_client.abort_outgoing_payment(contract_id);
+                <span class="comment">// FIXME: combine both errors?
+                </span><span class="self">self</span>.federation_client
+                    .abort_outgoing_payment(contract_id)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Err</span>(e)
             }
         }

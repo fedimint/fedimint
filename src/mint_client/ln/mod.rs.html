@@ -443,6 +443,53 @@
 <span id="443">443</span>
 <span id="444">444</span>
 <span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -509,6 +556,7 @@
             timelock,
             user_key: user_sk.public_key(),
             invoice: invoice.to_string(),
+            cancelled: <span class="bool-val">false</span>,
         };
 
         <span class="kw">let </span>outgoing_payment = OutgoingContractData {
@@ -546,6 +594,37 @@
         }
     }
 
+    <span class="doccomment">/// Determines if an outgoing contract can be refunded
+    </span><span class="kw">pub async fn </span>is_outgoing_contract_refundable(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;bool&gt; {
+        <span class="kw">let </span>contract = <span class="self">self</span>.get_outgoing_contract(id).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// If the contract was cancelled by the LN gateway we can get a refund instantly …
+        </span><span class="kw">if </span>contract.contract.cancelled {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
+        }
+
+        <span class="comment">// … otherwise we have to wait till the timeout hits
+        </span><span class="kw">let </span>consensus_block_height = <span class="self">self
+            </span>.context
+            .api
+            .fetch_consensus_block_height()
+            .<span class="kw">await
+            </span>.map_err(LnClientError::ApiError)<span class="question-mark">?</span>;
+        <span class="kw">if </span>contract.contract.timelock <span class="kw">as </span>u64 &lt;= consensus_block_height {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="bool-val">true</span>);
+        }
+
+        <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
+    }
+
+    <span class="doccomment">/// Waits for an outgoing contract to become refundable
+    </span><span class="kw">pub async fn </span>await_outgoing_refundable(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">while </span>!<span class="self">self</span>.is_outgoing_contract_refundable(id).<span class="kw">await</span><span class="question-mark">? </span>{
+            <span class="kw">crate</span>::sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
+        <span class="prelude-val">Ok</span>(())
+    }
+
     <span class="kw">pub async fn </span>get_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;IncomingContractAccount&gt; {
         <span class="kw">let </span>account = <span class="self">self</span>.get_contract_account(id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">match </span>account.contract {
@@ -563,7 +642,10 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>OutgoingPaymentKeyPrefix)
             .filter_map(|res| {
                 <span class="kw">let </span>(_key, outgoing_data) = res.expect(<span class="string">&quot;DB error&quot;</span>);
-                <span class="kw">if </span>outgoing_data.contract_account.contract.timelock <span class="kw">as </span>u64 &lt;= block_height {
+                <span class="kw">let </span>cancelled = outgoing_data.contract_account.contract.cancelled;
+                <span class="kw">let </span>timed_out =
+                    outgoing_data.contract_account.contract.timelock <span class="kw">as </span>u64 &lt;= block_height;
+                <span class="kw">if </span>cancelled || timed_out {
                     <span class="prelude-val">Some</span>(outgoing_data)
                 } <span class="kw">else </span>{
                     <span class="prelude-val">None
@@ -631,6 +713,18 @@
             .expect(<span class="string">&quot;Db error&quot;</span>)
             .ok_or(LnClientError::NoConfirmedInvoice(contract_id))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(confirmed_invoice)
+    }
+
+    <span class="doccomment">/// Used by gateway to prematurely return funds to the user if the payment failed
+    </span><span class="kw">pub fn </span>create_cancel_outgoing_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract_id: ContractId,
+        signature: secp256k1_zkp::schnorr::Signature,
+    ) -&gt; ContractOrOfferOutput {
+        ContractOrOfferOutput::CancelOutgoing {
+            contract: contract_id,
+            gateway_signature: signature,
+        }
     }
 }
 

@@ -90,6 +90,9 @@
 <span id="90">90</span>
 <span id="91">91</span>
 <span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
 </pre><pre class="rust"><code><span class="kw">use crate</span>::{ConsensusItem, ConsensusOutcome};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::Contract;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
@@ -160,6 +163,9 @@
                     }
                     Output::LN(ContractOrOfferOutput::Offer(o)) =&gt; {
                         <span class="macro">format!</span>(<span class="string">&quot;LN Offer for {} with hash {}&quot;</span>, o.amount, o.hash)
+                    }
+                    Output::LN(ContractOrOfferOutput::CancelOutgoing { contract, .. }) =&gt; {
+                        <span class="macro">format!</span>(<span class="string">&quot;LN Outgoing contract {} cancellation&quot;</span>, contract)
                     }
                     Output::LN(ContractOrOfferOutput::Contract(ContractOutput {
                         amount,

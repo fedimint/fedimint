@@ -381,6 +381,27 @@
 <span id="381">381</span>
 <span id="382">382</span>
 <span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -391,7 +412,7 @@
 
 <span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
-<span class="kw">use </span>std::io::Error;
+<span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 
@@ -624,6 +645,27 @@
         String::consensus_decode(d)<span class="question-mark">?
             </span>.parse::&lt;lightning_invoice::Invoice&gt;()
             .map_err(DecodeError::from_err)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bool {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="kw">let </span>bool_as_u8 = <span class="kw">if </span><span class="kw-2">*</span><span class="self">self </span>{ <span class="number">1 </span>} <span class="kw">else </span>{ <span class="number">0 </span>};
+        writer.write_all(<span class="kw-2">&amp;</span>[bool_as_u8])<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="number">1</span>)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bool {
+    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>bool_as_u8 = [<span class="number">0u8</span>];
+        d.read_exact(<span class="kw-2">&amp;mut </span>bool_as_u8)
+            .map_err(DecodeError::from_err)<span class="question-mark">?</span>;
+        <span class="kw">match </span>bool_as_u8[<span class="number">0</span>] {
+            <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>),
+            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">&quot;Out of range, expected 0 or 1&quot;</span>)),
+        }
     }
 }
 

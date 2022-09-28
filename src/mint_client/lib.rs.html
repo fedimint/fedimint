@@ -1062,6 +1062,94 @@
 <span id="1062">1062</span>
 <span id="1063">1063</span>
 <span id="1064">1064</span>
+<span id="1065">1065</span>
+<span id="1066">1066</span>
+<span id="1067">1067</span>
+<span id="1068">1068</span>
+<span id="1069">1069</span>
+<span id="1070">1070</span>
+<span id="1071">1071</span>
+<span id="1072">1072</span>
+<span id="1073">1073</span>
+<span id="1074">1074</span>
+<span id="1075">1075</span>
+<span id="1076">1076</span>
+<span id="1077">1077</span>
+<span id="1078">1078</span>
+<span id="1079">1079</span>
+<span id="1080">1080</span>
+<span id="1081">1081</span>
+<span id="1082">1082</span>
+<span id="1083">1083</span>
+<span id="1084">1084</span>
+<span id="1085">1085</span>
+<span id="1086">1086</span>
+<span id="1087">1087</span>
+<span id="1088">1088</span>
+<span id="1089">1089</span>
+<span id="1090">1090</span>
+<span id="1091">1091</span>
+<span id="1092">1092</span>
+<span id="1093">1093</span>
+<span id="1094">1094</span>
+<span id="1095">1095</span>
+<span id="1096">1096</span>
+<span id="1097">1097</span>
+<span id="1098">1098</span>
+<span id="1099">1099</span>
+<span id="1100">1100</span>
+<span id="1101">1101</span>
+<span id="1102">1102</span>
+<span id="1103">1103</span>
+<span id="1104">1104</span>
+<span id="1105">1105</span>
+<span id="1106">1106</span>
+<span id="1107">1107</span>
+<span id="1108">1108</span>
+<span id="1109">1109</span>
+<span id="1110">1110</span>
+<span id="1111">1111</span>
+<span id="1112">1112</span>
+<span id="1113">1113</span>
+<span id="1114">1114</span>
+<span id="1115">1115</span>
+<span id="1116">1116</span>
+<span id="1117">1117</span>
+<span id="1118">1118</span>
+<span id="1119">1119</span>
+<span id="1120">1120</span>
+<span id="1121">1121</span>
+<span id="1122">1122</span>
+<span id="1123">1123</span>
+<span id="1124">1124</span>
+<span id="1125">1125</span>
+<span id="1126">1126</span>
+<span id="1127">1127</span>
+<span id="1128">1128</span>
+<span id="1129">1129</span>
+<span id="1130">1130</span>
+<span id="1131">1131</span>
+<span id="1132">1132</span>
+<span id="1133">1133</span>
+<span id="1134">1134</span>
+<span id="1135">1135</span>
+<span id="1136">1136</span>
+<span id="1137">1137</span>
+<span id="1138">1138</span>
+<span id="1139">1139</span>
+<span id="1140">1140</span>
+<span id="1141">1141</span>
+<span id="1142">1142</span>
+<span id="1143">1143</span>
+<span id="1144">1144</span>
+<span id="1145">1145</span>
+<span id="1146">1146</span>
+<span id="1147">1147</span>
+<span id="1148">1148</span>
+<span id="1149">1149</span>
+<span id="1150">1150</span>
+<span id="1151">1151</span>
+<span id="1152">1152</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1089,7 +1177,7 @@
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::{
     db::batch::{Accumulator, BatchItem, DbBatch},
-    Amount, OutPoint, PeerId, TransactionId,
+    Amount, FederationModule, OutPoint, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::{
@@ -1099,7 +1187,7 @@
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractOutput, LightningGateway};
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOut;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core::transaction::TransactionItem;
+<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionItem};
 <span class="kw">use </span>fedimint_core::{
     config::ClientConfig,
     modules::{
@@ -1123,11 +1211,12 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::PublicKey;
+<span class="kw">use </span>tracing::debug;
 <span class="kw">use </span>url::Url;
 
 <span class="kw">use </span><span class="kw">crate</span>::ln::db::{
     OutgoingContractAccountKey, OutgoingContractAccountKeyPrefix, OutgoingPaymentClaimKey,
-    OutgoingPaymentClaimKeyPrefix,
+    OutgoingPaymentClaimKeyPrefix, OutgoingPaymentKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::LnClientError;
@@ -1622,7 +1711,7 @@
 
         <span class="kw">let </span>contract_id = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
             ContractOrOfferOutput::Contract(c) =&gt; c.contract.contract_id(),
-            ContractOrOfferOutput::Offer(<span class="kw">_</span>) =&gt; {
+            ContractOrOfferOutput::Offer(<span class="kw">_</span>) | ContractOrOfferOutput::CancelOutgoing { .. } =&gt; {
                 <span class="macro">panic!</span>()
             } <span class="comment">// FIXME: impl TryFrom
         </span>};
@@ -1634,7 +1723,43 @@
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
+        <span class="macro">debug!</span>(<span class="string">&quot;Funded outgoing contract {} in {}&quot;</span>, contract_id, outpoint);
         <span class="prelude-val">Ok</span>((contract_id, outpoint))
+    }
+
+    <span class="doccomment">/// Claims a refund for an expired or cancelled outgoing contract
+    ///
+    /// This can be necessary when the Lightning gateway cannot route the payment, is malicious or
+    /// offline. The function returns the out point of the e-cash output generated as change.
+    </span><span class="kw">pub async fn </span>try_refund_outgoing_contract(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract_id: ContractId,
+        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
+        <span class="kw">let </span>contract_data = <span class="self">self
+            </span>.context
+            .db
+            .get_value(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .ok_or(ClientError::RefundUnknownOutgoingContract)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
+        <span class="kw">let </span>(refund_key, refund_input) = <span class="self">self
+            </span>.ln_client()
+            .create_refund_outgoing_contract_input(<span class="kw-2">&amp;</span>contract_data);
+        tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="kw-2">*</span>refund_key], Input::LN(refund_input));
+        <span class="kw">let </span>txid = <span class="self">self
+            </span>.mint_client()
+            .submit_tx_with_change(<span class="kw-2">&amp;</span><span class="self">self</span>.config.<span class="number">0</span>.fee_consensus(), tx, DbBatch::new(), rng)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="self">self</span>.context
+            .db
+            .remove_entry(<span class="kw-2">&amp;</span>OutgoingPaymentKey(contract_id))
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .ok_or(ClientError::DeleteUnknownOutgoingContract)<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(OutPoint { txid, out_idx: <span class="number">0 </span>})
     }
 
     <span class="kw">pub async fn </span>await_outgoing_contract_acceptance(<span class="kw-2">&amp;</span><span class="self">self</span>, outpoint: OutPoint) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -1750,7 +1875,11 @@
 
     <span class="doccomment">/// Notify gateway that we&#39;ve escrowed tokens they can claim by routing our payment and wait
     /// for them to do so
-    </span><span class="kw">pub async fn </span>await_outgoing_contract_execution(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">pub async fn </span>await_outgoing_contract_execution(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract_id: ContractId,
+        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>future = reqwest::Client::new()
             .post(
@@ -1762,9 +1891,27 @@
             )
             .json(<span class="kw-2">&amp;</span>contract_id)
             .send();
-        fedimint_api::task::timeout(Duration::from_secs(<span class="number">15</span>), future)
+        <span class="kw">let </span>result = fedimint_api::task::timeout(Duration::from_secs(<span class="number">120</span>), future)
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">??</span>;
+            </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">?
+            </span>.map_err(ClientError::HttpError);
+
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = result {
+            <span class="kw">if </span>response.status().is_success() {
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
+            fedimint_api::task::timeout(
+                Duration::from_secs(<span class="number">10</span>),
+                <span class="self">self</span>.ln_client().await_outgoing_refundable(contract_id),
+            )
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| ClientError::FailedPaymentNoRefund)<span class="question-mark">??</span>;
+
+            <span class="self">self</span>.try_refund_outgoing_contract(contract_id, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::RefundedFailedPayment);
+        };
+
         <span class="prelude-val">Ok</span>(())
     }
 }
@@ -1861,13 +2008,32 @@
             .collect()
     }
 
-    <span class="doccomment">/// Abort payment if our node can&#39;t route it
-    </span><span class="kw">pub fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) {
-        <span class="comment">// FIXME: implement abort by gateway to give funds back to user prematurely
-        </span><span class="self">self</span>.context
+    <span class="doccomment">/// Abort payment if our node can&#39;t route it and give money back to user
+    </span><span class="kw">pub async fn </span>abort_outgoing_payment(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>contract_account = <span class="self">self
+            </span>.context
             .db
             .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractAccountKey(contract_id))
-            .expect(<span class="string">&quot;DB error&quot;</span>);
+            .expect(<span class="string">&quot;DB error&quot;</span>)
+            .ok_or(ClientError::CancelUnknownOutgoingContract)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>cancel_signature = <span class="self">self</span>.context.secp.sign_schnorr(
+            <span class="kw-2">&amp;</span>contract_account.contract.cancellation_message().into(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key,
+        );
+        <span class="kw">let </span>cancel_output = <span class="self">self
+            </span>.ln_client()
+            .create_cancel_outgoing_output(contract_id, cancel_signature);
+        <span class="kw">let </span>cancel_tx = Transaction {
+            inputs: <span class="macro">vec!</span>[],
+            outputs: <span class="macro">vec!</span>[Output::LN(cancel_output)],
+            signature: <span class="prelude-val">None</span>,
+        };
+
+        <span class="comment">// TODO: protect against crashes, but the timout being hit eventually anyway makes this less of an issue
+        </span><span class="self">self</span>.context.api.submit_transaction(cancel_tx).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Claim an outgoing contract after acquiring the preimage by paying the associated invoice and
@@ -2003,7 +2169,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.context
             .api
-            .await_output_outcome::&lt;OutgoingContractOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
+            .await_output_outcome::&lt;&lt;fedimint_core::modules::mint::Mint <span class="kw">as </span>FederationModule&gt;::TxOutputOutcome&gt;(outpoint, Duration::from_secs(<span class="number">10</span>))
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="comment">// We remove the entry that indicates we are still waiting for transaction
         // confirmation. This does not mean we are finished yet. As a last step we need
@@ -2119,6 +2285,16 @@
     </span>InvalidSignature,
     <span class="attribute">#[error(<span class="string">&quot;Violated fee policy&quot;</span>)]
     </span>ViolatedFeePolicy,
+    <span class="attribute">#[error(<span class="string">&quot;Tried to cancel outgoing contract that we don&#39;t know about&quot;</span>)]
+    </span>CancelUnknownOutgoingContract,
+    <span class="attribute">#[error(<span class="string">&quot;Tried to refund outgoing contract that we don&#39;t know about&quot;</span>)]
+    </span>RefundUnknownOutgoingContract,
+    <span class="attribute">#[error(<span class="string">&quot;Routing outgoing payment failed but we got a refund&quot;</span>)]
+    </span>RefundedFailedPayment,
+    <span class="attribute">#[error(<span class="string">&quot;Routing outgoing payment failed, we didn&#39;t get a refund (yet)&quot;</span>)]
+    </span>FailedPaymentNoRefund,
+    <span class="attribute">#[error(<span class="string">&quot;Failed to delete unknown outgoing contract&quot;</span>)]
+    </span>DeleteUnknownOutgoingContract,
 }
 
 <span class="kw">impl </span>From&lt;InvalidAmountTierError&gt; <span class="kw">for </span>ClientError {
