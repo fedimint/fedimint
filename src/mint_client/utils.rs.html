@@ -63,7 +63,6 @@
 <span id="63">63</span>
 <span id="64">64</span>
 <span id="65">65</span>
-<span id="66">66</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::FederationApi;
@@ -71,8 +70,7 @@
 <span class="kw">use </span>bitcoin::{secp256k1, Network};
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::Decodable;
-<span class="kw">use </span>fedimint_api::ParseAmountError;
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
+<span class="kw">use </span>fedimint_api::{ParseAmountError, TieredMulti};
 <span class="kw">use </span>lightning_invoice::Currency;
 
 <span class="kw">pub fn </span>parse_coins(s: <span class="kw-2">&amp;</span>str) -&gt; TieredMulti&lt;SpendableNote&gt; {

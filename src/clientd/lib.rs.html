@@ -209,7 +209,6 @@
 <span id="209">209</span>
 <span id="210">210</span>
 <span id="211">211</span>
-<span id="212">212</span>
 </pre><pre class="rust"><code><span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>axum::extract::rejection::JsonRejection;
@@ -218,8 +217,7 @@
 <span class="kw">use </span>axum::BoxError;
 <span class="kw">use </span>bitcoin::hashes::hex::ToHex;
 <span class="kw">use </span>bitcoin::Transaction;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>mint_client::mint::{NoteIssuanceRequests, SpendableNote};
 <span class="kw">use </span>mint_client::ClientError;

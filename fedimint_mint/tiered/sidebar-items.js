@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":[["tiered_multi",""]],"struct":[["Tiered",""],["TieredMulti","Represents coins of different denominations."],["TieredMultiZip",""]]};

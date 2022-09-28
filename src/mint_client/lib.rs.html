@@ -1059,6 +1059,8 @@
 <span id="1059">1059</span>
 <span id="1060">1060</span>
 <span id="1061">1061</span>
+<span id="1062">1062</span>
+<span id="1063">1063</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1072,6 +1074,8 @@
 </span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_api::TieredMulti;
 <span class="kw">use </span>futures::StreamExt;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
@@ -1101,7 +1105,7 @@
             contracts::{ContractId, OutgoingContractOutcome},
             ContractOrOfferOutput,
         },
-        mint::{tiered::TieredMulti, BlindNonce, InvalidAmountTierError},
+        mint::BlindNonce,
         wallet::txoproof::TxOutProof,
     },
     transaction::{Input, Output},

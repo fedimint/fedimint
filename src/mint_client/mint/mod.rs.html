@@ -610,8 +610,6 @@
 <span id="610">610</span>
 <span id="611">611</span>
 <span id="612">612</span>
-<span id="613">613</span>
-<span id="614">614</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
@@ -621,13 +619,11 @@
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::FeeConsensus;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
-<span class="kw">use </span>fedimint_core::modules::mint::{
-    BlindNonce, InvalidAmountTierError, Nonce, Note, SigResponse, SignRequest, Tiered,
-};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
 

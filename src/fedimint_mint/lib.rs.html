@@ -921,16 +921,6 @@
 <span id="921">921</span>
 <span id="922">922</span>
 <span id="923">923</span>
-<span id="924">924</span>
-<span id="925">925</span>
-<span id="926">926</span>
-<span id="927">927</span>
-<span id="928">928</span>
-<span id="929">929</span>
-<span id="930">930</span>
-<span id="931">931</span>
-<span id="932">932</span>
-<span id="933">933</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -944,7 +934,10 @@
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::ApiEndpoint;
-<span class="kw">use </span>fedimint_api::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_api::{
+    Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
+};
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
@@ -959,18 +952,14 @@
     PublicKeyShare, SecretKeyShare,
 };
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">pub use </span>tiered::Tiered;
-<span class="kw">use </span>tiered::TieredMulti;
-<span class="kw">use </span>tiered::TieredMultiZip;
 <span class="kw">use </span>tracing::{debug, error, warn};
 
 <span class="kw">pub mod </span>config;
 
 <span class="kw">mod </span>db;
 <span class="doccomment">/// Data structures taking into account different amount tiers
-</span><span class="kw">pub mod </span>tiered;
 
-<span class="doccomment">/// Federated mint member mint
+/// Federated mint member mint
 </span><span class="kw">pub struct </span>Mint {
     cfg: MintConfig,
     sec_key: Tiered&lt;SecretKeyShare&gt;,
@@ -1617,15 +1606,6 @@
     }
 }
 
-<span class="attribute">#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]
-</span><span class="kw">pub struct </span>InvalidAmountTierError(<span class="kw">pub </span>Amount);
-
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>InvalidAmountTierError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">&#39;_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">&quot;Amount tier unknown to mint: {}&quot;</span>, <span class="self">self</span>.<span class="number">0</span>)
-    }
-}
-
 <span class="doccomment">/// Represents an array of mint indexes that delivered faulty shares
 </span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 </span><span class="kw">pub struct </span>MintShareErrors(<span class="kw">pub </span>Vec&lt;(PeerId, PeerErrorType)&gt;);
@@ -1675,10 +1655,10 @@
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
-    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType, TieredMulti};
+    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
     <span class="kw">use </span>fedimint_api::config::GenerateConfig;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
-    <span class="kw">use </span>fedimint_api::{Amount, PeerId};
+    <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
 

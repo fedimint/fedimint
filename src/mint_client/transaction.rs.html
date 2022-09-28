@@ -165,7 +165,6 @@
 <span id="165">165</span>
 <span id="166">166</span>
 <span id="167">167</span>
-<span id="168">168</span>
 </pre><pre class="rust"><code><span class="kw">use </span>rand::{CryptoRng, RngCore};
 
 <span class="kw">use </span><span class="kw">crate</span>::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
@@ -173,10 +172,9 @@
 <span class="kw">use crate</span>::{MintClientError, SpendableNote};
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
 <span class="kw">use </span>fedimint_core::config::FeeConsensus;
-<span class="kw">use </span>fedimint_core::modules::mint::tiered::TieredMulti;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note, Tiered};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Note};
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>tbs::AggregatePublicKey;
 
