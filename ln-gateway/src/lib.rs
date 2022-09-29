@@ -5,8 +5,11 @@ pub mod webserver;
 
 use std::{
     borrow::Cow,
+    cell::RefCell,
     io::Cursor,
     net::SocketAddr,
+    path::PathBuf,
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -16,20 +19,27 @@ use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
+use fedimint_server::{
+    config::load_from_file,
+    modules::ln::contracts::{ContractId, Preimage},
+};
 use futures::Future;
-use mint_client::mint::MintClientError;
+use mint_client::{mint::MintClientError, Client, GatewayClientConfig};
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
+use rpc::GatewayRpcReceiver;
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 use tracing::{debug, error, instrument, warn};
 
 use crate::{
     ln::{LightningError, LnRpc},
-    rpc::{GatewayRpcReceiver, GatewayRpcSender},
+    rpc::GatewayRpcSender,
     webserver::run_webserver,
 };
 
@@ -115,29 +125,172 @@ where
 }
 
 pub struct LnGateway {
-    bind_addr: SocketAddr,
-    federation_client: Arc<GatewayClient>,
-    ln_client: Arc<dyn LnRpc>,
-    receiver: mpsc::Receiver<GatewayRequest>,
-    sender: mpsc::Sender<GatewayRequest>,
-    webserver: Option<tokio::task::JoinHandle<axum::response::Result<()>>>,
+    ln_client: Option<Arc<dyn LnRpc>>,
+    servers: Vec<Rc<RefCell<GatewayRpcServer>>>,
+    webserver: Option<JoinHandle<axum::response::Result<()>>>,
 }
 
 impl LnGateway {
-    pub fn new(
-        federation_client: Arc<GatewayClient>,
-        ln_client: Arc<dyn LnRpc>,
-        sender: mpsc::Sender<GatewayRequest>,
-        receiver: mpsc::Receiver<GatewayRequest>,
-        bind_addr: SocketAddr,
-    ) -> Self {
+    pub fn new() -> Self {
         Self {
-            bind_addr,
-            federation_client,
-            ln_client,
-            receiver,
-            sender,
+            servers: Vec::new(),
+            ln_client: None,
             webserver: None,
+        }
+    }
+
+    pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<()>
+    where
+        F: Fn(GatewayRpcSender) -> R + 'static,
+        R: Future<
+                Output = std::result::Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), anyhow::Error>,
+            > + 'static,
+    {
+        let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
+            mpsc::channel(100);
+
+        // TODO: make rpc factory generic over multiple LN implementations
+
+        // Instantiate and register an lightning RPC client
+        let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(GatewayRpcSender::new(&sender))
+            .await
+            .expect("Failed to register RPC");
+        self.ln_client = Some(ln_rpc.clone());
+
+        // TODO: change direction of dependency and order of registration
+        //   to allow 1:N relationship between ln_rpc and gateway servers
+
+        // Instantiate a federation client to service the gateway
+        self.gateway_rpc_server_factory(receiver, ln_rpc, workdir)
+            .await
+            .expect("Failed to create federation gateway");
+
+        // Run a webserver on the rpc bind address
+        self.run_webserver(&sender, bind_addr)
+            .expect("Failed to run webserver");
+
+        Ok(())
+    }
+
+    /// Create a new federation client to service the gateway
+    ///
+    /// NOTES: A gateway would ideally be served by multiple federation clients,
+    /// dialled in to a shared ln rpc instance and web server.
+    async fn gateway_rpc_server_factory(
+        &mut self,
+        receiver: mpsc::Receiver<GatewayRequest>,
+        ln_rpc: Arc<dyn LnRpc>,
+        workdir: PathBuf,
+    ) -> Result<()> {
+        let cfg_path = workdir.join("gateway.json");
+        let db_path = workdir.join("gateway.db");
+
+        let client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .expect("Error opening DB")
+            .into();
+        let ctx = secp256k1::Secp256k1::new();
+        let client = Arc::new(Client::new(client_cfg, db, ctx));
+        client
+            .register_with_federation(client.config().into())
+            .await
+            .expect("Failed to register client with federation");
+
+        let fed_gateway = Rc::new(RefCell::new(GatewayRpcServer::new(
+            receiver, client, ln_rpc,
+        )));
+        self.servers.push(fed_gateway);
+        Ok(())
+    }
+
+    fn run_webserver(
+        &mut self,
+        sender: &mpsc::Sender<GatewayRequest>,
+        bind_addr: SocketAddr,
+    ) -> Result<()> {
+        // Run webserver asynchronously in tokio
+        let webserver = tokio::spawn(run_webserver(bind_addr, GatewayRpcSender::new(sender)));
+        self.webserver = Some(webserver);
+        Ok(())
+    }
+
+    pub async fn run(self) -> Result<()> {
+        // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        // TODO: try run gateway rpc servers in parallel
+        loop {
+            let least_wait_until = Instant::now() + Duration::from_millis(100);
+
+            // Handle messages from webserver and plugin
+            for server in &self.servers {
+                server.borrow_mut().receive().await;
+            }
+
+            fedimint_api::task::sleep_until(least_wait_until).await;
+        }
+    }
+}
+
+impl Drop for LnGateway {
+    fn drop(&mut self) {
+        if let Some(mut webserver) = self.webserver.take() {
+            webserver.abort();
+            let _ = futures::executor::block_on(&mut webserver);
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum LnGatewayError {
+    #[error("Federation client operation error: {0:?}")]
+    ClientError(#[from] ClientError),
+    #[error("Our LN node could not route the payment: {0:?}")]
+    CouldNotRoute(LightningError),
+    #[error("Mint client error: {0:?}")]
+    MintClientE(#[from] MintClientError),
+    #[error("Other")]
+    Other(#[from] anyhow::Error),
+}
+
+pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
+    d: D,
+) -> std::result::Result<T, D::Error> {
+    if d.is_human_readable() {
+        let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
+            .map_err(serde::de::Error::custom)?;
+        T::consensus_decode(Cursor::new(&bytes))
+            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    } else {
+        let bytes: Vec<u8> = Deserialize::deserialize(d)?;
+        T::consensus_decode(Cursor::new(&bytes))
+            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    }
+}
+
+impl IntoResponse for LnGatewayError {
+    fn into_response(self) -> Response {
+        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
+        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        err
+    }
+}
+
+pub struct GatewayRpcServer {
+    federation_client: Arc<GatewayClient>,
+    ln_rpc: Arc<dyn LnRpc>,
+    receiver: mpsc::Receiver<GatewayRequest>,
+}
+
+impl GatewayRpcServer {
+    pub fn new(
+        receiver: mpsc::Receiver<GatewayRequest>,
+        federation_client: Arc<GatewayClient>,
+        ln_rpc: Arc<dyn LnRpc>,
+    ) -> Self {
+        // TODO: support ln_rpc swaps in-flight, after instantiation
+        Self {
+            receiver,
+            federation_client,
+            ln_rpc,
         }
     }
 
@@ -264,7 +417,7 @@ impl LnGateway {
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
         match self
-            .ln_client
+            .ln_rpc
             .pay(
                 invoice,
                 payment_params.max_delay,
@@ -345,86 +498,5 @@ impl LnGateway {
             .await
             .map_err(LnGatewayError::ClientError)
             .map(|out_point| out_point.txid)
-    }
-
-    fn run_webserver(&mut self) {
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(
-            self.bind_addr,
-            GatewayRpcSender::new(&self.sender),
-        ));
-        self.webserver = Some(webserver);
-    }
-
-    pub async fn run(&mut self) -> Result<()> {
-        self.federation_client
-            .register_with_federation(self.federation_client.config().into())
-            .await
-            .expect("Failed to register with federation");
-
-        self.run_webserver();
-
-        // TODO: try to drive forward outgoing and incoming payments that were interrupted
-        loop {
-            let least_wait_until = Instant::now() + Duration::from_millis(100);
-            for fetch_result in self.federation_client.fetch_all_coins().await {
-                if let Err(e) = fetch_result {
-                    debug!(error = %e, "Fetching coins failed")
-                };
-            }
-
-            // Handle messages from webserver and plugin
-            self.receive().await;
-
-            fedimint_api::task::sleep_until(least_wait_until).await;
-        }
-    }
-
-    // pub async fn register_ln_client(&mut self, rpc: dyn LnRpc) {
-    //     self.cln_client = Some(rpc);
-    // }
-}
-
-impl Drop for LnGateway {
-    fn drop(&mut self) {
-        if let Some(mut webserver) = self.webserver.take() {
-            webserver.abort();
-            let _ = futures::executor::block_on(&mut webserver);
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LnGatewayError {
-    #[error("Federation client operation error: {0:?}")]
-    ClientError(#[from] ClientError),
-    #[error("Our LN node could not route the payment: {0:?}")]
-    CouldNotRoute(LightningError),
-    #[error("Mint client error: {0:?}")]
-    MintClientE(#[from] MintClientError),
-    #[error("Other")]
-    Other(#[from] anyhow::Error),
-}
-
-pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
-    d: D,
-) -> std::result::Result<T, D::Error> {
-    if d.is_human_readable() {
-        let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
-            .map_err(serde::de::Error::custom)?;
-        T::consensus_decode(Cursor::new(&bytes))
-            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
-    } else {
-        let bytes: Vec<u8> = Deserialize::deserialize(d)?;
-        T::consensus_decode(Cursor::new(&bytes))
-            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
-    }
-}
-
-impl IntoResponse for LnGatewayError {
-    fn into_response(self) -> Response {
-        let mut err = Cow::<'static, str>::Owned(format!("{:?}", self)).into_response();
-        *err.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-        err
     }
 }

@@ -3,8 +3,9 @@ use std::sync::Arc;
 use anyhow::Error;
 use async_trait::async_trait;
 use tokio::sync::{mpsc, oneshot, Mutex};
+use tracing::debug;
 
-use crate::{GatewayRequest, GatewayRequestTrait, LnGateway, LnGatewayError};
+use crate::{GatewayRequest, GatewayRequestTrait, GatewayRpcServer, LnGatewayError};
 
 #[derive(Debug, Clone)]
 pub struct GatewayRpcSender {
@@ -41,8 +42,14 @@ pub trait GatewayRpcReceiver {
 }
 
 #[async_trait]
-impl GatewayRpcReceiver for LnGateway {
+impl GatewayRpcReceiver for GatewayRpcServer {
     async fn receive(&mut self) {
+        for fetch_result in self.federation_client.fetch_all_coins().await {
+            if let Err(e) = fetch_result {
+                debug!(error = %e, "Fetching coins failed")
+            };
+        }
+
         // Handle messages from webserver and plugin
         while let Ok(msg) = self.receiver.try_recv() {
             tracing::trace!("Gateway received message {:?}", msg);
