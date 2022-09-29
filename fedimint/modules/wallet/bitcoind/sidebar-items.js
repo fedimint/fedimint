@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":[["test",""]],"struct":[["BitcoindRpc",""]],"trait":[["IBitcoindRpc","Trait that allows interacting with the Bitcoin blockchain"]]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":[["BlockHashKey",""],["PegOutBitcoinTransaction",""],["PegOutTxSignatureCI",""],["PegOutTxSignatureCIPrefix",""],["PendingTransactionKey",""],["PendingTransactionPrefixKey",""],["RoundConsensusKey",""],["UTXOKey",""],["UTXOPrefixKey",""],["UnsignedTransactionKey",""],["UnsignedTransactionPrefixKey",""]]};

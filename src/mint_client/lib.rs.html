@@ -1150,6 +1150,7 @@
 <span id="1150">1150</span>
 <span id="1151">1151</span>
 <span id="1152">1152</span>
+<span id="1153">1153</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1180,11 +1181,6 @@
     Amount, FederationModule, OutPoint, PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::{
-    DecryptedPreimage, IncomingContract, IncomingContractOffer, OfferId, Preimage,
-};
-<span class="kw">use </span>fedimint_core::modules::ln::contracts::{outgoing, Contract, IdentifyableContract};
-<span class="kw">use </span>fedimint_core::modules::ln::{ContractOutput, LightningGateway};
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOut;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionItem};
@@ -1192,8 +1188,12 @@
     config::ClientConfig,
     modules::{
         ln::{
-            contracts::{ContractId, OutgoingContractOutcome},
-            ContractOrOfferOutput,
+            contracts::{
+                incoming::{IncomingContract, IncomingContractOffer, OfferId},
+                Contract, ContractId, DecryptedPreimage, IdentifyableContract,
+                OutgoingContractOutcome, Preimage,
+            },
+            ContractOrOfferOutput, ContractOutput, LightningGateway,
         },
         mint::BlindNonce,
         wallet::txoproof::TxOutProof,
@@ -1779,7 +1779,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>raw_payment_secret = payment_keypair.public_key().serialize();
+        <span class="kw">let </span>raw_payment_secret: [u8; <span class="number">32</span>] = payment_keypair.public_key().serialize();
         <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>raw_payment_secret);
         <span class="kw">let </span>payment_secret = PaymentSecret(raw_payment_secret);
 
@@ -1823,9 +1823,11 @@
                     .sign_ecdsa_recoverable(hash, <span class="kw-2">&amp;</span>node_secret_key)
             })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>offer_output =
-            <span class="self">self</span>.ln_client()
-                .create_offer_output(amount, payment_hash, raw_payment_secret);
+        <span class="kw">let </span>offer_output = <span class="self">self</span>.ln_client().create_offer_output(
+            amount,
+            payment_hash,
+            Preimage(raw_payment_secret),
+        );
         <span class="kw">let </span>ln_output = Output::LN(offer_output);
 
         <span class="comment">// There is no input here because this is just an announcement
@@ -2045,14 +2047,14 @@
     </span><span class="kw">pub async fn </span>claim_outgoing_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract_id: ContractId,
-        preimage: [u8; <span class="number">32</span>],
+        preimage: Preimage,
         rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OutPoint&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>tx = TransactionBuilder::default();
 
         <span class="kw">let </span>contract = <span class="self">self</span>.ln_client().get_outgoing_contract(contract_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>input = Input::LN(contract.claim(outgoing::Preimage(preimage)));
+        <span class="kw">let </span>input = Input::LN(contract.claim(preimage));
 
         batch.autocommit(|batch| {
             batch.append_delete(OutgoingContractAccountKey(contract_id));
@@ -2303,4 +2305,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>

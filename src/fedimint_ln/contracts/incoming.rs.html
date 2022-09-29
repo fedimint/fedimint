@@ -96,71 +96,7 @@
 <span id="96">96</span>
 <span id="97">97</span>
 <span id="98">98</span>
-<span id="99">99</span>
-<span id="100">100</span>
-<span id="101">101</span>
-<span id="102">102</span>
-<span id="103">103</span>
-<span id="104">104</span>
-<span id="105">105</span>
-<span id="106">106</span>
-<span id="107">107</span>
-<span id="108">108</span>
-<span id="109">109</span>
-<span id="110">110</span>
-<span id="111">111</span>
-<span id="112">112</span>
-<span id="113">113</span>
-<span id="114">114</span>
-<span id="115">115</span>
-<span id="116">116</span>
-<span id="117">117</span>
-<span id="118">118</span>
-<span id="119">119</span>
-<span id="120">120</span>
-<span id="121">121</span>
-<span id="122">122</span>
-<span id="123">123</span>
-<span id="124">124</span>
-<span id="125">125</span>
-<span id="126">126</span>
-<span id="127">127</span>
-<span id="128">128</span>
-<span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
-<span id="132">132</span>
-<span id="133">133</span>
-<span id="134">134</span>
-<span id="135">135</span>
-<span id="136">136</span>
-<span id="137">137</span>
-<span id="138">138</span>
-<span id="139">139</span>
-<span id="140">140</span>
-<span id="141">141</span>
-<span id="142">142</span>
-<span id="143">143</span>
-<span id="144">144</span>
-<span id="145">145</span>
-<span id="146">146</span>
-<span id="147">147</span>
-<span id="148">148</span>
-<span id="149">149</span>
-<span id="150">150</span>
-<span id="151">151</span>
-<span id="152">152</span>
-<span id="153">153</span>
-<span id="154">154</span>
-<span id="155">155</span>
-<span id="156">156</span>
-<span id="157">157</span>
-<span id="158">158</span>
-<span id="159">159</span>
-<span id="160">160</span>
-<span id="161">161</span>
-<span id="162">162</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, IdentifyableContract};
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
@@ -234,17 +170,6 @@
     </span><span class="kw">pub </span>out_point: OutPoint,
 }
 
-<span class="doccomment">/// Possible outcomes of preimage decryption
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>DecryptedPreimage {
-    <span class="doccomment">/// There aren&#39;t enough decryption shares yet
-    </span>Pending,
-    <span class="doccomment">/// The decrypted preimage was valid
-    </span><span class="prelude-val">Some</span>(Preimage),
-    <span class="doccomment">/// The decrypted preimage was invalid
-    </span>Invalid,
-}
-
 <span class="macro">hash_newtype!</span>(
     OfferId,
     Sha256,
@@ -252,45 +177,9 @@
     doc = <span class="string">&quot;The hash of a LN incoming contract offer&quot;
 </span>);
 
-<span class="doccomment">/// A preimage in the context of incoming contracts. In this context it is a public key chosen
-/// by the creator of the [`IncomingContractOffer`].
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>secp256k1::XOnlyPublicKey);
-
-<span class="doccomment">/// Threshold-encrypted [`Preimage`]
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-</span><span class="kw">pub struct </span>EncryptedPreimage(<span class="kw">pub </span>threshold_crypto::Ciphertext);
-
-<span class="doccomment">/// Share to decrypt an [`EncryptedPreimage`]
-</span><span class="attribute">#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>PreimageDecryptionShare(<span class="kw">pub </span>threshold_crypto::DecryptionShare);
-
-<span class="kw">impl </span>EncryptedPreimage {
-    <span class="kw">pub fn </span>new(preimage: [u8; <span class="number">32</span>], key: <span class="kw-2">&amp;</span>threshold_crypto::PublicKey) -&gt; EncryptedPreimage {
-        EncryptedPreimage(key.encrypt(preimage))
-    }
-}
-
 <span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>IncomingContract {
     <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
         ContractId::from_hash(<span class="self">self</span>.hash)
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="comment">// TODO: get rid of bincode
-        </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
-        bytes.consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(EncryptedPreimage(
-            bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
-        ))
     }
 }
 
@@ -305,22 +194,5 @@
         <span class="prelude-val">Ok</span>(OfferId::from_inner(Decodable::consensus_decode(d)<span class="question-mark">?</span>))
     }
 }
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="comment">// TODO: get rid of bincode
-        </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
-        bytes.consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(PreimageDecryptionShare(
-            bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
-        ))
-    }
-}
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>

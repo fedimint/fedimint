@@ -432,10 +432,6 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
-<span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
-<span id="438">438</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -447,13 +443,12 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>cln::HtlcAccepted;
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>fedimint_server::modules::ln::contracts::{incoming::Preimage, ContractId};
+<span class="kw">use </span>fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_server::modules::wallet::txoproof::TxOutProof;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>mint_client::mint::MintClientError;
 <span class="kw">use </span>mint_client::{ClientError, GatewayClient, PaymentParameters};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
-<span class="kw">use </span>secp256k1::XOnlyPublicKey;
 <span class="kw">use </span>serde::{Deserialize, Deserializer};
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -663,7 +658,7 @@
         payment_hash: <span class="kw-2">&amp;</span>sha256::Hash,
         invoice_amount: <span class="kw-2">&amp;</span>Amount,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>]&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>(out_point, contract_id) = <span class="self">self
             </span>.federation_client
             .buy_preimage_offer(payment_hash, invoice_amount, <span class="kw-2">&amp;mut </span>rng)
@@ -677,7 +672,7 @@
         </span>{
             <span class="prelude-val">Ok</span>(preimage) =&gt; {
                 <span class="macro">debug!</span>(<span class="string">&quot;Decrypted preimage {:?}&quot;</span>, preimage);
-                <span class="prelude-val">Ok</span>(preimage.<span class="number">0</span>.serialize())
+                <span class="prelude-val">Ok</span>(preimage)
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">warn!</span>(<span class="string">&quot;Failed to decrypt preimage. Now requesting a refund: {}&quot;</span>, e);
@@ -693,7 +688,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         invoice: <span class="kw-2">&amp;</span>str,
         payment_params: <span class="kw-2">&amp;</span>PaymentParameters,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>]&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">match </span><span class="self">self
             </span>.ln_client
             .pay(
@@ -740,12 +735,9 @@
             rand::rngs::OsRng::new().expect(<span class="string">&quot;only systems with a randomness source are supported&quot;</span>);
 
         <span class="macro">debug!</span>(<span class="string">&quot;Incoming htlc for payment hash {}&quot;</span>, payment_hash);
-        <span class="kw">let </span>pk_slice = <span class="self">self
-            </span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_hash, <span class="kw-2">&amp;</span>invoice_amount, <span class="kw-2">&amp;mut </span>rng)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>pk = XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span>pk_slice).expect(<span class="string">&quot;Invalid preimage&quot;</span>);
-        <span class="prelude-val">Ok</span>(Preimage(pk))
-    }
+        <span class="self">self</span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_hash, <span class="kw-2">&amp;</span>invoice_amount, <span class="kw-2">&amp;mut </span>rng)
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>handle_balance_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
         <span class="kw">let </span>fetch_results = <span class="self">self</span>.federation_client.fetch_all_coins().<span class="kw">await</span>;
@@ -875,4 +867,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>

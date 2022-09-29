@@ -48,10 +48,6 @@
 <span id="48">48</span>
 <span id="49">49</span>
 <span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-<span id="53">53</span>
-<span id="54">54</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, IdentifyableContract};
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -81,10 +77,6 @@
     </span><span class="kw">pub </span>cancelled: bool,
 }
 
-<span class="doccomment">/// Preimage in the context of [`OutgoingContract`]s
-</span><span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>Preimage(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
-
 <span class="kw">impl </span>IdentifyableContract <span class="kw">for </span>OutgoingContract {
     <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = ContractId::engine();
@@ -107,4 +99,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>

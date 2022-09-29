@@ -66,10 +66,13 @@
 <span id="66">66</span>
 <span id="67">67</span>
 <span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::convert::TryInto;
 
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>cln_rpc::model::requests::PayRequest;
+<span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tracing::{debug, instrument};
 
@@ -81,7 +84,7 @@
         invoice: <span class="kw-2">&amp;</span>str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], LightningError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt;;
 }
 
 <span class="attribute">#[derive(Debug)]
@@ -95,7 +98,7 @@
         invoice: <span class="kw-2">&amp;</span>str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], LightningError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Attempting to pay invoice&quot;</span>);
 
         <span class="kw">let </span>pay_result = <span class="self">self
@@ -120,7 +123,8 @@
         <span class="kw">match </span>pay_result {
             <span class="prelude-val">Ok</span>(cln_rpc::Response::Pay(pay_success)) =&gt; {
                 <span class="macro">debug!</span>(<span class="string">&quot;Successfully paid invoice&quot;</span>);
-                <span class="prelude-val">Ok</span>(pay_success.payment_preimage.to_vec().try_into().unwrap())
+                <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = pay_success.payment_preimage.to_vec().try_into().unwrap();
+                <span class="prelude-val">Ok</span>(Preimage(slice))
             }
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;unexpected response from C-lightning&quot;</span>),
             <span class="prelude-val">Err</span>(cln_rpc::RpcError { code, message }) =&gt; {
@@ -135,4 +139,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (470e518c4 2022-09-27)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>
