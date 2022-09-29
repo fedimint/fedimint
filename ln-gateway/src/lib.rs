@@ -1,10 +1,10 @@
-pub mod builder;
 pub mod cln;
 pub mod ln;
 pub mod rpc;
 pub mod webserver;
 
 use crate::ln::{LightningError, LnRpc};
+use async_trait::async_trait;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
@@ -17,6 +17,7 @@ use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
+use rpc::{GatewayRpcClient, GatewayRpcSender};
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::net::SocketAddr;
@@ -110,28 +111,29 @@ where
 }
 
 pub struct LnGateway {
+    bind_addr: SocketAddr,
     federation_client: Arc<GatewayClient>,
     ln_client: Arc<dyn LnRpc>,
-    webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
+    sender: mpsc::Sender<GatewayRequest>,
     receiver: mpsc::Receiver<GatewayRequest>,
+    webserver: Option<tokio::task::JoinHandle<axum::response::Result<()>>>,
 }
 
 impl LnGateway {
     pub fn new(
+        bind_addr: SocketAddr,
         federation_client: Arc<GatewayClient>,
         ln_client: Arc<dyn LnRpc>,
-        sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-        bind_addr: SocketAddr,
+        sender: mpsc::Sender<GatewayRequest>,
     ) -> Self {
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(bind_addr, sender));
-
         Self {
+            bind_addr,
             federation_client,
             ln_client,
-            webserver,
             receiver,
+            sender,
+            webserver: None,
         }
     }
 
@@ -348,6 +350,12 @@ impl LnGateway {
             .await
             .expect("Failed to register with federation");
 
+        // Run webserver asynchronously in tokio
+        let webserver = tokio::spawn(run_webserver(
+            self.bind_addr,
+            GatewayRpcSender::new(self.sender.clone()),
+        ));
+
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
@@ -358,47 +366,61 @@ impl LnGateway {
             }
 
             // Handle messages from webserver and plugin
-            while let Ok(msg) = self.receiver.try_recv() {
-                tracing::trace!("Gateway received message {:?}", msg);
-                match msg {
-                    GatewayRequest::HtlcAccepted(inner) => {
-                        inner
-                            .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
-                            .await;
-                    }
-                    GatewayRequest::PayInvoice(inner) => {
-                        inner
-                            .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
-                            .await;
-                    }
-                    GatewayRequest::Balance(inner) => {
-                        inner.handle(|_| self.handle_balance_msg()).await;
-                    }
-                    GatewayRequest::DepositAddress(inner) => {
-                        inner.handle(|_| self.handle_address_msg()).await;
-                    }
-                    GatewayRequest::Deposit(inner) => {
-                        inner
-                            .handle(|deposit| self.handle_deposit_msg(deposit))
-                            .await;
-                    }
-                    GatewayRequest::Withdraw(inner) => {
-                        inner
-                            .handle(|withdraw| self.handle_withdraw_msg(withdraw))
-                            .await;
-                    }
-                }
-            }
+            self.receive().await;
 
             fedimint_api::task::sleep_until(least_wait_until).await;
+        }
+    }
+
+    // pub async fn register_ln_client(&mut self, rpc: dyn LnRpc) {
+    //     self.cln_client = Some(rpc);
+    // }
+}
+
+#[async_trait]
+impl GatewayRpcClient for LnGateway {
+    async fn receive(&self) {
+        // Handle messages from webserver and plugin
+        while let Ok(msg) = self.receiver.try_recv() {
+            tracing::trace!("Gateway received message {:?}", msg);
+            match msg {
+                GatewayRequest::HtlcAccepted(inner) => {
+                    inner
+                        .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
+                        .await;
+                }
+                GatewayRequest::PayInvoice(inner) => {
+                    inner
+                        .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
+                        .await;
+                }
+                GatewayRequest::Balance(inner) => {
+                    inner.handle(|_| self.handle_balance_msg()).await;
+                }
+                GatewayRequest::DepositAddress(inner) => {
+                    inner.handle(|_| self.handle_address_msg()).await;
+                }
+                GatewayRequest::Deposit(inner) => {
+                    inner
+                        .handle(|deposit| self.handle_deposit_msg(deposit))
+                        .await;
+                }
+                GatewayRequest::Withdraw(inner) => {
+                    inner
+                        .handle(|withdraw| self.handle_withdraw_msg(withdraw))
+                        .await;
+                }
+            }
         }
     }
 }
 
 impl Drop for LnGateway {
     fn drop(&mut self) {
-        self.webserver.abort();
-        let _ = futures::executor::block_on(&mut self.webserver);
+        if let Some(webserver) = self.webserver.take() {
+            webserver.abort();
+            let _ = futures::executor::block_on(&mut webserver);
+        }
     }
 }
 

@@ -1,23 +1,27 @@
 use async_trait::async_trait;
 use cln_plugin::{anyhow, options, Builder, Error, Plugin};
-use cln_rpc::model::PayRequest;
-use cln_rpc::ClnRpc;
+use cln_rpc::{model::PayRequest, ClnRpc};
 use fedimint_api::Amount;
+use fedimint_server::config::load_from_file;
+use fedimint_server::modules::ln::contracts::Preimage;
+use mint_client::GatewayClientConfig;
+use rand::thread_rng;
+use secp256k1::KeyPair;
 use serde::{Deserialize, Deserializer};
 use serde_json::json;
-use std::path::PathBuf;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, error, instrument};
+use url::Url;
 
 use crate::{
     ln::{LightningError, LnRpc},
-    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, GatewayRequestTrait,
-    LnGatewayError, WithdrawPayload,
+    rpc::GatewayRpcSender,
+    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, WithdrawPayload,
 };
-
-type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
 fn as_fedimint_amount<'de, D>(amount: D) -> Result<Amount, D::Error>
@@ -67,7 +71,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         invoice: &str,
         max_delay: u64,
         max_fee_percent: f64,
-    ) -> Result<[u8; 32], LightningError> {
+    ) -> Result<Preimage, LightningError> {
         debug!("Attempting to pay invoice");
 
         let pay_result = self
@@ -92,7 +96,8 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
         match pay_result {
             Ok(cln_rpc::Response::Pay(pay_success)) => {
                 debug!("Successfully paid invoice");
-                Ok(pay_success.payment_preimage.to_vec().try_into().unwrap())
+                let slice: [u8; 32] = pay_success.payment_preimage.to_vec().try_into().unwrap();
+                Ok(Preimage(slice))
             }
             Ok(_) => unreachable!("unexpected response from C-lightning"),
             Err(cln_rpc::RpcError { code, message }) => {
@@ -107,21 +112,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
     }
 }
 
-/// Send message to LnGateway over channel and receive response over onshot channel
-async fn gw_rpc<R>(plugin: Plugin<PluginState>, message: R) -> Result<R::Response, Error>
-where
-    R: GatewayRequestTrait,
-{
-    let (sender, receiver) = oneshot::channel::<Result<R::Response, LnGatewayError>>();
-    let msg = message.to_enum(sender);
-
-    let gw_sender = { plugin.state().lock().await.clone() };
-    gw_sender
-        .send(msg)
-        .await
-        .expect("failed to send over channel");
-    Ok(receiver.await.expect("Failed to send over channel")?)
-}
+type PluginState = GatewayRpcSender;
 
 /// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
 /// and completing the payment
@@ -130,10 +121,11 @@ async fn htlc_accepted_hook(
     value: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let htlc_accepted: HtlcAccepted = serde_json::from_value(value)?;
-    let preimage = gw_rpc(plugin, htlc_accepted).await?;
+    let preimage = plugin.state().send(htlc_accepted).await?;
+    let pk = preimage.to_public_key()?;
     Ok(serde_json::json!({
       "result": "resolve",
-      "payment_key": preimage,
+      "payment_key": pk.to_string(),
     }))
 }
 
@@ -141,7 +133,7 @@ async fn balance_rpc(
     plugin: Plugin<PluginState>,
     _: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let amount = gw_rpc(plugin, BalancePayload {}).await?;
+    let amount = plugin.state().send(BalancePayload {}).await?;
     Ok(json!({ "balance_msat": amount.milli_sat }))
 }
 
@@ -149,7 +141,7 @@ async fn address(
     plugin: Plugin<PluginState>,
     _: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
-    let address = gw_rpc(plugin, DepositAddressPayload {}).await?;
+    let address = plugin.state().send(DepositAddressPayload {}).await?;
     Ok(json!({ "address": address }))
 }
 
@@ -158,7 +150,7 @@ async fn deposit_rpc(
     value: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let deposit: DepositPayload = serde_json::from_value(value)?;
-    let txid = gw_rpc(plugin, deposit).await?;
+    let txid = plugin.state().send(deposit).await?;
     Ok(json!({ "fedimint_txid": txid.to_string() }))
 }
 
@@ -167,12 +159,22 @@ async fn withdraw_rpc(
     value: serde_json::Value,
 ) -> Result<serde_json::Value, Error> {
     let withdraw: WithdrawPayload = serde_json::from_value(value)?;
-    let txid = gw_rpc(plugin, withdraw).await?;
+    let txid = plugin.state().send(withdraw).await?;
     Ok(json!({ "fedimint_txid": txid.to_string() }))
 }
 
-pub async fn build_rpc(sender: mpsc::Sender<GatewayRequest>) -> Result<Arc<dyn LnRpc>, Error> {
-    let state = Arc::new(Mutex::new(sender));
+/// Start the core-lightning plugin and register it in an LnRpc
+/// This process generates and writes rpc configs to a known location
+///
+/// Returns
+///
+/// * CLN LnRpc
+/// * The Ln Rpc bind address
+/// * Working directory hosting the rpc config path
+pub async fn build_cln_rpc(
+    sender: mpsc::Sender<GatewayRequest>,
+) -> Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), Error> {
+    let state = GatewayRpcSender::new(sender.clone());
 
     // Register this plugin with core-lightning
     if let Some(plugin) = Builder::new(state, stdin(), stdout())
@@ -249,11 +251,46 @@ pub async fn build_rpc(sender: mpsc::Sender<GatewayRequest>) -> Result<Arc<dyn L
         let mut ln_client = ClnRpc::new(cln_rpc_socket)
             .await
             .expect("connect to ln_socket");
-        // if !Path::new(&cfg_path).is_file() {
-        //     generate_config(&workdir, &mut ln_client, &bind_addr).await;
-        // }
-        Ok(Arc::new(ln_client.into()))
+        if !Path::new(&cfg_path).is_file() {
+            generate_config(&workdir, &mut ln_client, &bind_addr).await;
+        }
+        Ok((Arc::new(Mutex::new(ln_client)), bind_addr, workdir))
     } else {
         Err(anyhow!("Failed to build cln rpc!"))
     }
+}
+
+/// Create [`gateway.json`] config files
+async fn generate_config(workdir: &Path, ln_client: &mut ClnRpc, bind_addr: &SocketAddr) {
+    let client_cfg_path = workdir.join("client.json");
+    let client_cfg: fedimint_server::config::ClientConfig = load_from_file(&client_cfg_path);
+
+    let mut rng = thread_rng();
+    let ctx = secp256k1::Secp256k1::new();
+    let kp_fed = KeyPair::new(&ctx, &mut rng);
+
+    let node_pub_key_bytes = match ln_client
+        .call(cln_rpc::Request::Getinfo(
+            cln_rpc::model::requests::GetinfoRequest {},
+        ))
+        .await
+    {
+        Ok(cln_rpc::Response::Getinfo(r)) => r.id,
+        Ok(_) => panic!("Core lightning sent wrong message"),
+        Err(e) => panic!("Failed to fetch core-lightning node pubkey {:?}", e),
+    };
+    let node_pub_key = secp256k1::PublicKey::from_slice(&node_pub_key_bytes.to_vec()).unwrap();
+
+    // Write gateway config
+    let gateway_cfg = GatewayClientConfig {
+        client_config: client_cfg.clone(),
+        redeem_key: kp_fed,
+        timelock_delta: 10,
+        node_pub_key,
+        api: Url::parse(format!("http://{}", bind_addr).as_str())
+            .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+    };
+    let gw_cfg_file_path: PathBuf = workdir.join("gateway.json");
+    let gw_cfg_file = std::fs::File::create(gw_cfg_file_path).expect("Could not create cfg file");
+    serde_json::to_writer_pretty(gw_cfg_file, &gateway_cfg).unwrap();
 }

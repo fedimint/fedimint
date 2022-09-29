@@ -1,41 +1,36 @@
 use std::net::SocketAddr;
-use std::sync::Arc;
 
+use anyhow::Error;
 use axum::{routing::post, Extension, Json, Router};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, instrument};
 
-use crate::GatewayRequestInner;
-use crate::{GatewayRequest, LnGatewayError};
+use crate::{rpc::GatewayRpcSender, GatewayRequest, GatewayRequestInner};
 use fedimint_server::modules::ln::contracts::ContractId;
 
 #[instrument(skip_all, err)]
 pub async fn pay_invoice(
-    extension: Extension<mpsc::Sender<GatewayRequest>>,
+    extension: Extension<GatewayRpcSender>,
     Json(contract_id): Json<ContractId>,
-) -> Result<(), LnGatewayError> {
+) -> Result<(), Error> {
     debug!(%contract_id, "Received request to pay invoice");
 
-    let (sender, receiver) = oneshot::channel::<Result<(), LnGatewayError>>();
+    let (sender, _) = oneshot::channel::<Result<(), Error>>();
+
     let msg = GatewayRequest::PayInvoice(GatewayRequestInner {
         request: contract_id,
         sender,
     });
 
-    let gw_sender = { extension.0.lock().await.clone() };
-    gw_sender
-        .send(msg)
-        .await
-        .expect("failed to send over channel");
-    receiver.await.unwrap()?;
+    extension.0.send(msg).await?;
 
     Ok(())
 }
 
 pub async fn run_webserver(
     bind_addr: SocketAddr,
-    sender: Arc<Mutex<mpsc::Sender<GatewayRequest>>>,
+    sender: GatewayRpcSender,
 ) -> axum::response::Result<()> {
     let app = Router::new()
         .route("/pay_invoice", post(pay_invoice))
