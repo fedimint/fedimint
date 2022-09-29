@@ -36,6 +36,10 @@ enum Command {
         #[arg(long = "api-base-port", default_value = "17340")]
         api_base_port: u16,
 
+        /// `bitcoind` json rpc endpoint
+        #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
+        bitcoind_rpc: String,
+
         /// Available denominations of notes issues by the federation (comma separated)
         #[arg(
             long = "denominations",
@@ -64,6 +68,7 @@ fn main() {
             api_base_port,
             denominations: amount_tiers,
             federation_name,
+            bitcoind_rpc,
         } => {
             let mut rng = OsRng::new().unwrap();
             // Recursively create config directory if it doesn't exist
@@ -79,6 +84,7 @@ fn main() {
                 api_base_port,
                 amount_tiers,
                 federation_name,
+                bitcoind_rpc,
             };
 
             let (server_cfg, client_cfg) =
