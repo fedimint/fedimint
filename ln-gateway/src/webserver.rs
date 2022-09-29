@@ -1,30 +1,22 @@
 use std::net::SocketAddr;
 
-use anyhow::Error;
 use axum::{routing::post, Extension, Json, Router};
-use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
 use tracing::{debug, instrument};
 
-use crate::{rpc::GatewayRpcSender, GatewayRequest, GatewayRequestInner};
+use crate::{rpc::GatewayRpcSender, LnGatewayError};
 use fedimint_server::modules::ln::contracts::ContractId;
 
 #[instrument(skip_all, err)]
 pub async fn pay_invoice(
-    extension: Extension<GatewayRpcSender>,
+    Extension(sender): Extension<GatewayRpcSender>,
     Json(contract_id): Json<ContractId>,
-) -> Result<(), Error> {
+) -> Result<(), LnGatewayError> {
     debug!(%contract_id, "Received request to pay invoice");
-
-    let (sender, _) = oneshot::channel::<Result<(), Error>>();
-
-    let msg = GatewayRequest::PayInvoice(GatewayRequestInner {
-        request: contract_id,
-        sender,
-    });
-
-    extension.0.send(msg).await?;
-
+    sender
+        .send(contract_id)
+        .await
+        .map_err(LnGatewayError::Other)?;
     Ok(())
 }
 

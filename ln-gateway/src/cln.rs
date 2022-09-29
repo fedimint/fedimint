@@ -13,14 +13,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::io::{stdin, stdout};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 use url::Url;
 
 use crate::{
     ln::{LightningError, LnRpc},
     rpc::GatewayRpcSender,
-    BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest, WithdrawPayload,
+    BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
@@ -172,12 +172,10 @@ async fn withdraw_rpc(
 /// * The Ln Rpc bind address
 /// * Working directory hosting the rpc config path
 pub async fn build_cln_rpc(
-    sender: mpsc::Sender<GatewayRequest>,
+    sender: GatewayRpcSender,
 ) -> Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), Error> {
-    let state = GatewayRpcSender::new(sender.clone());
-
     // Register this plugin with core-lightning
-    if let Some(plugin) = Builder::new(state, stdin(), stdout())
+    if let Some(plugin) = Builder::new(sender, stdin(), stdout())
         .option(options::ConfigOption::new(
             "fedimint-cfg",
             // FIXME: cln_plugin doesn't support parameters without defaults
