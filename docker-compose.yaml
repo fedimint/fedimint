@@ -1,0 +1,72 @@
+## Preconfigured docker-compose setup
+#
+# To start run in different sheels:
+#
+# * `docker-compose up bitcoind`
+# * `docker-compose up server-0`
+# * `docker-compose up server-1`
+# * `docker-compose up server-2`
+
+version: "3.9"
+services:
+  # You probably don't want to use it, because it will overwrite carefully prepared
+  # config that was already checked-in into git.
+  #
+  # configgen:
+  #   image: *fedimintd-image
+  #   command: configgen generate --out-dir /var/fedimint/ --bitcoind-rpc bitcoind:18443 --num-nodes 3 --denominations 1,2,5,10,100,1000,10000,100000,1000000,10000000
+  #   volumes:
+  #     - ./docker-compose.data:/var/fedimint
+
+  bitcoind:
+    image: ruimarinho/bitcoin-core:23.0
+    environment:
+      - BITCOIN_DATA=/var/fedimint/bitcoind
+    command: bitcoind -printtoconsole -regtest=1 -rpcbind=0.0.0.0 -rpcallowip=0.0.0.0/0 -rpcport=18443 -rpcuser=bitcoin -rpcpassword=bitcoin
+
+  # Start with:
+  # docker-compose run --rm shell
+  shell:
+    image: ubuntu
+    command: bash
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./docker-compose.data:/var/fedimint
+
+  server-0:
+    image: &fedimintd-image fedimint/fedimintd:99958855a83ba31d94f34c764a830195900f7f31
+    # If you want to use locally built version:
+    # image: &fedimintd-image fedimintd:ngnlbxnk3p9nlv76lhqmn46p8dy7cjyy
+    command: fedimintd /var/fedimint/server-0.json /var/fedimint/server-0.db
+    ports:
+      - "17240:17240"
+      - "17340:17340"
+    volumes:
+      - ./docker-compose.data:/var/fedimint
+
+  server-1:
+    image: *fedimintd-image
+    command: fedimintd /var/fedimint/server-1.json /var/fedimint/server-1.db
+    ports:
+      - "17241:17241"
+      - "17341:17341"
+    volumes:
+      - ./docker-compose.data:/var/fedimint
+
+  server-2:
+    image: *fedimintd-image
+    command: fedimintd /var/fedimint/server-2.json /var/fedimint/server-2.db
+    ports:
+      - "17242:17242"
+      - "17342:17342"
+    volumes:
+      - ./docker-compose.data:/var/fedimint
+
+  ln-gateway:
+    # image: fedimint/ln-gateway-clightning
+    image: ln-gateway-clightning:35ga61rkkjbvv36kxagwkzrckwsxf7fn
+    # TBD: needs a config, etc.
+    command: lightningd --help
+    volumes:
+      - ./docker-compose.data:/var/fedimint
