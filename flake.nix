@@ -615,15 +615,68 @@
 
           container = {
             fedimintd = pkgs.dockerTools.buildLayeredImage {
-              name = "fedimint";
-              contents = [ fedimintd ];
+              name = "fedimintd";
+              contents = [ fedimintd pkgs.bash pkgs.coreutils ];
               config = {
                 Cmd = [
                   "${fedimintd}/bin/fedimintd"
                 ];
                 ExposedPorts = {
-                  "${builtins.toString 8080}/tcp" = { };
+                  "${builtins.toString 17240}/tcp" = { };
+                  "${builtins.toString 17340}/tcp" = { };
                 };
+              };
+            };
+
+            ln-gateway-clightning =
+              let
+                # Will be placed in `/config-example.cfg` by `fakeRootCommands` below
+                config-example = pkgs.writeText "config-example.conf" ''
+                  network=signet
+                  # bitcoin-datadir=/var/lib/bitcoind
+
+                  always-use-proxy=false
+                  bind-addr=0.0.0.0:9735
+                  bitcoin-rpcconnect=127.0.0.1
+                  bitcoin-rpcport=8332
+                  bitcoin-rpcuser=public
+                  rpc-file-mode=0660
+                  log-timestamps=false
+
+                  plugin=${ln-gateway}/bin/ln_gateway
+                  fedimint-cfg=/var/fedimint/fedimint-gw
+
+                  announce-addr=104.244.73.68:9735
+                  alias=fm-signet.sirion.io
+                  large-channels
+                  experimental-offers
+                  fee-base=0
+                  fee-per-satoshi=100
+                ''; in
+              pkgs.dockerTools.buildLayeredImage {
+                name = "ln-gateway-clightning";
+                contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils ];
+                config = {
+                  Cmd = [
+                    "${ln-gateway}/bin/ln-gateway"
+                  ];
+                  ExposedPorts = {
+                    "${builtins.toString 9735}/tcp" = { };
+                  };
+                };
+                enableFakechroot = true;
+                fakeRootCommands = ''
+                  ln -s ${config-example} /config-example.cfg
+                '';
+              };
+
+            mint-client-cli = pkgs.dockerTools.buildLayeredImage {
+              name = "mint-client-cli";
+              contents = [ mint-client-cli pkgs.bash pkgs.coreutils ];
+              config = {
+                Cmd = [
+                  "${mint-client-cli}/bin/mint-client-cli"
+                ];
               };
             };
           };
