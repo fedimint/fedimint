@@ -113,8 +113,9 @@ where
     R: GatewayRequestTrait,
 {
     let (sender, receiver) = oneshot::channel::<Result<R::Response, LnGatewayError>>();
-    let gw_sender = { plugin.state().lock().await.clone() };
     let msg = message.to_enum(sender);
+
+    let gw_sender = { plugin.state().lock().await.clone() };
     gw_sender
         .send(msg)
         .await

@@ -1,8 +1,8 @@
 use crate::LnGatewayError;
 use crate::{ln::LnRpc, rpc::GatewayRpc, GatewayRequest};
 use bitcoin_hashes::sha256;
-use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use fedimint_api::{Amount, OutPoint};
+use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
 use futures::Future;
 use mint_client::GatewayClient;
 use rand::{CryptoRng, RngCore};
