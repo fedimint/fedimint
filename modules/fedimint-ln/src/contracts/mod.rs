@@ -122,7 +122,7 @@ impl Preimage {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidPublicKey`] if the Preimage does not represent a valid Secp256k1 point x coordinate.
+    /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not represent a valid Secp256k1 point x coordinate.
     pub fn to_public_key(&self) -> Result<secp256k1::XOnlyPublicKey, secp256k1::Error> {
         secp256k1::XOnlyPublicKey::from_slice(&self.0)
     }

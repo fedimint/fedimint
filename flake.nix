@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
-    crane.url = "github:ipetkov/crane?rev=21e627606c5548a3f6be1f71c7397999ac76bea2";
+    crane.url = "github:ipetkov/crane?rev=755acd231a7de182fdc772bee1b2a1f21d4ec9ed"; # https://github.com/ipetkov/crane/releases/tag/v0.7.0
     crane.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -306,10 +306,17 @@
           doCheck = false;
         });
 
-        workspaceDoc = craneLib.cargoBuild (commonArgs // {
+        workspaceDoc = craneLib.cargoDoc (commonArgs // {
           pname = "workspace-doc";
           cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
+          preConfigure = ''
+            export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
+          '';
+          cargoDocExtraArgs = "--no-deps --document-private-items";
+          doInstallCargoArtifacts = false;
+          postInstall = ''
+            cp -a target/doc $out
+          '';
           doCheck = false;
         });
 
