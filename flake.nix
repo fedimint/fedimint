@@ -306,10 +306,17 @@
           doCheck = false;
         });
 
-        workspaceDoc = craneLib.cargoBuild (commonArgs // {
+        workspaceDoc = craneLib.cargoDoc (commonArgs // {
           pname = "workspace-doc";
           cargoArtifacts = workspaceDeps;
-          cargoBuildCommand = "env RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links' cargo doc --no-deps --document-private-items && cp -a target/doc $out";
+          preConfigure = ''
+            export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links'
+          '';
+          cargoDocExtraArgs = "--no-deps --document-private-items";
+          doInstallCargoArtifacts = false;
+          postInstall = ''
+            cp -a target/doc $out
+          '';
           doCheck = false;
         });
 
