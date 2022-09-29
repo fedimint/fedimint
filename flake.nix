@@ -370,7 +370,7 @@
         });
 
 
-        pkg = { name, dirs, bin }:
+        pkg = { name, dirs, bin ? null }:
           let
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
@@ -522,7 +522,7 @@
 
         fedimint-tests = pkg {
           name = "fedimint-tests";
-          extraDirs = [
+          dirs = [
             "client/cli"
             "client/client-lib"
             "client/clientd"
@@ -592,7 +592,12 @@
             workspaceDoc
             workspaceCov
             workspaceAudit;
+        };
 
+        # Technically nested sets are not allowed in `packages`, so we can
+        # dump the nested things here. They'll work the same way for most
+        # purposes (like `nix build`).
+        legacyPackages = {
           cli-test = {
             reconnect = cliTestReconnect;
             latency = cliTestLatency;
