@@ -23,7 +23,7 @@ bitcoin_hashes = "0.10.0"
 bitcoin = { version = "0.28.1", features = ["serde", "use-serde"] }
 cln-rpc = "0.1"
 cln-plugin = "0.1"
-futures = "0.3.21"
+futures = "0.3.24"
 hex = "0.4.3"
 lightning-invoice = "0.18.0"
 fedimint-server = { path = "../fedimint-server/" }
