@@ -199,17 +199,22 @@ where
 
         // Begin consensus epoch
         {
-            let mut db_batch = DbBatch::new();
+            let mut db_vec = Vec::new();
+            db_vec.push(self.db.begin_transaction());
+            db_vec.push(self.db.begin_transaction());
+            db_vec.push(self.db.begin_transaction());
             self.wallet
-                .begin_consensus_epoch(db_batch.transaction(), wallet_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut db_vec[0], wallet_cis, self.rng_gen.get_rng())
                 .await;
             self.mint
-                .begin_consensus_epoch(db_batch.transaction(), mint_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut db_vec[1], mint_cis, self.rng_gen.get_rng())
                 .await;
             self.ln
-                .begin_consensus_epoch(db_batch.transaction(), ln_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut db_vec[2], ln_cis, self.rng_gen.get_rng())
                 .await;
-            self.db.apply_batch(db_batch).expect("DB error");
+            db_vec
+                .into_iter()
+                .for_each(|tx| tx.commit_tx().expect("DB Error"));
         }
 
         // Process transactions

@@ -30,8 +30,8 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use itertools::Itertools;
 
-use fedimint_api::db::batch::{BatchItem, BatchTx};
-use fedimint_api::db::Database;
+use fedimint_api::db::batch::BatchTx;
+use fedimint_api::db::{Database, IDatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -174,20 +174,22 @@ impl FederationModule for LightningModule {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
-        batch.append_from_iter(consensus_items.into_iter().map(|(peer, decryption_share)| {
-            let span = info_span!("process decryption share", %peer);
-            let _guard = span.enter();
+        consensus_items
+            .into_iter()
+            .for_each(|(peer, decryption_share)| {
+                let span = info_span!("process decryption share", %peer);
+                let _guard = span.enter();
 
-            BatchItem::insert_new(
-                AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                decryption_share.share,
-            )
-        }));
-        batch.commit();
+                dbtx.insert_new_entry(
+                    &AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                    &decryption_share.share,
+                )
+                .expect("DB Error");
+            });
     }
 
     fn build_verification_cache<'a>(

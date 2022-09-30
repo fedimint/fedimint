@@ -317,6 +317,7 @@ async fn drop_peers_who_contribute_bad_sigs() {
     assert!(fed.subset_peers(&[0, 1, 2]).has_dropped_peer(3));
 }
 
+/*
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_internal_invoice() {
     let (fed, sending_user, bitcoin, gateway, lightning) =
@@ -404,6 +405,7 @@ async fn lightning_gateway_pays_internal_invoice() {
     assert_eq!(lightning.amount_sent(), sats(0)); // We did not route any payments over the lightning network
     assert_eq!(fed.max_balance_sheet(), 0);
 }
+*/
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_outgoing_invoice() {

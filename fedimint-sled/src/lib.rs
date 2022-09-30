@@ -3,16 +3,25 @@
 
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
-use fedimint_api::db::IDatabase;
-use fedimint_api::db::PrefixIter;
+use fedimint_api::db::{
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, PrefixIter,
+};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use sled::transaction::TransactionError;
+use std::collections::BTreeMap;
 use std::path::Path;
-use tracing::error;
+use tracing::{error, warn};
 
 pub use sled;
 
 #[derive(Debug)]
 pub struct SledDb(sled::Tree);
+
+#[derive(Debug)]
+pub struct SledTransaction<'a> {
+    operations: Vec<DatabaseOperation>,
+    db: &'a SledDb,
+}
 
 impl SledDb {
     pub fn open(db_path: impl AsRef<Path>, tree: &str) -> Result<SledDb, sled::Error> {
@@ -105,6 +114,126 @@ impl IDatabase for SledDb {
         self.inner().flush().expect("DB failure");
         ret
     }
+
+    fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + 'a> {
+        Box::new(SledTransaction {
+            operations: Vec::new(),
+            db: self,
+        })
+    }
+}
+
+impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
+    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let val = self.raw_get_bytes(key);
+        self.operations
+            .push(DatabaseOperation::Insert(DatabaseInsertOperation {
+                key: key.to_vec(),
+                value: value,
+            }));
+        val
+    }
+
+    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let mut val: Option<Vec<u8>> = None;
+        let mut deleted = false;
+        // First iterate through pending writes to support "read our own writes"
+        for op in &self.operations {
+            match op {
+                DatabaseOperation::Insert(insert_op) if insert_op.key == key => {
+                    deleted = false;
+                    val = Some(insert_op.value.clone());
+                }
+                DatabaseOperation::Delete(delete_op) if delete_op.key == key => {
+                    deleted = true;
+                }
+                _ => {}
+            }
+        }
+
+        if deleted {
+            return Ok(None);
+        }
+
+        if val.is_some() {
+            return Ok(val);
+        }
+
+        Ok(self
+            .db
+            .inner()
+            .get(key)
+            .map_err(anyhow::Error::from)?
+            .map(|bytes| bytes.to_vec()))
+    }
+
+    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()> {
+        self.operations
+            .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
+                key: key.to_vec(),
+            }));
+        Ok(())
+    }
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        let mut val: BTreeMap<Vec<u8>, Result<(Vec<u8>, Vec<u8>)>> = BTreeMap::new();
+        // First iterate through pending writes to support "read our own writes"
+        for op in &self.operations {
+            match op {
+                DatabaseOperation::Insert(insert_op) if insert_op.key.starts_with(key_prefix) => {
+                    val.insert(
+                        insert_op.key.clone(),
+                        Ok((insert_op.key.clone(), insert_op.value.clone())),
+                    );
+                }
+                DatabaseOperation::Delete(delete_op)
+                    if delete_op.key.starts_with(key_prefix)
+                        && val.contains_key(&delete_op.key) =>
+                {
+                    val.remove(&delete_op.key);
+                }
+                _ => {}
+            }
+        }
+
+        let mut dbscan: Vec<Result<(Vec<u8>, Vec<u8>), anyhow::Error>> = self
+            .db
+            .inner()
+            .scan_prefix(key_prefix)
+            .map(|res| {
+                res.map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                    .map_err(anyhow::Error::from)
+            })
+            .collect();
+
+        let mut values: Vec<Result<(Vec<u8>, Vec<u8>), anyhow::Error>> =
+            val.into_values().collect();
+        dbscan.append(&mut values);
+        Box::new(dbscan.into_iter())
+    }
+
+    fn commit_tx(self: Box<Self>) -> Result<()> {
+        let ret = self
+            .db
+            .inner()
+            .transaction::<_, _, TransactionError>(|t| {
+                for op in self.operations.iter() {
+                    match op {
+                        DatabaseOperation::Insert(insert_op) => {
+                            t.insert(insert_op.key.clone(), insert_op.value.clone())?;
+                        }
+                        DatabaseOperation::Delete(delete_op) => {
+                            t.remove(delete_op.key.clone())?;
+                        }
+                    }
+                }
+                Ok(())
+            })
+            .map_err(anyhow::Error::from);
+
+        self.db.inner().flush().expect("DB failure");
+        ret
+    }
 }
 
 #[cfg(test)]
@@ -118,5 +247,15 @@ mod tests {
             .unwrap();
         let db = SledDb::open(path, "default").unwrap();
         fedimint_api::db::test_db_impl(db.into());
+    }
+
+    #[test_log::test]
+    fn test_basic_dbtx_rw() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-sled-test")
+            .tempdir()
+            .unwrap();
+        let db = SledDb::open(path, "default").unwrap();
+        fedimint_api::db::test_dbtx_impl(db.into());
     }
 }
