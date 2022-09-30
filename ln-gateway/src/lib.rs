@@ -1,5 +1,6 @@
 pub mod cln;
-pub mod rpc;
+pub mod ln;
+pub mod messaging;
 pub mod webserver;
 
 use std::{
@@ -13,12 +14,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Error;
 use async_trait::async_trait;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
+use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_server::{
     config::load_from_file,
@@ -33,13 +34,14 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot, Mutex},
+    sync::{mpsc, oneshot},
     task::JoinHandle,
 };
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    rpc::{GatewayRpcReceiver, LightningError, LnRpc},
+    ln::{LightningError, LnRpc},
+    messaging::{GatewayMessageChannel, GatewayMessageReceiver},
     webserver::run_webserver,
 };
 
@@ -350,7 +352,7 @@ impl GatewayRpcServer {
 }
 
 #[async_trait]
-impl GatewayRpcReceiver for GatewayRpcServer {
+impl GatewayMessageReceiver for GatewayRpcServer {
     async fn receive(&mut self) {
         for fetch_result in self.federation_client.fetch_all_coins().await {
             if let Err(e) = fetch_result {
@@ -393,35 +395,6 @@ impl GatewayRpcReceiver for GatewayRpcServer {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct OneshotGatewayRpcSender {
-    sender: Arc<Mutex<mpsc::Sender<GatewayRequest>>>,
-}
-
-impl OneshotGatewayRpcSender {
-    pub fn new(sender: &mpsc::Sender<GatewayRequest>) -> Self {
-        Self {
-            sender: Arc::new(Mutex::new(sender.clone().to_owned())),
-        }
-    }
-
-    // TODO: Implement send as GatewayRpcReceiver trait?
-    async fn send<R>(&self, message: R) -> std::result::Result<R::Response, Error>
-    where
-        R: GatewayRequestTrait,
-    {
-        let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
-        let msg = message.to_enum(sender);
-
-        let gw_sender = { self.sender.lock().await.clone() };
-        gw_sender
-            .send(msg)
-            .await
-            .expect("failed to send over channel");
-        Ok(receiver.await.expect("Failed to send over channel")?)
-    }
-}
-
 pub struct LnGateway {
     ln_client: Option<Arc<dyn LnRpc>>,
     servers: Vec<Rc<RefCell<GatewayRpcServer>>>,
@@ -439,7 +412,7 @@ impl LnGateway {
 
     pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<()>
     where
-        F: Fn(OneshotGatewayRpcSender) -> R + 'static,
+        F: Fn(GatewayMessageChannel) -> R + 'static,
         R: Future<
                 Output = std::result::Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), anyhow::Error>,
             > + 'static,
@@ -450,7 +423,7 @@ impl LnGateway {
             mpsc::channel(100);
 
         // Instantiate and register an lightning RPC client
-        let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(OneshotGatewayRpcSender::new(&sender))
+        let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(GatewayMessageChannel::new(&sender))
             .await
             .expect("Failed to register RPC");
         self.ln_client = Some(ln_rpc.clone());
@@ -506,7 +479,10 @@ impl LnGateway {
         bind_addr: SocketAddr,
     ) -> Result<()> {
         // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(bind_addr, sender.clone()));
+        let webserver = tokio::spawn(run_webserver(
+            GatewayMessageChannel::new(&sender),
+            bind_addr,
+        ));
         self.webserver = Some(webserver);
         Ok(())
     }

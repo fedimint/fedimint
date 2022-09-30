@@ -21,9 +21,8 @@ use tracing::{debug, error, instrument};
 use url::Url;
 
 use crate::{
-    rpc::{LightningError, LnRpc},
-    BalancePayload, DepositAddressPayload, DepositPayload, OneshotGatewayRpcSender,
-    WithdrawPayload,
+    ln::{LightningError, LnRpc},
+    BalancePayload, DepositAddressPayload, DepositPayload, GatewayMessageChannel, WithdrawPayload,
 };
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
@@ -115,7 +114,7 @@ impl LnRpc for Mutex<cln_rpc::ClnRpc> {
     }
 }
 
-type PluginState = OneshotGatewayRpcSender;
+type PluginState = GatewayMessageChannel;
 
 /// Handle core-lightning "htlc_accepted" events by attempting to buy this preimage from the federation
 /// and completing the payment
@@ -175,7 +174,7 @@ async fn withdraw_rpc(
 /// * The Ln Rpc bind address
 /// * Working directory hosting the rpc config path
 pub async fn build_cln_rpc(
-    sender: OneshotGatewayRpcSender,
+    sender: GatewayMessageChannel,
 ) -> Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), Error> {
     // Register this plugin with core-lightning
     if let Some(plugin) = Builder::new(sender, stdin(), stdout())
