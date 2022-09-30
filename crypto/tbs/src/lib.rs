@@ -3,8 +3,11 @@
 //! This library implements an ad-hoc threshold blind signature scheme based on BLS signatures using
 //! the (unrelated) BLS12-381 curve.
 
-use crate::hash::{hash_bytes_to_curve, hash_to_curve};
-use crate::poly::Poly;
+use std::hash::Hasher;
+
+pub use bls12_381::G1Affine as MessagePoint;
+pub use bls12_381::G2Affine as PubKeyPoint;
+pub use bls12_381::Scalar;
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective};
 use ff::Field;
 use group::Curve;
@@ -13,11 +16,9 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::digest::generic_array::typenum::U32;
 use sha3::Digest;
-use std::hash::Hasher;
 
-pub use bls12_381::G1Affine as MessagePoint;
-pub use bls12_381::G2Affine as PubKeyPoint;
-pub use bls12_381::Scalar;
+use crate::hash::{hash_bytes_to_curve, hash_to_curve};
+use crate::poly::Poly;
 
 pub mod hash;
 pub mod poly;

@@ -1,11 +1,13 @@
-use super::batch::{BatchItem, DbBatch};
-use super::IDatabase;
-use crate::db::PrefixIter;
-use anyhow::Result;
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::Mutex;
+
+use anyhow::Result;
 use tracing::error;
+
+use super::batch::{BatchItem, DbBatch};
+use super::IDatabase;
+use crate::db::PrefixIter;
 
 #[derive(Debug, Default)]
 pub struct MemDatabase {

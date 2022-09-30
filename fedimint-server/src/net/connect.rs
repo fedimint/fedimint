@@ -1,19 +1,21 @@
 //! Provides an abstract network connection interface and multiple implementations
 
-use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
-use async_trait::async_trait;
-use fedimint_api::PeerId;
-use futures::Stream;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::pin::Pin;
 use std::sync::Arc;
+
+use async_trait::async_trait;
+use fedimint_api::PeerId;
+use futures::Stream;
 use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+
+use crate::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
 /// Shared [`Connector`] trait object
 pub type SharedAnyConnector<M> = Arc<dyn Connector<M> + Send + Sync + Unpin + 'static>;
@@ -216,22 +218,24 @@ where
 /// Fake network stack used in tests
 #[allow(unused_imports)]
 pub mod mock {
-    use crate::net::connect::{ConnectResult, Connector};
-    use crate::net::framed::{BidiFramed, FramedTransport};
-    use anyhow::Error;
-    use fedimint_api::PeerId;
-    use futures::{FutureExt, SinkExt, Stream, StreamExt};
     use std::collections::HashMap;
     use std::fmt::Debug;
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::Arc;
     use std::time::Duration;
+
+    use anyhow::Error;
+    use fedimint_api::PeerId;
+    use futures::{FutureExt, SinkExt, Stream, StreamExt};
     use tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
     };
     use tokio::sync::mpsc::Sender;
     use tokio::sync::Mutex;
+
+    use crate::net::connect::{ConnectResult, Connector};
+    use crate::net::framed::{BidiFramed, FramedTransport};
 
     pub struct MockNetwork {
         clients: Arc<Mutex<HashMap<String, Sender<DuplexStream>>>>,
@@ -399,12 +403,13 @@ pub mod mock {
 
 #[cfg(test)]
 mod tests {
+    use fedimint_api::PeerId;
+    use futures::{SinkExt, StreamExt};
+
     use crate::config::gen_cert_and_key;
     use crate::net::connect::{ConnectionListener, TlsConfig};
     use crate::net::framed::AnyFramedTransport;
     use crate::{Connector, TlsTcpConnector};
-    use fedimint_api::PeerId;
-    use futures::{SinkExt, StreamExt};
 
     fn gen_connector_config(count: usize) -> Vec<TlsConfig> {
         let peer_keys = (0..count)

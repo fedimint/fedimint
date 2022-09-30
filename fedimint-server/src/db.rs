@@ -1,10 +1,12 @@
-use crate::consensus::AcceptedTransaction;
-use crate::transaction::Transaction;
+use std::fmt::Debug;
+
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
-use std::fmt::Debug;
+
+use crate::consensus::AcceptedTransaction;
+use crate::transaction::Transaction;
 
 pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;
 pub const DB_PREFIX_ACCEPTED_TRANSACTION: u8 = 0x02;

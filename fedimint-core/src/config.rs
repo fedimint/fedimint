@@ -1,9 +1,10 @@
+use std::path::Path;
+
 use fedimint_ln::config::LightningModuleClientConfig;
 use fedimint_mint::config::MintClientConfig;
 use fedimint_wallet::config::WalletClientConfig;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use url::Url;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

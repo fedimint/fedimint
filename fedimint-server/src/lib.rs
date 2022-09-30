@@ -5,28 +5,25 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api::rand::Rand07Compat;
-use hbbft::honey_badger::{HoneyBadger, Message};
-use hbbft::{Epoched, NetworkInfo, Target};
-
-use rand::rngs::OsRng;
-use rand::{CryptoRng, RngCore};
-use tokio::sync::Notify;
-use tokio::task::spawn;
-use tracing::{info, warn};
-
 use config::ServerConfig;
+use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::Database;
+use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{NumPeers, PeerId};
+use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
 use fedimint_core::modules::wallet::Wallet;
-
-use fedimint_api::config::GenerateConfig;
-use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
+use hbbft::honey_badger::{HoneyBadger, Message};
+use hbbft::{Epoched, NetworkInfo, Target};
 use mint_client::api::{IFederationApi, WsFederationApi};
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use tokio::sync::Notify;
+use tokio::task::spawn;
+use tracing::{info, warn};
 
 use crate::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,

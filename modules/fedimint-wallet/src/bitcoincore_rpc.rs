@@ -1,5 +1,6 @@
-use crate::bitcoind::IBitcoindRpc;
-use crate::{bitcoind::BitcoindRpc, Feerate};
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -7,9 +8,10 @@ use bitcoincore_rpc::Auth;
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::module::__reexports::serde_json::Value;
 use serde::Deserialize;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 use tracing::warn;
+
+use crate::bitcoind::IBitcoindRpc;
+use crate::{bitcoind::BitcoindRpc, Feerate};
 
 pub fn make_bitcoind_rpc(cfg: &BitcoindRpcCfg) -> Result<BitcoindRpc, bitcoincore_rpc::Error> {
     let bitcoind_client = bitcoincore_rpc::Client::new(

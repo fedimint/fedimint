@@ -1,9 +1,8 @@
-use crate::config::MintConfig;
-use crate::db::{
-    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
-    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
-    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::hash::Hash;
+use std::iter::FromIterator;
+use std::ops::Sub;
+
 use async_trait::async_trait;
 use fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::Database;
@@ -19,17 +18,19 @@ use itertools::Itertools;
 use rand::{CryptoRng, RngCore};
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
-
-use std::hash::Hash;
-use std::iter::FromIterator;
-use std::ops::Sub;
 use tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
     PublicKeyShare, SecretKeyShare,
 };
 use thiserror::Error;
 use tracing::{debug, error, warn};
+
+use crate::config::MintConfig;
+use crate::db::{
+    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
+    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
+};
 
 pub mod config;
 
@@ -731,13 +732,14 @@ impl From<InvalidAmountTierError> for MintError {
 
 #[cfg(test)]
 mod test {
-    use crate::config::{FeeConsensus, MintClientConfig};
-    use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
     use fedimint_api::config::GenerateConfig;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::{Amount, PeerId, TieredMulti};
     use rand::rngs::OsRng;
     use tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+
+    use crate::config::{FeeConsensus, MintClientConfig};
+    use crate::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
 
     const THRESHOLD: usize = 1;
     const MINTS: usize = 5;

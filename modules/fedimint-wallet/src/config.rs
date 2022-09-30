@@ -1,12 +1,14 @@
-use crate::keys::CompressedPublicKey;
-use crate::{Feerate, PegInDescriptor};
+use std::collections::BTreeMap;
+
 use bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 use bitcoin::Network;
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{NumPeers, PeerId};
 use miniscript::descriptor::Wsh;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
+use crate::keys::CompressedPublicKey;
+use crate::{Feerate, PegInDescriptor};
 
 const FINALITY_DELAY: u32 = 10;
 

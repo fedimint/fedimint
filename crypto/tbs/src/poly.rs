@@ -1,9 +1,11 @@
-use crate::FromRandom;
-use ff::Field;
-use rand::RngCore;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Mul, MulAssign};
+
+use ff::Field;
+use rand::RngCore;
+
+use crate::FromRandom;
 
 #[derive(Debug)]
 pub struct Poly<G, S>

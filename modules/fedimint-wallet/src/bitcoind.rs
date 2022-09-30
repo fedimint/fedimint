@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use crate::Feerate;
 use async_trait::async_trait;
 use bitcoin::{BlockHash, Transaction};
 use fedimint_api::dyn_newtype_define;
+
+use crate::Feerate;
 
 /// Trait that allows interacting with the Bitcoin blockchain
 ///
@@ -52,13 +53,15 @@ dyn_newtype_define! {
 
 #[allow(dead_code)]
 pub mod test {
-    use super::IBitcoindRpc;
-    use crate::Feerate;
+    use std::collections::{HashMap, VecDeque};
+    use std::sync::{Arc, Mutex};
+
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
-    use std::collections::{HashMap, VecDeque};
-    use std::sync::{Arc, Mutex};
+
+    use super::IBitcoindRpc;
+    use crate::Feerate;
 
     #[derive(Debug, Default)]
     pub struct FakeBitcoindRpcState {

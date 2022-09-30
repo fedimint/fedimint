@@ -2,17 +2,18 @@ pub mod audit;
 pub mod interconnect;
 pub mod testing;
 
-use crate::db::batch::BatchTx;
-use crate::{Amount, PeerId};
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use rand::CryptoRng;
 use secp256k1_zkp::rand::RngCore;
 use secp256k1_zkp::XOnlyPublicKey;
-use std::collections::HashSet;
 
+use crate::db::batch::BatchTx;
 use crate::module::audit::Audit;
 use crate::module::interconnect::ModuleInterconect;
+use crate::{Amount, PeerId};
 
 pub struct InputMeta<'a> {
     pub amount: Amount,

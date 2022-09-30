@@ -1,12 +1,12 @@
+use std::path::Path;
+
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
 use fedimint_api::db::IDatabase;
 use fedimint_api::db::PrefixIter;
-use rocksdb::OptimisticTransactionDB;
-use std::path::Path;
-use tracing::{error, trace};
-
 pub use rocksdb;
+use rocksdb::OptimisticTransactionDB;
+use tracing::{error, trace};
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);

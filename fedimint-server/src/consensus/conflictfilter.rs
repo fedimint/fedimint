@@ -1,10 +1,12 @@
-use crate::transaction::{Input, Output, Transaction};
+use std::collections::HashSet;
+
 use fedimint_api::TieredMulti;
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};
 use fedimint_core::modules::ln::ContractOrOfferOutput;
 use fedimint_core::modules::mint::Note;
 use fedimint_core::modules::wallet::txoproof::PegInProof;
-use std::collections::HashSet;
+
+use crate::transaction::{Input, Output, Transaction};
 
 pub trait ConflictFilterable<T>
 where

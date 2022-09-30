@@ -1,7 +1,9 @@
-use crate::PeerId;
+use std::collections::BTreeMap;
+
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+
+use crate::PeerId;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
 pub trait GenerateConfig: Sized {

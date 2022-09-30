@@ -1,11 +1,13 @@
-use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
+use std::io::Error;
+
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
-use std::io::Error;
+
+use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContractOffer {

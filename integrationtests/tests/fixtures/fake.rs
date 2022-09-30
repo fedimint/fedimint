@@ -9,16 +9,15 @@ use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
     secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, Transaction, TxOut,
 };
-use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
-use rand::rngs::OsRng;
-
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
 use fedimint_wallet::bitcoind::IBitcoindRpc;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::Feerate;
+use lightning::ln::PaymentSecret;
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
 use ln_gateway::ln::{LightningError, LnRpc};
+use rand::rngs::OsRng;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 

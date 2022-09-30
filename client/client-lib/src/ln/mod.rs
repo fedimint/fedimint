@@ -3,11 +3,8 @@ pub mod db;
 pub mod incoming;
 pub mod outgoing;
 
-use crate::api::ApiError;
-use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
-use crate::ln::incoming::IncomingContractAccount;
-use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
-use crate::utils::ClientContext;
+use std::time::Duration;
+
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::task::timeout;
@@ -23,11 +20,15 @@ use fedimint_core::modules::ln::{
 };
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
-use std::time::Duration;
 use thiserror::Error;
 
 use self::db::ConfirmedInvoiceKey;
 use self::incoming::ConfirmedInvoice;
+use crate::api::ApiError;
+use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
+use crate::ln::incoming::IncomingContractAccount;
+use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
+use crate::utils::ClientContext;
 
 pub struct LnClient<'c> {
     pub config: &'c LightningModuleClientConfig,
@@ -252,9 +253,8 @@ pub enum LnClientError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::IFederationApi;
-    use crate::ln::LnClient;
-    use crate::ClientContext;
+    use std::sync::Arc;
+
     use async_trait::async_trait;
     use bitcoin::Address;
     use fedimint_api::db::batch::DbBatch;
@@ -271,9 +271,12 @@ mod tests {
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
     use lightning_invoice::Invoice;
-    use std::sync::Arc;
     use threshold_crypto::PublicKey;
     use url::Url;
+
+    use crate::api::IFederationApi;
+    use crate::ln::LnClient;
+    use crate::ClientContext;
 
     type Fed = FakeFed<LightningModule, LightningModuleClientConfig>;
 

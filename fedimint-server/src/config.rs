@@ -1,21 +1,20 @@
-use fedimint_api::rand::Rand07Compat;
-pub use fedimint_core::config::*;
+use std::collections::{BTreeMap, HashMap};
 
-use crate::net::peers::{ConnectionConfig, NetworkConfig};
 use fedimint_api::config::GenerateConfig;
+use fedimint_api::rand::Rand07Compat;
 use fedimint_api::PeerId;
+pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
 use fedimint_core::modules::mint::config::MintConfig;
 use fedimint_core::modules::wallet::config::WalletConfig;
 use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+use tokio_rustls::rustls;
 use url::Url;
 
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-
 use crate::net::connect::TlsConfig;
-use tokio_rustls::rustls;
+use crate::net::peers::{ConnectionConfig, NetworkConfig};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -261,9 +260,10 @@ pub(crate) fn gen_cert_and_key(
 }
 
 mod serde_tls_cert {
+    use std::borrow::Cow;
+
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::borrow::Cow;
     use tokio_rustls::rustls;
 
     pub fn serialize<S>(cert: &rustls::Certificate, serializer: S) -> Result<S::Ok, S::Error>
@@ -285,9 +285,10 @@ mod serde_tls_cert {
 }
 
 mod serde_tls_key {
+    use std::borrow::Cow;
+
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::borrow::Cow;
     use tokio_rustls::rustls;
 
     pub fn serialize<S>(key: &rustls::PrivateKey, serializer: S) -> Result<S::Ok, S::Error>

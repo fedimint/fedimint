@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use clap::Parser;
 use fedimint_server::config::{load_from_file, ServerConfig};
 use fedimint_server::FedimintServer;
-
 use fedimint_wallet::bitcoincore_rpc;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;

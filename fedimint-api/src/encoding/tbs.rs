@@ -57,8 +57,9 @@ impl Decodable for tbs::BlindingKey {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::test_roundtrip;
     use tbs::{BlindedMessage, BlindingKey};
+
+    use super::super::tests::test_roundtrip;
 
     #[test_log::test]
     fn test_message_macro() {

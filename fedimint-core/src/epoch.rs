@@ -1,4 +1,5 @@
-use crate::transaction::Transaction;
+use std::collections::{BTreeMap, HashSet};
+
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -6,8 +7,9 @@ use fedimint_api::{BitcoinHash, FederationModule, PeerId};
 use fedimint_derive::UnzipConsensus;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
+
+use crate::transaction::Transaction;
 
 #[derive(
     Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
@@ -182,13 +184,15 @@ impl Decodable for EpochSignatureShare {
 
 #[cfg(test)]
 mod tests {
-    use crate::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
-    use crate::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
+    use std::collections::HashSet;
+
     use fedimint_api::rand::Rand07Compat;
     use fedimint_api::PeerId;
     use rand::rngs::OsRng;
-    use std::collections::HashSet;
     use threshold_crypto::{SecretKey, SecretKeySet};
+
+    use crate::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
+    use crate::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
 
     fn signed_history(
         epoch: u16,

@@ -7,15 +7,13 @@ use bitcoin::secp256k1;
 use bitcoin::{Address, Transaction};
 use bitcoincore_rpc::Client;
 use bitcoincore_rpc::{Auth, RpcApi};
-
 use clightningrpc::LightningRPC;
-use fedimint_api::Amount;
-use lightning_invoice::Invoice;
-use serde::Serialize;
-
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::encoding::Decodable;
+use fedimint_api::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
+use lightning_invoice::Invoice;
+use serde::Serialize;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 

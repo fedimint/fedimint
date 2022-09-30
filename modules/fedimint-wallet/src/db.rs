@@ -1,10 +1,11 @@
-use crate::{
-    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-};
 use bitcoin::{BlockHash, Txid};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use secp256k1::ecdsa::Signature;
+
+use crate::{
+    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+};
 
 const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
 const DB_PREFIX_UTXO: u8 = 0x31;

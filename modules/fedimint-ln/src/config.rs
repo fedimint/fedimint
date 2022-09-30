@@ -1,9 +1,10 @@
+use std::collections::BTreeMap;
+
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningModuleConfig {

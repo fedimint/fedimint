@@ -1,6 +1,8 @@
-use crate::encoding::{Decodable, DecodeError, Encodable};
-use bitcoin::hashes::Hash as BitcoinHash;
 use std::io::Error;
+
+use bitcoin::hashes::Hash as BitcoinHash;
+
+use crate::encoding::{Decodable, DecodeError, Encodable};
 
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
@@ -81,10 +83,12 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
 
 #[cfg(test)]
 mod tests {
-    use crate::encoding::{Decodable, Encodable};
-    use bitcoin::hashes::Hash as BitcoinHash;
     use std::io::Cursor;
     use std::str::FromStr;
+
+    use bitcoin::hashes::Hash as BitcoinHash;
+
+    use crate::encoding::{Decodable, Encodable};
 
     #[test_log::test]
     fn sha256_roundtrip() {

@@ -14,37 +14,18 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
-use fedimint_api::Amount;
-use fedimint_api::FederationModule;
-use fedimint_api::OutPoint;
-use fedimint_api::PeerId;
-use futures::executor::block_on;
-use futures::future::{join_all, select_all};
-use hbbft::honey_badger::Batch;
-
-use fedimint_api::task::spawn;
-use fedimint_ln::LightningGateway;
-use fedimint_wallet::{bitcoincore_rpc, WalletConsensusItem};
-use itertools::Itertools;
-use lightning_invoice::Invoice;
-use ln_gateway::GatewayRequest;
-use rand::RngCore;
-
-use rand::rngs::OsRng;
-
-use tokio::sync::Mutex;
-
-use tracing::info;
-use tracing_subscriber::EnvFilter;
-use url::Url;
-
-use crate::fixtures::utils::LnRpcAdapter;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
+use fedimint_api::task::spawn;
+use fedimint_api::Amount;
+use fedimint_api::FederationModule;
+use fedimint_api::OutPoint;
+use fedimint_api::PeerId;
 use fedimint_api::TieredMulti;
+use fedimint_ln::LightningGateway;
 use fedimint_server::config::ServerConfigParams;
 use fedimint_server::config::{ClientConfig, ServerConfig};
 use fedimint_server::consensus::{ConsensusOutcome, ConsensusProposal};
@@ -59,11 +40,26 @@ use fedimint_wallet::config::WalletConfig;
 use fedimint_wallet::db::UTXOKey;
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::SpendableUTXO;
+use fedimint_wallet::{bitcoincore_rpc, WalletConsensusItem};
+use futures::executor::block_on;
+use futures::future::{join_all, select_all};
+use hbbft::honey_badger::Batch;
+use itertools::Itertools;
+use lightning_invoice::Invoice;
+use ln_gateway::GatewayRequest;
 use ln_gateway::LnGateway;
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
+use rand::rngs::OsRng;
+use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
+use tokio::sync::Mutex;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+use url::Url;
+
+use crate::fixtures::utils::LnRpcAdapter;
 
 mod fake;
 mod real;

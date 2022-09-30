@@ -1,7 +1,8 @@
-use crate::contracts::{ContractId, IdentifyableContract};
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
+
+use crate::contracts::{ContractId, IdentifyableContract};
 
 /// A generic contract to hold money in a pub key locked account
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]

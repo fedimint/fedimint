@@ -4,15 +4,6 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-
-use fixtures::{fixtures, rng, sats, secp, sha256};
-use futures::executor::block_on;
-use futures::future::{join_all, Either};
-use threshold_crypto::{SecretKey, SecretKeyShare};
-use tokio::time::timeout;
-use tracing::debug;
-
-use crate::fixtures::FederationTest;
 use fedimint_api::db::batch::DbBatch;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
@@ -22,8 +13,16 @@ use fedimint_server::epoch::ConsensusItem;
 use fedimint_server::transaction::Output;
 use fedimint_wallet::PegOutSignatureItem;
 use fedimint_wallet::WalletConsensusItem::PegOutSignature;
+use fixtures::{fixtures, rng, sats, secp, sha256};
+use futures::executor::block_on;
+use futures::future::{join_all, Either};
 use mint_client::transaction::TransactionBuilder;
 use mint_client::ClientError;
+use threshold_crypto::{SecretKey, SecretKeyShare};
+use tokio::time::timeout;
+use tracing::debug;
+
+use crate::fixtures::FederationTest;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_in_and_peg_out_with_fees() {

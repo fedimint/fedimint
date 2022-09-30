@@ -1,6 +1,6 @@
-use crate::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
-
 use std::fmt::{Display, Formatter};
+
+use crate::db::{Database, DatabaseKeyPrefix, DatabaseKeyPrefixConst};
 
 #[derive(Default)]
 pub struct Audit {

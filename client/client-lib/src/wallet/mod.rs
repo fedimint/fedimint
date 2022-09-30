@@ -1,4 +1,3 @@
-use crate::utils::ClientContext;
 use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
@@ -7,13 +6,14 @@ use fedimint_api::Amount;
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-
-use crate::ApiError;
 use fedimint_core::modules::wallet::PegOutOutcome;
 use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
+
+use crate::utils::ClientContext;
+use crate::ApiError;
 
 mod db;
 
@@ -142,17 +142,16 @@ pub enum WalletClientError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::IFederationApi;
-    use crate::wallet::WalletClient;
-    use crate::ClientContext;
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use std::time::Duration;
+
     use async_trait::async_trait;
     use bitcoin::{Address, Txid};
-
+    use bitcoin_hashes::Hash;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
-
-    use bitcoin_hashes::Hash;
     use fedimint_core::epoch::EpochHistory;
     use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
     use fedimint_core::modules::ln::contracts::ContractId;
@@ -167,10 +166,11 @@ mod tests {
     };
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
-    use std::str::FromStr;
-    use std::sync::Arc;
-    use std::time::Duration;
     use threshold_crypto::PublicKey;
+
+    use crate::api::IFederationApi;
+    use crate::wallet::WalletClient;
+    use crate::ClientContext;
 
     type Fed = FakeFed<Wallet, WalletClientConfig>;
     type SharedFed = Arc<tokio::sync::Mutex<Fed>>;
