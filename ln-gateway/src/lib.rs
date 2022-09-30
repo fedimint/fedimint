@@ -1,34 +1,47 @@
 pub mod cln;
-pub mod ln;
+pub mod rpc;
 pub mod webserver;
 
-use std::borrow::Cow;
-use std::net::SocketAddr;
 use std::{
+    borrow::Cow,
+    cell::RefCell,
     io::Cursor,
+    net::SocketAddr,
+    path::PathBuf,
+    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
 
+use anyhow::Error;
+use async_trait::async_trait;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
 use bitcoin_hashes::sha256;
-use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
-use fedimint_server::modules::ln::contracts::{ContractId, Preimage};
-use fedimint_server::modules::wallet::txoproof::TxOutProof;
+use fedimint_server::{
+    config::load_from_file,
+    modules::ln::contracts::{ContractId, Preimage},
+    modules::wallet::txoproof::TxOutProof,
+};
 use futures::Future;
-use mint_client::mint::MintClientError;
-use mint_client::{ClientError, GatewayClient, PaymentParameters};
+use mint_client::GatewayClient;
+use mint_client::PaymentParameters;
+use mint_client::{mint::MintClientError, Client, ClientError, GatewayClientConfig};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
-use tracing::{debug, error, instrument, warn};
-use webserver::run_webserver;
+use tokio::{
+    sync::{mpsc, oneshot, Mutex},
+    task::JoinHandle,
+};
+use tracing::{debug, instrument, warn};
 
-use crate::ln::{LightningError, LnRpc};
+use crate::{
+    rpc::{GatewayRpcReceiver, LightningError, LnRpc},
+    webserver::run_webserver,
+};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
@@ -110,29 +123,23 @@ where
     }
 }
 
-pub struct LnGateway {
+pub struct GatewayRpcServer {
     federation_client: Arc<GatewayClient>,
-    ln_client: Arc<dyn LnRpc>,
-    webserver: tokio::task::JoinHandle<axum::response::Result<()>>,
+    ln_rpc: Arc<dyn LnRpc>,
     receiver: mpsc::Receiver<GatewayRequest>,
 }
 
-impl LnGateway {
+impl GatewayRpcServer {
     pub fn new(
-        federation_client: Arc<GatewayClient>,
-        ln_client: Arc<dyn LnRpc>,
-        sender: mpsc::Sender<GatewayRequest>,
         receiver: mpsc::Receiver<GatewayRequest>,
-        bind_addr: SocketAddr,
+        federation_client: Arc<GatewayClient>,
+        ln_rpc: Arc<dyn LnRpc>,
     ) -> Self {
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(bind_addr, sender));
-
+        // TODO: support ln_rpc swaps in-flight, after instantiation
         Self {
-            federation_client,
-            ln_client,
-            webserver,
             receiver,
+            federation_client,
+            ln_rpc,
         }
     }
 
@@ -259,7 +266,7 @@ impl LnGateway {
         payment_params: &PaymentParameters,
     ) -> Result<Preimage> {
         match self
-            .ln_client
+            .ln_rpc
             .pay(
                 invoice,
                 payment_params.max_delay,
@@ -340,54 +347,179 @@ impl LnGateway {
             .map_err(LnGatewayError::ClientError)
             .map(|out_point| out_point.txid)
     }
+}
 
-    pub async fn run(&mut self) -> Result<()> {
-        // Regster gateway with federation
-        self.federation_client
-            .register_with_federation(self.federation_client.config().into())
+#[async_trait]
+impl GatewayRpcReceiver for GatewayRpcServer {
+    async fn receive(&mut self) {
+        for fetch_result in self.federation_client.fetch_all_coins().await {
+            if let Err(e) = fetch_result {
+                debug!(error = %e, "Fetching coins failed")
+            };
+        }
+
+        // Handle messages from webserver and plugin
+        while let Ok(msg) = self.receiver.try_recv() {
+            tracing::trace!("Gateway received message {:?}", msg);
+            match msg {
+                GatewayRequest::HtlcAccepted(inner) => {
+                    inner
+                        .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
+                        .await;
+                }
+                GatewayRequest::PayInvoice(inner) => {
+                    inner
+                        .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
+                        .await;
+                }
+                GatewayRequest::Balance(inner) => {
+                    inner.handle(|_| self.handle_balance_msg()).await;
+                }
+                GatewayRequest::DepositAddress(inner) => {
+                    inner.handle(|_| self.handle_address_msg()).await;
+                }
+                GatewayRequest::Deposit(inner) => {
+                    inner
+                        .handle(|deposit| self.handle_deposit_msg(deposit))
+                        .await;
+                }
+                GatewayRequest::Withdraw(inner) => {
+                    inner
+                        .handle(|withdraw| self.handle_withdraw_msg(withdraw))
+                        .await;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OneshotGatewayRpcSender {
+    sender: Arc<Mutex<mpsc::Sender<GatewayRequest>>>,
+}
+
+impl OneshotGatewayRpcSender {
+    pub fn new(sender: &mpsc::Sender<GatewayRequest>) -> Self {
+        Self {
+            sender: Arc::new(Mutex::new(sender.clone().to_owned())),
+        }
+    }
+
+    // TODO: Implement send as GatewayRpcReceiver trait?
+    async fn send<R>(&self, message: R) -> std::result::Result<R::Response, Error>
+    where
+        R: GatewayRequestTrait,
+    {
+        let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
+        let msg = message.to_enum(sender);
+
+        let gw_sender = { self.sender.lock().await.clone() };
+        gw_sender
+            .send(msg)
             .await
-            .expect("Failed to register with federation");
+            .expect("failed to send over channel");
+        Ok(receiver.await.expect("Failed to send over channel")?)
+    }
+}
 
+pub struct LnGateway {
+    ln_client: Option<Arc<dyn LnRpc>>,
+    servers: Vec<Rc<RefCell<GatewayRpcServer>>>,
+    webserver: Option<JoinHandle<axum::response::Result<()>>>,
+}
+
+impl LnGateway {
+    pub fn new() -> Self {
+        Self {
+            servers: Vec::new(),
+            ln_client: None,
+            webserver: None,
+        }
+    }
+
+    pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<()>
+    where
+        F: Fn(OneshotGatewayRpcSender) -> R + 'static,
+        R: Future<
+                Output = std::result::Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), anyhow::Error>,
+            > + 'static,
+    {
+        // TODO: define ln rpc factory signature to be generic over multiple LN implementations.
+
+        let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
+            mpsc::channel(100);
+
+        // Instantiate and register an lightning RPC client
+        let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(OneshotGatewayRpcSender::new(&sender))
+            .await
+            .expect("Failed to register RPC");
+        self.ln_client = Some(ln_rpc.clone());
+
+        // TODO: change direction of dependency and order of registration
+        //   to allow 1:N relationship between ln_rpc and gateway servers
+
+        // Instantiate a gateway rpc server unique to this federation
+        self.gateway_rpc_server_factory(receiver, ln_rpc, workdir)
+            .await
+            .expect("Failed to create gateway rpc server");
+
+        // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
+        // Run a webserver on the rpc bind address
+        self.run_webserver(&sender, bind_addr)
+            .expect("Failed to run webserver");
+
+        Ok(())
+    }
+
+    async fn gateway_rpc_server_factory(
+        &mut self,
+        receiver: mpsc::Receiver<GatewayRequest>,
+        ln_rpc: Arc<dyn LnRpc>,
+        workdir: PathBuf,
+    ) -> Result<()> {
+        // Assumes rpc servers are unique to each federation
+        // TODO: make
+        let cfg_path = workdir.join("gateway.json");
+        let db_path = workdir.join("gateway.db");
+
+        let client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
+        let db = fedimint_rocksdb::RocksDb::open(db_path)
+            .expect("Error opening DB")
+            .into();
+        let ctx = secp256k1::Secp256k1::new();
+        let client = Arc::new(Client::new(client_cfg, db, ctx));
+        client
+            .register_with_federation(client.config().into())
+            .await
+            .expect("Failed to register client with federation");
+
+        let fed_gateway = Rc::new(RefCell::new(GatewayRpcServer::new(
+            receiver, client, ln_rpc,
+        )));
+        self.servers.push(fed_gateway);
+        Ok(())
+    }
+
+    fn run_webserver(
+        &mut self,
+        sender: &mpsc::Sender<GatewayRequest>,
+        bind_addr: SocketAddr,
+    ) -> Result<()> {
+        // Run webserver asynchronously in tokio
+        let webserver = tokio::spawn(run_webserver(bind_addr, sender.clone()));
+        self.webserver = Some(webserver);
+        Ok(())
+    }
+
+    pub async fn run(self) -> Result<()> {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
+        // TODO: try run gateway rpc servers in parallel
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
-            for fetch_result in self.federation_client.fetch_all_coins().await {
-                if let Err(e) = fetch_result {
-                    debug!(error = %e, "Fetching coins failed")
-                };
-            }
 
             // Handle messages from webserver and plugin
-            while let Ok(msg) = self.receiver.try_recv() {
-                tracing::trace!("Gateway received message {:?}", msg);
-                match msg {
-                    GatewayRequest::HtlcAccepted(inner) => {
-                        inner
-                            .handle(|htlc_accepted| self.handle_htlc_incoming_msg(htlc_accepted))
-                            .await;
-                    }
-                    GatewayRequest::PayInvoice(inner) => {
-                        inner
-                            .handle(|contract_id| self.handle_pay_invoice_msg(contract_id))
-                            .await;
-                    }
-                    GatewayRequest::Balance(inner) => {
-                        inner.handle(|_| self.handle_balance_msg()).await;
-                    }
-                    GatewayRequest::DepositAddress(inner) => {
-                        inner.handle(|_| self.handle_address_msg()).await;
-                    }
-                    GatewayRequest::Deposit(inner) => {
-                        inner
-                            .handle(|deposit| self.handle_deposit_msg(deposit))
-                            .await;
-                    }
-                    GatewayRequest::Withdraw(inner) => {
-                        inner
-                            .handle(|withdraw| self.handle_withdraw_msg(withdraw))
-                            .await;
-                    }
-                }
+            for server in &self.servers {
+                server.borrow_mut().receive().await;
             }
 
             fedimint_api::task::sleep_until(least_wait_until).await;
@@ -397,8 +529,10 @@ impl LnGateway {
 
 impl Drop for LnGateway {
     fn drop(&mut self) {
-        self.webserver.abort();
-        let _ = futures::executor::block_on(&mut self.webserver);
+        if let Some(mut webserver) = self.webserver.take() {
+            webserver.abort();
+            let _ = futures::executor::block_on(&mut webserver);
+        }
     }
 }
 
@@ -410,6 +544,8 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
+    #[error("Other")]
+    Other(#[from] anyhow::Error),
 }
 
 pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
