@@ -44,7 +44,7 @@ The previous step has already set up an e-cash client with a funded wallet for y
 You can view your client's holdings using the `info` command:
 
 ```shell
-$ mint-client-cli info
+$ fedimint-cli info
 
 {
   "info": {
@@ -62,7 +62,7 @@ The `spend` subcommand allows sending notes to another client. This will select 
 The notes are base64 encoded into a token and printed as the `token` field.
 
 ```shell
-$ mint-client-cli spend 400000
+$ fedimint-cli spend 400000
 
 {
   "spend": {
@@ -74,7 +74,7 @@ $ mint-client-cli spend 400000
 The `validate` subcommand checks the validity of the signatures without claiming the notes. It does not check if the nonce is unspent. Validity will be printed as the `all_valid` boolean.
 
 ```shell
-$ mint-client-cli validate AQAAAAAAAABAQg8AAA...
+$ fedimint-cli validate AQAAAAAAAABAQg8AAA...
 
 {
   "validate": {
@@ -87,10 +87,10 @@ $ mint-client-cli validate AQAAAAAAAABAQg8AAA...
 A receiving client can now reissue these notes to claim them and avoid double spends:
 
 ```shell
-$ mint-client-cli reissue AQAAAAAAAABAQg8AAA...
+$ fedimint-cli reissue AQAAAAAAAABAQg8AAA...
 > ...
 
-$ mint-client-cli fetch
+$ fedimint-cli fetch
 
 {
   "fetch": {
@@ -135,7 +135,7 @@ $ ln2 invoice 100000 test test 1m
 Pay the invoice by copying the `bolt11` invoice field:
 
 ```shell
-$ mint-client-cli ln-pay "lnbcrt1u1p3vdl3ds..."
+$ fedimint-cli ln-pay "lnbcrt1u1p3vdl3ds..."
 ```
 
 Confirm the invoice was paid
@@ -156,7 +156,7 @@ $ ln2 listinvoices test
 
 Create our own invoice:
 ```shell
-$ mint-client-cli ln-invoice 1000 "description"
+$ fedimint-cli ln-invoice 1000 "description"
 
 {
   "ln_invoice": {
@@ -174,9 +174,9 @@ $ ln2 pay lnbcrt1u1p3vcp...
 Have mint client check that payment succeeded, fetch notes, and display new balances:
 
 ```shell
-$ mint-client-cli wait-invoice lnbcrt1u1p3vcp...
-$ mint-client-cli fetch
-$ mint-client-cli info
+$ fedimint-cli wait-invoice lnbcrt1u1p3vcp...
+$ fedimint-cli fetch
+$ fedimint-cli info
 ```
 
 ### Other options
@@ -184,12 +184,12 @@ $ mint-client-cli info
 There also exist some other, more experimental commands that can be explored using the `--help` flag:
 
 ```shell
-$ mint-client-cli help
+$ fedimint-cli help
 
-mint-client-cli 
+fedimint-cli 
 
 USAGE:
-    mint-client-cli <WORKDIR> <SUBCOMMAND>
+    fedimint-cli <WORKDIR> <SUBCOMMAND>
 
 ARGS:
     <WORKDIR>    
