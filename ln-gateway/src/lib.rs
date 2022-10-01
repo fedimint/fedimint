@@ -125,13 +125,13 @@ where
     }
 }
 
-pub struct GatewayRpcServer {
+pub struct GatewayActor {
     federation_client: Arc<GatewayClient>,
     ln_rpc: Arc<dyn LnRpc>,
     receiver: mpsc::Receiver<GatewayRequest>,
 }
 
-impl GatewayRpcServer {
+impl GatewayActor {
     pub fn new(
         receiver: mpsc::Receiver<GatewayRequest>,
         federation_client: Arc<GatewayClient>,
@@ -352,7 +352,7 @@ impl GatewayRpcServer {
 }
 
 #[async_trait]
-impl GatewayMessageReceiver for GatewayRpcServer {
+impl GatewayMessageReceiver for GatewayActor {
     async fn receive(&mut self) {
         for fetch_result in self.federation_client.fetch_all_coins().await {
             if let Err(e) = fetch_result {
@@ -397,14 +397,14 @@ impl GatewayMessageReceiver for GatewayRpcServer {
 
 pub struct LnGateway {
     ln_client: Option<Arc<dyn LnRpc>>,
-    servers: Vec<Rc<RefCell<GatewayRpcServer>>>,
+    actors: Vec<Rc<RefCell<GatewayActor>>>,
     webserver: Option<JoinHandle<axum::response::Result<()>>>,
 }
 
 impl LnGateway {
     pub fn new() -> Self {
         Self {
-            servers: Vec::new(),
+            actors: Vec::new(),
             ln_client: None,
             webserver: None,
         }
@@ -431,8 +431,8 @@ impl LnGateway {
         // TODO: change direction of dependency and order of registration
         //   to allow 1:N relationship between ln_rpc and gateway servers
 
-        // Instantiate a gateway rpc server unique to this federation
-        self.gateway_rpc_server_factory(receiver, ln_rpc, workdir)
+        // Instantiate a gateway actor unique to this federation
+        self.gateway_actor_factory(receiver, ln_rpc, workdir)
             .await
             .expect("Failed to create gateway rpc server");
 
@@ -444,14 +444,12 @@ impl LnGateway {
         Ok(())
     }
 
-    async fn gateway_rpc_server_factory(
+    async fn gateway_actor_factory(
         &mut self,
         receiver: mpsc::Receiver<GatewayRequest>,
         ln_rpc: Arc<dyn LnRpc>,
         workdir: PathBuf,
     ) -> Result<()> {
-        // Assumes rpc servers are unique to each federation
-        // TODO: make
         let cfg_path = workdir.join("gateway.json");
         let db_path = workdir.join("gateway.db");
 
@@ -466,10 +464,8 @@ impl LnGateway {
             .await
             .expect("Failed to register client with federation");
 
-        let fed_gateway = Rc::new(RefCell::new(GatewayRpcServer::new(
-            receiver, client, ln_rpc,
-        )));
-        self.servers.push(fed_gateway);
+        let fed_gateway = Rc::new(RefCell::new(GatewayActor::new(receiver, client, ln_rpc)));
+        self.actors.push(fed_gateway);
         Ok(())
     }
 
@@ -489,13 +485,13 @@ impl LnGateway {
 
     pub async fn run(self) -> Result<()> {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
-        // TODO: try run gateway rpc servers in parallel
+        // TODO: try run gateway rpc actors in parallel
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
 
             // Handle messages from webserver and plugin
-            for server in &self.servers {
-                server.borrow_mut().receive().await;
+            for actor in &self.actors {
+                actor.borrow_mut().receive().await;
             }
 
             fedimint_api::task::sleep_until(least_wait_until).await;
