@@ -155,9 +155,9 @@ jobs:
           nix build -L .#container.ln-gateway-clightning
           echo "ln_gateway_clightning_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
-      - name: Build mint-client-cli container
+      - name: Build fedimint-cli container
         run: |
-          nix build -L .#container.mint-client-cli
+          nix build -L .#container.fedimint-cli
           echo "mint_client_cli_container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Login to Docker Hub
@@ -172,4 +172,4 @@ jobs:
         run: |
           nix_tag=${{ env.fedimintd_container_tag }} && hub_tag="fedimint/fedimintd:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
           nix_tag=${{ env.ln_gateway_clightning_container_tag }} && hub_tag="fedimint/ln-gateway-clightning:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
-          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/mint-client-cli:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"
+          nix_tag=${{ env.mint_client_cli_container_tag }} && hub_tag="fedimint/fedimint-cli:${GITHUB_SHA}" && docker tag "$nix_tag" "$hub_tag" && docker push "$hub_tag"

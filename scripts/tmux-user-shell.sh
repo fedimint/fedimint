@@ -24,9 +24,9 @@ scripts/pegin.sh 20000.0 1 > /dev/null 2>&1
 echo Done!
 echo
 echo "This shell provides the following commands:"
-echo "  mint-client-cli:  cli client to interact with the federation"
+echo "  fedimint-cli:  cli client to interact with the federation"
 echo "  ln1, ln2:     cli clients for the two lightning nodes (1 is gateway)"
 echo "  btc_client:   cli client for bitcoind"
 echo
-echo Use mint-client-cli as follows:
-mint-client-cli --help
+echo Use fedimint-cli as follows:
+fedimint-cli --help
