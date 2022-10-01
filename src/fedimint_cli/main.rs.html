@@ -927,7 +927,20 @@
         .with_writer(std::io::stderr)
         .init();
 
-    <span class="kw">if let </span><span class="prelude-val">Ok</span>(cli) = Cli::try_parse() {
+    <span class="kw">if let </span><span class="prelude-val">Ok</span>(cli) = CliNoWorkdir::try_parse() {
+        <span class="comment">// Only commands that don&#39;t need the workdir can be used here
+        //TODO: remove allow when there are more commands
+        </span><span class="attribute">#[allow(irrefutable_let_patterns)]
+        </span><span class="kw">if let </span>CommandNoWorkdir::VersionHash = cli.command {
+            <span class="macro">println!</span>(
+                <span class="string">&quot;{}&quot;</span>,
+                CliOutput::VersionHash {
+                    hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string()
+                }
+            );
+        };
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>cli = Cli::parse();
         <span class="kw">if let </span>Command::JoinFederation { connect } = cli.command {
             <span class="kw">let </span>connect_obj: WsFederationConnect = serde_json::from_str(<span class="kw-2">&amp;</span>connect)
                 .or_terminate(CliErrorKind::InvalidValue, <span class="string">&quot;invalid connect info&quot;</span>);
@@ -982,19 +995,6 @@
                 exit(<span class="number">1</span>);
             }
         }
-    } <span class="kw">else </span>{
-        <span class="comment">// Only commands that don&#39;t need the workdir can be used here
-        </span><span class="kw">let </span>cli = CliNoWorkdir::parse();
-        <span class="comment">//TODO: remove allow when there are more commands
-        </span><span class="attribute">#[allow(irrefutable_let_patterns)]
-        </span><span class="kw">if let </span>CommandNoWorkdir::VersionHash = cli.command {
-            <span class="macro">println!</span>(
-                <span class="string">&quot;{}&quot;</span>,
-                CliOutput::VersionHash {
-                    hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string()
-                }
-            );
-        };
     }
 }
 
