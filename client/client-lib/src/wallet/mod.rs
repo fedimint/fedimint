@@ -148,6 +148,7 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::{Address, Txid};
 
+    use fedimint_api::config::BitcoindRpcCfg;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::module::testing::FakeFed;
     use fedimint_api::{OutPoint, TransactionId};
@@ -268,7 +269,11 @@ mod tests {
                             .unwrap()
                     }
                 },
-                &(),
+                &BitcoindRpcCfg {
+                    btc_rpc_address: "127.0.0.1".into(),
+                    btc_rpc_user: "bitcoin".into(),
+                    btc_rpc_pass: "bitcoin".into(),
+                },
             )
             .await,
         ));

@@ -1,9 +1,9 @@
 [package]
-name = "mint-client-cli"
+name = "fedimint-cli"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "mint-client-cli is a command line interface wrapper for the client library."
+description = "fedimint-cli is a command line interface wrapper for the client library."
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,7 +12,7 @@ name = "mint-rpc-client"
 path = "src/bin/mint-rpc-client.rs"
 
 [[bin]]
-name = "mint-client-cli"
+name = "fedimint-cli"
 path = "src/main.rs"
 
 [dependencies]

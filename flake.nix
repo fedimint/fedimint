@@ -466,9 +466,9 @@
           ];
         };
 
-        mint-client-cli = pkg {
-          name = "mint-client-cli";
-          bin = "mint-client-cli";
+        fedimint-cli = pkg {
+          name = "fedimint-cli";
+          bin = "fedimint-cli";
           dirs = [
             "client/clientd"
             "client/client-lib"
@@ -583,7 +583,7 @@
           fedimint-tests = fedimint-tests;
           ln-gateway = replace-git-hash { name = "ln-gateway"; package = ln-gateway; };
           clientd = replace-git-hash { name = "clientd"; package = clientd; };
-          mint-client-cli = replace-git-hash { name = "mint-client-cli"; package = mint-client-cli; };
+          fedimint-cli = replace-git-hash { name = "fedimint-cli"; package = fedimint-cli; };
 
           inherit workspaceDeps
             workspaceBuild
@@ -670,12 +670,12 @@
                 '';
               };
 
-            mint-client-cli = pkgs.dockerTools.buildLayeredImage {
-              name = "mint-client-cli";
-              contents = [ mint-client-cli pkgs.bash pkgs.coreutils ];
+            fedimint-cli = pkgs.dockerTools.buildLayeredImage {
+              name = "fedimint-cli";
+              contents = [ fedimint-cli pkgs.bash pkgs.coreutils ];
               config = {
                 Cmd = [
-                  "${mint-client-cli}/bin/mint-client-cli"
+                  "${fedimint-cli}/bin/fedimint-cli"
                 ];
               };
             };
