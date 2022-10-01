@@ -305,7 +305,20 @@ async fn main() {
         .with_writer(std::io::stderr)
         .init();
 
-    if let Ok(cli) = Cli::try_parse() {
+    if let Ok(cli) = CliNoWorkdir::try_parse() {
+        // Only commands that don't need the workdir can be used here
+        //TODO: remove allow when there are more commands
+        #[allow(irrefutable_let_patterns)]
+        if let CommandNoWorkdir::VersionHash = cli.command {
+            println!(
+                "{}",
+                CliOutput::VersionHash {
+                    hash: env!("GIT_HASH").to_string()
+                }
+            );
+        };
+    } else {
+        let cli = Cli::parse();
         if let Command::JoinFederation { connect } = cli.command {
             let connect_obj: WsFederationConnect = serde_json::from_str(&connect)
                 .or_terminate(CliErrorKind::InvalidValue, "invalid connect info");
@@ -360,19 +373,6 @@ async fn main() {
                 exit(1);
             }
         }
-    } else {
-        // Only commands that don't need the workdir can be used here
-        let cli = CliNoWorkdir::parse();
-        //TODO: remove allow when there are more commands
-        #[allow(irrefutable_let_patterns)]
-        if let CommandNoWorkdir::VersionHash = cli.command {
-            println!(
-                "{}",
-                CliOutput::VersionHash {
-                    hash: env!("GIT_HASH").to_string()
-                }
-            );
-        };
     }
 }
 
