@@ -236,6 +236,7 @@ enum Command {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
         description: String,
+        expiry_time: Option<u64>,
     },
 
     /// Wait for incoming invoice to be paid
@@ -525,8 +526,9 @@ async fn handle_command(
         Command::LnInvoice {
             amount,
             description,
+            expiry_time,
         } => client
-            .generate_invoice(amount, description, &mut rng)
+            .generate_invoice(amount, description, &mut rng, expiry_time)
             .await
             .transform(
                 |confirmed_invoice| CliOutput::LnInvoice {
