@@ -1239,6 +1239,22 @@
 <span id="1239">1239</span>
 <span id="1240">1240</span>
 <span id="1241">1241</span>
+<span id="1242">1242</span>
+<span id="1243">1243</span>
+<span id="1244">1244</span>
+<span id="1245">1245</span>
+<span id="1246">1246</span>
+<span id="1247">1247</span>
+<span id="1248">1248</span>
+<span id="1249">1249</span>
+<span id="1250">1250</span>
+<span id="1251">1251</span>
+<span id="1252">1252</span>
+<span id="1253">1253</span>
+<span id="1254">1254</span>
+<span id="1255">1255</span>
+<span id="1256">1256</span>
+<span id="1257">1257</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::TryInto;
 
@@ -1456,7 +1472,8 @@
             </span>.btc_rpc
             .get_fee_rate(CONFIRMATION_TARGET)
             .<span class="kw">await
-            </span>.unwrap_or(<span class="self">self</span>.cfg.default_fee);
+            </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>)
+            .unwrap_or(<span class="self">self</span>.cfg.default_fee);
 
         <span class="kw">let </span>round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
             block_height: proposed_height,
@@ -1795,7 +1812,10 @@
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
-        <span class="kw">let </span>bitcoind_net = bitcoind_rpc.get_network().<span class="kw">await</span>;
+        <span class="kw">let </span>bitcoind_net = bitcoind_rpc
+            .get_network()
+            .<span class="kw">await
+            </span>.map_err(|e| WalletError::RpcError(e.into()))<span class="question-mark">?</span>;
         <span class="kw">if </span>bitcoind_net != cfg.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(cfg.network, bitcoind_net));
         }
@@ -1989,7 +2009,11 @@
     }
 
     <span class="kw">pub async fn </span>target_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u32 {
-        <span class="kw">let </span>our_network_height = <span class="self">self</span>.btc_rpc.get_block_height().<span class="kw">await as </span>u32;
+        <span class="kw">let </span>our_network_height = <span class="self">self
+            </span>.btc_rpc
+            .get_block_height()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>) <span class="kw">as </span>u32;
         our_network_height.saturating_sub(<span class="self">self</span>.cfg.finality_delay)
     }
 
@@ -2026,7 +2050,11 @@
 
             <span class="comment">// TODO: use batching for mainnet syncing
             </span><span class="macro">trace!</span>(block = height, <span class="string">&quot;Fetching block hash&quot;</span>);
-            <span class="kw">let </span>block_hash = <span class="self">self</span>.btc_rpc.get_block_hash(height <span class="kw">as </span>u64).<span class="kw">await</span>; <span class="comment">// TODO: use u64 for height everywhere
+            <span class="kw">let </span>block_hash = <span class="self">self
+                </span>.btc_rpc
+                .get_block_hash(height <span class="kw">as </span>u64)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;bitcoind rpc failed&quot;</span>); <span class="comment">// TODO: use u64 for height everywhere
 
             </span><span class="kw">let </span>pending_transactions = <span class="self">self
                 </span>.db
@@ -2038,7 +2066,11 @@
                 .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
             <span class="kw">if </span>!pending_transactions.is_empty() {
-                <span class="kw">let </span>block = <span class="self">self</span>.btc_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span>;
+                <span class="kw">let </span>block = <span class="self">self
+                    </span>.btc_rpc
+                    .get_block(<span class="kw-2">&amp;</span>block_hash)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">&quot;bitcoin rpc failed&quot;</span>);
                 <span class="kw">for </span>transaction <span class="kw">in </span>block.txdata {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(pending_tx) = pending_transactions.get(<span class="kw-2">&amp;</span>transaction.txid()) {
                         <span class="self">self</span>.recognize_change_utxo(batch.subtransaction(), pending_tx);
@@ -2402,7 +2434,7 @@
             <span class="string">&quot;Broadcasting peg-out&quot;</span>,
         );
         <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
-        rpc.submit_transaction(tx).<span class="kw">await</span>;
+        <span class="kw">let _ </span>= rpc.submit_transaction(tx).<span class="kw">await</span>;
     }
 }
 

@@ -183,12 +183,29 @@
 <span id="183">183</span>
 <span id="184">184</span>
 <span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span><span class="kw">crate</span>::Feerate;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{BlockHash, Transaction};
 <span class="kw">use </span>fedimint_api::dyn_newtype_define;
+<span class="kw">use </span>thiserror::Error;
+
+<span class="attribute">#[derive(Error, Debug)]
+</span><span class="kw">pub enum </span>Error {
+    <span class="attribute">#[error(<span class="string">&quot;Rpc error&quot;</span>)]
+    </span>Rpc(<span class="attribute">#[from] </span>anyhow::Error),
+}
+
+<span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
 
 <span class="doccomment">/// Trait that allows interacting with the Bitcoin blockchain
 ///
@@ -196,10 +213,10 @@
 </span><span class="attribute">#[async_trait]
 </span><span class="kw">pub trait </span>IBitcoindRpc: Send + Sync {
     <span class="doccomment">/// Returns the Bitcoin network the node is connected to
-    </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::Network;
+    </span><span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Network&gt;;
 
     <span class="doccomment">/// Returns the current block height
-    </span><span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
+    </span><span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt;;
 
     <span class="doccomment">/// Returns the block hash at a given height
     ///
@@ -210,24 +227,21 @@
     /// While there is a corner case that the blockchain shrinks between these two calls (through on
     /// average heavier blocks on a fork) this is prevented by only querying hashes for blocks
     /// tailing the chain tip by a certain number of blocks.
-    </span><span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BlockHash;
+    </span><span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt;;
 
     <span class="doccomment">/// Returns the block with the given hash
     ///
     /// # Panics
     /// If the block doesn&#39;t exist.
-    </span><span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; bitcoin::Block;
+    </span><span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;bitcoin::Block&gt;;
 
     <span class="doccomment">/// Estimates the fee rate for a given confirmation target. Make sure that all federation
     /// members use the same algorithm to avoid widely diverging results. If the node is not ready
     /// yet to return a fee rate estimation this function returns `None`.
-    </span><span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Option</span>&lt;Feerate&gt;;
+    </span><span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt;;
 
     <span class="doccomment">/// Submits a transaction to the Bitcoin network
-    ///
-    /// # Panics
-    /// If the transaction is deemed invalid by the node it was submitted to
-    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction);
+    </span><span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
 <span class="macro">dyn_newtype_define! </span>{
@@ -237,7 +251,7 @@
 
 <span class="attribute">#[allow(dead_code)]
 </span><span class="kw">pub mod </span>test {
-    <span class="kw">use </span><span class="kw">super</span>::IBitcoindRpc;
+    <span class="kw">use super</span>::{IBitcoindRpc, <span class="prelude-ty">Result</span>};
     <span class="kw">use </span><span class="kw">crate</span>::Feerate;
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
@@ -264,19 +278,19 @@
 
     <span class="attribute">#[async_trait]
     </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>FakeBitcoindRpc {
-        <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
-            bitcoin::Network::Regtest
+        <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Network&gt; {
+            <span class="prelude-val">Ok</span>(bitcoin::Network::Regtest)
         }
 
-        <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-            <span class="self">self</span>.state.lock().unwrap().block_height
+        <span class="kw">async fn </span>get_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.state.lock().unwrap().block_height)
         }
 
-        <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BlockHash {
-            height_hash(height)
+        <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; <span class="prelude-ty">Result</span>&lt;BlockHash&gt; {
+            <span class="prelude-val">Ok</span>(height_hash(height))
         }
 
-        <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; Block {
+        <span class="kw">async fn </span>get_block(<span class="kw-2">&amp;</span><span class="self">self</span>, hash: <span class="kw-2">&amp;</span>BlockHash) -&gt; <span class="prelude-ty">Result</span>&lt;Block&gt; {
             <span class="kw">let </span>txdata = <span class="self">self
                 </span>.state
                 .lock()
@@ -285,7 +299,7 @@
                 .get(hash)
                 .cloned()
                 .unwrap_or_default();
-            Block {
+            <span class="prelude-val">Ok</span>(Block {
                 header: BlockHeader {
                     version: <span class="number">0</span>,
                     prev_blockhash: Default::default(),
@@ -295,19 +309,21 @@
                     nonce: <span class="number">0</span>,
                 },
                 txdata,
-            }
+            })
         }
 
-        <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, _confirmation_target: u16) -&gt; <span class="prelude-ty">Option</span>&lt;Feerate&gt; {
-            <span class="self">self</span>.state.lock().unwrap().fee_rate
+        <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, _confirmation_target: u16) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">self</span>.state.lock().unwrap().fee_rate)
         }
 
-        <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+        <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
             <span class="self">self</span>.state
                 .lock()
                 .unwrap()
                 .transactions
                 .push_back(transaction);
+
+            <span class="prelude-val">Ok</span>(())
         }
     }
 
