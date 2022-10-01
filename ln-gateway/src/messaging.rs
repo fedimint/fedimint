@@ -8,7 +8,7 @@ use crate::{GatewayRequest, GatewayRequestTrait, Result};
 
 #[async_trait]
 pub trait GatewayMessageReceiver: Send + Sync + 'static {
-    async fn receive(&mut self) -> ();
+    async fn receive(&self) -> ();
 }
 
 #[derive(Debug, Clone)]

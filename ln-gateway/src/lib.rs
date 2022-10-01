@@ -5,11 +5,9 @@ pub mod webserver;
 
 use std::{
     borrow::Cow,
-    cell::RefCell,
     io::Cursor,
     net::SocketAddr,
     path::PathBuf,
-    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -22,7 +20,6 @@ use bitcoin_hashes::sha256;
 use cln::HtlcAccepted;
 use fedimint_api::{Amount, OutPoint, TransactionId};
 use fedimint_server::{
-    config::load_from_file,
     modules::ln::contracts::{ContractId, Preimage},
     modules::wallet::txoproof::TxOutProof,
 };
@@ -34,7 +31,7 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
 use thiserror::Error;
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, Mutex},
     task::JoinHandle,
 };
 use tracing::{debug, instrument, warn};
@@ -128,7 +125,7 @@ where
 pub struct GatewayActor {
     federation_client: Arc<GatewayClient>,
     ln_rpc: Arc<dyn LnRpc>,
-    receiver: mpsc::Receiver<GatewayRequest>,
+    receiver: Arc<Mutex<mpsc::Receiver<GatewayRequest>>>,
 }
 
 impl GatewayActor {
@@ -139,7 +136,7 @@ impl GatewayActor {
     ) -> Self {
         // TODO: support ln_rpc swaps in-flight, after instantiation
         Self {
-            receiver,
+            receiver: Arc::new(Mutex::new(receiver)),
             federation_client,
             ln_rpc,
         }
@@ -353,7 +350,7 @@ impl GatewayActor {
 
 #[async_trait]
 impl GatewayMessageReceiver for GatewayActor {
-    async fn receive(&mut self) {
+    async fn receive(&self) {
         for fetch_result in self.federation_client.fetch_all_coins().await {
             if let Err(e) = fetch_result {
                 debug!(error = %e, "Fetching coins failed")
@@ -361,7 +358,7 @@ impl GatewayMessageReceiver for GatewayActor {
         }
 
         // Handle messages from webserver and plugin
-        while let Ok(msg) = self.receiver.try_recv() {
+        while let Ok(msg) = self.receiver.lock().await.try_recv() {
             tracing::trace!("Gateway received message {:?}", msg);
             match msg {
                 GatewayRequest::HtlcAccepted(inner) => {
@@ -396,21 +393,26 @@ impl GatewayMessageReceiver for GatewayActor {
 }
 
 pub struct LnGateway {
-    ln_client: Option<Arc<dyn LnRpc>>,
-    actors: Vec<Rc<RefCell<GatewayActor>>>,
+    ln_rpc: Option<Arc<dyn LnRpc>>,
+    actors: Vec<Arc<GatewayActor>>,
     webserver: Option<JoinHandle<axum::response::Result<()>>>,
+    // TODO: Impl a gateway 'Message Router' thatwe can reference instead of a direct receiver
+    receiver: Option<mpsc::Receiver<GatewayRequest>>,
 }
 
 impl LnGateway {
     pub fn new() -> Self {
         Self {
             actors: Vec::new(),
-            ln_client: None,
+            ln_rpc: None,
             webserver: None,
+            receiver: None,
         }
     }
 
-    pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<()>
+    /// Register a lew lightning RPC on the gateway.
+    /// If there was an existing RPC, a successful registration of a new ln rpc will replace the old one.
+    pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<PathBuf>
     where
         F: Fn(GatewayMessageChannel) -> R + 'static,
         R: Future<
@@ -426,47 +428,46 @@ impl LnGateway {
         let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(GatewayMessageChannel::new(&sender))
             .await
             .expect("Failed to register RPC");
-        self.ln_client = Some(ln_rpc.clone());
-
-        // TODO: change direction of dependency and order of registration
-        //   to allow 1:N relationship between ln_rpc and gateway servers
-
-        // Instantiate a gateway actor unique to this federation
-        self.gateway_actor_factory(receiver, ln_rpc, workdir)
-            .await
-            .expect("Failed to create gateway rpc server");
+        self.ln_rpc = Some(ln_rpc.clone());
 
         // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
         // Run a webserver on the rpc bind address
         self.run_webserver(&sender, bind_addr)
             .expect("Failed to run webserver");
 
-        Ok(())
+        // Temp: We keep a reference to the receiver so we can later istantiate an actor on demand
+        self.receiver = Some(receiver); // TODO: instantiate a 'MessageRouter' with the receiver
+
+        Ok(workdir)
     }
 
-    async fn gateway_actor_factory(
+    /// Register a federation to the gateway.
+    ///
+    /// # Returns
+    ///
+    /// A `GatewayActor` that can be used to execute gateway functions for the federation
+    pub async fn register_federation(
         &mut self,
-        receiver: mpsc::Receiver<GatewayRequest>,
-        ln_rpc: Arc<dyn LnRpc>,
-        workdir: PathBuf,
-    ) -> Result<()> {
-        let cfg_path = workdir.join("gateway.json");
-        let db_path = workdir.join("gateway.db");
+        client: Arc<Client<GatewayClientConfig>>,
+    ) -> Result<Arc<GatewayActor>> {
+        if self.receiver.is_none() || self.ln_rpc.is_none() {
+            return Err(LnGatewayError::InstantiationError);
+        }
 
-        let client_cfg: GatewayClientConfig = load_from_file(&cfg_path);
-        let db = fedimint_rocksdb::RocksDb::open(db_path)
-            .expect("Error opening DB")
-            .into();
-        let ctx = secp256k1::Secp256k1::new();
-        let client = Arc::new(Client::new(client_cfg, db, ctx));
+        let receiver = self.receiver.take().expect("No receiver declared");
+        let ln_rpc = self.ln_rpc.take().expect("No ln rpc registered");
+
+        // Register the provided client with a federation.
+        // This assumes the client provider did not register the client already.
         client
             .register_with_federation(client.config().into())
             .await
             .expect("Failed to register client with federation");
 
-        let fed_gateway = Rc::new(RefCell::new(GatewayActor::new(receiver, client, ln_rpc)));
-        self.actors.push(fed_gateway);
-        Ok(())
+        let actor = Arc::new(GatewayActor::new(receiver, client, ln_rpc));
+        self.actors.push(actor.clone());
+
+        Ok(actor)
     }
 
     fn run_webserver(
@@ -485,13 +486,13 @@ impl LnGateway {
 
     pub async fn run(self) -> Result<()> {
         // TODO: try to drive forward outgoing and incoming payments that were interrupted
-        // TODO: try run gateway rpc actors in parallel
+        // TODO: try run gateway rpc actors concurrently
         loop {
             let least_wait_until = Instant::now() + Duration::from_millis(100);
 
             // Handle messages from webserver and plugin
             for actor in &self.actors {
-                actor.borrow_mut().receive().await;
+                actor.receive().await;
             }
 
             fedimint_api::task::sleep_until(least_wait_until).await;
@@ -510,6 +511,8 @@ impl Drop for LnGateway {
 
 #[derive(Debug, Error)]
 pub enum LnGatewayError {
+    #[error("instantiation error")]
+    InstantiationError,
     #[error("Federation client operation error: {0:?}")]
     ClientError(#[from] ClientError),
     #[error("Our LN node could not route the payment: {0:?}")]
