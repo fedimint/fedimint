@@ -101,6 +101,12 @@
 <span id="101">101</span>
 <span id="102">102</span>
 <span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
 </pre><pre class="rust"><code><span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
@@ -139,6 +145,10 @@
         </span><span class="attribute">#[arg(long = <span class="string">&quot;api-base-port&quot;</span>, default_value = <span class="string">&quot;17340&quot;</span>)]
         </span>api_base_port: u16,
 
+        <span class="doccomment">/// `bitcoind` json rpc endpoint
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
+        </span>bitcoind_rpc: String,
+
         <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
         </span><span class="attribute">#[arg(
             long = <span class="string">&quot;denominations&quot;</span>,
@@ -167,6 +177,7 @@
             api_base_port,
             denominations: amount_tiers,
             federation_name,
+            bitcoind_rpc,
         } =&gt; {
             <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
             <span class="comment">// Recursively create config directory if it doesn&#39;t exist
@@ -182,6 +193,7 @@
                 api_base_port,
                 amount_tiers,
                 federation_name,
+                bitcoind_rpc,
             };
 
             <span class="kw">let </span>(server_cfg, client_cfg) =
@@ -205,4 +217,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="configgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8ce3204af 2022-09-30)" ></div></body></html>

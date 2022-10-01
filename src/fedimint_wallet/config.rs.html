@@ -126,10 +126,6 @@
 <span id="126">126</span>
 <span id="127">127</span>
 <span id="128">128</span>
-<span id="129">129</span>
-<span id="130">130</span>
-<span id="131">131</span>
-<span id="132">132</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
@@ -182,12 +178,12 @@
 }
 
 <span class="kw">impl </span>GenerateConfig <span class="kw">for </span>WalletConfig {
-    <span class="kw">type </span>Params = ();
+    <span class="kw">type </span>Params = BitcoindRpcCfg;
     <span class="kw">type </span>ClientConfig = WalletClientConfig;
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
-        _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
@@ -221,11 +217,7 @@
                     peg_in_key: <span class="kw-2">*</span>sk,
                     finality_delay: FINALITY_DELAY,
                     default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
-                    btc_rpc: BitcoindRpcCfg {
-                        btc_rpc_address: <span class="string">&quot;127.0.0.1:18443&quot;</span>.to_string(),
-                        btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                        btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.to_string(),
-                    },
+                    btc_rpc: params.clone(),
                     fee_consensus: FeeConsensus::default(),
                 };
 
@@ -263,4 +255,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8ce3204af 2022-09-30)" ></div></body></html>

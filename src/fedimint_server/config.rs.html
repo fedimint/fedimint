@@ -307,7 +307,15 @@
 <span id="307">307</span>
 <span id="308">308</span>
 <span id="309">309</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::rand::Rand07Compat;
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
@@ -366,6 +374,7 @@
     <span class="kw">pub </span>api_base_port: u16,
     <span class="kw">pub </span>amount_tiers: Vec&lt;fedimint_api::Amount&gt;,
     <span class="kw">pub </span>federation_name: String,
+    <span class="kw">pub </span>bitcoind_rpc: String,
 }
 
 <span class="kw">impl </span>GenerateConfig <span class="kw">for </span>ServerConfig {
@@ -410,8 +419,15 @@
             })
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
+            peers,
+            <span class="kw-2">&amp;</span>BitcoindRpcCfg {
+                btc_rpc_address: params.bitcoind_rpc.clone(),
+                btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
+                btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
+            },
+            <span class="kw-2">&amp;mut </span>rng,
+        );
         <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) =
             MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) =
@@ -617,4 +633,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (ce7f0f1aa 2022-09-28)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8ce3204af 2022-09-30)" ></div></body></html>
