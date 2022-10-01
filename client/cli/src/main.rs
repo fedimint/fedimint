@@ -163,6 +163,7 @@ impl Error for CliError {}
 #[command(version)]
 struct Cli {
     /// The working directory of the client containing the config and db
+    #[arg(long = "workdir")]
     workdir: PathBuf,
     #[clap(subcommand)]
     command: Command,

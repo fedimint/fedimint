@@ -189,7 +189,7 @@ $ fedimint-cli help
 fedimint-cli 
 
 USAGE:
-    fedimint-cli <WORKDIR> <SUBCOMMAND>
+    fedimint-cli --workdir <WORKDIR> <SUBCOMMAND>
 
 ARGS:
     <WORKDIR>    

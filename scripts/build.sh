@@ -33,7 +33,7 @@ $FM_BIN_DIR/configgen generate --out-dir $FM_CFG_DIR --num-nodes $FM_FED_SIZE --
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"
 export FM_LN2="lightning-cli --network regtest --lightning-dir=$FM_LN2_DIR"
 export FM_BTC_CLIENT="bitcoin-cli -regtest -rpcuser=bitcoin -rpcpassword=bitcoin"
-export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli $FM_CFG_DIR"
+export FM_MINT_CLIENT="$FM_BIN_DIR/fedimint-cli --workdir $FM_CFG_DIR"
 export FM_MINT_RPC_CLIENT="$FM_BIN_DIR/mint-rpc-client"
 export FM_CLIENTD="$FM_BIN_DIR/clientd"
 export FM_CLIENTD_CLI="$FM_BIN_DIR/clientd-cli"
