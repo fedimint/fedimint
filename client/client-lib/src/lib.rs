@@ -745,23 +745,24 @@ impl Client<UserClientConfig> {
             .map_err(|_| ClientError::OutgoingPaymentTimeout)?
             .map_err(ClientError::HttpError);
 
-        if let Ok(response) = result {
-            if response.status().is_success() {
-                return Ok(());
+        match result {
+            Ok(response) => {
+                if response.status().is_success() {
+                    return Ok(());
+                }
+
+                fedimint_api::task::timeout(
+                    Duration::from_secs(10),
+                    self.ln_client().await_outgoing_refundable(contract_id),
+                )
+                .await
+                .map_err(|_| ClientError::FailedPaymentNoRefund)??;
+
+                self.try_refund_outgoing_contract(contract_id, rng).await?;
+                Err(ClientError::RefundedFailedPayment)
             }
-
-            fedimint_api::task::timeout(
-                Duration::from_secs(10),
-                self.ln_client().await_outgoing_refundable(contract_id),
-            )
-            .await
-            .map_err(|_| ClientError::FailedPaymentNoRefund)??;
-
-            self.try_refund_outgoing_contract(contract_id, rng).await?;
-            return Err(ClientError::RefundedFailedPayment);
-        };
-
-        Ok(())
+            Err(e) => Err(e),
+        }
     }
 }
 
