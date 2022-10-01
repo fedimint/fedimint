@@ -6,7 +6,7 @@ pre_window:
   - alias ln1="\$FM_LN1"
   - alias ln2="\$FM_LN2"
   - alias btc_client="\$FM_BTC_CLIENT"
-  - alias mint-client-cli="\$FM_MINT_CLIENT"
+  - alias fedimint-cli="\$FM_MINT_CLIENT"
   - alias mint_rpc_client="\$FM_MINT_RPC_CLIENT"
 tmux_detached: false
 windows:
