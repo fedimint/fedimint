@@ -6,8 +6,6 @@ pub mod webserver;
 use std::{
     borrow::Cow,
     io::Cursor,
-    net::SocketAddr,
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -37,8 +35,8 @@ use tokio::{
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    ln::{LightningError, LnRpc},
-    messaging::{GatewayMessageChannel, GatewayMessageReceiver},
+    ln::{GatewayLnRpcConfig, GatewayLnRpcConfigError, LightningError, LnRpc},
+    messaging::{GatewayMessageReceiver, GatewayMessageChannel},
     webserver::run_webserver,
 };
 
@@ -412,33 +410,42 @@ impl LnGateway {
 
     /// Register a lew lightning RPC on the gateway.
     /// If there was an existing RPC, a successful registration of a new ln rpc will replace the old one.
-    pub async fn register_ln_rpc<F, R>(&mut self, ln_rpc_factory: F) -> Result<PathBuf>
-    where
-        F: Fn(GatewayMessageChannel) -> R + 'static,
-        R: Future<
-                Output = std::result::Result<(Arc<dyn LnRpc>, SocketAddr, PathBuf), anyhow::Error>,
-            > + 'static,
-    {
-        // TODO: define ln rpc factory signature to be generic over multiple LN implementations.
-
+    pub async fn register_ln_rpc(
+        &mut self,
+        gateway_ln_rpc_config: Arc<Mutex<GatewayLnRpcConfig>>,
+    ) -> Result<&mut Self> {
         let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
             mpsc::channel(100);
 
-        // Instantiate and register an lightning RPC client
-        let (ln_rpc, bind_addr, workdir) = ln_rpc_factory(GatewayMessageChannel::new(&sender))
-            .await
-            .expect("Failed to register RPC");
-        self.ln_rpc = Some(ln_rpc.clone());
+        let ln_rpc_messenger = GatewayMessageChannel::new(&sender);
 
-        // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
-        // Run a webserver on the rpc bind address
-        self.run_webserver(&sender, bind_addr)
-            .expect("Failed to run webserver");
+        // Register the lightning RPC client
+        match gateway_ln_rpc_config
+            .lock()
+            .await
+            .init(ln_rpc_messenger)
+            .await
+        {
+            Ok(config) => {
+                self.ln_rpc = Some(Arc::clone(&config.ln_rpc));
+
+                // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
+                // Run a webserver on the rpc bind address
+                let webserver_messenger = GatewayMessageChannel::new(&sender);
+                let webserver = tokio::spawn(async move {
+                    run_webserver(webserver_messenger, &config.bind_addr).await
+                });
+                self.webserver = Some(webserver);
+            }
+            Err(e) => {
+                return Err(LnGatewayError::LnRpcConfigE(e).into());
+            }
+        }
 
         // Temp: We keep a reference to the receiver so we can later istantiate an actor on demand
         self.receiver = Some(receiver); // TODO: instantiate a 'MessageRouter' with the receiver
 
-        Ok(workdir)
+        Ok(self)
     }
 
     /// Register a federation to the gateway.
@@ -450,12 +457,16 @@ impl LnGateway {
         &mut self,
         client: Arc<Client<GatewayClientConfig>>,
     ) -> Result<Arc<GatewayActor>> {
-        if self.receiver.is_none() || self.ln_rpc.is_none() {
-            return Err(LnGatewayError::InstantiationError);
-        }
-
+        // TODO: Support creation multiple actors and thus multiple federations.
+        // for now, we take the receiver when registering the very first federation
         let receiver = self.receiver.take().expect("No receiver declared");
-        let ln_rpc = self.ln_rpc.take().expect("No ln rpc registered");
+
+        let ln_rpc = self
+            .ln_rpc
+            .clone()
+            .ok_or(LnGatewayError::Other(anyhow::anyhow!(
+                "No ln rpc registered"
+            )))?;
 
         // Register the provided client with a federation.
         // This assumes the client provider did not register the client already.
@@ -468,20 +479,6 @@ impl LnGateway {
         self.actors.push(actor.clone());
 
         Ok(actor)
-    }
-
-    fn run_webserver(
-        &mut self,
-        sender: &mpsc::Sender<GatewayRequest>,
-        bind_addr: SocketAddr,
-    ) -> Result<()> {
-        // Run webserver asynchronously in tokio
-        let webserver = tokio::spawn(run_webserver(
-            GatewayMessageChannel::new(&sender),
-            bind_addr,
-        ));
-        self.webserver = Some(webserver);
-        Ok(())
     }
 
     pub async fn run(self) -> Result<()> {
@@ -519,7 +516,9 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
-    #[error("Other")]
+    #[error("Mint error: {0:?}")]
+    LnRpcConfigE(#[from] GatewayLnRpcConfigError),
+    #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }
 

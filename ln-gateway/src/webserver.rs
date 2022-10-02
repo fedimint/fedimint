@@ -22,14 +22,14 @@ pub async fn pay_invoice(
 
 pub async fn run_webserver(
     sender: GatewayMessageChannel,
-    bind_addr: SocketAddr,
+    bind_addr: &SocketAddr,
 ) -> axum::response::Result<()> {
     let app = Router::new()
         .route("/pay_invoice", post(pay_invoice))
         .layer(Extension(sender))
         .layer(CorsLayer::permissive());
 
-    axum::Server::bind(&bind_addr)
+    axum::Server::bind(bind_addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
