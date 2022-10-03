@@ -11,16 +11,11 @@ use hbbft::{Epoched, NetworkInfo, Target};
 
 use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
-use tokio::sync::Notify;
 use tokio::task::spawn;
 use tracing::{info, warn};
 
 use config::ServerConfig;
-use fedimint_api::db::Database;
 use fedimint_api::{NumPeers, PeerId};
-use fedimint_core::modules::ln::LightningModule;
-use fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
-use fedimint_core::modules::wallet::Wallet;
 
 use fedimint_api::config::GenerateConfig;
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
@@ -76,43 +71,24 @@ pub struct FedimintServer {
 
 impl FedimintServer {
     /// Start all the components of the mint and plug them together
-    pub async fn run(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) {
-        let server = FedimintServer::new(cfg.clone(), db, bitcoincore_rpc).await;
+    pub async fn run(cfg: ServerConfig, consensus: FedimintConsensus<OsRng>) {
+        let server = FedimintServer::new(cfg.clone(), consensus).await;
         spawn(net::api::run_server(cfg, server.consensus.clone()));
         server.run_consensus().await;
     }
-    pub async fn new(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) -> Self {
+    pub async fn new(cfg: ServerConfig, consensus: FedimintConsensus<OsRng>) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        Self::new_with(cfg.clone(), db, bitcoincore_rpc, connector).await
+        Self::new_with(cfg.clone(), consensus, connector).await
     }
 
     pub async fn new_with(
         cfg: ServerConfig,
-        database: Database,
-        bitcoind: BitcoindRpc,
+        consensus: FedimintConsensus<OsRng>,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {
         cfg.validate_config(&cfg.identity);
-
-        let mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
-
-        let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
-            .await
-            .expect("Couldn't create wallet");
-
-        let ln = LightningModule::new(cfg.ln.clone(), database.clone());
-
-        let consensus = Arc::new(FedimintConsensus {
-            rng_gen: Box::new(OsRngGen),
-            cfg: cfg.clone(),
-            mint,
-            wallet,
-            ln,
-            db: database,
-            transaction_notify: Arc::new(Notify::new()),
-        });
 
         let connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
             .await
@@ -138,7 +114,7 @@ impl FedimintServer {
         FedimintServer {
             connections,
             hbbft,
-            consensus,
+            consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
         }
@@ -445,7 +421,7 @@ impl FedimintServer {
     }
 }
 
-struct OsRngGen;
+pub struct OsRngGen;
 impl RngGenerator for OsRngGen {
     type Rng = OsRng;
 
