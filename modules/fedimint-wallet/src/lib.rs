@@ -215,6 +215,7 @@ impl FederationModule for Wallet {
             .btc_rpc
             .get_fee_rate(CONFIRMATION_TARGET)
             .await
+            .expect("bitcoind rpc failed")
             .unwrap_or(self.cfg.default_fee);
 
         let round_ci = WalletConsensusItem::RoundConsensus(RoundConsensusItem {
@@ -554,7 +555,10 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
-        let bitcoind_net = bitcoind_rpc.get_network().await;
+        let bitcoind_net = bitcoind_rpc
+            .get_network()
+            .await
+            .map_err(|e| WalletError::RpcError(e.into()))?;
         if bitcoind_net != cfg.network {
             return Err(WalletError::WrongNetwork(cfg.network, bitcoind_net));
         }
@@ -748,7 +752,11 @@ impl Wallet {
     }
 
     pub async fn target_height(&self) -> u32 {
-        let our_network_height = self.btc_rpc.get_block_height().await as u32;
+        let our_network_height = self
+            .btc_rpc
+            .get_block_height()
+            .await
+            .expect("bitcoind rpc failed") as u32;
         our_network_height.saturating_sub(self.cfg.finality_delay)
     }
 
@@ -785,7 +793,11 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash = self.btc_rpc.get_block_hash(height as u64).await; // TODO: use u64 for height everywhere
+            let block_hash = self
+                .btc_rpc
+                .get_block_hash(height as u64)
+                .await
+                .expect("bitcoind rpc failed"); // TODO: use u64 for height everywhere
 
             let pending_transactions = self
                 .db
@@ -797,7 +809,11 @@ impl Wallet {
                 .collect::<HashMap<_, _>>();
 
             if !pending_transactions.is_empty() {
-                let block = self.btc_rpc.get_block(&block_hash).await;
+                let block = self
+                    .btc_rpc
+                    .get_block(&block_hash)
+                    .await
+                    .expect("bitcoin rpc failed");
                 for transaction in block.txdata {
                     if let Some(pending_tx) = pending_transactions.get(&transaction.txid()) {
                         self.recognize_change_utxo(batch.subtransaction(), pending_tx);
@@ -1161,7 +1177,7 @@ pub async fn broadcast_pending_tx(db: &Database, rpc: &BitcoindRpc) {
             "Broadcasting peg-out",
         );
         trace!(transaction = ?tx);
-        rpc.submit_transaction(tx).await;
+        let _ = rpc.submit_transaction(tx).await;
     }
 }
 
