@@ -31,7 +31,7 @@ use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use itertools::Itertools;
 
 use fedimint_api::db::batch::BatchTx;
-use fedimint_api::db::{Database, IDatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -174,7 +174,7 @@ impl FederationModule for LightningModule {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {

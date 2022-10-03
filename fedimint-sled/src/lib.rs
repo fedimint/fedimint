@@ -4,7 +4,8 @@
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
 use fedimint_api::db::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, PrefixIter,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
+    PrefixIter,
 };
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use sled::transaction::TransactionError;
@@ -115,11 +116,12 @@ impl IDatabase for SledDb {
         ret
     }
 
-    fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + 'a> {
-        Box::new(SledTransaction {
+    fn begin_transaction(&self) -> DatabaseTransaction {
+        SledTransaction {
             operations: Vec::new(),
             db: self,
-        })
+        }
+        .into()
     }
 }
 
@@ -129,7 +131,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
                 key: key.to_vec(),
-                value: value,
+                value,
             }));
         val
     }

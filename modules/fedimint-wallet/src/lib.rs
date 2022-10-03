@@ -24,7 +24,7 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use fedimint_api::db::batch::{BatchItem, BatchTx};
-use fedimint_api::db::{Database, IDatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::api_endpoint;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -239,7 +239,7 @@ impl FederationModule for Wallet {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
@@ -584,7 +584,7 @@ impl Wallet {
 
     fn save_peg_out_signatures<'a>(
         &self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         signatures: Vec<(PeerId, PegOutSignatureItem)>,
     ) {
         let mut cache: BTreeMap<Txid, UnsignedTransaction> = self
@@ -723,7 +723,7 @@ impl Wallet {
     /// * If proposals is empty
     async fn process_block_height_proposals<'a>(
         &self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         mut proposals: Vec<u32>,
     ) -> u32 {
         assert!(!proposals.is_empty());
@@ -766,7 +766,7 @@ impl Wallet {
 
     async fn sync_up_to_consensus_height<'a>(
         &self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         new_height: u32,
     ) {
         let old_height = self.consensus_height().unwrap_or(0);
@@ -836,7 +836,7 @@ impl Wallet {
     /// got consensus on.
     fn recognize_change_utxo<'a>(
         &self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         pending_tx: &PendingTransaction,
     ) {
         let script_pk = self

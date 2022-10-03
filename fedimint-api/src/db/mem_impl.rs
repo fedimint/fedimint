@@ -1,7 +1,7 @@
 use super::batch::{BatchItem, DbBatch};
 use super::{
-    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, IDatabase,
-    IDatabaseTransaction,
+    DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
+    IDatabase, IDatabaseTransaction,
 };
 use crate::db::PrefixIter;
 use anyhow::Result;
@@ -96,12 +96,13 @@ impl IDatabase for MemDatabase {
         Ok(())
     }
 
-    fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + 'a> {
-        Box::new(MemTransaction {
+    fn begin_transaction(&self) -> DatabaseTransaction {
+        MemTransaction {
             operations: Vec::new(),
             tx_data: Mutex::new(self.data.lock().unwrap().clone()),
             db: self,
-        })
+        }
+        .into()
     }
 }
 
@@ -116,7 +117,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
                 key: key.to_vec(),
-                value: value,
+                value,
             }));
         val
     }

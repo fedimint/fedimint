@@ -3,7 +3,7 @@ pub mod interconnect;
 pub mod testing;
 
 use crate::db::batch::BatchTx;
-use crate::db::IDatabaseTransaction;
+use crate::db::DatabaseTransaction;
 use crate::{Amount, PeerId};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -150,7 +150,7 @@ pub trait FederationModule: Sized {
     /// when processing transactions.
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         rng: impl RngCore + CryptoRng + 'a,
     );

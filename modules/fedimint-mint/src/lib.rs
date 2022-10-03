@@ -6,7 +6,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-use fedimint_api::db::{Database, IDatabaseTransaction};
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -135,7 +135,7 @@ impl FederationModule for Mint {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
@@ -608,7 +608,7 @@ impl Mint {
 
     fn process_partial_signature<'a>(
         &self,
-        dbtx: &mut Box<dyn IDatabaseTransaction<'a> + 'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         peer: PeerId,
         output_id: OutPoint,
         partial_sig: PartialSigResponse,

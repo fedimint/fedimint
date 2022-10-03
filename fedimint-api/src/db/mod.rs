@@ -66,19 +66,7 @@ pub trait IDatabase: Send + Sync {
 
     fn raw_apply_batch(&self, batch: DbBatch) -> Result<()>;
 
-    fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + 'a>;
-}
-
-pub trait IDatabaseTransaction<'a>: 'a {
-    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
-
-    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
-
-    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()>;
-
-    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
-
-    fn commit_tx(self: Box<Self>) -> Result<()>;
+    fn begin_transaction(&self) -> DatabaseTransaction;
 }
 
 dyn_newtype_define! {
@@ -168,12 +156,35 @@ impl Database {
     }
 }
 
-impl<'a> dyn IDatabaseTransaction<'a> {
+pub trait IDatabaseTransaction<'a>: 'a {
+    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+
+    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>>;
+
+    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()>;
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
+
+    fn commit_tx(self: Box<Self>) -> Result<()>;
+}
+
+dyn_newtype_define! {
+    /// A handle to a type-erased database implementation
+    DatabaseTransaction<'a>(Box<IDatabaseTransaction>)
+}
+
+impl<'a> DatabaseTransaction<'a> {
+    pub fn commit_tx(self) -> Result<()> {
+        self.0.commit_tx()
+    }
+}
+
+impl<'a> DatabaseTransaction<'a> {
     pub fn insert_entry<K>(&mut self, key: &K, value: &K::Value) -> Result<Option<K::Value>>
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        match self.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
+        match self.0.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
             Some(old_val_bytes) => {
                 trace!(
                     "insert_bytes: Decoding {} from bytes {:?}",
@@ -190,7 +201,7 @@ impl<'a> dyn IDatabaseTransaction<'a> {
     where
         K: DatabaseKey + DatabaseKeyPrefixConst,
     {
-        match self.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
+        match self.0.raw_insert_bytes(&key.to_bytes(), value.to_bytes())? {
             Some(_) => {
                 warn!(
                     "Database overwriting element when expecting insertion of new entry. Key: {:?}",

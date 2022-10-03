@@ -1,6 +1,6 @@
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
-use fedimint_api::db::PrefixIter;
+use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use rocksdb::OptimisticTransactionDB;
 use std::path::Path;
@@ -109,8 +109,8 @@ impl IDatabase for RocksDb {
         Ok(())
     }
 
-    fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction<'a> + 'a> {
-        Box::new(RocksDbTransaction(self.0.transaction()))
+    fn begin_transaction(&self) -> DatabaseTransaction {
+        RocksDbTransaction(self.0.transaction()).into()
     }
 }
 
