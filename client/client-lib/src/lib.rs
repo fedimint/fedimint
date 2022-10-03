@@ -678,6 +678,7 @@ impl Client<UserClientConfig> {
             amount,
             payment_hash,
             Preimage(raw_payment_secret),
+            expiry_time,
         );
         let ln_output = Output::LN(offer_output);
 

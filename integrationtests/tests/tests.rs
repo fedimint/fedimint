@@ -606,6 +606,7 @@ async fn receive_lightning_payment_invalid_preimage() {
         payment_amount,
         payment_hash,
         Preimage(kp.public_key().serialize()),
+        None,
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));

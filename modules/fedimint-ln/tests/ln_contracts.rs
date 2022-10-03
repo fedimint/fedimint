@@ -164,6 +164,7 @@ async fn test_incoming() {
             preimage.clone(),
             &fed.client_cfg().threshold_pub_key,
         ),
+        expiry_time: None,
     };
     let offer_output = ContractOrOfferOutput::Offer(offer.clone());
     let offer_out_point = OutPoint {
