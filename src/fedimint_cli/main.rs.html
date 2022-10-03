@@ -621,6 +621,7 @@
 <span id="621">621</span>
 <span id="622">622</span>
 <span id="623">623</span>
+<span id="624">624</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
@@ -787,6 +788,7 @@
 #[command(version)]
 </span><span class="kw">struct </span>Cli {
     <span class="doccomment">/// The working directory of the client containing the config and db
+    </span><span class="attribute">#[arg(long = <span class="string">&quot;workdir&quot;</span>)]
     </span>workdir: PathBuf,
     <span class="attribute">#[clap(subcommand)]
     </span>command: Command,
