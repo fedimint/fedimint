@@ -9,6 +9,44 @@
 #[macro_export]
 macro_rules! dyn_newtype_define {
     (   $(#[$outer:meta])*
+        $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_inner!{
+            $(#[$outer])*
+            $name<$lifetime>(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut!($name<$lifetime>);
+    };
+    (   $(#[$outer:meta])*
+        $name:ident(Box<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_inner!{
+            $(#[$outer])*
+            $name(Box<$trait>)
+        }
+        $crate::_dyn_newtype_impl_deref_mut($name);
+    };
+    (   $(#[$outer:meta])*
+        $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_inner!{
+            $(#[$outer])*
+            $name<$lifetime>(Arc<$trait>)
+        }
+    };
+    (   $(#[$outer:meta])*
+        $name:ident(Arc<$trait:ident>)
+    ) => {
+        $crate::_dyn_newtype_define_inner!{
+            $(#[$outer])*
+            $name(Arc<$trait>)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! _dyn_newtype_define_inner {
+    (   $(#[$outer:meta])*
         $name:ident($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
@@ -22,7 +60,6 @@ macro_rules! dyn_newtype_define {
             }
 
         }
-
         impl<I> From<I> for $name
         where
             I: $trait + Send + Sync + 'static,
@@ -31,8 +68,48 @@ macro_rules! dyn_newtype_define {
                 Self($container::new(i))
             }
         }
+    };
+    (   $(#[$outer:meta])*
+        $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
+    ) => {
+        $(#[$outer])*
+        pub struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>);
 
-    }
+        impl<$lifetime> std::ops::Deref for $name<$lifetime> {
+            type Target = dyn $trait<$lifetime> + Send + $lifetime;
+
+            fn deref(&self) -> &<Self as std::ops::Deref>::Target {
+                &*self.0
+            }
+        }
+
+        impl<$lifetime, I> From<I> for $name<$lifetime>
+        where
+            I: $trait<$lifetime> + Send + $lifetime,
+        {
+            fn from(i: I) -> Self {
+                Self($container::new(i))
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! _dyn_newtype_impl_deref_mut {
+    ($name:ident<$lifetime:lifetime>) => {
+        impl<$lifetime> std::ops::DerefMut for $name<$lifetime> {
+            fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
+                &mut *self.0
+            }
+        }
+    };
+    ($name:ident) => {
+        impl std::ops::DerefMut for $name {
+            fn deref_mut(&mut self) -> &mut <Self as std::ops::Deref>::Target {
+                &mut *self.0
+            }
+        }
+    };
 }
 
 /// Implement `Clone` on a "dyn newtype"
@@ -51,9 +128,7 @@ macro_rules! dyn_newtype_define {
 /// the `Arc` itself.
 #[macro_export]
 macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
-    (
-        $name:ident
-    ) => {
+    ($name:ident) => {
         impl Clone for $name {
             fn clone(&self) -> Self {
                 self.0.clone()
