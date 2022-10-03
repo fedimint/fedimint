@@ -25,6 +25,7 @@ use tracing_subscriber::EnvFilter;
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
+#[serde(untagged)]
 enum CliOutput {
     VersionHash {
         hash: String,
