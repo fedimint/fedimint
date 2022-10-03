@@ -10,7 +10,7 @@ use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use sled::transaction::TransactionError;
 use std::collections::BTreeMap;
 use std::path::Path;
-use tracing::{error, warn};
+use tracing::error;
 
 pub use sled;
 
@@ -176,7 +176,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
-        let mut val: BTreeMap<Vec<u8>, Result<(Vec<u8>, Vec<u8>)>> = BTreeMap::new();
+        let mut val = BTreeMap::new();
         // First iterate through pending writes to support "read our own writes"
         for op in &self.operations {
             match op {
@@ -196,7 +196,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
             }
         }
 
-        let mut dbscan: Vec<Result<(Vec<u8>, Vec<u8>), anyhow::Error>> = self
+        let mut dbscan: Vec<Result<_, anyhow::Error>> = self
             .db
             .inner()
             .scan_prefix(key_prefix)
@@ -206,8 +206,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
             })
             .collect();
 
-        let mut values: Vec<Result<(Vec<u8>, Vec<u8>), anyhow::Error>> =
-            val.into_values().collect();
+        let mut values: Vec<Result<_, anyhow::Error>> = val.into_values().collect();
         dbscan.append(&mut values);
         Box::new(dbscan.into_iter())
     }

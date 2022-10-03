@@ -199,10 +199,11 @@ where
 
         // Begin consensus epoch
         {
-            let mut db_vec = Vec::new();
-            db_vec.push(self.db.begin_transaction());
-            db_vec.push(self.db.begin_transaction());
-            db_vec.push(self.db.begin_transaction());
+            let mut db_vec = vec![
+                self.db.begin_transaction(),
+                self.db.begin_transaction(),
+                self.db.begin_transaction(),
+            ];
             self.wallet
                 .begin_consensus_epoch(&mut db_vec[0], wallet_cis, self.rng_gen.get_rng())
                 .await;
