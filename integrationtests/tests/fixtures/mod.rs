@@ -117,6 +117,7 @@ pub async fn fixtures(
         hbbft_base_port: base_port,
         api_base_port: base_port + num_peers,
         amount_tiers: amount_tiers.to_vec(),
+        bitcoind_rpc: "127.0.0.1:18443".into(),
     };
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
 

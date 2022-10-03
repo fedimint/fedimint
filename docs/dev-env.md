@@ -98,3 +98,63 @@ available in a separate Nix dev shell. To start it, use:
 ```
 nix develop .#cross
 ```
+
+Inside the shell cross-compilation commands like:
+
+```
+cargo build --target wasm32-unknown-unknown
+```
+
+should work as expected.
+
+## Containers
+
+The `flake.nix` exposes OCI container builds of Fedimint (search for "container"). To use them
+try:
+
+```
+$ nix build .#container.fedimintd && docker load < ./result
+Loaded image: fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r
+```
+
+Change `.#container.fedimintd` to build a different container.
+The `Loaded image:` lists the image name that `docker` will use.
+
+```
+$ docker images | grep iqviraxy2cz7apg7qamcp2mbsy7x7w8r
+fedimintd     iqviraxy2cz7apg7qamcp2mbsy7x7w8r      fad75f704001   52 years ago    68.6MB
+```
+
+You can start the binary(-ies) inside with the usual:
+
+```
+$ docker run -it fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r fedimintd --help
+Usage: fedimintd <CFG_PATH> <DB_PATH>
+
+Arguments:
+  <CFG_PATH>
+  <DB_PATH>
+
+Options:
+  -h, --help  Print help information
+```
+
+Most commands will require access to some host mounted volumes and port bindings.
+For your convenience, here is an example:
+
+
+```
+$ docker run -it -v $PWD/demo:/var/fedimint fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r configgen generate --out-dir /var/fedimint --num-nodes 3 --denominations 1,2,5
+Generating keys such that up to 0 peers may fail/be evil
+$ ls demo
+client.json  server-0.json  server-1.json  server-2.json
+```
+
+`-v` will mount local directory `./demo` as `/var/fedimint` inside the container, so the `--out-dir /var/fedimint` writes the files to the host file-system
+
+```
+$ docker run -it -v $PWD/demo:/var/fedimint -p 17240:17240 fedimintd:iqviraxy2cz7apg7qamcp2mbsy7x7w8r fedimintd  /var/fedimint/server-0.json /var/fedimint/server-0.db
+... output logs ...
+```
+
+Again, `-v` is used to mount directory with the generated configs, while `-p` is used to bind the host's port 17240 as the container's port 17240.

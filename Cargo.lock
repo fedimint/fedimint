@@ -684,6 +684,28 @@ name = "fedimint-build"
 version = "0.1.0"
 
 [[package]]
+name = "fedimint-cli"
+version = "0.1.0"
+dependencies = [
+ "bitcoin",
+ "bitcoin_hashes",
+ "clap",
+ "fedimint-api",
+ "fedimint-build",
+ "fedimint-core",
+ "fedimint-rocksdb",
+ "lightning-invoice",
+ "mint-client",
+ "rand 0.6.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
@@ -749,6 +771,7 @@ dependencies = [
 name = "fedimint-mint"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
  "counter",
@@ -1846,28 +1869,6 @@ dependencies = [
  "test-log",
  "thiserror",
  "threshold_crypto",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "mint-client-cli"
-version = "0.1.0"
-dependencies = [
- "bitcoin",
- "bitcoin_hashes",
- "clap",
- "fedimint-api",
- "fedimint-build",
- "fedimint-core",
- "fedimint-rocksdb",
- "lightning-invoice",
- "mint-client",
- "rand 0.6.5",
- "serde",
- "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",

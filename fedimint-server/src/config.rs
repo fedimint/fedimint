@@ -1,4 +1,4 @@
-use fedimint_api::rand::Rand07Compat;
+use fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 pub use fedimint_core::config::*;
 
 use crate::net::peers::{ConnectionConfig, NetworkConfig};
@@ -57,6 +57,7 @@ pub struct ServerConfigParams {
     pub api_base_port: u16,
     pub amount_tiers: Vec<fedimint_api::Amount>,
     pub federation_name: String,
+    pub bitcoind_rpc: String,
 }
 
 impl GenerateConfig for ServerConfig {
@@ -101,8 +102,15 @@ impl GenerateConfig for ServerConfig {
             })
             .collect::<BTreeMap<_, _>>();
 
-        let (wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::trusted_dealer_gen(peers, &(), &mut rng);
+        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
+            peers,
+            &BitcoindRpcCfg {
+                btc_rpc_address: params.bitcoind_rpc.clone(),
+                btc_rpc_user: "bitcoin".into(),
+                btc_rpc_pass: "bitcoin".into(),
+            },
+            &mut rng,
+        );
         let (mint_server_cfg, mint_client_cfg) =
             MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), &mut rng);
         let (ln_server_cfg, ln_client_cfg) =

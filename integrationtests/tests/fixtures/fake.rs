@@ -15,7 +15,7 @@ use rand::rngs::OsRng;
 
 use fedimint_api::Amount;
 use fedimint_server::modules::ln::contracts::Preimage;
-use fedimint_wallet::bitcoind::IBitcoindRpc;
+use fedimint_wallet::bitcoind::{IBitcoindRpc, Result as BitcoinRpcResult};
 use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::Feerate;
 use ln_gateway::ln::{LightningError, LnRpc};
@@ -197,38 +197,40 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_network(&self) -> Network {
-        Network::Regtest
+    async fn get_network(&self) -> BitcoinRpcResult<Network> {
+        Ok(Network::Regtest)
     }
 
-    async fn get_block_height(&self) -> u64 {
-        self.blocks.lock().unwrap().len() as u64
+    async fn get_block_height(&self) -> BitcoinRpcResult<u64> {
+        Ok(self.blocks.lock().unwrap().len() as u64)
     }
 
-    async fn get_block_hash(&self, height: u64) -> BlockHash {
-        self.blocks.lock().unwrap()[(height - 1) as usize]
+    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<BlockHash> {
+        Ok(self.blocks.lock().unwrap()[(height - 1) as usize]
             .header
-            .block_hash()
+            .block_hash())
     }
 
-    async fn get_block(&self, hash: &BlockHash) -> Block {
-        self.blocks
+    async fn get_block(&self, hash: &BlockHash) -> BitcoinRpcResult<Block> {
+        Ok(self
+            .blocks
             .lock()
             .unwrap()
             .iter()
             .find(|block| *hash == block.header.block_hash())
             .unwrap()
-            .clone()
+            .clone())
     }
 
-    async fn get_fee_rate(&self, _confirmation_target: u16) -> Option<Feerate> {
-        None
+    async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
+        Ok(None)
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) {
+    async fn submit_transaction(&self, transaction: Transaction) -> BitcoinRpcResult<()> {
         let mut pending = self.pending.lock().unwrap();
         if !pending.contains(&transaction) {
             pending.push(transaction);
         }
+        Ok(())
     }
 }
