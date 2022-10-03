@@ -13,7 +13,6 @@ use std::time::Duration;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
-use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::db::batch::DbBatch;
@@ -51,8 +50,10 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::GatewayRequest;
-use ln_gateway::LnGateway;
+use ln_gateway::{
+    ln::{GatewayLnRpcConfig, LnRpcFactory},
+    GatewayActor, LnGateway,
+};
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
@@ -99,7 +100,7 @@ pub async fn fixtures(
     UserTest,
     Box<dyn BitcoinTest>,
     GatewayTest,
-    Box<dyn LightningTest>,
+    Arc<dyn LightningTest>,
 ) {
     let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
@@ -127,21 +128,14 @@ pub async fn fixtures(
             info!("Testing with REAL Bitcoin and Lightning services");
             let (server_config, client_config) = distributed_config(&peers, params, max_evil).await;
 
+            // Locate test dir from env var
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
+
+            // Build test federation
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
             let bitcoin_rpc = bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
                 .expect("Could not create bitcoinrpc");
             let bitcoin = RealBitcoinTest::new(&wallet_config.btc_rpc);
-            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
-            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
-            let lightning =
-                RealLightningTest::new(socket_gateway.clone(), socket_other.clone()).await;
-            let gateway_lightning_rpc = Mutex::new(
-                ClnRpc::new(socket_gateway.clone())
-                    .await
-                    .expect("connect to ln_socket"),
-            );
-            let lightning_rpc_adapter = LnRpcAdapter::new(Box::new(gateway_lightning_rpc));
 
             let connect_gen =
                 |cfg: &ServerConfig| TlsTcpConnector::new(cfg.tls_config()).into_dyn();
@@ -154,30 +148,34 @@ pub async fn fixtures(
             )
             .await;
 
+            // Build test user
             let user_cfg = UserClientConfig(client_config.clone());
             let user_db = rocks(dir.clone()).into();
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
 
-            let gateway = GatewayTest::new(
-                lightning_rpc_adapter,
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-                base_port + (2 * num_peers) + 1,
-            )
-            .await;
+            // Build test gateway
+            let socket_gateway = PathBuf::from(dir.clone()).join("ln1/regtest/lightning-rpc");
+            let socket_other = PathBuf::from(dir.clone()).join("ln2/regtest/lightning-rpc");
 
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            let bind_addr: SocketAddr = format!("127.0.0.1:{}", base_port + (2 * num_peers) + 1)
+                .parse()
+                .unwrap();
+            let lightning =
+                Arc::new(RealLightningTest::new(socket_gateway, bind_addr, socket_other).await);
+            let gateway = GatewayTest::new(lightning.clone(), client_config.clone()).await;
+
+            // Fixtures
+            (fed, user, Box::new(bitcoin), gateway, lightning)
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
             let (server_config, client_config) =
                 ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
 
+            // Build test federation
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
-            let lightning = FakeLightningTest::new();
-            let ln_rpc_adapter = LnRpcAdapter::new(Box::new(lightning.clone()));
             let net = MockNetwork::new();
             let net_ref = &net;
             let connect_gen = move |cfg: &ServerConfig| net_ref.connector(cfg.identity).into_dyn();
@@ -185,20 +183,18 @@ pub async fn fixtures(
             let fed_db = || MemDatabase::new().into();
             let fed = FederationTest::new(server_config, &fed_db, &bitcoin_rpc, &connect_gen).await;
 
+            // Build test user
             let user_db = MemDatabase::new().into();
             let user_cfg = UserClientConfig(client_config.clone());
             let user = UserTest::new(user_cfg.clone(), peers, user_db);
             user.client.await_consensus_block_height(0).await;
 
-            let gateway = GatewayTest::new(
-                ln_rpc_adapter,
-                client_config.clone(),
-                lightning.gateway_node_pub_key,
-                base_port + (2 * num_peers) + 1,
-            )
-            .await;
+            // Build test gateway
+            let lightning = Arc::new(FakeLightningTest::new());
+            let gateway = GatewayTest::new(lightning.clone(), client_config.clone()).await;
 
-            (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
+            // Fixtures
+            (fed, user, Box::new(bitcoin), gateway, lightning)
         }
     }
 }
@@ -265,7 +261,7 @@ pub trait LightningTest {
 }
 
 pub struct GatewayTest {
-    pub server: LnGateway,
+    pub actor: Arc<GatewayActor>,
     pub adapter: Arc<LnRpcAdapter>,
     pub keys: LightningGateway,
     pub user: UserTest,
@@ -273,63 +269,77 @@ pub struct GatewayTest {
 }
 
 impl GatewayTest {
-    async fn new(
-        ln_client_adapter: LnRpcAdapter,
-        client_config: ClientConfig,
-        node_pub_key: secp256k1::PublicKey,
-        bind_port: u16,
-    ) -> Self {
-        let mut rng = OsRng;
+    async fn new(ln_rpc_factory: Arc<dyn LnRpcFactory>, client_config: ClientConfig) -> Self {
+        let mut gateway = LnGateway::new();
+        let rpc_config_mx = Arc::new(Mutex::new(GatewayLnRpcConfig::new(ln_rpc_factory.clone())));
+
+        gateway
+            .register_ln_rpc(rpc_config_mx.clone())
+            .await
+            .expect("Failed to register LN RPC");
+
+        let database: Database = MemDatabase::new().into();
+        let mut rng = rng();
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
-        let keys = LightningGateway {
-            mint_pub_key: kp.x_only_public_key().0,
-            node_pub_key,
-            api: Url::parse("http://example.com")
-                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-        };
+        let ln_config = rpc_config_mx
+            .lock()
+            .await
+            .config()
+            .expect("Failed to get rpc config");
 
-        let database: Database = MemDatabase::new().into();
+        // Build user client and test
         let user_cfg = UserClientConfig(client_config.clone());
         let user_client = UserClient::new(user_cfg.clone(), database.clone(), Default::default());
-        let user = UserTest {
+        let user_test = UserTest {
             client: user_client,
             config: user_cfg,
         };
 
-        let bind_addr: SocketAddr = format!("127.0.0.1:{}", bind_port).parse().unwrap();
-        let gw_cfg = GatewayClientConfig {
-            client_config: client_config.clone(),
+        // Define keys
+        let keys = LightningGateway {
+            mint_pub_key: kp.x_only_public_key().0,
+            node_pub_key: ln_config.pub_key,
+            api: Url::parse("http://example.com")
+                .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
+        };
+
+        // Build gateway client
+        let gw_client_cfg = GatewayClientConfig {
+            client_config,
             redeem_key: kp,
             timelock_delta: 10,
-            api: Url::parse(format!("http://{}", bind_addr).as_str())
+            api: Url::parse(format!("http://{}", ln_config.bind_addr).as_str())
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
-            node_pub_key,
+            node_pub_key: ln_config.pub_key,
         };
-        let client = Arc::new(GatewayClient::new(
-            gw_cfg,
+
+        let gateway_client = Arc::new(GatewayClient::new(
+            gw_client_cfg,
             database.clone(),
             Default::default(),
         ));
-        let (sender, receiver) = tokio::sync::mpsc::channel::<GatewayRequest>(100);
-        let adapter = Arc::new(ln_client_adapter);
-        let ln_client = Arc::clone(&adapter);
-        let mut gateway = LnGateway::new();
-        let gateway = LnGateway::new(client.clone(), ln_client, sender, receiver, bind_addr);
-        // Normally, this client registration with the federation is automated as part of running the gateway
-        // In test cases, we want to register without running a gateway
-        client
-            .register_with_federation(client.config().into())
+
+        // Register federation and keep reference to a gateway actor
+        let actor = gateway
+            .register_federation(gateway_client.clone())
             .await
-            .expect("Failed to register client with federation");
+            .expect("Failed to register federation");
+
+        // Run gateway : NOTE: We never run gateways in tests because it starts a blocking loop
+        //
+        // gateway.run().await.expect("gateway failed to run");
+
+        // Provide an adapter to the gateway ln rpc
+        let adapter = Arc::new(LnRpcAdapter::new(ln_config.ln_rpc.clone()));
 
         GatewayTest {
-            server: gateway,
+            actor,
             adapter,
             keys,
-            user,
-            client,
+            user: user_test,
+            client: gateway_client,
         }
     }
 }

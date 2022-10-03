@@ -1,4 +1,5 @@
 use std::iter::repeat;
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -18,7 +19,10 @@ use fedimint_wallet::txoproof::TxOutProof;
 use fedimint_wallet::Feerate;
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
-use ln_gateway::ln::{LightningError, LnRpc};
+use ln_gateway::{
+    ln::{LightningError, LnRpc, LnRpcConfig, LnRpcFactory},
+    messaging::GatewayMessageChannel,
+};
 use rand::rngs::OsRng;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
@@ -81,6 +85,29 @@ impl LnRpc for FakeLightningTest {
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
         Ok(self.preimage.clone())
+    }
+}
+
+#[async_trait]
+impl LnRpcFactory for FakeLightningTest {
+    async fn create(
+        &self,
+        _messenger: GatewayMessageChannel,
+    ) -> Result<Arc<LnRpcConfig>, anyhow::Error> {
+        // mock bind address. not used in fake tests
+        let bind_addr: SocketAddr = "127.0.0.1:8080"
+            .parse()
+            .expect("Invalid gateway bind address");
+
+        // mock workdir. not used in fake tests
+        let work_dir = "/tmp/fake".into();
+
+        Ok(Arc::new(LnRpcConfig {
+            ln_rpc: Arc::new(self.clone()) as Arc<dyn LnRpc>,
+            bind_addr,
+            pub_key: self.gateway_node_pub_key,
+            work_dir,
+        }))
     }
 }
 

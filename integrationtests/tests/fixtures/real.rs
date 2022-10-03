@@ -1,60 +1,84 @@
-use std::io::Cursor;
-use std::ops::Sub;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{io::Cursor, net::SocketAddr, ops::Sub, path::PathBuf, str::FromStr, sync::Arc};
 
-use bitcoin::secp256k1;
-use bitcoin::{Address, Transaction};
-use bitcoincore_rpc::Client;
-use bitcoincore_rpc::{Auth, RpcApi};
+use async_trait::async_trait;
+use bitcoin::{secp256k1::PublicKey, Address, Transaction};
+use bitcoincore_rpc::{Auth, Client, RpcApi};
 use clightningrpc::LightningRPC;
-use fedimint_api::config::BitcoindRpcCfg;
-use fedimint_api::encoding::Decodable;
-use fedimint_api::Amount;
+use cln_rpc::ClnRpc;
+use fedimint_api::{config::BitcoindRpcCfg, encoding::Decodable, Amount};
 use fedimint_wallet::txoproof::TxOutProof;
 use lightning_invoice::Invoice;
+use ln_gateway::{
+    ln::{LnRpc, LnRpcConfig, LnRpcFactory},
+    messaging::GatewayMessageChannel,
+};
 use serde::Serialize;
+use tokio::sync::Mutex;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
 pub struct RealLightningTest {
-    rpc_gateway: LightningRPC,
-    rpc_other: LightningRPC,
-    initial_balance: Amount,
-    pub gateway_node_pub_key: secp256k1::PublicKey,
+    gateway_workdir: PathBuf,
+    gateway_bind_addr: SocketAddr,
+    gateway_rpc: LightningRPC,
+    other_rpc: LightningRPC,
+    gateway_initial_balance: Amount,
 }
 
 impl LightningTest for RealLightningTest {
     fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice = self
-            .rpc_other
+            .other_rpc
             .invoice(amount.milli_sat, &random.to_string(), "", expiry_time)
             .unwrap();
         Invoice::from_str(&invoice.bolt11).unwrap()
     }
 
     fn amount_sent(&self) -> Amount {
-        self.initial_balance
-            .sub(Self::channel_balance(&self.rpc_gateway))
+        self.gateway_initial_balance
+            .sub(Self::channel_balance(&self.gateway_rpc))
     }
 }
 
 impl RealLightningTest {
-    pub async fn new(socket_gateway: PathBuf, socket_other: PathBuf) -> Self {
-        let rpc_other = LightningRPC::new(socket_other);
-        let rpc_gateway = LightningRPC::new(socket_gateway);
-
-        let initial_balance = Self::channel_balance(&rpc_gateway);
-        let gateway_node_pub_key =
-            secp256k1::PublicKey::from_str(&rpc_gateway.getinfo().unwrap().id).unwrap();
-
+    pub async fn new(
+        gateway_workdir: PathBuf,
+        gateway_bind_addr: SocketAddr,
+        socket_other: PathBuf,
+    ) -> Self {
+        let other_rpc = LightningRPC::new(socket_other);
+        let gateway_rpc = LightningRPC::new(gateway_workdir.clone());
+        let gateway_initial_balance = Self::channel_balance(&gateway_rpc);
         RealLightningTest {
-            rpc_gateway,
-            rpc_other,
-            initial_balance,
-            gateway_node_pub_key,
+            gateway_workdir,
+            gateway_bind_addr,
+            gateway_rpc,
+            other_rpc,
+            gateway_initial_balance,
         }
+    }
+}
+
+#[async_trait]
+impl LnRpcFactory for RealLightningTest {
+    async fn create(
+        &self,
+        // TODO: Apply messaging in RealLightningTest scenario
+        _messenger: GatewayMessageChannel,
+    ) -> Result<Arc<LnRpcConfig>, anyhow::Error> {
+        let gateway_cln_rpc = ClnRpc::new(self.gateway_workdir.clone())
+            .await
+            .expect("connect to ln_socket");
+
+        let gateway_pub_key = PublicKey::from_str(&self.gateway_rpc.getinfo().unwrap().id).unwrap();
+
+        Ok(Arc::new(LnRpcConfig {
+            ln_rpc: Arc::new(Mutex::new(gateway_cln_rpc)) as Arc<dyn LnRpc>,
+            bind_addr: self.gateway_bind_addr,
+            work_dir: self.gateway_workdir.clone(),
+            pub_key: gateway_pub_key,
+        }))
     }
 }
 

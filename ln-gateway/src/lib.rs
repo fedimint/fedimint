@@ -36,7 +36,7 @@ use tracing::{debug, instrument, warn};
 
 use crate::{
     ln::{GatewayLnRpcConfig, GatewayLnRpcConfigError, LightningError, LnRpc},
-    messaging::{GatewayMessageReceiver, GatewayMessageChannel},
+    messaging::{GatewayMessageChannel, GatewayMessageReceiver},
     webserver::run_webserver,
 };
 
@@ -390,6 +390,7 @@ impl GatewayMessageReceiver for GatewayActor {
     }
 }
 
+#[derive(Default)]
 pub struct LnGateway {
     ln_rpc: Option<Arc<dyn LnRpc>>,
     actors: Vec<Arc<GatewayActor>>,
@@ -438,7 +439,7 @@ impl LnGateway {
                 self.webserver = Some(webserver);
             }
             Err(e) => {
-                return Err(LnGatewayError::LnRpcConfigE(e).into());
+                return Err(LnGatewayError::LnRpcConfigE(e));
             }
         }
 
@@ -464,9 +465,7 @@ impl LnGateway {
         let ln_rpc = self
             .ln_rpc
             .clone()
-            .ok_or(LnGatewayError::Other(anyhow::anyhow!(
-                "No ln rpc registered"
-            )))?;
+            .ok_or_else(|| LnGatewayError::Other(anyhow::anyhow!("No ln rpc registered")))?;
 
         // Register the provided client with a federation.
         // This assumes the client provider did not register the client already.

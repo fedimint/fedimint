@@ -61,7 +61,7 @@ fn build_gateway_client(config: Arc<LnRpcConfig>) -> Result<Client<GatewayClient
     let kp_fed = KeyPair::new(&ctx, &mut rng);
 
     let client_cfg = GatewayClientConfig {
-        client_config: client_cfg.clone(),
+        client_config: client_cfg,
         redeem_key: kp_fed,
         timelock_delta: 10,
         node_pub_key: config.pub_key,

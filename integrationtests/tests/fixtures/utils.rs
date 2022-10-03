@@ -9,13 +9,13 @@ use tokio::sync::Mutex;
 /// A proxy for the underlying LnRpc which can be used to add behavoir to it using the "Decorator pattern"
 pub struct LnRpcAdapter {
     /// The actual LnRpc that we add behavior to.
-    client: Box<dyn LnRpc>,
+    client: Arc<dyn LnRpc>,
     /// A pair of <Invoice> and <Count> where client.pay() will fail <Count> times for each <Invoice>
     fail_invoices: Arc<Mutex<HashMap<String, u8>>>,
 }
 
 impl LnRpcAdapter {
-    pub fn new(client: Box<dyn LnRpc>) -> Self {
+    pub fn new(client: Arc<dyn LnRpc>) -> Self {
         let fail_invoices = Arc::new(Mutex::new(HashMap::new()));
 
         LnRpcAdapter {

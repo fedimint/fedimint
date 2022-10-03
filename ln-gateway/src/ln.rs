@@ -64,12 +64,11 @@ impl GatewayLnRpcConfig {
     }
 
     pub fn config(&self) -> Result<Arc<LnRpcConfig>, GatewayLnRpcConfigError> {
-        let config = self
-            .config
-            .clone()
-            .ok_or(GatewayLnRpcConfigError::InstantiationError(
-                anyhow::anyhow!("GatewayLnRPC not initialized"),
-            ))?;
+        let config = self.config.clone().ok_or_else(|| {
+            GatewayLnRpcConfigError::InstantiationError(anyhow::anyhow!(
+                "GatewayLnRPC not initialized"
+            ))
+        })?;
         Ok(config)
     }
 }

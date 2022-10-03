@@ -158,6 +158,7 @@ async fn withdraw_rpc(
     Ok(json!({ "fedimint_txid": txid.to_string() }))
 }
 
+#[derive(Default)]
 pub struct ClnRpcFactory {}
 
 impl ClnRpcFactory {

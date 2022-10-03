@@ -23,7 +23,7 @@ pub struct GatewayMessageChannel {
 impl GatewayMessageChannel {
     pub fn new(sender: &mpsc::Sender<GatewayRequest>) -> Self {
         Self {
-            sender: Arc::new(Mutex::new(sender.clone().to_owned())),
+            sender: Arc::new(Mutex::new(sender.clone())),
         }
     }
 
