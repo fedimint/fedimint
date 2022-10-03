@@ -620,6 +620,7 @@
 <span id="620">620</span>
 <span id="621">621</span>
 <span id="622">622</span>
+<span id="623">623</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
@@ -647,6 +648,7 @@
 
 <span class="attribute">#[derive(Serialize)]
 #[serde(rename_all(serialize = <span class="string">&quot;snake_case&quot;</span>))]
+#[serde(untagged)]
 </span><span class="kw">enum </span>CliOutput {
     VersionHash {
         hash: String,
