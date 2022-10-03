@@ -109,7 +109,7 @@ should work as expected.
 
 ## Containers
 
-The `flake.nix` exposes OCI container builds of Fedimint (search for "conatiner"). To use them
+The `flake.nix` exposes OCI container builds of Fedimint (search for "container"). To use them
 try:
 
 ```
