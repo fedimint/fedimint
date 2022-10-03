@@ -68,13 +68,34 @@
 <span id="68">68</span>
 <span id="69">69</span>
 <span id="70">70</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_server::config::{load_from_file, ServerConfig};
 <span class="kw">use </span>fedimint_server::FedimintServer;
 
+<span class="kw">use </span>fedimint_server::ui::run_ui;
 <span class="kw">use </span>fedimint_wallet::bitcoincore_rpc;
+<span class="kw">use </span>tokio::spawn;
 <span class="kw">use </span>tracing_subscriber::prelude::<span class="kw-2">*</span>;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 <span class="kw">use </span>tracing_subscriber::Layer;
@@ -83,6 +104,8 @@
 </span><span class="kw">pub struct </span>ServerOpts {
     <span class="kw">pub </span>cfg_path: PathBuf,
     <span class="kw">pub </span>db_path: PathBuf,
+    <span class="attribute">#[arg(default_value = <span class="prelude-val">None</span>)]
+    </span><span class="kw">pub </span>ui_port: <span class="prelude-ty">Option</span>&lt;u32&gt;,
     <span class="attribute">#[cfg(feature = <span class="string">&quot;telemetry&quot;</span>)]
     #[clap(long)]
     </span><span class="kw">pub </span>with_telemetry: bool,
@@ -122,6 +145,21 @@
         registry.with(layer).init();
     } <span class="kw">else </span>{
         registry.init();
+    }
+
+    <span class="kw">let </span>(sender, <span class="kw-2">mut </span>receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(ui_port) = opts.ui_port {
+        <span class="comment">// Spawn UI, wait for it to finish
+        </span>spawn(run_ui(opts.cfg_path.clone(), sender, ui_port));
+        receiver
+            .recv()
+            .<span class="kw">await
+            </span>.expect(<span class="string">&quot;failed to receive setup message&quot;</span>);
+    }
+
+    <span class="kw">if </span>!Path::new(<span class="kw-2">&amp;</span>opts.cfg_path).is_file() {
+        <span class="macro">panic!</span>(<span class="string">&quot;Config file not found, you can generate one with the webui by running with port as arg 3.&quot;</span>);
     }
 
     <span class="kw">let </span>cfg: ServerConfig = load_from_file(<span class="kw-2">&amp;</span>opts.cfg_path);

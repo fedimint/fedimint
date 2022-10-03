@@ -10,7 +10,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_ln":["",[["contracts",[],["account.rs","incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","db.rs","lib.rs"]],\
 "fedimint_mint":["",[],["config.rs","db.rs","lib.rs"]],\
 "fedimint_rocksdb":["",[],["lib.rs"]],\
-"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
+"fedimint_server":["",[["consensus",[],["conflictfilter.rs","debug.rs","interconnect.rs","mod.rs"]],["net",[],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","queue.rs"]],["ui",[],["configgen.rs","mod.rs"]]],["config.rs","db.rs","lib.rs","rng.rs"]],\
 "fedimint_sled":["",[],["lib.rs"]],\
 "fedimint_wallet":["",[],["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimintd":["",[],["main.rs"]],\
