@@ -62,7 +62,7 @@ pub enum EpochMessage {
 }
 
 pub struct FedimintServer {
-    pub consensus: Arc<FedimintConsensus<OsRng>>,
+    pub consensus: Arc<FedimintConsensus>,
     pub connections: AnyPeerConnections<EpochMessage>,
     pub cfg: ServerConfig,
     pub hbbft: HoneyBadger<Vec<ConsensusItem>, PeerId>,
@@ -71,12 +71,12 @@ pub struct FedimintServer {
 
 impl FedimintServer {
     /// Start all the components of the mint and plug them together
-    pub async fn run(cfg: ServerConfig, consensus: FedimintConsensus<OsRng>) {
+    pub async fn run(cfg: ServerConfig, consensus: FedimintConsensus) {
         let server = FedimintServer::new(cfg.clone(), consensus).await;
         spawn(net::api::run_server(cfg, server.consensus.clone()));
         server.run_consensus().await;
     }
-    pub async fn new(cfg: ServerConfig, consensus: FedimintConsensus<OsRng>) -> Self {
+    pub async fn new(cfg: ServerConfig, consensus: FedimintConsensus) -> Self {
         let connector: PeerConnector<EpochMessage> =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
@@ -85,7 +85,7 @@ impl FedimintServer {
 
     pub async fn new_with(
         cfg: ServerConfig,
-        consensus: FedimintConsensus<OsRng>,
+        consensus: FedimintConsensus,
         connector: PeerConnector<EpochMessage>,
     ) -> Self {
         cfg.validate_config(&cfg.identity);

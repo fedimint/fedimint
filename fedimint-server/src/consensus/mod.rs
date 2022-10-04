@@ -25,10 +25,11 @@ use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 use fedimint_core::modules::mint::{Mint, MintError};
 use fedimint_core::modules::wallet::{Wallet, WalletError};
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core_api::server::ServerModule;
+use fedimint_core_api::ModuleKey;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
-use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
@@ -68,12 +69,9 @@ pub struct ConsensusProposal {
 
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
-pub struct FedimintConsensus<R>
-where
-    R: RngCore + CryptoRng,
-{
+pub struct FedimintConsensus {
     /// Cryptographic random number generator used for everything
-    pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
+    pub rng_gen: Box<dyn RngGenerator<Rng = OsRng>>,
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
@@ -82,6 +80,7 @@ where
     pub wallet: Wallet,
     pub ln: LightningModule,
 
+    modules: BTreeMap<ModuleKey, ServerModule>,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
@@ -102,7 +101,7 @@ struct VerificationCaches {
     ln: <LightningModule as FederationModule>::VerificationCache,
 }
 
-impl FedimintConsensus<OsRng> {
+impl FedimintConsensus {
     pub fn new(
         cfg: ServerConfig,
         mint: Mint,
@@ -116,16 +115,21 @@ impl FedimintConsensus<OsRng> {
             mint,
             wallet,
             ln,
+            modules: BTreeMap::default(),
             db,
             transaction_notify: Arc::new(Notify::new()),
         }
     }
+
+    pub fn register_module(&mut self, module: ServerModule) -> &mut Self {
+        if self.modules.insert(module.module_key(), module).is_some() {
+            panic!("Must not register modules with key conflict");
+        }
+        self
+    }
 }
 
-impl<R> FedimintConsensus<R>
-where
-    R: RngCore + CryptoRng,
-{
+impl FedimintConsensus {
     pub fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -628,31 +632,31 @@ where
         audit
     }
 
-    fn build_interconnect(&self) -> FedimintInterconnect<R> {
+    fn build_interconnect(&self) -> FedimintInterconnect {
         FedimintInterconnect { fedimint: self }
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Wallet> for FedimintConsensus<R> {
+impl AsRef<Wallet> for FedimintConsensus {
     fn as_ref(&self) -> &Wallet {
         &self.wallet
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Mint> for FedimintConsensus<R> {
+impl AsRef<Mint> for FedimintConsensus {
     fn as_ref(&self) -> &Mint {
         &self.mint
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<LightningModule> for FedimintConsensus<R> {
+impl AsRef<LightningModule> for FedimintConsensus {
     fn as_ref(&self) -> &LightningModule {
         &self.ln
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<FedimintConsensus<R>> for FedimintConsensus<R> {
-    fn as_ref(&self) -> &FedimintConsensus<R> {
+impl AsRef<FedimintConsensus> for FedimintConsensus {
+    fn as_ref(&self) -> &FedimintConsensus {
         self
     }
 }

@@ -4,19 +4,14 @@ use async_trait::async_trait;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiError;
 use fedimint_api::FederationModule;
-use rand::CryptoRng;
-use secp256k1_zkp::rand::RngCore;
 use serde_json::Value;
 
-pub struct FedimintInterconnect<'a, R: RngCore + CryptoRng> {
-    pub fedimint: &'a FedimintConsensus<R>,
+pub struct FedimintInterconnect<'a> {
+    pub fedimint: &'a FedimintConsensus,
 }
 
 #[async_trait]
-impl<'a, R> ModuleInterconect for FedimintInterconnect<'a, R>
-where
-    R: RngCore + CryptoRng,
-{
+impl<'a> ModuleInterconect for FedimintInterconnect<'a> {
     async fn call(
         &self,
         module: &'static str,

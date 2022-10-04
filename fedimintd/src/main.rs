@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use fedimint_api::db::Database;
 use fedimint_core::modules::ln::LightningModule;
+use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::{load_from_file, ServerConfig};
 use fedimint_server::FedimintServer;
 
@@ -91,7 +92,9 @@ async fn main() -> anyhow::Result<()> {
 
     let ln = LightningModule::new(cfg.ln.clone(), db.clone());
 
-    let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+    let mut consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+
+    consensus.register_module(MintServerModule::new().into());
 
     FedimintServer::run(cfg, consensus).await;
 

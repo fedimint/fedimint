@@ -12,6 +12,41 @@ use std::io::{Error, Read, Write};
 use thiserror::Error;
 use url::Url;
 
+/// Object-safe trait for things that can encode themselves
+///
+/// Like `rust-bitcoin`'s `consensus_encode`, but without generics,
+/// so can be used in `dyn` objects.
+pub trait DynEncodable {
+    fn consensus_encode_dyn(
+        &self,
+        writer: &mut dyn std::io::Write,
+    ) -> Result<usize, std::io::Error>;
+}
+
+impl Encodable for dyn DynEncodable {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+        self.consensus_encode_dyn(&mut writer)
+    }
+}
+
+impl<T> DynEncodable for T
+where
+    T: Encodable,
+{
+    fn consensus_encode_dyn(
+        &self,
+        writer: &mut dyn std::io::Write,
+    ) -> Result<usize, std::io::Error> {
+        <Self as Encodable>::consensus_encode(self, writer)
+    }
+}
+
+impl Encodable for Box<dyn DynEncodable> {
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+        (**self).consensus_encode_dyn(&mut writer)
+    }
+}
+
 /// Data which can be encoded in a consensus-consistent way
 pub trait Encodable {
     /// Encode an object with a well-defined format.
@@ -28,8 +63,8 @@ pub trait Decodable: Sized {
 }
 
 impl Encodable for Url {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
-        self.to_string().consensus_encode(writer)
+    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+        self.to_string().consensus_encode(&mut writer)
     }
 }
 
@@ -43,6 +78,12 @@ impl Decodable for Url {
 
 #[derive(Debug, Error)]
 pub struct DecodeError(pub(crate) anyhow::Error);
+
+impl DecodeError {
+    pub fn new_custom(e: anyhow::Error) -> Self {
+        Self(e)
+    }
+}
 
 macro_rules! impl_encode_decode_num {
     ($num_type:ty) => {

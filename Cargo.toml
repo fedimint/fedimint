@@ -1,9 +1,13 @@
 [workspace]
 members = [
+    "core/api",
+    "core/client",
+    "core/server",
     "crypto/tbs",
     "ln-gateway",
     "fedimintd",
     "fedimint-core",
+    "fedimint-client",
     "fedimint-derive",
     "fedimint-api",
     "fedimint-rocksdb",
@@ -12,6 +16,9 @@ members = [
     "client/cli",
     "client/client-lib",
     "client/clientd",
+    "modules/mint-common",
+    "modules/mint-server",
+    "modules/mint-client",
     "modules/fedimint-mint",
     "modules/fedimint-ln",
     "modules/fedimint-wallet",

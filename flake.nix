@@ -431,6 +431,9 @@
           name = "fedimintd";
           bin = "fedimintd";
           dirs = [
+            "core"
+            "crypto/tbs"
+            "ln-gateway"
             "client/client-lib"
             "crypto/tbs"
             "fedimintd"
@@ -444,6 +447,10 @@
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            # remove this dependency after modularization is complete and circular dependencies are resolved
+            "modules/mint-client"
+            "modules/mint-common"
+            "modules/mint-server"
           ];
         };
 
@@ -451,6 +458,7 @@
           name = "ln-gateway";
           bin = "ln-gateway";
           dirs = [
+            "core"
             "crypto/tbs"
             "client/client-lib"
             "modules/fedimint-ln"
@@ -463,6 +471,9 @@
             "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
+            "modules/mint-server"
           ];
         };
 
@@ -470,6 +481,7 @@
           name = "fedimint-cli";
           bin = "fedimint-cli";
           dirs = [
+            "core"
             "client/clientd"
             "client/client-lib"
             "client/cli"
@@ -482,6 +494,8 @@
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
           ];
         };
 
@@ -489,6 +503,7 @@
           name = "mint-client";
           inherit target;
           dirs = [
+            "core"
             "client/client-lib"
             "crypto/tbs"
             "fedimint-api"
@@ -498,6 +513,8 @@
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
           ];
         };
 
@@ -505,6 +522,7 @@
           name = "clientd";
           bin = "clientd";
           dirs = [
+            "core"
             "client/cli"
             "client/client-lib"
             "client/clientd"
@@ -523,6 +541,7 @@
         fedimint-tests = pkg {
           name = "fedimint-tests";
           dirs = [
+            "core"
             "client/cli"
             "client/client-lib"
             "client/clientd"
