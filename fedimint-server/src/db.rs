@@ -8,18 +8,22 @@ use fedimint_core::epoch::EpochHistory;
 use crate::consensus::AcceptedTransaction;
 use crate::transaction::Transaction;
 
-pub const DB_PREFIX_PROPOSED_TRANSACTION: u8 = 0x01;
-pub const DB_PREFIX_ACCEPTED_TRANSACTION: u8 = 0x02;
-pub const DB_PREFIX_DROP_PEER: u8 = 0x03;
-pub const DB_PREFIX_REJECTED_TRANSACTION: u8 = 0x04;
-pub const DB_PREFIX_EPOCH_HISTORY: u8 = 0x05;
-pub const DB_PREFIX_LAST_EPOCH: u8 = 0x06;
+#[repr(u8)]
+#[derive(Clone)]
+pub enum DbKeyPrefix {
+    ProposedTransaction = 0x01,
+    AcceptedTransaction = 0x02,
+    DropPeer = 0x03,
+    RejectedTransaction = 0x04,
+    EpochHistory = 0x05,
+    LastEpoch = 0x06,
+}
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct ProposedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for ProposedTransactionKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
     type Key = Self;
     type Value = Transaction;
 }
@@ -28,7 +32,7 @@ impl DatabaseKeyPrefixConst for ProposedTransactionKey {
 pub struct ProposedTransactionKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposedTransaction as u8;
     type Key = ProposedTransactionKey;
     type Value = Transaction;
 }
@@ -37,7 +41,7 @@ impl DatabaseKeyPrefixConst for ProposedTransactionKeyPrefix {
 pub struct AcceptedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
-    const DB_PREFIX: u8 = DB_PREFIX_ACCEPTED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::AcceptedTransaction as u8;
     type Key = Self;
     type Value = AcceptedTransaction;
 }
@@ -46,7 +50,7 @@ impl DatabaseKeyPrefixConst for AcceptedTransactionKey {
 pub struct RejectedTransactionKey(pub TransactionId);
 
 impl DatabaseKeyPrefixConst for RejectedTransactionKey {
-    const DB_PREFIX: u8 = DB_PREFIX_REJECTED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::RejectedTransaction as u8;
     type Key = Self;
     type Value = String;
 }
@@ -55,7 +59,7 @@ impl DatabaseKeyPrefixConst for RejectedTransactionKey {
 pub struct DropPeerKey(pub PeerId);
 
 impl DatabaseKeyPrefixConst for DropPeerKey {
-    const DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
+    const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
     type Key = Self;
     type Value = ();
 }
@@ -64,7 +68,7 @@ impl DatabaseKeyPrefixConst for DropPeerKey {
 pub struct DropPeerKeyPrefix;
 
 impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_DROP_PEER;
+    const DB_PREFIX: u8 = DbKeyPrefix::DropPeer as u8;
     type Key = DropPeerKey;
     type Value = ();
 }
@@ -73,7 +77,7 @@ impl DatabaseKeyPrefixConst for DropPeerKeyPrefix {
 pub struct EpochHistoryKey(pub u64);
 
 impl DatabaseKeyPrefixConst for EpochHistoryKey {
-    const DB_PREFIX: u8 = DB_PREFIX_EPOCH_HISTORY;
+    const DB_PREFIX: u8 = DbKeyPrefix::EpochHistory as u8;
     type Key = Self;
     type Value = EpochHistory;
 }
@@ -82,7 +86,7 @@ impl DatabaseKeyPrefixConst for EpochHistoryKey {
 pub struct LastEpochKey;
 
 impl DatabaseKeyPrefixConst for LastEpochKey {
-    const DB_PREFIX: u8 = DB_PREFIX_LAST_EPOCH;
+    const DB_PREFIX: u8 = DbKeyPrefix::LastEpoch as u8;
     type Key = Self;
     type Value = EpochHistoryKey;
 }

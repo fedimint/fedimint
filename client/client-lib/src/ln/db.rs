@@ -7,17 +7,21 @@ use super::incoming::ConfirmedInvoice;
 use super::outgoing::OutgoingContractAccount;
 use crate::ln::outgoing::OutgoingContractData;
 
-const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x23;
-const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x24;
-const DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = 0x25;
-const DB_PREFIX_CONFIRMED_INVOICE: u8 = 0x26;
-const DB_PREFIX_LIGHTNING_GATEWAY: u8 = 0x28;
+#[repr(u8)]
+#[derive(Clone)]
+pub enum DbKeyPrefix {
+    OutgoingPayment = 0x23,
+    OutgoingPaymentClaim = 0x24,
+    OutgoingContractAccount = 0x25,
+    ConfirmedInvoice = 0x26,
+    LightningGateway = 0x28,
+}
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct OutgoingPaymentKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
     type Key = Self;
     type Value = OutgoingContractData;
 }
@@ -26,7 +30,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentKey {
 pub struct OutgoingPaymentKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment as u8;
     type Key = OutgoingPaymentKey;
     type Value = OutgoingContractData;
 }
@@ -35,7 +39,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentKeyPrefix {
 pub struct OutgoingPaymentClaimKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
     type Key = Self;
     type Value = ();
 }
@@ -44,7 +48,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKey {
 pub struct OutgoingPaymentClaimKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim as u8;
     type Key = OutgoingPaymentClaimKey;
     type Value = ();
 }
@@ -53,7 +57,7 @@ impl DatabaseKeyPrefixConst for OutgoingPaymentClaimKeyPrefix {
 pub struct OutgoingContractAccountKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
     type Key = Self;
     type Value = OutgoingContractAccount;
 }
@@ -62,7 +66,7 @@ impl DatabaseKeyPrefixConst for OutgoingContractAccountKey {
 pub struct OutgoingContractAccountKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount as u8;
     type Key = OutgoingContractAccountKey;
     type Value = OutgoingContractAccount;
 }
@@ -71,7 +75,7 @@ impl DatabaseKeyPrefixConst for OutgoingContractAccountKeyPrefix {
 pub struct ConfirmedInvoiceKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ConfirmedInvoiceKey {
-    const DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
     type Key = Self;
     type Value = ConfirmedInvoice;
 }
@@ -80,7 +84,7 @@ impl DatabaseKeyPrefixConst for ConfirmedInvoiceKey {
 pub struct ConfirmedInvoiceKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    const DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice as u8;
     type Key = ConfirmedInvoiceKey;
     type Value = ConfirmedInvoice;
 }
@@ -89,7 +93,7 @@ impl DatabaseKeyPrefixConst for ConfirmedInvoiceKeyPrefix {
 pub struct LightningGatewayKey;
 
 impl DatabaseKeyPrefixConst for LightningGatewayKey {
-    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = Self;
     type Value = LightningGateway;
 }

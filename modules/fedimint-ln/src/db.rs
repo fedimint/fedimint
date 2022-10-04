@@ -6,18 +6,22 @@ use secp256k1::PublicKey;
 use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 use crate::{ContractAccount, LightningGateway, OutputOutcome};
 
-const DB_PREFIX_CONTRACT: u8 = 0x40;
-const DB_PREFIX_OFFER: u8 = 0x41;
-const DB_PREFIX_PROPOSE_DECRYPTION_SHARE: u8 = 0x42;
-const DB_PREFIX_AGREED_DECRYPTION_SHARE: u8 = 0x43;
-const DB_PREFIX_CONTRACT_UPDATE: u8 = 0x44;
-const DB_PREFIX_LIGHTNING_GATEWAY: u8 = 0x45;
+#[repr(u8)]
+#[derive(Clone)]
+pub enum DbKeyPrefix {
+    Contract = 0x40,
+    Offer = 0x41,
+    ProposeDecryptionShare = 0x42,
+    AgreedDecryptionShare = 0x43,
+    ContractUpdate = 0x44,
+    LightningGateway = 0x45,
+}
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable)]
 pub struct ContractKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ContractKey {
-    const DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
+    const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
     type Key = Self;
     type Value = ContractAccount;
 }
@@ -26,7 +30,7 @@ impl DatabaseKeyPrefixConst for ContractKey {
 pub struct ContractKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ContractKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
+    const DB_PREFIX: u8 = DbKeyPrefix::Contract as u8;
     type Key = ContractKey;
     type Value = ContractAccount;
 }
@@ -35,7 +39,7 @@ impl DatabaseKeyPrefixConst for ContractKeyPrefix {
 pub struct ContractUpdateKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for ContractUpdateKey {
-    const DB_PREFIX: u8 = DB_PREFIX_CONTRACT_UPDATE;
+    const DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate as u8;
     type Key = Self;
     type Value = OutputOutcome;
 }
@@ -44,7 +48,7 @@ impl DatabaseKeyPrefixConst for ContractUpdateKey {
 pub struct OfferKey(pub bitcoin_hashes::sha256::Hash);
 
 impl DatabaseKeyPrefixConst for OfferKey {
-    const DB_PREFIX: u8 = DB_PREFIX_OFFER;
+    const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
     type Key = Self;
     type Value = IncomingContractOffer;
 }
@@ -53,7 +57,7 @@ impl DatabaseKeyPrefixConst for OfferKey {
 pub struct OfferKeyPrefix;
 
 impl DatabaseKeyPrefixConst for OfferKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_OFFER;
+    const DB_PREFIX: u8 = DbKeyPrefix::Offer as u8;
     type Key = OfferKey;
     type Value = IncomingContractOffer;
 }
@@ -63,7 +67,7 @@ impl DatabaseKeyPrefixConst for OfferKeyPrefix {
 pub struct ProposeDecryptionShareKey(pub ContractId);
 
 impl DatabaseKeyPrefixConst for ProposeDecryptionShareKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSE_DECRYPTION_SHARE;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
     type Key = Self;
     type Value = PreimageDecryptionShare;
 }
@@ -73,7 +77,7 @@ impl DatabaseKeyPrefixConst for ProposeDecryptionShareKey {
 pub struct ProposeDecryptionShareKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposeDecryptionShareKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSE_DECRYPTION_SHARE;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare as u8;
     type Key = ProposeDecryptionShareKey;
     type Value = PreimageDecryptionShare;
 }
@@ -83,7 +87,7 @@ impl DatabaseKeyPrefixConst for ProposeDecryptionShareKeyPrefix {
 pub struct AgreedDecryptionShareKey(pub ContractId, pub PeerId);
 
 impl DatabaseKeyPrefixConst for AgreedDecryptionShareKey {
-    const DB_PREFIX: u8 = DB_PREFIX_AGREED_DECRYPTION_SHARE;
+    const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
     type Key = Self;
     type Value = PreimageDecryptionShare;
 }
@@ -93,7 +97,7 @@ impl DatabaseKeyPrefixConst for AgreedDecryptionShareKey {
 pub struct AgreedDecryptionShareKeyPrefix;
 
 impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_AGREED_DECRYPTION_SHARE;
+    const DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare as u8;
     type Key = AgreedDecryptionShareKey;
     type Value = PreimageDecryptionShare;
 }
@@ -102,7 +106,7 @@ impl DatabaseKeyPrefixConst for AgreedDecryptionShareKeyPrefix {
 pub struct LightningGatewayKey(pub PublicKey);
 
 impl DatabaseKeyPrefixConst for LightningGatewayKey {
-    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = Self;
     type Value = LightningGateway;
 }
@@ -111,7 +115,7 @@ impl DatabaseKeyPrefixConst for LightningGatewayKey {
 pub struct LightningGatewayKeyPrefix;
 
 impl DatabaseKeyPrefixConst for LightningGatewayKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    const DB_PREFIX: u8 = DbKeyPrefix::LightningGateway as u8;
     type Key = LightningGatewayKey;
     type Value = LightningGateway;
 }

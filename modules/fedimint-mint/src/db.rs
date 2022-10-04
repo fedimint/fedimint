@@ -4,17 +4,21 @@ use fedimint_api::{Amount, OutPoint, PeerId};
 
 use crate::{Nonce, PartialSigResponse, SigResponse};
 
-const DB_PREFIX_COIN_NONCE: u8 = 0x10;
-const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;
-const DB_PREFIX_RECEIVED_PARTIAL_SIG: u8 = 0x12;
-const DB_PREFIX_OUTPUT_OUTCOME: u8 = 0x13;
-const DB_PREFIX_MINT_AUDIT_ITEM: u8 = 0x14;
+#[repr(u8)]
+#[derive(Clone)]
+pub enum DbKeyPrefix {
+    CoinNonce = 0x10,
+    ProposedPartialSig = 0x11,
+    ReceivedPartialSig = 0x12,
+    OutputOutcome = 0x13,
+    MintAuditItem = 0x14,
+}
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
 pub struct NonceKey(pub Nonce);
 
 impl DatabaseKeyPrefixConst for NonceKey {
-    const DB_PREFIX: u8 = DB_PREFIX_COIN_NONCE;
+    const DB_PREFIX: u8 = DbKeyPrefix::CoinNonce as u8;
     type Key = Self;
     type Value = ();
 }
@@ -25,7 +29,7 @@ pub struct ProposedPartialSignatureKey {
 }
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = Self;
     type Value = PartialSigResponse;
 }
@@ -34,7 +38,7 @@ impl DatabaseKeyPrefixConst for ProposedPartialSignatureKey {
 pub struct ProposedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ProposedPartialSignaturesKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_PROPOSED_PARTIAL_SIG;
+    const DB_PREFIX: u8 = DbKeyPrefix::ProposedPartialSig as u8;
     type Key = ProposedPartialSignatureKey;
     type Value = PartialSigResponse;
 }
@@ -46,7 +50,7 @@ pub struct ReceivedPartialSignatureKey {
 }
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKey {
-    const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = Self;
     type Value = PartialSigResponse;
 }
@@ -57,7 +61,7 @@ pub struct ReceivedPartialSignatureKeyOutputPrefix {
 }
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
     type Value = PartialSigResponse;
 }
@@ -66,7 +70,7 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignatureKeyOutputPrefix {
 pub struct ReceivedPartialSignaturesKeyPrefix;
 
 impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_RECEIVED_PARTIAL_SIG;
+    const DB_PREFIX: u8 = DbKeyPrefix::ReceivedPartialSig as u8;
     type Key = ReceivedPartialSignatureKey;
     type Value = PartialSigResponse;
 }
@@ -76,7 +80,7 @@ impl DatabaseKeyPrefixConst for ReceivedPartialSignaturesKeyPrefix {
 pub struct OutputOutcomeKey(pub OutPoint);
 
 impl DatabaseKeyPrefixConst for OutputOutcomeKey {
-    const DB_PREFIX: u8 = DB_PREFIX_OUTPUT_OUTCOME;
+    const DB_PREFIX: u8 = DbKeyPrefix::OutputOutcome as u8;
     type Key = Self;
     type Value = SigResponse;
 }
@@ -91,7 +95,7 @@ pub enum MintAuditItemKey {
 }
 
 impl DatabaseKeyPrefixConst for MintAuditItemKey {
-    const DB_PREFIX: u8 = DB_PREFIX_MINT_AUDIT_ITEM;
+    const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = Self;
     type Value = Amount;
 }
@@ -100,7 +104,7 @@ impl DatabaseKeyPrefixConst for MintAuditItemKey {
 pub struct MintAuditItemKeyPrefix;
 
 impl DatabaseKeyPrefixConst for MintAuditItemKeyPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_MINT_AUDIT_ITEM;
+    const DB_PREFIX: u8 = DbKeyPrefix::MintAuditItem as u8;
     type Key = MintAuditItemKey;
     type Value = Amount;
 }

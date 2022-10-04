@@ -381,14 +381,18 @@ mod tests {
     use crate::db::DatabaseKeyPrefixConst;
     use crate::encoding::{Decodable, Encodable};
 
-    const DB_PREFIX_TEST: u8 = 0x42;
-    const ALT_DB_PREFIX_TEST: u8 = 0x43;
+    #[repr(u8)]
+    #[derive(Clone)]
+    pub enum TestDbKeyPrefix {
+        Test = 0x42,
+        AltTest = 0x43,
+    }
 
     #[derive(Debug, Encodable, Decodable)]
     struct TestKey(u64);
 
     impl DatabaseKeyPrefixConst for TestKey {
-        const DB_PREFIX: u8 = DB_PREFIX_TEST;
+        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = Self;
         type Value = TestVal;
     }
@@ -397,7 +401,7 @@ mod tests {
     struct DbPrefixTestPrefix;
 
     impl DatabaseKeyPrefixConst for DbPrefixTestPrefix {
-        const DB_PREFIX: u8 = DB_PREFIX_TEST;
+        const DB_PREFIX: u8 = TestDbKeyPrefix::Test as u8;
         type Key = TestKey;
         type Value = TestVal;
     }
@@ -406,7 +410,7 @@ mod tests {
     struct AltTestKey(u64);
 
     impl DatabaseKeyPrefixConst for AltTestKey {
-        const DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
         type Key = Self;
         type Value = TestVal;
     }
@@ -415,7 +419,7 @@ mod tests {
     struct AltDbPrefixTestPrefix;
 
     impl DatabaseKeyPrefixConst for AltDbPrefixTestPrefix {
-        const DB_PREFIX: u8 = ALT_DB_PREFIX_TEST;
+        const DB_PREFIX: u8 = TestDbKeyPrefix::AltTest as u8;
         type Key = AltTestKey;
         type Value = TestVal;
     }
