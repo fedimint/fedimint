@@ -24,7 +24,7 @@ macro_rules! dyn_newtype_define {
             $(#[$outer])*
             $name(Box<$trait>)
         }
-        $crate::_dyn_newtype_impl_deref_mut($name);
+        $crate::_dyn_newtype_impl_deref_mut!($name);
     };
     (   $(#[$outer:meta])*
         $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
