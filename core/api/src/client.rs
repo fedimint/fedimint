@@ -42,7 +42,7 @@ dyn_newtype_define! {
     ClientModule(Arc<IClientModule>)
 }
 
-/// Result of [`ClientModulePlugin::poll_pending_output`]
+/// Result of [`ClientModulePlugin::poll_pending_outputs`]
 pub struct PollPendingOutputs<S, P> {
     done: Vec<S>,
     pending: Vec<P>,

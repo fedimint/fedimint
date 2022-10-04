@@ -15,7 +15,7 @@ use std::time::Duration;
 use tracing::info;
 use tracing::warn;
 
-/// https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48
+// <https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48>
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;
 
 pub fn make_bitcoind_rpc(
