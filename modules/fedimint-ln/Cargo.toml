@@ -30,6 +30,6 @@ serde_json = "1.0.85"
 url = { version = "2.3.1", features = ["serde"] }
 
 [dev-dependencies]
-tokio = {version = "1.21.1", features = [ "full" ] }
+tokio = {version = "1.21.2", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
