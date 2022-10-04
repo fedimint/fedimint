@@ -162,7 +162,7 @@
             $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>]</span>)*
             <span class="macro-nonterminal">$name</span>(Box&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>&gt;)
         }
-        <span class="macro-nonterminal">$crate::_dyn_newtype_impl_deref_mut</span>(<span class="macro-nonterminal">$name</span>);
+        <span class="macro-nonterminal">$</span><span class="macro">crate::_dyn_newtype_impl_deref_mut!</span>(<span class="macro-nonterminal">$name</span>);
     };
     (   $(<span class="attribute">#[<span class="macro-nonterminal">$outer</span>:meta]</span>)*
         <span class="macro-nonterminal">$name</span>:ident&lt;<span class="macro-nonterminal">$lifetime</span>:lifetime&gt;(Arc&lt;<span class="macro-nonterminal">$</span><span class="kw">trait</span>:<span class="macro-nonterminal">ident</span>&gt;)
