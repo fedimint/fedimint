@@ -429,30 +429,6 @@
 <span id="429">429</span>
 <span id="430">430</span>
 <span id="431">431</span>
-<span id="432">432</span>
-<span id="433">433</span>
-<span id="434">434</span>
-<span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
-<span id="438">438</span>
-<span id="439">439</span>
-<span id="440">440</span>
-<span id="441">441</span>
-<span id="442">442</span>
-<span id="443">443</span>
-<span id="444">444</span>
-<span id="445">445</span>
-<span id="446">446</span>
-<span id="447">447</span>
-<span id="448">448</span>
-<span id="449">449</span>
-<span id="450">450</span>
-<span id="451">451</span>
-<span id="452">452</span>
-<span id="453">453</span>
-<span id="454">454</span>
-<span id="455">455</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -466,16 +442,11 @@
 
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
-<span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tokio::task::spawn;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span>config::ServerConfig;
-<span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
-<span class="kw">use </span>fedimint_core::modules::ln::LightningModule;
-<span class="kw">use </span>fedimint_core::modules::wallet::bitcoind::BitcoindRpc;
-<span class="kw">use </span>fedimint_core::modules::wallet::Wallet;
 
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
@@ -531,43 +502,24 @@
 
 <span class="kw">impl </span>FedimintServer {
     <span class="doccomment">/// Start all the components of the mint and plug them together
-    </span><span class="kw">pub async fn </span>run(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) {
-        <span class="kw">let </span>server = FedimintServer::new(cfg.clone(), db, bitcoincore_rpc).<span class="kw">await</span>;
+    </span><span class="kw">pub async fn </span>run(cfg: ServerConfig, consensus: FedimintConsensus&lt;OsRng&gt;) {
+        <span class="kw">let </span>server = FedimintServer::new(cfg.clone(), consensus).<span class="kw">await</span>;
         spawn(net::api::run_server(cfg, server.consensus.clone()));
         server.run_consensus().<span class="kw">await</span>;
     }
-    <span class="kw">pub async fn </span>new(cfg: ServerConfig, db: Database, bitcoincore_rpc: BitcoindRpc) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub async fn </span>new(cfg: ServerConfig, consensus: FedimintConsensus&lt;OsRng&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
-        <span class="self">Self</span>::new_with(cfg.clone(), db, bitcoincore_rpc, connector).<span class="kw">await
+        <span class="self">Self</span>::new_with(cfg.clone(), consensus, connector).<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
-        database: Database,
-        bitcoind: BitcoindRpc,
+        consensus: FedimintConsensus&lt;OsRng&gt;,
         connector: PeerConnector&lt;EpochMessage&gt;,
     ) -&gt; <span class="self">Self </span>{
         cfg.validate_config(<span class="kw-2">&amp;</span>cfg.identity);
-
-        <span class="kw">let </span>mint = fedimint_core::modules::mint::Mint::new(cfg.mint.clone(), database.clone());
-
-        <span class="kw">let </span>wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), database.clone(), bitcoind)
-            .<span class="kw">await
-            </span>.expect(<span class="string">&quot;Couldn&#39;t create wallet&quot;</span>);
-
-        <span class="kw">let </span>ln = LightningModule::new(cfg.ln.clone(), database.clone());
-
-        <span class="kw">let </span>consensus = Arc::new(FedimintConsensus {
-            rng_gen: Box::new(OsRngGen),
-            cfg: cfg.clone(),
-            mint,
-            wallet,
-            ln,
-            db: database,
-            transaction_notify: Arc::new(Notify::new()),
-        });
 
         <span class="kw">let </span>connections = ReconnectPeerConnections::new(cfg.network_config(), connector)
             .<span class="kw">await
@@ -593,7 +545,7 @@
         FedimintServer {
             connections,
             hbbft,
-            consensus,
+            consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
         }
@@ -900,7 +852,7 @@
     }
 }
 
-<span class="kw">struct </span>OsRngGen;
+<span class="kw">pub struct </span>OsRngGen;
 <span class="kw">impl </span>RngGenerator <span class="kw">for </span>OsRngGen {
     <span class="kw">type </span>Rng = OsRng;
 
@@ -909,4 +861,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (57f097ea2 2022-10-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f83e0266c 2022-10-03)" ></div></body></html>

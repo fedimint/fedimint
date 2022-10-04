@@ -646,6 +646,30 @@
 <span id="646">646</span>
 <span id="647">647</span>
 <span id="648">648</span>
+<span id="649">649</span>
+<span id="650">650</span>
+<span id="651">651</span>
+<span id="652">652</span>
+<span id="653">653</span>
+<span id="654">654</span>
+<span id="655">655</span>
+<span id="656">656</span>
+<span id="657">657</span>
+<span id="658">658</span>
+<span id="659">659</span>
+<span id="660">660</span>
+<span id="661">661</span>
+<span id="662">662</span>
+<span id="663">663</span>
+<span id="664">664</span>
+<span id="665">665</span>
+<span id="666">666</span>
+<span id="667">667</span>
+<span id="668">668</span>
+<span id="669">669</span>
+<span id="670">670</span>
+<span id="671">671</span>
+<span id="672">672</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -662,6 +686,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::outcome::OutputOutcome;
 <span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::{Input, Output, Transaction, TransactionError};
+<span class="kw">use </span><span class="kw">crate</span>::OsRngGen;
 <span class="kw">use </span>fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -674,6 +699,7 @@
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
+<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
@@ -712,7 +738,9 @@
     <span class="kw">pub </span>drop_peers: Vec&lt;PeerId&gt;,
 }
 
-<span class="kw">pub struct </span>FedimintConsensus&lt;R&gt;
+<span class="comment">// TODO: we should make other fields private and get rid of this
+</span><span class="attribute">#[non_exhaustive]
+</span><span class="kw">pub struct </span>FedimintConsensus&lt;R&gt;
 <span class="kw">where
     </span>R: RngCore + CryptoRng,
 {
@@ -729,7 +757,7 @@
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
     </span><span class="kw">pub </span>db: Database,
 
-    <span class="comment">// Notifies tasks when there is a new transaction
+    <span class="doccomment">/// Notifies tasks when there is a new transaction
     </span><span class="kw">pub </span>transaction_notify: Arc&lt;Notify&gt;,
 }
 
@@ -744,6 +772,26 @@
     mint: &lt;Mint <span class="kw">as </span>FederationModule&gt;::VerificationCache,
     wallet: &lt;Wallet <span class="kw">as </span>FederationModule&gt;::VerificationCache,
     ln: &lt;LightningModule <span class="kw">as </span>FederationModule&gt;::VerificationCache,
+}
+
+<span class="kw">impl </span>FedimintConsensus&lt;OsRng&gt; {
+    <span class="kw">pub fn </span>new(
+        cfg: ServerConfig,
+        mint: Mint,
+        wallet: Wallet,
+        ln: LightningModule,
+        db: Database,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            rng_gen: Box::new(OsRngGen),
+            cfg,
+            mint,
+            wallet,
+            ln,
+            db,
+            transaction_notify: Arc::new(Notify::new()),
+        }
+    }
 }
 
 <span class="kw">impl</span>&lt;R&gt; FedimintConsensus&lt;R&gt;
@@ -1295,4 +1343,4 @@
     </span>TransactionConflictError,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (57f097ea2 2022-10-01)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (f83e0266c 2022-10-03)" ></div></body></html>
