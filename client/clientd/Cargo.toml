@@ -40,7 +40,7 @@ axum = "0.5.16"
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = [ "trace" ] }
 rand = "0.6.5"
-thiserror = "1.0.23"
+thiserror = "1.0.37"
 
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }

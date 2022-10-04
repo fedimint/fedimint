@@ -31,7 +31,7 @@ reqwest = { version = "0.11.12", features = [ "json", "rustls-tls" ], default-fe
 secp256k1-zkp = { version = "0.6.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = "1.0.145"
 tbs = { path = "../../crypto/tbs" }
-thiserror = "1.0.23"
+thiserror = "1.0.37"
 tracing ="0.1.22"
 jsonrpsee-types = "0.15.1"
 jsonrpsee-core = { version = "0.15.1", features = [ "client" ] }
