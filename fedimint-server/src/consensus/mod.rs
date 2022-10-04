@@ -14,6 +14,7 @@ use crate::db::{
 use crate::outcome::OutputOutcome;
 use crate::rng::RngGenerator;
 use crate::transaction::{Input, Output, Transaction, TransactionError};
+use crate::OsRngGen;
 use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -26,6 +27,7 @@ use fedimint_core::modules::wallet::{Wallet, WalletError};
 use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
+use rand::rngs::OsRng;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
@@ -64,6 +66,8 @@ pub struct ConsensusProposal {
     pub drop_peers: Vec<PeerId>,
 }
 
+// TODO: we should make other fields private and get rid of this
+#[non_exhaustive]
 pub struct FedimintConsensus<R>
 where
     R: RngCore + CryptoRng,
@@ -81,7 +85,7 @@ where
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
-    // Notifies tasks when there is a new transaction
+    /// Notifies tasks when there is a new transaction
     pub transaction_notify: Arc<Notify>,
 }
 
@@ -96,6 +100,26 @@ struct VerificationCaches {
     mint: <Mint as FederationModule>::VerificationCache,
     wallet: <Wallet as FederationModule>::VerificationCache,
     ln: <LightningModule as FederationModule>::VerificationCache,
+}
+
+impl FedimintConsensus<OsRng> {
+    pub fn new(
+        cfg: ServerConfig,
+        mint: Mint,
+        wallet: Wallet,
+        ln: LightningModule,
+        db: Database,
+    ) -> Self {
+        Self {
+            rng_gen: Box::new(OsRngGen),
+            cfg,
+            mint,
+            wallet,
+            ln,
+            db,
+            transaction_notify: Arc::new(Notify::new()),
+        }
+    }
 }
 
 impl<R> FedimintConsensus<R>

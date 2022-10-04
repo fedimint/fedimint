@@ -206,10 +206,10 @@
         filterWorkspaceDepsBuildFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ] src;
 
         # Filter only files relevant to building the workspace
-        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ] src;
+        filterWorkspaceFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" ] src;
 
         # Like `filterWorkspaceFiles` but with `./scripts/` included
-        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" "scripts/.*" ] src;
+        filterWorkspaceCliTestFiles = src: filterSrcWithRegexes [ "Cargo.lock" "Cargo.toml" ".cargo" ".cargo/.*" ".*/Cargo.toml" ".*\.rs" ".*\.html" "scripts/.*" ] src;
 
         filterSrcWithRegexes = regexes: src:
           let
@@ -624,6 +624,7 @@
                 ExposedPorts = {
                   "${builtins.toString 17240}/tcp" = { };
                   "${builtins.toString 17340}/tcp" = { };
+                  "${builtins.toString 17440}/tcp" = { };
                 };
               };
             };
@@ -658,7 +659,7 @@
                 contents = [ ln-gateway clightning-dev pkgs.bash pkgs.coreutils ];
                 config = {
                   Cmd = [
-                    "${ln-gateway}/bin/ln-gateway"
+                    "${ln-gateway}/bin/ln_gateway"
                   ];
                   ExposedPorts = {
                     "${builtins.toString 9735}/tcp" = { };

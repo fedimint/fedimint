@@ -25,6 +25,7 @@ use tracing_subscriber::EnvFilter;
 
 #[derive(Serialize)]
 #[serde(rename_all(serialize = "snake_case"))]
+#[serde(untagged)]
 enum CliOutput {
     VersionHash {
         hash: String,
@@ -163,6 +164,7 @@ impl Error for CliError {}
 #[command(version)]
 struct Cli {
     /// The working directory of the client containing the config and db
+    #[arg(long = "workdir")]
     workdir: PathBuf,
     #[clap(subcommand)]
     command: Command,

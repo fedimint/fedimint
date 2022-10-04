@@ -18,6 +18,10 @@ use fedimint_api::Amount;
 use fedimint_api::FederationModule;
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
+use fedimint_ln::LightningModule;
+use fedimint_mint::Mint;
+use fedimint_server::consensus::FedimintConsensus;
+use fedimint_wallet::Wallet;
 use futures::executor::block_on;
 use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
@@ -728,16 +732,19 @@ impl FederationTest {
         connect_gen: &impl Fn(&ServerConfig) -> PeerConnector<EpochMessage>,
     ) -> Self {
         let servers = join_all(server_config.values().map(|cfg| async move {
-            let bitcoin_rpc = bitcoin_gen();
-            let database = database_gen();
+            let btc_rpc = bitcoin_gen();
+            let db = database_gen();
 
-            let fedimint = FedimintServer::new_with(
-                cfg.clone(),
-                database.clone(),
-                bitcoin_gen(),
-                connect_gen(cfg),
-            )
-            .await;
+            let mint = Mint::new(cfg.mint.clone(), db.clone());
+
+            let wallet = Wallet::new_with_bitcoind(cfg.wallet.clone(), db.clone(), btc_rpc.clone())
+                .await
+                .expect("Couldn't create wallet");
+
+            let ln = LightningModule::new(cfg.ln.clone(), db.clone());
+
+            let consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db.clone());
+            let fedimint = FedimintServer::new_with(cfg.clone(), consensus, connect_gen(cfg)).await;
 
             spawn(fedimint_server::net::api::run_server(
                 cfg.clone(),
@@ -746,8 +753,8 @@ impl FederationTest {
 
             Rc::new(RefCell::new(ServerTest {
                 fedimint,
-                bitcoin_rpc,
-                database,
+                bitcoin_rpc: btc_rpc,
+                database: db,
                 last_consensus: vec![],
                 override_proposal: None,
                 dropped_peers: vec![],

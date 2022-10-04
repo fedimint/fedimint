@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %} Fedimint {% endblock %}
+
+{% block content %}
+<div class="container text-center mt-5">
+  <h1>The {{federation_name}} Federation is Running!</h1>
+  <h4>Send these configs to your other federation members to help them connected.</h4>
+  <h3>Client config</h3>
+  <div class="input-group mb-3">
+    <input id="client-config" type="textarea" class="form-control" value="{{ client_config }}" readonly>
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary" type="button" id="copy-button-client-config">Copy</button>
+    </div>
+  </div>
+
+  <h3>Server configs</h3>
+  {% for (guardian, server_config) in server_configs %}
+  {% if guardian.name != "You" %}
+  <div class="input-group mb-3">
+    <div class="input-group-prepend"><span class="input-group-text">{{guardian.name}}</span></div>
+    <input id="server-config-{{guardian.name}}" type="textarea" class="form-control" value="{{ server_config }}"
+      readonly>
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary" type="button"
+        id="copy-button-server-config-{{guardian.name}}">Copy</button>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+  <p>Scan this QR to connect to your federation from mobile.</p>
+  <br>
+  <img src="/qr" alt="federation qr code" width="200" height="200" />
+  <br>
+  <div class="input-group mb-3 mt-3">
+    <input id="connection-string" type="text" class="form-control" value="{{ federation_connection_string }}"
+      aria-label="Connection String" readonly>
+    <div class="input-group-append">
+      <button class="btn btn-outline-primary" type="button" id="copy-button">Copy</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelector("#copy-button-client-config").addEventListener("click", function (e) {
+    const config = document.getElementById("client-config");
+    navigator.clipboard.writeText(config.value);
+  });
+</script>
+
+{% for (guardian, server_config) in server_configs %}
+<script>
+  document.querySelector("#copy-button-server-config-{{guardian.name}}").addEventListener("click", function (e) {
+    e.preventDefault();
+    const config = document.getElementById("server-config-{{guardian.name}}");
+    navigator.clipboard.writeText(config.value);
+  });
+</script>
+{% endfor %}
+{% endblock %}
