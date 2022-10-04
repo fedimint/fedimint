@@ -101,9 +101,10 @@ where
 {
     async fn handle<F: Fn(T) -> FF, FF: Future<Output = Result<T::Response>>>(self, handler: F) {
         let result = handler(self.request).await;
-        self.sender
-            .send(result)
-            .expect("couldn't send over channel");
+        if self.sender.send(result).is_err() {
+            // TODO: figure out how to log the result
+            tracing::error!("Plugin hung up");
+        }
     }
 }
 
