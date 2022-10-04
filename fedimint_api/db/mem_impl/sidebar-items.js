@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["DummyError",""],["MemDatabase",""],["MemDbIter",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["DummyError",""],["MemDatabase",""],["MemDbIter",""],["MemTransaction",""]]};

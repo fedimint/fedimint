@@ -670,6 +670,12 @@
 <span id="670">670</span>
 <span id="671">671</span>
 <span id="672">672</span>
+<span id="673">673</span>
+<span id="674">674</span>
+<span id="675">675</span>
+<span id="676">676</span>
+<span id="677">677</span>
+<span id="678">678</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -895,17 +901,23 @@
 
         <span class="comment">// Begin consensus epoch
         </span>{
-            <span class="kw">let </span><span class="kw-2">mut </span>db_batch = DbBatch::new();
+            <span class="kw">let </span><span class="kw-2">mut </span>db_vec = <span class="macro">vec!</span>[
+                <span class="self">self</span>.db.begin_transaction(),
+                <span class="self">self</span>.db.begin_transaction(),
+                <span class="self">self</span>.db.begin_transaction(),
+            ];
             <span class="self">self</span>.wallet
-                .begin_consensus_epoch(db_batch.transaction(), wallet_cis, <span class="self">self</span>.rng_gen.get_rng())
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>db_vec[<span class="number">0</span>], wallet_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
             <span class="self">self</span>.mint
-                .begin_consensus_epoch(db_batch.transaction(), mint_cis, <span class="self">self</span>.rng_gen.get_rng())
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>db_vec[<span class="number">1</span>], mint_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
             <span class="self">self</span>.ln
-                .begin_consensus_epoch(db_batch.transaction(), ln_cis, <span class="self">self</span>.rng_gen.get_rng())
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>db_vec[<span class="number">2</span>], ln_cis, <span class="self">self</span>.rng_gen.get_rng())
                 .<span class="kw">await</span>;
-            <span class="self">self</span>.db.apply_batch(db_batch).expect(<span class="string">&quot;DB error&quot;</span>);
+            db_vec
+                .into_iter()
+                .for_each(|tx| tx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>));
         }
 
         <span class="comment">// Process transactions

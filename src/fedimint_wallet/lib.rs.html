@@ -1255,6 +1255,13 @@
 <span id="1255">1255</span>
 <span id="1256">1256</span>
 <span id="1257">1257</span>
+<span id="1258">1258</span>
+<span id="1259">1259</span>
+<span id="1260">1260</span>
+<span id="1261">1261</span>
+<span id="1262">1262</span>
+<span id="1263">1263</span>
+<span id="1264">1264</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::TryInto;
 
@@ -1281,7 +1288,7 @@
     Transaction, TxIn, TxOut, Txid,
 };
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
-<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::api_endpoint;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -1496,7 +1503,7 @@
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
         _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
@@ -1510,7 +1517,7 @@
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         <span class="comment">// Save signatures to the database
-        </span><span class="self">self</span>.save_peg_out_signatures(batch.subtransaction(), peg_out_signatures);
+        </span><span class="self">self</span>.save_peg_out_signatures(dbtx, peg_out_signatures);
 
         <span class="comment">// FIXME: also warn on less than 1/3, that should never happen
         // Make sure we have enough contributions to continue
@@ -1526,7 +1533,7 @@
             .map(|(<span class="kw">_</span>, rc)| rc.block_height)
             .collect();
         <span class="kw">let </span>block_height = <span class="self">self
-            </span>.process_block_height_proposals(batch.subtransaction(), height_proposals)
+            </span>.process_block_height_proposals(dbtx, height_proposals)
             .<span class="kw">await</span>;
 
         <span class="kw">let </span>randomness_contributions = round_consensus
@@ -1541,8 +1548,8 @@
             randomness_beacon,
         };
 
-        batch.append_insert(RoundConsensusKey, round_consensus);
-        batch.commit();
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>RoundConsensusKey, <span class="kw-2">&amp;</span>round_consensus)
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1839,9 +1846,9 @@
         randomness.into_iter().fold([<span class="number">0</span>; <span class="number">32</span>], xor)
     }
 
-    <span class="kw">fn </span>save_peg_out_signatures(
+    <span class="kw">fn </span>save_peg_out_signatures&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>cache: BTreeMap&lt;Txid, UnsignedTransaction&gt; = <span class="self">self
@@ -1864,9 +1871,9 @@
         }
 
         <span class="kw">for </span>(txid, unsigned) <span class="kw">in </span>cache.into_iter() {
-            batch.append_insert(UnsignedTransactionKey(txid), unsigned);
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>unsigned)
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
         }
-        batch.commit();
     }
 
     <span class="doccomment">/// Try to attach signatures to a pending peg-out tx.
@@ -1978,9 +1985,9 @@
 
     <span class="doccomment">/// # Panics
     /// * If proposals is empty
-    </span><span class="kw">async fn </span>process_block_height_proposals(
+    </span><span class="kw">async fn </span>process_block_height_proposals&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         <span class="kw-2">mut </span>proposals: Vec&lt;u32&gt;,
     ) -&gt; u32 {
         <span class="macro">assert!</span>(!proposals.is_empty());
@@ -1992,7 +1999,7 @@
 
         <span class="kw">if </span>median_proposal &gt;= consensus_height {
             <span class="macro">debug!</span>(<span class="string">&quot;Setting consensus block height to {}&quot;</span>, median_proposal);
-            <span class="self">self</span>.sync_up_to_consensus_height(batch, median_proposal)
+            <span class="self">self</span>.sync_up_to_consensus_height(dbtx, median_proposal)
                 .<span class="kw">await</span>;
         } <span class="kw">else </span>{
             <span class="macro">panic!</span>(
@@ -2021,7 +2028,11 @@
         <span class="self">self</span>.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    <span class="kw">async fn </span>sync_up_to_consensus_height(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;, new_height: u32) {
+    <span class="kw">async fn </span>sync_up_to_consensus_height&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        new_height: u32,
+    ) {
         <span class="kw">let </span>old_height = <span class="self">self</span>.consensus_height().unwrap_or(<span class="number">0</span>);
         <span class="kw">if </span>new_height &lt; old_height {
             <span class="macro">info!</span>(
@@ -2042,7 +2053,6 @@
             <span class="string">&quot;New consensus height, syncing up&quot;</span>,
         );
 
-        batch.reserve((new_height - old_height) <span class="kw">as </span>usize + <span class="number">1</span>);
         <span class="kw">for </span>height <span class="kw">in </span>(old_height + <span class="number">1</span>)..=(new_height) {
             <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
                 <span class="macro">debug!</span>(<span class="string">&quot;Caught up to block {}&quot;</span>, height);
@@ -2073,22 +2083,26 @@
                     </span>.expect(<span class="string">&quot;bitcoin rpc failed&quot;</span>);
                 <span class="kw">for </span>transaction <span class="kw">in </span>block.txdata {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(pending_tx) = pending_transactions.get(<span class="kw-2">&amp;</span>transaction.txid()) {
-                        <span class="self">self</span>.recognize_change_utxo(batch.subtransaction(), pending_tx);
+                        <span class="self">self</span>.recognize_change_utxo(dbtx, pending_tx);
                     }
                 }
             }
 
-            batch.append_insert_new(
-                BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
-                (),
-            );
+            dbtx.insert_new_entry(
+                <span class="kw-2">&amp;</span>BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
+                <span class="kw-2">&amp;</span>(),
+            )
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
         }
-        batch.commit();
     }
 
     <span class="doccomment">/// Add a change UTXO to our spendable UTXO database after it was included in a block that we
     /// got consensus on.
-    </span><span class="kw">fn </span>recognize_change_utxo(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>batch: BatchTx, pending_tx: <span class="kw-2">&amp;</span>PendingTransaction) {
+    </span><span class="kw">fn </span>recognize_change_utxo&lt;<span class="lifetime">&#39;a</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        pending_tx: <span class="kw-2">&amp;</span>PendingTransaction,
+    ) {
         <span class="kw">let </span>script_pk = <span class="self">self
             </span>.cfg
             .peg_in_descriptor
@@ -2096,19 +2110,19 @@
             .script_pubkey();
         <span class="kw">for </span>(idx, output) <span class="kw">in </span>pending_tx.tx.output.iter().enumerate() {
             <span class="kw">if </span>output.script_pubkey == script_pk {
-                batch.append_insert(
-                    UTXOKey(bitcoin::OutPoint {
+                dbtx.insert_entry(
+                    <span class="kw-2">&amp;</span>UTXOKey(bitcoin::OutPoint {
                         txid: pending_tx.tx.txid(),
                         vout: idx <span class="kw">as </span>u32,
                     }),
-                    SpendableUTXO {
+                    <span class="kw-2">&amp;</span>SpendableUTXO {
                         tweak: pending_tx.tweak,
                         amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
             }
         }
-        batch.commit();
     }
 
     <span class="kw">fn </span>block_is_known(<span class="kw-2">&amp;</span><span class="self">self</span>, block_hash: BlockHash) -&gt; bool {

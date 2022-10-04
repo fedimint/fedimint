@@ -222,6 +222,9 @@
 <span id="222">222</span>
 <span id="223">223</span>
 <span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
@@ -340,9 +343,11 @@
         <span class="kw">let </span>peers: HashSet&lt;PeerId&gt; = <span class="self">self</span>.members.iter().map(|p| p.<span class="number">0</span>).collect();
         <span class="kw">for </span>(_peer, member, db) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.members {
             <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
+            <span class="kw">let </span>database = db <span class="kw">as </span><span class="kw-2">&amp;mut </span>Database;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = database.begin_transaction();
 
             member
-                .begin_consensus_epoch(batch.transaction(), consensus.clone(), <span class="kw-2">&amp;mut </span>rng)
+                .begin_consensus_epoch(<span class="kw-2">&amp;mut </span>dbtx, consensus.clone(), <span class="kw-2">&amp;mut </span>rng)
                 .<span class="kw">await</span>;
 
             <span class="kw">let </span>cache = member.build_verification_cache(inputs.iter());
@@ -358,14 +363,15 @@
                     .expect(<span class="string">&quot;Faulty output&quot;</span>);
             }
 
-            db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+            dbtx.commit_tx().expect(<span class="string">&quot;DB Error&quot;</span>);
+            database.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
 
             <span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
             member
                 .end_consensus_epoch(<span class="kw-2">&amp;</span>peers, batch.transaction(), <span class="kw-2">&amp;mut </span>rng)
                 .<span class="kw">await</span>;
 
-            db.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
+            database.apply_batch(batch).expect(<span class="string">&quot;DB error&quot;</span>);
         }
     }
 

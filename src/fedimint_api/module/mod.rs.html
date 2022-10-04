@@ -246,11 +246,13 @@
 <span id="246">246</span>
 <span id="247">247</span>
 <span id="248">248</span>
+<span id="249">249</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>testing;
 
 <span class="kw">use </span><span class="kw">crate</span>::db::batch::BatchTx;
+<span class="kw">use </span><span class="kw">crate</span>::db::DatabaseTransaction;
 <span class="kw">use crate</span>::{Amount, PeerId};
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>futures::future::BoxFuture;
@@ -397,7 +399,7 @@
     /// when processing transactions.
     </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
         rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     );

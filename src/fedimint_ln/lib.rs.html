@@ -745,6 +745,8 @@
 <span id="745">745</span>
 <span id="746">746</span>
 <span id="747">747</span>
+<span id="748">748</span>
+<span id="749">749</span>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -777,8 +779,8 @@
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 <span class="kw">use </span>itertools::Itertools;
 
-<span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
-<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::db::batch::BatchTx;
+<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -921,20 +923,22 @@
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
         _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
-        batch.append_from_iter(consensus_items.into_iter().map(|(peer, decryption_share)| {
-            <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
-            <span class="kw">let </span>_guard = span.enter();
+        consensus_items
+            .into_iter()
+            .for_each(|(peer, decryption_share)| {
+                <span class="kw">let </span>span = <span class="macro">info_span!</span>(<span class="string">&quot;process decryption share&quot;</span>, %peer);
+                <span class="kw">let </span>_guard = span.enter();
 
-            BatchItem::insert_new(
-                AgreedDecryptionShareKey(decryption_share.contract_id, peer),
-                decryption_share.share,
-            )
-        }));
-        batch.commit();
+                dbtx.insert_new_entry(
+                    <span class="kw-2">&amp;</span>AgreedDecryptionShareKey(decryption_share.contract_id, peer),
+                    <span class="kw-2">&amp;</span>decryption_share.share,
+                )
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
+            });
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(

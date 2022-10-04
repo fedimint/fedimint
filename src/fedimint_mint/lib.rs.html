@@ -919,8 +919,6 @@
 <span id="919">919</span>
 <span id="920">920</span>
 <span id="921">921</span>
-<span id="922">922</span>
-<span id="923">923</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
 <span class="kw">use </span><span class="kw">crate</span>::db::{
     MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
@@ -929,7 +927,7 @@
 };
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-<span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
@@ -1058,19 +1056,18 @@
 
     <span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
         _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) {
         <span class="kw">for </span>(peer, partial_sig) <span class="kw">in </span>consensus_items {
             <span class="self">self</span>.process_partial_signature(
-                batch.subtransaction(),
+                dbtx,
                 peer,
                 partial_sig.out_point,
                 partial_sig.partial_signature,
             )
         }
-        batch.commit();
     }
 
     <span class="kw">fn </span>build_verification_cache&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1530,9 +1527,9 @@
         (<span class="prelude-val">Ok</span>(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    <span class="kw">fn </span>process_partial_signature(
+    <span class="kw">fn </span>process_partial_signature&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         peer: PeerId,
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
@@ -1555,15 +1552,14 @@
             issuance = %output_id,
             <span class="string">&quot;Received sig share&quot;
         </span>);
-        batch.append_insert_new(
-            ReceivedPartialSignatureKey {
+        dbtx.insert_new_entry(
+            <span class="kw-2">&amp;</span>ReceivedPartialSignatureKey {
                 request_id: output_id,
                 peer_id: peer,
             },
-            partial_sig,
-        );
-
-        batch.commit();
+            <span class="kw-2">&amp;</span>partial_sig,
+        )
+        .expect(<span class="string">&quot;DB Error&quot;</span>);
     }
 }
 
