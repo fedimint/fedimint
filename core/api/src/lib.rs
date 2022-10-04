@@ -4,7 +4,7 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
-use crate::encode::{module_decode_key_prefixed_decodable, ModuleDecodable};
+use crate::encode::ModuleDecodable;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
@@ -44,15 +44,25 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             }
         }
 
-        impl<M> ModuleDecodable<M> for $name
-        where
-            M: ModuleCommon,
-        {
+        impl ModuleDecodable<$crate::server::ServerModule> for $name {
             fn consensus_decode<R: std::io::Read>(
                 mut r: &mut R,
-                modules: &BTreeMap<ModuleKey, M>,
+                modules: &BTreeMap<ModuleKey, $crate::server::ServerModule>,
             ) -> Result<Self, DecodeError> {
-                module_decode_key_prefixed_decodable(&mut r, modules, |r, m| m.$decode_fn(r))
+                $crate::encode::module_decode_key_prefixed_decodable(&mut r, modules, |r, m| {
+                    m.$decode_fn(r)
+                })
+            }
+        }
+
+        impl ModuleDecodable<$crate::client::ClientModule> for $name {
+            fn consensus_decode<R: std::io::Read>(
+                mut r: &mut R,
+                modules: &BTreeMap<ModuleKey, $crate::client::ClientModule>,
+            ) -> Result<Self, DecodeError> {
+                $crate::encode::module_decode_key_prefixed_decodable(&mut r, modules, |r, m| {
+                    m.$decode_fn(r)
+                })
             }
         }
     };
@@ -107,23 +117,22 @@ macro_rules! module_plugin_trait_define {
 /// Both backend and server part of the module will need
 /// things like decoding module-specific data.
 pub trait ModuleCommon {
-    fn module_key(&self) -> ModuleKey;
+    fn module_key() -> ModuleKey;
 
     /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_spendable_output(&self, r: &mut dyn io::Read)
-        -> Result<SpendableOutput, DecodeError>;
+    fn decode_spendable_output(r: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError>;
 
     /// Decode `Input` compatible with this module, after the module key prefix was already decoded
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+    fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
     /// Decode `Output` compatible with this module, after the module key prefix was already decoded
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+    fn decode_output(r: &mut dyn io::Read) -> Result<Output, DecodeError>;
 
     /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
+    fn decode_pending_output(r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
 
     /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+    fn decode_output_outcome(r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
 }
 
 /// Something that can be an [`Input`] in a [`Transaction`]

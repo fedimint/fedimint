@@ -9,37 +9,34 @@ use fedimint_core_api::{
     PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
 };
 
-const MINT_MODULE_KEY: u16 = 0;
+pub const MINT_MODULE_KEY: u16 = 0;
 
 // TODO: DELME
 #[derive(Default, Clone)]
 pub struct MintModuleCommon;
 
 impl ModuleCommon for MintModuleCommon {
-    fn module_key(&self) -> ModuleKey {
+    fn module_key() -> ModuleKey {
         MINT_MODULE_KEY
     }
-    fn decode_spendable_output(
-        &self,
-        d: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, DecodeError> {
+    fn decode_spendable_output(d: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError> {
         Ok(SpendableOutput::from(
             MintSpendableOutput::consensus_decode(d)?,
         ))
     }
 
-    fn decode_pending_output(&self, d: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+    fn decode_pending_output(d: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
         Ok(PendingOutput::from(MintPendingOutput::consensus_decode(d)?))
     }
 
-    fn decode_output(&self, d: &mut dyn io::Read) -> Result<Output, DecodeError> {
+    fn decode_output(d: &mut dyn io::Read) -> Result<Output, DecodeError> {
         Ok(Output::from(MintOutput::consensus_decode(d)?))
     }
-    fn decode_output_outcome(&self, d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+    fn decode_output_outcome(d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
         Ok(OutputOutcome::from(MintOutputOutcome::consensus_decode(d)?))
     }
 
-    fn decode_input(&self, d: &mut dyn io::Read) -> Result<Input, DecodeError> {
+    fn decode_input(d: &mut dyn io::Read) -> Result<Input, DecodeError> {
         Ok(Input::from(MintInput::consensus_decode(d)?))
     }
 }

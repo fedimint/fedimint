@@ -76,7 +76,20 @@ pub struct InputMeta {
 ///
 /// Server side Fedimint mondule needs to implement this trait.
 #[async_trait(?Send)]
-pub trait IServerModule: ModuleCommon {
+pub trait IServerModule {
+    fn module_key(&self) -> ModuleKey;
+
+    fn decode_spendable_output(&self, r: &mut dyn io::Read)
+        -> Result<SpendableOutput, DecodeError>;
+
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
+
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
     /// Initialize the module on registration in Fedimint
     fn init(&self);
 
@@ -192,6 +205,7 @@ dyn_newtype_define!(
 
 #[async_trait(?Send)]
 pub trait ServerModulePlugin: Sized {
+    type Common: ModuleCommon;
     type Input: PluginInput;
     type Output: PluginOutput;
     type PendingOutput: PluginPendingOutput;
@@ -314,8 +328,34 @@ pub trait ServerModulePlugin: Sized {
 impl<T> IServerModule for T
 where
     T: ServerModulePlugin,
-    T: ModuleCommon,
 {
+    fn module_key(&self) -> ModuleKey {
+        <Self as ServerModulePlugin>::Common::module_key()
+    }
+
+    fn decode_spendable_output(
+        &self,
+        r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        <Self as ServerModulePlugin>::Common::decode_spendable_output(r)
+    }
+
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        <Self as ServerModulePlugin>::Common::decode_input(r)
+    }
+
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        <Self as ServerModulePlugin>::Common::decode_output(r)
+    }
+
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        <Self as ServerModulePlugin>::Common::decode_pending_output(r)
+    }
+
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        <Self as ServerModulePlugin>::Common::decode_output_outcome(r)
+    }
+
     fn init(&self) {
         <Self as ServerModulePlugin>::init(self)
     }
@@ -518,37 +558,3 @@ where
         <Self as ServerModulePlugin>::api_endpoints(self)
     }
 }
-
-/*
-  TODO: oops, this conflicts with `T: ClientModulePlugin`
-impl<T> ModuleCommon for T
-where
-    T: ServerModulePlugin,
-{
-    fn module_key(&self) -> ModuleKey {
-        <Self as ServerModulePlugin>::module_key(self)
-    }
-
-    fn decode_spendable_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, DecodeError> {
-        Ok(<Self as ServerModulePlugin>::SpendableOutput::consensus_decode(r)?.into())
-    }
-
-    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        Ok(<Self as ServerModulePlugin>::Input::consensus_decode(r)?.into())
-    }
-
-    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        Ok(<Self as ServerModulePlugin>::Output::consensus_decode(r)?.into())
-    }
-
-    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        Ok(<Self as ServerModulePlugin>::PendingOutput::consensus_decode(r)?.into())
-    }
-
-    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        Ok(<Self as ServerModulePlugin>::OutputOutcome::consensus_decode(r)?.into())
-    }
-}*/

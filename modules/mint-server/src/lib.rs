@@ -1,101 +1,88 @@
 use async_trait::async_trait;
 use fedimint_api::{
     db::batch::BatchTx,
+    encoding::{Decodable, Encodable},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
 };
 use fedimint_core_server::{
-    ApiEndpoint, ConsensusItem, Error, IServerModule, Input, InputMeta, ModuleCommon, ModuleKey,
-    Output, OutputOutcome, SpendableOutput, VerificationCache,
+    ApiEndpoint, Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
+    ServerModulePlugin,
 };
-use fedimint_mint_common::MintModuleCommon;
-use std::{collections::HashSet, io};
+use fedimint_mint_common::{
+    MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
+    MintSpendableOutput, MINT_MODULE_KEY,
+};
+use std::collections::HashSet;
+
+#[derive(Encodable, Decodable, Clone)]
+pub struct MintVerificationCache;
+
+impl PluginVerificationCache for MintVerificationCache {
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
+    }
+}
+
+#[derive(Encodable, Decodable, Clone)]
+pub struct MintConsensusItem;
+
+impl PluginConsensusItem for MintConsensusItem {
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
+    }
+}
 
 #[derive(Default)]
-pub struct MintServerModule {
-    common: MintModuleCommon,
-}
+pub struct MintServerModule;
 
 impl MintServerModule {
     pub fn new() -> Self {
-        Self {
-            common: MintModuleCommon,
-        }
-    }
-}
-
-impl ModuleCommon for MintServerModule {
-    fn module_key(&self) -> ModuleKey {
-        self.common.module_key()
-    }
-
-    fn decode_spendable_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<SpendableOutput, fedimint_api::encoding::DecodeError> {
-        self.common.decode_spendable_output(r)
-    }
-
-    fn decode_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<Output, fedimint_api::encoding::DecodeError> {
-        self.common.decode_output(r)
-    }
-
-    fn decode_input(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<Input, fedimint_api::encoding::DecodeError> {
-        self.common.decode_input(r)
-    }
-
-    fn decode_pending_output(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<fedimint_core_server::PendingOutput, fedimint_api::encoding::DecodeError> {
-        self.common.decode_pending_output(r)
-    }
-
-    fn decode_output_outcome(
-        &self,
-        r: &mut dyn io::Read,
-    ) -> Result<fedimint_core_server::OutputOutcome, fedimint_api::encoding::DecodeError> {
-        self.common.decode_output_outcome(r)
+        Self
     }
 }
 
 #[async_trait(?Send)]
-impl IServerModule for MintServerModule {
-    fn init(&self) {
+impl ServerModulePlugin for MintServerModule {
+    type Common = MintModuleCommon;
+    type Input = MintInput;
+    type Output = MintOutput;
+    type PendingOutput = MintPendingOutput;
+    type SpendableOutput = MintSpendableOutput;
+    type OutputOutcome = MintOutputOutcome;
+    type ConsensusItem = MintConsensusItem;
+    type VerificationCache = MintVerificationCache;
+
+    fn init(&self) {}
+
+    async fn await_consensus_proposal<'a>(&'a self) {
         todo!()
     }
 
-    async fn await_consensus_proposal(&self) {
+    async fn consensus_proposal<'a>(&'a self) -> Vec<Self::ConsensusItem> {
         todo!()
     }
 
-    async fn consensus_proposal(&self) -> Vec<ConsensusItem> {
-        todo!()
-    }
-
-    async fn begin_consensus_epoch(
-        &self,
-        _batch: BatchTx<'_>,
-        _consensus_items: Vec<(PeerId, ConsensusItem)>,
+    async fn begin_consensus_epoch<'a>(
+        &'a self,
+        _batch: BatchTx<'a>,
+        _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         todo!()
     }
 
-    fn build_verification_cache(&self, _inputs: &[Input]) -> VerificationCache {
+    fn build_verification_cache<'a>(
+        &'a self,
+        _inputs: impl Iterator<Item = &'a Self::Input> + Send,
+    ) -> Self::VerificationCache {
         todo!()
     }
 
-    fn validate_input(
+    fn validate_input<'a>(
         &self,
         _interconnect: &dyn ModuleInterconect,
-        _verification_cache: &VerificationCache,
-        _input: &Input,
+        _verification_cache: &Self::VerificationCache,
+        _input: &'a Self::Input,
     ) -> Result<InputMeta, Error> {
         todo!()
     }
@@ -104,34 +91,34 @@ impl IServerModule for MintServerModule {
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
         _batch: BatchTx<'a>,
-        _input: &'b Input,
-        _verification_cache: &VerificationCache,
+        _input: &'b Self::Input,
+        _verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, Error> {
         todo!()
     }
 
-    fn validate_output(&self, _output: &Output) -> Result<Amount, Error> {
+    fn validate_output(&self, _output: &Self::Output) -> Result<Amount, Error> {
         todo!()
     }
 
-    fn apply_output(
-        &self,
-        _batch: BatchTx,
-        _output: &Output,
+    fn apply_output<'a>(
+        &'a self,
+        _batch: BatchTx<'a>,
+        _output: &'a Self::Output,
         _out_point: OutPoint,
     ) -> Result<Amount, Error> {
         todo!()
     }
 
-    async fn end_consensus_epoch(
-        &self,
+    async fn end_consensus_epoch<'a>(
+        &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        _batch: BatchTx<'_>,
+        _batch: BatchTx<'a>,
     ) -> Vec<PeerId> {
         todo!()
     }
 
-    fn output_status(&self, _out_point: crate::OutPoint) -> Option<OutputOutcome> {
+    fn output_status(&self, _out_point: OutPoint) -> Option<Self::OutputOutcome> {
         todo!()
     }
 

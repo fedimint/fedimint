@@ -2,8 +2,6 @@ use std::{collections::BTreeMap, io};
 
 use fedimint_api::encoding::{Decodable, DecodeError};
 
-use crate::ModuleCommon;
-
 use super::ModuleKey;
 
 /// Value that can be decoded, but only using the required supported modules of type `M`
@@ -36,7 +34,6 @@ pub fn module_decode_key_prefixed_decodable<T, F, R, M>(
 where
     R: io::Read,
     F: FnOnce(&mut R, &M) -> Result<T, DecodeError>,
-    M: ModuleCommon,
 {
     let key = ModuleKey::consensus_decode(&mut d)?;
 

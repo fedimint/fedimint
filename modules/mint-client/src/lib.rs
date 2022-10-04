@@ -1,7 +1,6 @@
 use fedimint_api::Amount;
 use fedimint_core_client::{
-    ClientModulePlugin, FedimintClientCore, ModuleCommon, ModuleKey, Output, PendingOutput,
-    PollPendingOutputs,
+    ClientModulePlugin, FedimintClientCore, Output, PendingOutput, PollPendingOutputs,
 };
 use fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
@@ -16,7 +15,6 @@ pub struct MintModuleClientConfig {
 
 #[derive(Clone)]
 pub struct MintClientModule {
-    common: MintModuleCommon,
     #[allow(unused)]
     config: MintModuleClientConfig,
 }
@@ -24,10 +22,7 @@ pub struct MintClientModule {
 impl MintClientModule {
     #[allow(clippy::new_ret_no_self)]
     pub fn from_config(config: MintModuleClientConfig) -> MintClientModule {
-        Self {
-            common: MintModuleCommon,
-            config,
-        }
+        Self { config }
     }
 
     /// Generate a transaction [`Output`] and a corresponding [`PendingOutput`]
@@ -58,18 +53,11 @@ impl MintClientModule {
 }
 
 impl ClientModulePlugin for MintClientModule {
-    fn module_key(&self) -> ModuleKey {
-        self.common.module_key()
-    }
-
+    type Common = MintModuleCommon;
     type Input = MintInput;
-
     type Output = MintOutput;
-
     type PendingOutput = MintPendingOutput;
-
     type SpendableOutput = MintSpendableOutput;
-
     type OutputOutcome = MintOutputOutcome;
 
     fn init(&self, _core: FedimintClientCore) {
