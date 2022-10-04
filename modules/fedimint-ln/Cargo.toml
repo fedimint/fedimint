@@ -24,7 +24,7 @@ fedimint-api = { path = "../../fedimint-api" }
 secp256k1 = { version="0.22.1", default-features=false }
 serde = {version = "1.0.145", features = [ "derive" ] }
 threshold_crypto = { git = "https://github.com/fedimint/threshold_crypto" }
-thiserror = "1.0.23"
+thiserror = "1.0.37"
 tracing = "0.1.29"
 serde_json = "1.0.85"
 url = { version = "2.3.1", features = ["serde"] }
