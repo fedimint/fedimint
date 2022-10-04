@@ -24,7 +24,7 @@ use jsonrpsee::{
 
 #[derive(Clone)]
 struct State {
-    fedimint: Arc<FedimintConsensus<rand::rngs::OsRng>>,
+    fedimint: Arc<FedimintConsensus>,
 }
 
 impl std::fmt::Debug for State {
@@ -33,7 +33,7 @@ impl std::fmt::Debug for State {
     }
 }
 
-pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus<rand::rngs::OsRng>>) {
+pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
     let state = State {
         fedimint: fedimint.clone(),
     };
@@ -72,7 +72,7 @@ fn attach_endpoints<M>(
     endpoints: &'static [ApiEndpoint<M>],
     base_name: Option<&str>,
 ) where
-    FedimintConsensus<rand::rngs::OsRng>: AsRef<M>,
+    FedimintConsensus: AsRef<M>,
     M: Sync,
 {
     for endpoint in endpoints {
@@ -114,11 +114,11 @@ fn attach_endpoints<M>(
     }
 }
 
-fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus<rand::rngs::OsRng>>] {
-    const ENDPOINTS: &[ApiEndpoint<FedimintConsensus<rand::rngs::OsRng>>] = &[
+fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus>] {
+    const ENDPOINTS: &[ApiEndpoint<FedimintConsensus>] = &[
         api_endpoint! {
             "/transaction",
-            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, transaction: serde_json::Value| -> TransactionId {
+            async |fedimint: &FedimintConsensus, transaction: serde_json::Value| -> TransactionId {
                 // deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 let string = serde_json::to_string(&transaction).map_err(|e| ApiError::bad_request(e.to_string()))?;
@@ -134,7 +134,7 @@ fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus<rand::rngs::OsR
         },
         api_endpoint! {
             "/fetch_transaction",
-            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, tx_hash: TransactionId| -> TransactionStatus {
+            async |fedimint: &FedimintConsensus, tx_hash: TransactionId| -> TransactionStatus {
                 debug!(transaction = %tx_hash, "Recieved request");
 
                 let tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from("transaction not found")))?;
@@ -145,14 +145,14 @@ fn server_endpoints() -> &'static [ApiEndpoint<FedimintConsensus<rand::rngs::OsR
         },
         api_endpoint! {
             "/fetch_epoch_history",
-            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, epoch: u64| -> EpochHistory {
+            async |fedimint: &FedimintConsensus, epoch: u64| -> EpochHistory {
                 let epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from("epoch not found")))?;
                 Ok(epoch)
             }
         },
         api_endpoint! {
             "/config",
-            async |fedimint: &FedimintConsensus<rand::rngs::OsRng>, _v: ()| -> ClientConfig {
+            async |fedimint: &FedimintConsensus, _v: ()| -> ClientConfig {
                 Ok(fedimint.cfg.to_client_config())
             }
         },

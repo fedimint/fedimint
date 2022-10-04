@@ -28,7 +28,6 @@ use fedimint_core::outcome::TransactionStatus;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
-use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
@@ -68,12 +67,9 @@ pub struct ConsensusProposal {
 
 // TODO: we should make other fields private and get rid of this
 #[non_exhaustive]
-pub struct FedimintConsensus<R>
-where
-    R: RngCore + CryptoRng,
-{
+pub struct FedimintConsensus {
     /// Cryptographic random number generator used for everything
-    pub rng_gen: Box<dyn RngGenerator<Rng = R>>,
+    pub rng_gen: Box<dyn RngGenerator<Rng = OsRng>>,
     /// Configuration describing the federation and containing our secrets
     pub cfg: ServerConfig,
 
@@ -102,7 +98,7 @@ struct VerificationCaches {
     ln: <LightningModule as FederationModule>::VerificationCache,
 }
 
-impl FedimintConsensus<OsRng> {
+impl FedimintConsensus {
     pub fn new(
         cfg: ServerConfig,
         mint: Mint,
@@ -122,10 +118,7 @@ impl FedimintConsensus<OsRng> {
     }
 }
 
-impl<R> FedimintConsensus<R>
-where
-    R: RngCore + CryptoRng,
-{
+impl FedimintConsensus {
     pub fn submit_transaction(
         &self,
         transaction: Transaction,
@@ -628,31 +621,31 @@ where
         audit
     }
 
-    fn build_interconnect(&self) -> FedimintInterconnect<R> {
+    fn build_interconnect(&self) -> FedimintInterconnect {
         FedimintInterconnect { fedimint: self }
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Wallet> for FedimintConsensus<R> {
+impl AsRef<Wallet> for FedimintConsensus {
     fn as_ref(&self) -> &Wallet {
         &self.wallet
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<Mint> for FedimintConsensus<R> {
+impl AsRef<Mint> for FedimintConsensus {
     fn as_ref(&self) -> &Mint {
         &self.mint
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<LightningModule> for FedimintConsensus<R> {
+impl AsRef<LightningModule> for FedimintConsensus {
     fn as_ref(&self) -> &LightningModule {
         &self.ln
     }
 }
 
-impl<R: RngCore + CryptoRng> AsRef<FedimintConsensus<R>> for FedimintConsensus<R> {
-    fn as_ref(&self) -> &FedimintConsensus<R> {
+impl AsRef<FedimintConsensus> for FedimintConsensus {
+    fn as_ref(&self) -> &FedimintConsensus {
         self
     }
 }
