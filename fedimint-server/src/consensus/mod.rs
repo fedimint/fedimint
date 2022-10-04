@@ -25,6 +25,8 @@ use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 use fedimint_core::modules::mint::{Mint, MintError};
 use fedimint_core::modules::wallet::{Wallet, WalletError};
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core_api::server::ServerModule;
+use fedimint_core_api::ModuleKey;
 use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
@@ -78,6 +80,7 @@ pub struct FedimintConsensus {
     pub wallet: Wallet,
     pub ln: LightningModule,
 
+    modules: BTreeMap<ModuleKey, ServerModule>,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
@@ -112,9 +115,17 @@ impl FedimintConsensus {
             mint,
             wallet,
             ln,
+            modules: BTreeMap::default(),
             db,
             transaction_notify: Arc::new(Notify::new()),
         }
+    }
+
+    pub fn register_module(&mut self, module: ServerModule) -> &mut Self {
+        if self.modules.insert(module.module_key(), module).is_some() {
+            panic!("Must not register modules with key conflict");
+        }
+        self
     }
 }
 

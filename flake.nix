@@ -471,6 +471,9 @@
             "ln-gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
+            "modules/mint-server"
           ];
         };
 

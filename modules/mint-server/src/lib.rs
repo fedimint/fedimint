@@ -16,6 +16,14 @@ pub struct MintServerModule {
     common: MintModuleCommon,
 }
 
+impl MintServerModule {
+    pub fn new() -> Self {
+        Self {
+            common: MintModuleCommon,
+        }
+    }
+}
+
 impl ModuleCommon for MintServerModule {
     fn module_key(&self) -> ModuleKey {
         self.common.module_key()
