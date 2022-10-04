@@ -432,6 +432,7 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
+<span id="435">435</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -535,9 +536,10 @@
 {
     <span class="kw">async fn </span>handle&lt;F: Fn(T) -&gt; FF, FF: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T::Response&gt;&gt;&gt;(<span class="self">self</span>, handler: F) {
         <span class="kw">let </span>result = handler(<span class="self">self</span>.request).<span class="kw">await</span>;
-        <span class="self">self</span>.sender
-            .send(result)
-            .expect(<span class="string">&quot;couldn&#39;t send over channel&quot;</span>);
+        <span class="kw">if </span><span class="self">self</span>.sender.send(result).is_err() {
+            <span class="comment">// TODO: figure out how to log the result
+            </span><span class="macro">tracing::error!</span>(<span class="string">&quot;Plugin hung up&quot;</span>);
+        }
     }
 }
 
