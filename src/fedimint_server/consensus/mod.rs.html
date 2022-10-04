@@ -676,6 +676,10 @@
 <span id="676">676</span>
 <span id="677">677</span>
 <span id="678">678</span>
+<span id="679">679</span>
+<span id="680">680</span>
+<span id="681">681</span>
+<span id="682">682</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
@@ -703,10 +707,11 @@
 <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintError};
 <span class="kw">use </span>fedimint_core::modules::wallet::{Wallet, WalletError};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
+<span class="kw">use </span>fedimint_core_api::server::ServerModule;
+<span class="kw">use </span>fedimint_core_api::ModuleKey;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::iter::FromIterator;
@@ -746,12 +751,9 @@
 
 <span class="comment">// TODO: we should make other fields private and get rid of this
 </span><span class="attribute">#[non_exhaustive]
-</span><span class="kw">pub struct </span>FedimintConsensus&lt;R&gt;
-<span class="kw">where
-    </span>R: RngCore + CryptoRng,
-{
+</span><span class="kw">pub struct </span>FedimintConsensus {
     <span class="doccomment">/// Cryptographic random number generator used for everything
-    </span><span class="kw">pub </span>rng_gen: Box&lt;<span class="kw">dyn </span>RngGenerator&lt;Rng = R&gt;&gt;,
+    </span><span class="kw">pub </span>rng_gen: Box&lt;<span class="kw">dyn </span>RngGenerator&lt;Rng = OsRng&gt;&gt;,
     <span class="doccomment">/// Configuration describing the federation and containing our secrets
     </span><span class="kw">pub </span>cfg: ServerConfig,
 
@@ -760,6 +762,7 @@
     </span><span class="kw">pub </span>wallet: Wallet,
     <span class="kw">pub </span>ln: LightningModule,
 
+    modules: BTreeMap&lt;ModuleKey, ServerModule&gt;,
     <span class="doccomment">/// KV Database into which all state is persisted to recover from in case of a crash
     </span><span class="kw">pub </span>db: Database,
 
@@ -780,7 +783,7 @@
     ln: &lt;LightningModule <span class="kw">as </span>FederationModule&gt;::VerificationCache,
 }
 
-<span class="kw">impl </span>FedimintConsensus&lt;OsRng&gt; {
+<span class="kw">impl </span>FedimintConsensus {
     <span class="kw">pub fn </span>new(
         cfg: ServerConfig,
         mint: Mint,
@@ -794,16 +797,21 @@
             mint,
             wallet,
             ln,
+            modules: BTreeMap::default(),
             db,
             transaction_notify: Arc::new(Notify::new()),
         }
     }
+
+    <span class="kw">pub fn </span>register_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, module: ServerModule) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+        <span class="kw">if </span><span class="self">self</span>.modules.insert(module.module_key(), module).is_some() {
+            <span class="macro">panic!</span>(<span class="string">&quot;Must not register modules with key conflict&quot;</span>);
+        }
+        <span class="self">self
+    </span>}
 }
 
-<span class="kw">impl</span>&lt;R&gt; FedimintConsensus&lt;R&gt;
-<span class="kw">where
-    </span>R: RngCore + CryptoRng,
-{
+<span class="kw">impl </span>FedimintConsensus {
     <span class="kw">pub fn </span>submit_transaction(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         transaction: Transaction,
@@ -1306,31 +1314,31 @@
         audit
     }
 
-    <span class="kw">fn </span>build_interconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedimintInterconnect&lt;R&gt; {
+    <span class="kw">fn </span>build_interconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FedimintInterconnect {
         FedimintInterconnect { fedimint: <span class="self">self </span>}
     }
 }
 
-<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;Wallet&gt; <span class="kw">for </span>FedimintConsensus&lt;R&gt; {
+<span class="kw">impl </span>AsRef&lt;Wallet&gt; <span class="kw">for </span>FedimintConsensus {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Wallet {
         <span class="kw-2">&amp;</span><span class="self">self</span>.wallet
     }
 }
 
-<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;Mint&gt; <span class="kw">for </span>FedimintConsensus&lt;R&gt; {
+<span class="kw">impl </span>AsRef&lt;Mint&gt; <span class="kw">for </span>FedimintConsensus {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Mint {
         <span class="kw-2">&amp;</span><span class="self">self</span>.mint
     }
 }
 
-<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;LightningModule&gt; <span class="kw">for </span>FedimintConsensus&lt;R&gt; {
+<span class="kw">impl </span>AsRef&lt;LightningModule&gt; <span class="kw">for </span>FedimintConsensus {
     <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>LightningModule {
         <span class="kw-2">&amp;</span><span class="self">self</span>.ln
     }
 }
 
-<span class="kw">impl</span>&lt;R: RngCore + CryptoRng&gt; AsRef&lt;FedimintConsensus&lt;R&gt;&gt; <span class="kw">for </span>FedimintConsensus&lt;R&gt; {
-    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>FedimintConsensus&lt;R&gt; {
+<span class="kw">impl </span>AsRef&lt;FedimintConsensus&gt; <span class="kw">for </span>FedimintConsensus {
+    <span class="kw">fn </span>as_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>FedimintConsensus {
         <span class="self">self
     </span>}
 }

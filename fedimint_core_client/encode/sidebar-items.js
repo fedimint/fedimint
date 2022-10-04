@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":[["module_decode_key_prefixed_decodable",""]],"trait":[["ModuleDecodable","Value that can be decoded, but only using the required supported modules of type `M`"]]};

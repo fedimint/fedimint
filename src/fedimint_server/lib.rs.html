@@ -493,7 +493,7 @@
 }
 
 <span class="kw">pub struct </span>FedimintServer {
-    <span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&lt;OsRng&gt;&gt;,
+    <span class="kw">pub </span>consensus: Arc&lt;FedimintConsensus&gt;,
     <span class="kw">pub </span>connections: AnyPeerConnections&lt;EpochMessage&gt;,
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;,
@@ -502,12 +502,12 @@
 
 <span class="kw">impl </span>FedimintServer {
     <span class="doccomment">/// Start all the components of the mint and plug them together
-    </span><span class="kw">pub async fn </span>run(cfg: ServerConfig, consensus: FedimintConsensus&lt;OsRng&gt;) {
+    </span><span class="kw">pub async fn </span>run(cfg: ServerConfig, consensus: FedimintConsensus) {
         <span class="kw">let </span>server = FedimintServer::new(cfg.clone(), consensus).<span class="kw">await</span>;
         spawn(net::api::run_server(cfg, server.consensus.clone()));
         server.run_consensus().<span class="kw">await</span>;
     }
-    <span class="kw">pub async fn </span>new(cfg: ServerConfig, consensus: FedimintConsensus&lt;OsRng&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub async fn </span>new(cfg: ServerConfig, consensus: FedimintConsensus) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>connector: PeerConnector&lt;EpochMessage&gt; =
             TlsTcpConnector::new(cfg.tls_config()).into_dyn();
 
@@ -516,7 +516,7 @@
 
     <span class="kw">pub async fn </span>new_with(
         cfg: ServerConfig,
-        consensus: FedimintConsensus&lt;OsRng&gt;,
+        consensus: FedimintConsensus,
         connector: PeerConnector&lt;EpochMessage&gt;,
     ) -&gt; <span class="self">Self </span>{
         cfg.validate_config(<span class="kw-2">&amp;</span>cfg.identity);

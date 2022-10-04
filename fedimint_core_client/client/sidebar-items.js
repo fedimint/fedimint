@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":[["ClientModule",""],["FedimintClientCore",""],["PollPendingOutputs","Result of [`ClientModulePlugin::poll_pending_outputs`]"]],"trait":[["ClientModulePlugin",""],["IClientModule","Client side module interface"]]};

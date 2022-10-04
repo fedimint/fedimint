@@ -186,7 +186,7 @@
 
 <span class="attribute">#[derive(Clone)]
 </span><span class="kw">struct </span>State {
-    fedimint: Arc&lt;FedimintConsensus&lt;rand::rngs::OsRng&gt;&gt;,
+    fedimint: Arc&lt;FedimintConsensus&gt;,
 }
 
 <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span>State {
@@ -195,7 +195,7 @@
     }
 }
 
-<span class="kw">pub async fn </span>run_server(cfg: ServerConfig, fedimint: Arc&lt;FedimintConsensus&lt;rand::rngs::OsRng&gt;&gt;) {
+<span class="kw">pub async fn </span>run_server(cfg: ServerConfig, fedimint: Arc&lt;FedimintConsensus&gt;) {
     <span class="kw">let </span>state = State {
         fedimint: fedimint.clone(),
     };
@@ -234,7 +234,7 @@
     endpoints: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;M&gt;],
     base_name: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
 ) <span class="kw">where
-    </span>FedimintConsensus&lt;rand::rngs::OsRng&gt;: AsRef&lt;M&gt;,
+    </span>FedimintConsensus: AsRef&lt;M&gt;,
     M: Sync,
 {
     <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
@@ -276,11 +276,11 @@
     }
 }
 
-<span class="kw">fn </span>server_endpoints() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;FedimintConsensus&lt;rand::rngs::OsRng&gt;&gt;] {
-    <span class="kw">const </span>ENDPOINTS: <span class="kw-2">&amp;</span>[ApiEndpoint&lt;FedimintConsensus&lt;rand::rngs::OsRng&gt;&gt;] = <span class="kw-2">&amp;</span>[
+<span class="kw">fn </span>server_endpoints() -&gt; <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>[ApiEndpoint&lt;FedimintConsensus&gt;] {
+    <span class="kw">const </span>ENDPOINTS: <span class="kw-2">&amp;</span>[ApiEndpoint&lt;FedimintConsensus&gt;] = <span class="kw-2">&amp;</span>[
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus&lt;rand::rngs::OsRng&gt;, transaction: serde_json::Value| -&gt; TransactionId {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, transaction: serde_json::Value| -&gt; TransactionId {
                 <span class="comment">// deserializing Transaction from json Value always fails
                 // we need to convert it to string first
                 </span><span class="kw">let </span>string = serde_json::to_string(<span class="kw-2">&amp;</span>transaction).map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
@@ -296,7 +296,7 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_transaction&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus&lt;rand::rngs::OsRng&gt;, tx_hash: TransactionId| -&gt; TransactionStatus {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, tx_hash: TransactionId| -&gt; TransactionStatus {
                 <span class="macro">debug!</span>(transaction = %tx_hash, <span class="string">&quot;Recieved request&quot;</span>);
 
                 <span class="kw">let </span>tx_status = fedimint.transaction_status(tx_hash).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;transaction not found&quot;</span>)))<span class="question-mark">?</span>;
@@ -307,14 +307,14 @@
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/fetch_epoch_history&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus&lt;rand::rngs::OsRng&gt;, epoch: u64| -&gt; EpochHistory {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, epoch: u64| -&gt; EpochHistory {
                 <span class="kw">let </span>epoch = fedimint.epoch_history(epoch).ok_or_else(|| ApiError::not_found(String::from(<span class="string">&quot;epoch not found&quot;</span>)))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(epoch)
             }
         },
         <span class="macro">api_endpoint! </span>{
             <span class="string">&quot;/config&quot;</span>,
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus&lt;rand::rngs::OsRng&gt;, _v: ()| -&gt; ClientConfig {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>FedimintConsensus, _v: ()| -&gt; ClientConfig {
                 <span class="prelude-val">Ok</span>(fedimint.cfg.to_client_config())
             }
         },

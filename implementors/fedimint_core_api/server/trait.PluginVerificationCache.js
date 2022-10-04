@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"fedimint_mint_server":[["impl PluginVerificationCache for <a class=\"struct\" href=\"fedimint_mint_server/struct.MintVerificationCache.html\" title=\"struct fedimint_mint_server::MintVerificationCache\">MintVerificationCache</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

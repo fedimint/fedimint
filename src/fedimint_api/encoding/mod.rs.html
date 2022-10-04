@@ -402,6 +402,47 @@
 <span id="402">402</span>
 <span id="403">403</span>
 <span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -415,6 +456,41 @@
 <span class="kw">use </span>std::io::{Error, Read, Write};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
+
+<span class="doccomment">/// Object-safe trait for things that can encode themselves
+///
+/// Like `rust-bitcoin`&#39;s `consensus_encode`, but without generics,
+/// so can be used in `dyn` objects.
+</span><span class="kw">pub trait </span>DynEncodable {
+    <span class="kw">fn </span>consensus_encode_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        writer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>std::io::Write,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt;;
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for dyn </span>DynEncodable {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="self">self</span>.consensus_encode_dyn(<span class="kw-2">&amp;mut </span>writer)
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; DynEncodable <span class="kw">for </span>T
+<span class="kw">where
+    </span>T: Encodable,
+{
+    <span class="kw">fn </span>consensus_encode_dyn(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        writer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>std::io::Write,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        &lt;<span class="self">Self </span><span class="kw">as </span>Encodable&gt;::consensus_encode(<span class="self">self</span>, writer)
+    }
+}
+
+<span class="kw">impl </span>Encodable <span class="kw">for </span>Box&lt;<span class="kw">dyn </span>DynEncodable&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).consensus_encode_dyn(<span class="kw-2">&amp;mut </span>writer)
+    }
+}
 
 <span class="doccomment">/// Data which can be encoded in a consensus-consistent way
 </span><span class="kw">pub trait </span>Encodable {
@@ -432,8 +508,8 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>Url {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.to_string().consensus_encode(writer)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.to_string().consensus_encode(<span class="kw-2">&amp;mut </span>writer)
     }
 }
 
@@ -447,6 +523,12 @@
 
 <span class="attribute">#[derive(Debug, Error)]
 </span><span class="kw">pub struct </span>DecodeError(<span class="kw">pub</span>(<span class="kw">crate</span>) anyhow::Error);
+
+<span class="kw">impl </span>DecodeError {
+    <span class="kw">pub fn </span>new_custom(e: anyhow::Error) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(e)
+    }
+}
 
 <span class="macro">macro_rules! </span>impl_encode_decode_num {
     (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {

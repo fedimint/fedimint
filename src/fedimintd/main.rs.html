@@ -100,11 +100,15 @@
 <span id="100">100</span>
 <span id="101">101</span>
 <span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_core::modules::ln::LightningModule;
+<span class="kw">use </span>fedimint_mint_server::MintServerModule;
 <span class="kw">use </span>fedimint_server::config::{load_from_file, ServerConfig};
 <span class="kw">use </span>fedimint_server::FedimintServer;
 
@@ -193,7 +197,9 @@
 
     <span class="kw">let </span>ln = LightningModule::new(cfg.ln.clone(), db.clone());
 
-    <span class="kw">let </span>consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+    <span class="kw">let </span><span class="kw-2">mut </span>consensus = FedimintConsensus::new(cfg.clone(), mint, wallet, ln, db);
+
+    consensus.register_module(MintServerModule::new().into());
 
     FedimintServer::run(cfg, consensus).<span class="kw">await</span>;
 
