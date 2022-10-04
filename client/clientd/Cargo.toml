@@ -35,12 +35,12 @@ serde = { version = "1.0.145", features = [ "derive" ] }
 serde_json = "1.0.85"
 tracing ="0.1.22"
 tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
-clap = { version = "4.0.0", features = ["derive"] }
+clap = { version = "4.0.9", features = ["derive"] }
 axum = "0.5.16"
 tower = "0.4.13"
 tower-http = { version = "0.3.4", features = [ "trace" ] }
 rand = "0.6.5"
-thiserror = "1.0.23"
+thiserror = "1.0.37"
 
 [build-dependencies]
 fedimint-build = { path = "../../fedimint-build" }
