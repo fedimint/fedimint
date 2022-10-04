@@ -6,7 +6,7 @@ use crate::db::{
 };
 use async_trait::async_trait;
 use fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
-use fedimint_api::db::Database;
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -135,19 +135,18 @@ impl FederationModule for Mint {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
         for (peer, partial_sig) in consensus_items {
             self.process_partial_signature(
-                batch.subtransaction(),
+                dbtx,
                 peer,
                 partial_sig.out_point,
                 partial_sig.partial_signature,
             )
         }
-        batch.commit();
     }
 
     fn build_verification_cache<'a>(
@@ -607,9 +606,9 @@ impl Mint {
         (Ok(SigResponse(bsigs)), MintShareErrors(peer_errors))
     }
 
-    fn process_partial_signature(
+    fn process_partial_signature<'a>(
         &self,
-        mut batch: BatchTx,
+        dbtx: &mut DatabaseTransaction<'a>,
         peer: PeerId,
         output_id: OutPoint,
         partial_sig: PartialSigResponse,
@@ -632,15 +631,14 @@ impl Mint {
             issuance = %output_id,
             "Received sig share"
         );
-        batch.append_insert_new(
-            ReceivedPartialSignatureKey {
+        dbtx.insert_new_entry(
+            &ReceivedPartialSignatureKey {
                 request_id: output_id,
                 peer_id: peer,
             },
-            partial_sig,
-        );
-
-        batch.commit();
+            &partial_sig,
+        )
+        .expect("DB Error");
     }
 }
 

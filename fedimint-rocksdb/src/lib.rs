@@ -1,7 +1,7 @@
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
-use fedimint_api::db::IDatabase;
-use fedimint_api::db::PrefixIter;
+use fedimint_api::db::{DatabaseTransaction, PrefixIter};
+use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 use rocksdb::OptimisticTransactionDB;
 use std::path::Path;
 use tracing::{error, trace};
@@ -10,6 +10,8 @@ pub use rocksdb;
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
+
+pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTransactionDB>);
 
 impl RocksDb {
     pub fn open(db_path: impl AsRef<Path>) -> Result<RocksDb, rocksdb::Error> {
@@ -106,6 +108,48 @@ impl IDatabase for RocksDb {
         tx.commit()?;
         Ok(())
     }
+
+    fn begin_transaction(&self) -> DatabaseTransaction {
+        RocksDbTransaction(self.0.transaction()).into()
+    }
+}
+
+impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
+    fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let val = self.0.get(key).unwrap();
+        self.0.put(key, value)?;
+        Ok(val)
+    }
+
+    fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        Ok(self.0.get(key)?)
+    }
+
+    fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()> {
+        self.0.delete(key)?;
+        Ok(())
+    }
+
+    fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
+        let prefix = key_prefix.to_vec();
+        Box::new(
+            self.0
+                .prefix_iterator(prefix.clone())
+                .map_while(move |res| {
+                    let (key_bytes, value_bytes) = res.expect("DB error");
+                    key_bytes
+                        .starts_with(&prefix)
+                        .then_some((key_bytes, value_bytes))
+                })
+                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()))
+                .map(Ok),
+        )
+    }
+
+    fn commit_tx(self: Box<Self>) -> Result<()> {
+        self.0.commit()?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -122,5 +166,17 @@ mod tests {
         let db = RocksDb::open(path).unwrap();
 
         fedimint_api::db::test_db_impl(db.into());
+    }
+
+    #[test_log::test]
+    fn test_basic_dbtx_rw() {
+        let path = tempfile::Builder::new()
+            .prefix("fcb-rocksdb-test")
+            .tempdir()
+            .unwrap();
+
+        let db = RocksDb::open(path).unwrap();
+
+        fedimint_api::db::test_dbtx_impl(db.into());
     }
 }

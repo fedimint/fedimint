@@ -24,7 +24,7 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use fedimint_api::db::batch::{BatchItem, BatchTx};
-use fedimint_api::db::Database;
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::api_endpoint;
 use fedimint_api::module::interconnect::ModuleInterconect;
@@ -239,7 +239,7 @@ impl FederationModule for Wallet {
 
     async fn begin_consensus_epoch<'a>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) {
@@ -253,7 +253,7 @@ impl FederationModule for Wallet {
         } = consensus_items.into_iter().unzip_wallet_consensus_item();
 
         // Save signatures to the database
-        self.save_peg_out_signatures(batch.subtransaction(), peg_out_signatures);
+        self.save_peg_out_signatures(dbtx, peg_out_signatures);
 
         // FIXME: also warn on less than 1/3, that should never happen
         // Make sure we have enough contributions to continue
@@ -269,7 +269,7 @@ impl FederationModule for Wallet {
             .map(|(_, rc)| rc.block_height)
             .collect();
         let block_height = self
-            .process_block_height_proposals(batch.subtransaction(), height_proposals)
+            .process_block_height_proposals(dbtx, height_proposals)
             .await;
 
         let randomness_contributions = round_consensus
@@ -284,8 +284,8 @@ impl FederationModule for Wallet {
             randomness_beacon,
         };
 
-        batch.append_insert(RoundConsensusKey, round_consensus);
-        batch.commit();
+        dbtx.insert_entry(&RoundConsensusKey, &round_consensus)
+            .expect("DB Error");
     }
 
     fn build_verification_cache<'a>(
@@ -582,9 +582,9 @@ impl Wallet {
         randomness.into_iter().fold([0; 32], xor)
     }
 
-    fn save_peg_out_signatures(
+    fn save_peg_out_signatures<'a>(
         &self,
-        mut batch: BatchTx,
+        dbtx: &mut DatabaseTransaction<'a>,
         signatures: Vec<(PeerId, PegOutSignatureItem)>,
     ) {
         let mut cache: BTreeMap<Txid, UnsignedTransaction> = self
@@ -607,9 +607,9 @@ impl Wallet {
         }
 
         for (txid, unsigned) in cache.into_iter() {
-            batch.append_insert(UnsignedTransactionKey(txid), unsigned);
+            dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
+                .expect("DB Error");
         }
-        batch.commit();
     }
 
     /// Try to attach signatures to a pending peg-out tx.
@@ -721,9 +721,9 @@ impl Wallet {
 
     /// # Panics
     /// * If proposals is empty
-    async fn process_block_height_proposals(
+    async fn process_block_height_proposals<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         mut proposals: Vec<u32>,
     ) -> u32 {
         assert!(!proposals.is_empty());
@@ -735,7 +735,7 @@ impl Wallet {
 
         if median_proposal >= consensus_height {
             debug!("Setting consensus block height to {}", median_proposal);
-            self.sync_up_to_consensus_height(batch, median_proposal)
+            self.sync_up_to_consensus_height(dbtx, median_proposal)
                 .await;
         } else {
             panic!(
@@ -764,7 +764,11 @@ impl Wallet {
         self.current_round_consensus().map(|rc| rc.block_height)
     }
 
-    async fn sync_up_to_consensus_height(&self, mut batch: BatchTx<'_>, new_height: u32) {
+    async fn sync_up_to_consensus_height<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        new_height: u32,
+    ) {
         let old_height = self.consensus_height().unwrap_or(0);
         if new_height < old_height {
             info!(
@@ -785,7 +789,6 @@ impl Wallet {
             "New consensus height, syncing up",
         );
 
-        batch.reserve((new_height - old_height) as usize + 1);
         for height in (old_height + 1)..=(new_height) {
             if height % 100 == 0 {
                 debug!("Caught up to block {}", height);
@@ -816,22 +819,26 @@ impl Wallet {
                     .expect("bitcoin rpc failed");
                 for transaction in block.txdata {
                     if let Some(pending_tx) = pending_transactions.get(&transaction.txid()) {
-                        self.recognize_change_utxo(batch.subtransaction(), pending_tx);
+                        self.recognize_change_utxo(dbtx, pending_tx);
                     }
                 }
             }
 
-            batch.append_insert_new(
-                BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
-                (),
-            );
+            dbtx.insert_new_entry(
+                &BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
+                &(),
+            )
+            .expect("DB Error");
         }
-        batch.commit();
     }
 
     /// Add a change UTXO to our spendable UTXO database after it was included in a block that we
     /// got consensus on.
-    fn recognize_change_utxo(&self, mut batch: BatchTx, pending_tx: &PendingTransaction) {
+    fn recognize_change_utxo<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        pending_tx: &PendingTransaction,
+    ) {
         let script_pk = self
             .cfg
             .peg_in_descriptor
@@ -839,19 +846,19 @@ impl Wallet {
             .script_pubkey();
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
             if output.script_pubkey == script_pk {
-                batch.append_insert(
-                    UTXOKey(bitcoin::OutPoint {
+                dbtx.insert_entry(
+                    &UTXOKey(bitcoin::OutPoint {
                         txid: pending_tx.tx.txid(),
                         vout: idx as u32,
                     }),
-                    SpendableUTXO {
+                    &SpendableUTXO {
                         tweak: pending_tx.tweak,
                         amount: bitcoin::Amount::from_sat(output.value),
                     },
                 )
+                .expect("DB Error");
             }
         }
-        batch.commit();
     }
 
     fn block_is_known(&self, block_hash: BlockHash) -> bool {

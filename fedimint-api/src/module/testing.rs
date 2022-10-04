@@ -116,9 +116,11 @@ where
         let peers: HashSet<PeerId> = self.members.iter().map(|p| p.0).collect();
         for (_peer, member, db) in &mut self.members {
             let mut batch = DbBatch::new();
+            let database = db as &mut Database;
+            let mut dbtx = database.begin_transaction();
 
             member
-                .begin_consensus_epoch(batch.transaction(), consensus.clone(), &mut rng)
+                .begin_consensus_epoch(&mut dbtx, consensus.clone(), &mut rng)
                 .await;
 
             let cache = member.build_verification_cache(inputs.iter());
@@ -134,14 +136,15 @@ where
                     .expect("Faulty output");
             }
 
-            db.apply_batch(batch).expect("DB error");
+            dbtx.commit_tx().expect("DB Error");
+            database.apply_batch(batch).expect("DB error");
 
             let mut batch = DbBatch::new();
             member
                 .end_consensus_epoch(&peers, batch.transaction(), &mut rng)
                 .await;
 
-            db.apply_batch(batch).expect("DB error");
+            database.apply_batch(batch).expect("DB error");
         }
     }
 
