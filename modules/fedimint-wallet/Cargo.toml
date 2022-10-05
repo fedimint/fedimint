@@ -24,7 +24,7 @@ hex = "0.4.3"
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-derive = { path = "../../fedimint-derive" }
 miniscript = { version = "7.0.0", features = [ "compiler", "use-serde" ] }
-rand = "0.6.0"
+rand = "0.8.5"
 secp256k1 = { version = "0.22.1", features = [ "serde" ] }
 serde = { version = "1.0.145", features = [ "derive" ] }
 thiserror = "1.0.37"

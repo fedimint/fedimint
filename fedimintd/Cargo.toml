@@ -40,7 +40,7 @@ fedimint-wallet = { path = "../modules/fedimint-wallet", features = ["native"] }
 fedimint-mint-server = { path = "../modules/mint-server/" }
 opentelemetry = { version = "0.18.0", optional = true }
 opentelemetry-jaeger = { version = "0.17.0", optional = true }
-rand = "0.6.5"
+rand = "0.8.5"
 rayon = "1.5.0"
 rcgen = "0.9.2"
 secp256k1-zkp = { version = "0.6.0", features = [ "global-context", "bitcoin_hashes" ] }

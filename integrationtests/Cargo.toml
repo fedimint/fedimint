@@ -29,7 +29,7 @@ fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
-rand = "0.6.5"
+rand = "0.8.5"
 serde = { version = "1.0.145", features = [ "derive" ] }
 tokio = { version = "1.21.2", features = ["full"] }
 tracing ="0.1.22"

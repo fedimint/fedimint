@@ -18,5 +18,5 @@ bitcoin = "*"
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-derive = { path = "../../fedimint-derive" }
 fedimint-core-api = { path = "../api" }
-rand = "0.6.5"
+rand = "0.8.5"
 thiserror = "1.0.23"
