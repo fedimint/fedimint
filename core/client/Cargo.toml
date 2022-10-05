@@ -15,7 +15,6 @@ path = "src/lib.rs"
 [dependencies]
 bitcoin = "0.28.1"
 anyhow = "1.0.65"
-itertools = "0.10.0"
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-derive = { path = "../../fedimint-derive" }
 fedimint-core-api = { path = "../api" }
