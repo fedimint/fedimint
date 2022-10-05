@@ -102,6 +102,7 @@ fn trusted_dealer_gen(
                     Url::parse(&s).expect("Could not parse URL")
                 },
                 tls_cert: tls_keys[&id].0.clone(),
+                name: format!("peer-{}", id.to_usize()),
             };
 
             (id, peer)

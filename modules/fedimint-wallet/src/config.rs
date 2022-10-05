@@ -81,7 +81,7 @@ impl GenerateConfig for WalletConfig {
                         .collect(),
                     *sk,
                     peers.threshold(),
-                    params.clone()
+                    params.clone(),
                 );
                 (*id, cfg)
             })
@@ -145,7 +145,7 @@ impl WalletConfig {
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
         threshold: usize,
-        btc_rpc: BitcoindRpcCfg
+        btc_rpc: BitcoindRpcCfg,
     ) -> Self {
         let peg_in_descriptor = PegInDescriptor::Wsh(
             Wsh::new_sortedmulti(

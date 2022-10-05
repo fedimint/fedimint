@@ -1,4 +1,3 @@
-use fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 use crate::fedimint_api::net::peers::PeerConnections;
 use crate::net::connect::Connector;
 use crate::net::connect::TlsConfig;
@@ -7,6 +6,7 @@ use crate::{ReconnectPeerConnections, TlsTcpConnector};
 use async_trait::async_trait;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 use fedimint_api::{Amount, NumPeers, PeerId};
 pub use fedimint_core::config::*;
 use fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use threshold_crypto::G1Projective;
 use tokio_rustls::rustls;
+use tracing::info;
 use url::Url;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +56,8 @@ pub struct Peer {
     pub tls_cert: rustls::Certificate,
     /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
     pub api_addr: Url,
+    /// human-readable name
+    pub name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -91,12 +94,15 @@ impl GenerateConfig for ServerConfig {
                 .expect("Could not generate HBBFT netinfo");
 
         let peer0 = &params[&PeerId::from(0)];
-        let (wallet_server_cfg, wallet_client_cfg) =
-            WalletConfig::trusted_dealer_gen(peers, &BitcoindRpcCfg {
+        let (wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
+            peers,
+            &BitcoindRpcCfg {
                 btc_rpc_address: peer0.bitcoind_rpc.clone(),
                 btc_rpc_user: "bitcoin".into(),
                 btc_rpc_pass: "bitcoin".into(),
-            }, &mut rng);
+            },
+            &mut rng,
+        );
         let (mint_server_cfg, mint_client_cfg) =
             MintConfig::trusted_dealer_gen(peers, &peer0.amount_tiers, &mut rng);
         let (ln_server_cfg, ln_client_cfg) =
@@ -126,9 +132,14 @@ impl GenerateConfig for ServerConfig {
             })
             .collect();
 
+        let names: HashMap<PeerId, String> = peers
+            .iter()
+            .map(|peer| (*peer, format!("peer-{}", peer.to_usize())))
+            .collect();
+
         let client_config = ClientConfig {
             federation_name: peer0.federation_name.clone(),
-            nodes: peer0.api.nodes("ws://"),
+            nodes: peer0.api.nodes("ws://", names),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
@@ -194,6 +205,7 @@ impl GenerateConfig for ServerConfig {
             let (server, client) = Self::trusted_dealer_gen(peers, params, rng);
             return Ok((server[our_id].clone(), client));
         }
+        info!("Peer {} running distributed key generation...", our_id);
 
         let params = params[our_id].clone();
         // hbbft uses a lower threshold of signing keys (f+1)
@@ -244,7 +256,7 @@ impl GenerateConfig for ServerConfig {
 
         let client = ClientConfig {
             federation_name: params.federation_name,
-            nodes: params.api.nodes("ws://"),
+            nodes: params.api.nodes("ws://", params.tls.peer_names),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
@@ -282,6 +294,11 @@ impl ServerConfig {
                 .iter()
                 .map(|(peer, cfg)| (*peer, cfg.tls_cert.clone()))
                 .collect(),
+            peer_names: self
+                .peers
+                .iter()
+                .map(|(peer, cfg)| (*peer, cfg.name.to_string()))
+                .collect(),
         }
     }
 
@@ -298,6 +315,13 @@ impl ServerConfig {
     }
 }
 
+pub struct PeerServerParams {
+    pub cert: rustls::Certificate,
+    pub address: String,
+    pub base_port: u16,
+    pub name: String,
+}
+
 impl ServerConfigParams {
     pub fn peers(&self) -> BTreeMap<PeerId, Peer> {
         self.hbbft
@@ -307,6 +331,7 @@ impl ServerConfigParams {
                 (
                     *peer,
                     Peer {
+                        name: self.tls.peer_names[peer].clone(),
                         hbbft: hbbft.clone(),
                         tls_cert: self.tls.peer_certs[peer].clone(),
                         api_addr: Url::parse(&format!("ws://{}", self.api.peers[peer].address))
@@ -317,13 +342,76 @@ impl ServerConfigParams {
             .collect::<BTreeMap<_, _>>()
     }
 
+    pub fn gen_params(
+        key: rustls::PrivateKey,
+        our_id: PeerId,
+        amount_tiers: Vec<Amount>,
+        peers: &BTreeMap<PeerId, PeerServerParams>,
+        federation_name: String,
+        bitcoind_rpc: String,
+    ) -> ServerConfigParams {
+        let peer_certs: HashMap<PeerId, rustls::Certificate> = peers
+            .iter()
+            .map(|(peer, params)| (*peer, params.cert.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let peer_names: HashMap<PeerId, String> = peers
+            .iter()
+            .map(|(peer, params)| (*peer, params.name.to_string()))
+            .collect::<HashMap<_, _>>();
+
+        let tls = TlsConfig {
+            our_certificate: peers[&our_id].cert.clone(),
+            our_private_key: key,
+            peer_certs,
+            peer_names,
+        };
+
+        ServerConfigParams {
+            tls,
+            hbbft: Self::gen_network(&our_id, 0, peers),
+            api: Self::gen_network(&our_id, 1, peers),
+            server_dkg: Self::gen_network(&our_id, 2, peers),
+            wallet_dkg: Self::gen_network(&our_id, 3, peers),
+            lightning_dkg: Self::gen_network(&our_id, 4, peers),
+            mint_dkg: Self::gen_network(&our_id, 5, peers),
+            amount_tiers,
+            federation_name,
+            bitcoind_rpc,
+        }
+    }
+
+    fn gen_network(
+        our_id: &PeerId,
+        offset: u16,
+        peers: &BTreeMap<PeerId, PeerServerParams>,
+    ) -> NetworkConfig {
+        NetworkConfig {
+            identity: *our_id,
+            bind_addr: format!(
+                "{}:{}",
+                peers[our_id].address,
+                peers[our_id].base_port + offset
+            ),
+            peers: peers
+                .iter()
+                .map(|(peer, params)| {
+                    let connection = ConnectionConfig {
+                        address: format!("{}:{}", params.address, params.base_port + offset),
+                    };
+                    (*peer, connection)
+                })
+                .collect(),
+        }
+    }
+
     /// config for servers running on different ports on a local network
     pub fn gen_local(
         peers: &[PeerId],
         amount_tiers: Vec<Amount>,
         base_port: u16,
         federation_name: &str,
-        bitcoind_rpc: String,
+        bitcoind_rpc: &str,
     ) -> HashMap<PeerId, ServerConfigParams> {
         let keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
             .iter()
@@ -333,63 +421,33 @@ impl ServerConfigParams {
             })
             .collect::<HashMap<_, _>>();
 
-        let certs: HashMap<PeerId, rustls::Certificate> = keys
+        let peer_params: BTreeMap<PeerId, PeerServerParams> = peers
             .iter()
-            .map(|(peer, (cert, _))| (*peer, cert.clone()))
-            .collect::<HashMap<_, _>>();
-
-        let tls_config: HashMap<PeerId, TlsConfig> = keys
-            .iter()
-            .map(|(peer, (cert, key))| {
-                (
-                    *peer,
-                    TlsConfig {
-                        our_certificate: cert.clone(),
-                        our_private_key: key.clone(),
-                        peer_certs: certs.clone(),
-                    },
-                )
+            .map(|peer| {
+                let params: PeerServerParams = PeerServerParams {
+                    cert: keys[peer].0.clone(),
+                    address: "127.0.0.1".to_string(),
+                    base_port: base_port + (u16::from(*peer) * 6),
+                    name: format!("peer-{}", peer.to_usize()),
+                };
+                (*peer, params)
             })
-            .collect::<HashMap<_, _>>();
+            .collect();
 
-        let port = base_port as usize;
         peers
             .iter()
             .map(|peer| {
-                (
+                let params: ServerConfigParams = Self::gen_params(
+                    keys[peer].1.clone(),
                     *peer,
-                    ServerConfigParams {
-                        tls: tls_config.get(peer).expect("exists").clone(),
-                        hbbft: Self::gen_local_network(peers, peer, port),
-                        api: Self::gen_local_network(peers, peer, port + peers.len()),
-                        server_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 2),
-                        wallet_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 3),
-                        lightning_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 4),
-                        mint_dkg: Self::gen_local_network(peers, peer, port + peers.len() * 5),
-                        amount_tiers: amount_tiers.clone(),
-                        federation_name: federation_name.to_string(),
-                        bitcoind_rpc: bitcoind_rpc.clone()
-                    },
-                )
+                    amount_tiers.clone(),
+                    &peer_params,
+                    federation_name.to_string(),
+                    bitcoind_rpc.to_string(),
+                );
+                (*peer, params)
             })
             .collect()
-    }
-
-    fn gen_local_network(peers: &[PeerId], our_id: &PeerId, base_port: usize) -> NetworkConfig {
-        NetworkConfig {
-            identity: *our_id,
-            bind_addr: format!("127.0.0.1:{}", base_port + our_id.to_usize()),
-            peers: peers
-                .iter()
-                .map(|peer| {
-                    (*peer, {
-                        ConnectionConfig {
-                            address: format!("127.0.0.1:{}", base_port + peer.to_usize()),
-                        }
-                    })
-                })
-                .collect(),
-        }
     }
 }
 
@@ -403,7 +461,7 @@ where
         .into_dyn()
 }
 
-pub(crate) fn gen_cert_and_key(
+pub fn gen_cert_and_key(
     name: &str,
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
     let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;

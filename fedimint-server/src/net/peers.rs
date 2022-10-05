@@ -108,11 +108,11 @@ enum PeerConnectionState<M> {
 }
 
 impl NetworkConfig {
-    pub fn nodes(&self, prefix: &str) -> Vec<Node> {
+    pub fn nodes(&self, prefix: &str, names: HashMap<PeerId, String>) -> Vec<Node> {
         self.peers
             .iter()
             .map(|(peer, connection)| Node {
-                name: format!("node #{}", peer.to_usize()),
+                name: names[peer].to_string(),
                 url: Url::parse(&format!("{}{}", prefix, connection.address))
                     .expect("Could not parse Url"),
             })

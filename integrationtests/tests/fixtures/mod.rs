@@ -18,9 +18,9 @@ use fedimint_api::Amount;
 use fedimint_api::FederationModule;
 use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
-use fedimint_server::config::connect;
 use fedimint_ln::LightningModule;
 use fedimint_mint::Mint;
+use fedimint_server::config::connect;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_wallet::Wallet;
 use futures::executor::block_on;
@@ -105,7 +105,7 @@ pub async fn fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 7 + 1, Ordering::Relaxed);
+    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == 4000 {
@@ -117,7 +117,13 @@ pub async fn fixtures(
             .init();
     }
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-    let params = ServerConfigParams::gen_local(&peers, amount_tiers.to_vec(), base_port, "test", "127.0.0.1:18443".to_string());
+    let params = ServerConfigParams::gen_local(
+        &peers,
+        amount_tiers.to_vec(),
+        base_port,
+        "test",
+        "127.0.0.1:18443",
+    );
     let max_evil = hbbft::util::max_faulty(peers.len());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
@@ -212,10 +218,10 @@ async fn distributed_config(
 
         async move {
             let our_params = params[peer].clone();
-            let mut hbbft = connect(our_params.server_dkg, our_params.tls).await;
+            let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
 
             let rng = OsRng::new().unwrap();
-            let cfg = ServerConfig::distributed_gen(&mut hbbft, peer, &peers, &params, rng);
+            let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
             (*peer, cfg.await.expect("generation failed"))
         }
     }))

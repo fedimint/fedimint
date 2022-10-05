@@ -26,8 +26,30 @@ mkdir -p $FM_LN2_DIR
 mkdir -p $FM_BTC_DIR
 mkdir -p $FM_CFG_DIR
 
-# Generate federation client config
-$FM_BIN_DIR/configgen generate --out-dir $FM_CFG_DIR --num-nodes $FM_FED_SIZE --hbbft-base-port 4000 --api-base-port 5000 --denominations 1000,10000,100000,1000000,10000000
+# Generate federation configs
+CERTS=""
+for ((ID=0; ID<FM_FED_SIZE; ID++));
+do
+  mkdir $FM_CFG_DIR/server-$ID
+  base_port=$(echo "4000 + $ID * 10" | bc -l)
+  $FM_BIN_DIR/distributedgen create-cert --out-dir $FM_CFG_DIR/server-$ID --base-port $base_port --name "Server-$ID"
+  CERTS="$CERTS,$(cat $FM_CFG_DIR/server-$ID/tls-cert)"
+done
+CERTS=${CERTS:1}
+echo "Running DKG with certs: $CERTS"
+
+for ((ID=0; ID<FM_FED_SIZE; ID++));
+do
+  $FM_BIN_DIR/distributedgen run --out-dir $FM_CFG_DIR/server-$ID --certs $CERTS &
+done
+wait
+
+# Move the client config and all server configs to root dir
+mv $FM_CFG_DIR/server-0/client.json $FM_CFG_DIR/
+for ((ID=0; ID<FM_FED_SIZE; ID++));
+do
+  mv $FM_CFG_DIR/server-$ID/server-$ID.json $FM_CFG_DIR/
+done
 
 # Define clients
 export FM_LN1="lightning-cli --network regtest --lightning-dir=$FM_LN1_DIR"

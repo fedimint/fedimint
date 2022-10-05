@@ -79,7 +79,7 @@ fn main() {
                 amount_tiers.to_vec(),
                 base_port,
                 &federation_name,
-                bitcoind_rpc
+                &bitcoind_rpc,
             );
 
             let (server_cfg, client_cfg) =
