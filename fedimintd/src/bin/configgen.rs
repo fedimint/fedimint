@@ -28,13 +28,9 @@ enum Command {
         #[arg(long = "num-nodes")]
         num_nodes: u16,
 
-        /// Base hbbft port
-        #[arg(long = "hbbft-base-port", default_value = "17240")]
-        hbbft_base_port: u16,
-
-        /// Base api port
-        #[arg(long = "api-base-port", default_value = "17340")]
-        api_base_port: u16,
+        /// Base port
+        #[arg(long = "base-port", default_value = "17240")]
+        base_port: u16,
 
         /// `bitcoind` json rpc endpoint
         #[arg(long = "bitcoind-rpc", default_value = "127.0.0.1:18443")]
@@ -64,8 +60,7 @@ fn main() {
         Command::Generate {
             dir_out_path: cfg_path,
             num_nodes: nodes,
-            hbbft_base_port,
-            api_base_port,
+            base_port,
             denominations: amount_tiers,
             federation_name,
             bitcoind_rpc,
@@ -79,13 +74,13 @@ fn main() {
                 "Generating keys such that up to {} peers may fail/be evil",
                 peers.max_evil()
             );
-            let params = ServerConfigParams {
-                hbbft_base_port,
-                api_base_port,
-                amount_tiers,
-                federation_name,
-                bitcoind_rpc,
-            };
+            let params = ServerConfigParams::gen_local(
+                &peers,
+                amount_tiers.to_vec(),
+                base_port,
+                &federation_name,
+                &bitcoind_rpc,
+            );
 
             let (server_cfg, client_cfg) =
                 ServerConfig::trusted_dealer_gen(&peers, &params, &mut rng);

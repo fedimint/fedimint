@@ -21,7 +21,7 @@ pub use bls12_381::Scalar;
 
 pub mod hash;
 pub mod poly;
-mod serde_impl;
+pub mod serde_impl;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PublicKeyShare(#[serde(with = "serde_impl::g2")] pub G2Affine);

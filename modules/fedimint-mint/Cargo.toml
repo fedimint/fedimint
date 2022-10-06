@@ -25,6 +25,7 @@ secp256k1-zkp = "0.6.0"
 serde = { version = "1.0.145", features = [ "derive" ] }
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.37"
+threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
 tracing ="0.1.22"
 
 [dev-dependencies]

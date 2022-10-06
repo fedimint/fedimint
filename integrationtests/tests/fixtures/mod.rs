@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::iter::repeat;
 use std::net::SocketAddr;
@@ -20,6 +20,7 @@ use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_ln::LightningModule;
 use fedimint_mint::Mint;
+use fedimint_server::config::connect;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_wallet::Wallet;
 use futures::executor::block_on;
@@ -104,7 +105,7 @@ pub async fn fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
+    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == 4000 {
@@ -115,22 +116,21 @@ pub async fn fixtures(
             )
             .init();
     }
-
-    let params = ServerConfigParams {
-        federation_name: "Test federation".into(),
-        hbbft_base_port: base_port,
-        api_base_port: base_port + num_peers,
-        amount_tiers: amount_tiers.to_vec(),
-        bitcoind_rpc: "127.0.0.1:18443".into(),
-    };
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-
-    let (server_config, client_config) =
-        ServerConfig::trusted_dealer_gen(&peers, &params, OsRng::new().unwrap());
+    let params = ServerConfigParams::gen_local(
+        &peers,
+        amount_tiers.to_vec(),
+        base_port,
+        "test",
+        "127.0.0.1:18443",
+    );
+    let max_evil = hbbft::util::max_faulty(peers.len());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
+            let (server_config, client_config) = distributed_config(&peers, params, max_evil).await;
+
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
             let bitcoin_rpc = bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
@@ -175,6 +175,9 @@ pub async fn fixtures(
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
+            let (server_config, client_config) =
+                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng::new().unwrap());
+
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
@@ -202,6 +205,35 @@ pub async fn fixtures(
             (fed, user, Box::new(bitcoin), gateway, Box::new(lightning))
         }
     }
+}
+
+async fn distributed_config(
+    peers: &[PeerId],
+    params: HashMap<PeerId, ServerConfigParams>,
+    _max_evil: usize,
+) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
+    let configs: Vec<(PeerId, (ServerConfig, ClientConfig))> = join_all(peers.iter().map(|peer| {
+        let params = params.clone();
+        let peers = peers.to_vec();
+
+        async move {
+            let our_params = params[peer].clone();
+            let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
+
+            let rng = OsRng::new().unwrap();
+            let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
+            (*peer, cfg.await.expect("generation failed"))
+        }
+    }))
+    .await;
+
+    let (_, (_, client_config)) = configs.first().unwrap().clone();
+    let server_configs = configs
+        .into_iter()
+        .map(|(peer, (server, _))| (peer, server))
+        .collect();
+
+    (server_configs, client_config)
 }
 
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {

@@ -57,6 +57,7 @@ pub struct TlsTcpConnector {
     peer_certs: Arc<PeerCertStore>,
     /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls` understands
     cert_store: RootCertStore,
+    peer_names: HashMap<PeerId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,7 @@ pub struct TlsConfig {
     pub our_certificate: rustls::Certificate,
     pub our_private_key: rustls::PrivateKey,
     pub peer_certs: HashMap<PeerId, rustls::Certificate>,
+    pub peer_names: HashMap<PeerId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +87,7 @@ impl TlsTcpConnector {
             our_private_key: cfg.our_private_key,
             peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
             cert_store,
+            peer_names: cfg.peer_names,
         }
     }
 }
@@ -160,9 +163,8 @@ where
             )
             .expect("Failed to create TLS config");
 
-        let fake_domain =
-            rustls::ServerName::try_from(format!("peer-{}", peer.to_usize()).as_str())
-                .expect("Always a valid DNS name");
+        let fake_domain = rustls::ServerName::try_from(self.peer_names[&peer].as_str())
+            .expect("Always a valid DNS name");
 
         let connector = TlsConnector::from(Arc::new(cfg));
         let tls_conn = connector
@@ -423,6 +425,11 @@ mod tests {
                     .iter()
                     .enumerate()
                     .map(|(peer, (cert, _))| (PeerId::from(peer as u16), cert.clone()))
+                    .collect(),
+                peer_names: peer_keys
+                    .iter()
+                    .enumerate()
+                    .map(|(peer, (_, _))| (PeerId::from(peer as u16), format!("peer-{}", peer)))
                     .collect(),
             })
             .collect()
