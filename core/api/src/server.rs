@@ -14,25 +14,10 @@ use fedimint_api::{
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
 };
+use futures::future::BoxFuture;
 use thiserror::Error;
 
 use super::*;
-
-/// Api Endpoint exposed by a server side module
-pub struct ApiEndpoint {
-    pub path: String,
-    pub handler: ApiHandler,
-}
-
-#[async_trait]
-pub trait ModuleApiHandler {
-    async fn handle(&self, params: &serde_json::Value) -> Result<serde_json::Value, ApiError>;
-}
-
-dyn_newtype_define! {
-    /// [`ApiEndpoint`] handler exposed by the server side module
-    pub ApiHandler(Box<ModuleApiHandler>)
-}
 
 pub trait ModuleConsensusItem: DynEncodable {
     fn as_any(&self) -> &(dyn Any + 'static);
@@ -73,6 +58,22 @@ pub struct InputMeta {
     pub puk_keys: Vec<XOnlyPublicKey>,
 }
 
+/// An interface rpc handlers can use to query to access current running context
+pub trait RpcHandlerCtx: Sync {}
+
+/// An interface exposed to Fedimint modules
+pub trait InitHandle {
+    /// Register an rpc handler at a given path
+    fn register_endpoint(
+        &mut self,
+        path: &'static str,
+        handler: fn(
+            serde_json::Value,
+            ctx: &dyn RpcHandlerCtx,
+        ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
+    );
+}
+
 /// Backend side module interface
 ///
 /// Server side Fedimint mondule needs to implement this trait.
@@ -92,7 +93,7 @@ pub trait IServerModule {
     fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
 
     /// Initialize the module on registration in Fedimint
-    fn init(&self);
+    fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal(&self);
@@ -186,17 +187,6 @@ pub trait IServerModule {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint>;
 }
 
 dyn_newtype_define!(
@@ -215,7 +205,7 @@ pub trait ServerModulePlugin: Sized {
     type ConsensusItem: PluginConsensusItem;
     type VerificationCache: PluginVerificationCache;
 
-    fn init(&self);
+    fn init(&self, backend: &mut dyn InitHandle);
 
     /// Blocks until a new `consensus_proposal` is available.
     async fn await_consensus_proposal<'a>(&'a self);
@@ -312,17 +302,6 @@ pub trait ServerModulePlugin: Sized {
     /// Summing over all modules, if liabilities > assets then an error has occurred in the database
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit);
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint>;
 }
 
 #[async_trait(?Send)]
@@ -357,8 +336,8 @@ where
         <Self as ServerModulePlugin>::Common::decode_output_outcome(r)
     }
 
-    fn init(&self) {
-        <Self as ServerModulePlugin>::init(self)
+    fn init(&self, backend: &mut dyn InitHandle) {
+        <Self as ServerModulePlugin>::init(self, backend)
     }
 
     /// Blocks until a new `consensus_proposal` is available.
@@ -542,20 +521,5 @@ where
     /// and consensus should halt.
     fn audit(&self, audit: &mut Audit) {
         <Self as ServerModulePlugin>::audit(self, audit)
-    }
-
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str {
-        <Self as ServerModulePlugin>::api_base_name(self)
-    }
-
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> Vec<ApiEndpoint> {
-        <Self as ServerModulePlugin>::api_endpoints(self)
     }
 }
