@@ -879,6 +879,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "fedimint-api",
+ "futures",
  "thiserror",
 ]
 

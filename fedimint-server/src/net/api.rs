@@ -11,6 +11,7 @@ use fedimint_api::{
 use fedimint_core::config::ClientConfig;
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
+use futures::future::BoxFuture;
 use futures::FutureExt;
 use jsonrpsee::{
     types::{error::CallError, ErrorObject},
@@ -23,19 +24,65 @@ use crate::config::ServerConfig;
 use crate::consensus::FedimintConsensus;
 use crate::transaction::Transaction;
 
+/// A state of fedimint server passed to each rpc handler callback
 #[derive(Clone)]
-struct State {
+pub struct RpcHandlerCtx {
     fedimint: Arc<FedimintConsensus>,
 }
 
-impl std::fmt::Debug for State {
+impl std::fmt::Debug for RpcHandlerCtx {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("State { ... }")
     }
 }
 
+impl fedimint_core_api::server::RpcHandlerCtx for FedimintConsensus {}
+
+struct InitHandle<'a> {
+    rpc_module: &'a mut RpcModule<RpcHandlerCtx>,
+}
+
+impl<'a> fedimint_core_api::server::InitHandle for InitHandle<'a> {
+    fn register_endpoint(
+        &mut self,
+        path: &'static str,
+        handler: fn(
+            serde_json::Value,
+            &dyn fedimint_core_api::server::RpcHandlerCtx,
+        ) -> BoxFuture<'static, Result<serde_json::Value, ApiError>>,
+    ) {
+        self.rpc_module
+            .register_async_method(path, move |params, state| {
+                Box::pin(async move {
+                    let params = params.one::<serde_json::Value>()?;
+                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                    // end up with an inconsistent state in theory. In practice most API functions
+                    // are only reading and the few that do write anything are atomic. Lastly, this
+                    // is only the last line of defense
+                    AssertUnwindSafe(handler(params, &*state.fedimint))
+                        .catch_unwind()
+                        .await
+                        .map_err(|_| {
+                            error!(path, "API handler panicked, DO NOT IGNORE, FIX IT!!!");
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                500,
+                                "API handler panicked",
+                                None::<()>,
+                            )))
+                        })?
+                        .map_err(|e| {
+                            jsonrpsee::core::Error::Call(CallError::Custom(ErrorObject::owned(
+                                e.code, e.message, None::<()>,
+                            )))
+                        })
+                })
+            })
+            .expect("Failed to register async method");
+    }
+}
+
 pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
-    let state = State {
+    let state = RpcHandlerCtx {
         fedimint: fedimint.clone(),
     };
     let mut rpc_module = RpcModule::new(state);
@@ -46,11 +93,13 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
         fedimint.wallet.api_endpoints(),
         Some(fedimint.wallet.api_base_name()),
     );
-    attach_endpoints(
-        &mut rpc_module,
-        fedimint.mint.api_endpoints(),
-        Some(fedimint.mint.api_base_name()),
-    );
+
+    for module in fedimint.modules.values() {
+        module.init(&mut InitHandle {
+            rpc_module: &mut rpc_module,
+        });
+    }
+
     attach_endpoints(
         &mut rpc_module,
         fedimint.ln.api_endpoints(),
@@ -69,7 +118,7 @@ pub async fn run_server(cfg: ServerConfig, fedimint: Arc<FedimintConsensus>) {
 }
 
 fn attach_endpoints<M>(
-    rpc_module: &mut RpcModule<State>,
+    rpc_module: &mut RpcModule<RpcHandlerCtx>,
     endpoints: &'static [ApiEndpoint<M>],
     base_name: Option<&str>,
 ) where

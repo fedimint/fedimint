@@ -8,7 +8,7 @@ use fedimint_api::{
     Amount, OutPoint, PeerId,
 };
 use fedimint_core_server::{
-    ApiEndpoint, Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
+    Error, InitHandle, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
     ServerModulePlugin,
 };
 use fedimint_mint_common::{
@@ -54,7 +54,12 @@ impl ServerModulePlugin for MintServerModule {
     type ConsensusItem = MintConsensusItem;
     type VerificationCache = MintVerificationCache;
 
-    fn init(&self) {}
+    fn init(&self, backend: &mut dyn InitHandle) {
+        // TODO: delete this dummy endpoint
+        backend.register_endpoint("/mint/echo", |value, _ctx| {
+            Box::pin(async move { Ok(value) })
+        });
+    }
 
     async fn await_consensus_proposal<'a>(&'a self) {
         todo!()
@@ -124,14 +129,6 @@ impl ServerModulePlugin for MintServerModule {
     }
 
     fn audit(&self, _audit: &mut Audit) {
-        todo!()
-    }
-
-    fn api_base_name(&self) -> &'static str {
-        todo!()
-    }
-
-    fn api_endpoints(&self) -> Vec<ApiEndpoint> {
         todo!()
     }
 }

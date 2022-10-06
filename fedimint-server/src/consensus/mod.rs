@@ -78,11 +78,11 @@ pub struct FedimintConsensus {
     pub cfg: ServerConfig,
 
     /// Our local mint
-    pub mint: Mint, // TODO: generate consensus code using Macro, making modules replaceable for testing and easy adaptability
     pub wallet: Wallet,
     pub ln: LightningModule,
+    pub mint: Mint,
 
-    modules: BTreeMap<ModuleKey, ServerModule>,
+    pub modules: BTreeMap<ModuleKey, ServerModule>,
     /// KV Database into which all state is persisted to recover from in case of a crash
     pub db: Database,
 
