@@ -622,6 +622,8 @@
 <span id="622">622</span>
 <span id="623">623</span>
 <span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
@@ -860,6 +862,7 @@
         <span class="attribute">#[clap(value_parser = parse_fedimint_amount)]
         </span>amount: Amount,
         description: String,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
 
     <span class="doccomment">/// Wait for incoming invoice to be paid
@@ -1149,8 +1152,9 @@
         Command::LnInvoice {
             amount,
             description,
+            expiry_time,
         } =&gt; client
-            .generate_invoice(amount, description, <span class="kw-2">&amp;mut </span>rng)
+            .generate_invoice(amount, description, <span class="kw-2">&amp;mut </span>rng, expiry_time)
             .<span class="kw">await
             </span>.transform(
                 |confirmed_invoice| CliOutput::LnInvoice {

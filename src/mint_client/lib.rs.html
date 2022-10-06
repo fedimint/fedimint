@@ -1151,6 +1151,11 @@
 <span id="1151">1151</span>
 <span id="1152">1152</span>
 <span id="1153">1153</span>
+<span id="1154">1154</span>
+<span id="1155">1155</span>
+<span id="1156">1156</span>
+<span id="1157">1157</span>
+<span id="1158">1158</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1203,7 +1208,7 @@
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};
-<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+<span class="kw">use </span>lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 <span class="kw">use </span>ln::db::LightningGatewayKey;
 <span class="kw">use </span>mint::NoteIssuanceRequests;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -1776,6 +1781,7 @@
         amount: Amount,
         description: String,
         <span class="kw-2">mut </span>rng: R,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
@@ -1817,6 +1823,9 @@
             .min_final_cltv_expiry(<span class="number">18</span>)
             .payee_pub_key(node_public_key)
             .private_route(gateway_route_hint)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
             .build_signed(|hash| {
                 <span class="self">self</span>.context
                     .secp
@@ -1827,6 +1836,7 @@
             amount,
             payment_hash,
             Preimage(raw_payment_secret),
+            expiry_time,
         );
         <span class="kw">let </span>ln_output = Output::LN(offer_output);
 

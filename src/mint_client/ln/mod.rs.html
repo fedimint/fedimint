@@ -490,6 +490,8 @@
 <span id="490">490</span>
 <span id="491">491</span>
 <span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -669,6 +671,7 @@
         amount: Amount,
         payment_hash: Sha256Hash,
         payment_secret: Preimage,
+        expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; ContractOrOfferOutput {
         ContractOrOfferOutput::Offer(IncomingContractOffer {
             amount,
@@ -677,6 +680,7 @@
                 payment_secret,
                 <span class="kw-2">&amp;</span><span class="self">self</span>.config.threshold_pub_key,
             ),
+            expiry_time,
         })
     }
 
