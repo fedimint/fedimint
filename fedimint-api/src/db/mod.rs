@@ -306,8 +306,10 @@ where
             return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[0]));
         }
 
-        <Self as crate::encoding::Decodable>::consensus_decode(std::io::Cursor::new(&data[1..]))
-            .map_err(|decode_error| DecodingError::Other(decode_error.0))
+        <Self as crate::encoding::Decodable>::consensus_decode(&mut std::io::Cursor::new(
+            &data[1..],
+        ))
+        .map_err(|decode_error| DecodingError::Other(decode_error.0))
     }
 }
 
@@ -328,7 +330,7 @@ where
     T: SerializableDatabaseValue + Decodable,
 {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
-        T::consensus_decode(std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.0))
+        T::consensus_decode(&mut std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.0))
     }
 }
 

@@ -61,7 +61,7 @@ pub mod test {
     use super::{IBitcoindRpc, Result};
     use crate::Feerate;
     use async_trait::async_trait;
-    use bitcoin::hashes::Hash;
+    use bitcoin::hashes::{sha256d, Hash};
     use bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
     use std::collections::{HashMap, VecDeque};
     use std::sync::{Arc, Mutex};
@@ -109,8 +109,8 @@ pub mod test {
             Ok(Block {
                 header: BlockHeader {
                     version: 0,
-                    prev_blockhash: Default::default(),
-                    merkle_root: Default::default(),
+                    prev_blockhash: sha256d::Hash::hash(b"").into(),
+                    merkle_root: sha256d::Hash::hash(b"").into(),
                     time: 0,
                     bits: 0,
                     nonce: 0,
@@ -167,7 +167,7 @@ pub mod test {
                 .iter()
                 .flat_map(|tx| tx.output.iter())
                 .any(|output| {
-                    output.value == amount.as_sat()
+                    output.value == amount.to_sat()
                         && output.script_pubkey == recipient.script_pubkey()
                 })
         }

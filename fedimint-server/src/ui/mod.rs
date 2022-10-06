@@ -284,7 +284,7 @@ pub enum UiMessage {
 }
 
 pub async fn run_ui(cfg_path: PathBuf, sender: Sender<UiMessage>, port: u32) {
-    let mut rng = OsRng::new().unwrap();
+    let mut rng = OsRng;
     let secp = bitcoin::secp256k1::Secp256k1::new();
     let (_, pubkey) = secp.generate_keypair(&mut rng);
     let connection_string = format!("{}", pubkey);

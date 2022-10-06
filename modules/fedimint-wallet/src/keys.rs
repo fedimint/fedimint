@@ -22,9 +22,13 @@ impl MiniscriptKey for CompressedPublicKey {
         false
     }
 
-    type Hash = CompressedPublicKey;
+    type RawPkHash = CompressedPublicKey;
+    type Sha256 = bitcoin::hashes::sha256::Hash;
+    type Hash256 = miniscript::hash256::Hash;
+    type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
+    type Hash160 = bitcoin::hashes::hash160::Hash;
 
-    fn to_pubkeyhash(&self) -> Self::Hash {
+    fn to_pubkeyhash(&self) -> Self::RawPkHash {
         (*self).clone()
     }
 }
@@ -37,8 +41,24 @@ impl ToPublicKey for CompressedPublicKey {
         }
     }
 
-    fn hash_to_hash160(hash: &Self::Hash) -> bitcoin::hashes::hash160::Hash {
+    fn hash_to_hash160(hash: &Self::RawPkHash) -> bitcoin::hashes::hash160::Hash {
         bitcoin::hashes::hash160::Hash::hash(&hash.key.serialize()[..])
+    }
+
+    fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> bitcoin::hashes::sha256::Hash {
+        *hash
+    }
+
+    fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> miniscript::hash256::Hash {
+        *hash
+    }
+
+    fn to_ripemd160(hash: &<Self as MiniscriptKey>::Ripemd160) -> bitcoin::hashes::ripemd160::Hash {
+        *hash
+    }
+
+    fn to_hash160(hash: &<Self as MiniscriptKey>::Hash160) -> bitcoin::hashes::hash160::Hash {
+        *hash
     }
 }
 

@@ -41,7 +41,6 @@ license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [patch.crates-io]
-bitcoin_hashes = { version = "0.10.0", git = 'https://github.com/fedimint/bitcoin_hashes', branch = 'fedimint' }
-secp256k1-zkp = { git = "https://github.com/fedimint/rust-secp256k1-zkp/", branch = "sanket-pr" }
+secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
 cln-plugin = { git = "https://github.com/ElementsProject/lightning", rev = "42783aa" }
 cln-rpc = { git = "https://github.com/ElementsProject/lightning", rev = "42783aa" }

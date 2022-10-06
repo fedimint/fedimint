@@ -50,7 +50,7 @@ use fedimint_core::{
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln::db::LightningGatewayKey;
 use mint::NoteIssuanceRequests;
 use rand::{CryptoRng, RngCore};
@@ -110,7 +110,7 @@ pub struct GatewayClientConfig {
 impl From<GatewayClientConfig> for LightningGateway {
     fn from(config: GatewayClientConfig) -> Self {
         LightningGateway {
-            mint_pub_key: config.redeem_key.public_key(),
+            mint_pub_key: config.redeem_key.x_only_public_key().0,
             node_pub_key: config.node_pub_key,
             api: config.api,
         }
@@ -623,10 +623,11 @@ impl Client<UserClientConfig> {
         amount: Amount,
         description: String,
         mut rng: R,
+        expiry_time: Option<u64>,
     ) -> Result<ConfirmedInvoice> {
         let gateway = self.fetch_active_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
-        let raw_payment_secret: [u8; 32] = payment_keypair.public_key().serialize();
+        let raw_payment_secret: [u8; 32] = payment_keypair.x_only_public_key().0.serialize();
         let payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(&raw_payment_secret);
         let payment_secret = PaymentSecret(raw_payment_secret);
 
@@ -664,6 +665,9 @@ impl Client<UserClientConfig> {
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
             .private_route(gateway_route_hint)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
             .build_signed(|hash| {
                 self.context
                     .secp
@@ -674,6 +678,7 @@ impl Client<UserClientConfig> {
             amount,
             payment_hash,
             Preimage(raw_payment_secret),
+            expiry_time,
         );
         let ln_output = Output::LN(offer_output);
 
@@ -783,7 +788,7 @@ impl Client<GatewayClientConfig> {
         &self,
         account: &OutgoingContractAccount,
     ) -> Result<PaymentParameters> {
-        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
 
         if account.contract.gateway_key != our_pub_key {
             return Err(ClientError::NotOurKey);
@@ -946,7 +951,7 @@ impl Client<GatewayClientConfig> {
         builder.input_coins(coins, &self.context.secp)?;
 
         // Outputs
-        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key);
+        let our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&self.config.redeem_key).0;
         let contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -1073,7 +1078,7 @@ pub mod serde_keypair {
 
         Ok(KeyPair::from_secret_key(
             secp256k1_zkp::SECP256K1,
-            secret_key,
+            &secret_key,
         ))
     }
 }

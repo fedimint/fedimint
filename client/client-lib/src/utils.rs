@@ -20,7 +20,7 @@ pub fn serialize_coins(c: &TieredMulti<SpendableNote>) -> String {
 
 pub fn from_hex<D: Decodable>(s: &str) -> Result<D, anyhow::Error> {
     let bytes = hex::decode(s)?;
-    Ok(D::consensus_decode(std::io::Cursor::new(bytes))?)
+    Ok(D::consensus_decode(&mut std::io::Cursor::new(bytes))?)
 }
 
 pub fn parse_bitcoin_amount(

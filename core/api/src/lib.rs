@@ -37,19 +37,19 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
         impl Encodable for $name {
             fn consensus_encode<W: std::io::Write>(
                 &self,
-                mut writer: W,
+                writer: &mut W,
             ) -> Result<usize, std::io::Error> {
-                self.0.module_key().consensus_encode(&mut writer)?;
-                self.0.consensus_encode_dyn(&mut writer)
+                self.0.module_key().consensus_encode(writer)?;
+                self.0.consensus_encode_dyn(writer)
             }
         }
 
         impl ModuleDecodable<$crate::server::ServerModule> for $name {
             fn consensus_decode<R: std::io::Read>(
-                mut r: &mut R,
+                r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::server::ServerModule>,
             ) -> Result<Self, DecodeError> {
-                $crate::encode::module_decode_key_prefixed_decodable(&mut r, modules, |r, m| {
+                $crate::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
             }
@@ -57,10 +57,10 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
 
         impl ModuleDecodable<$crate::client::ClientModule> for $name {
             fn consensus_decode<R: std::io::Read>(
-                mut r: &mut R,
+                r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::client::ClientModule>,
             ) -> Result<Self, DecodeError> {
-                $crate::encode::module_decode_key_prefixed_decodable(&mut r, modules, |r, m| {
+                $crate::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
             }

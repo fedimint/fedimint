@@ -3,7 +3,7 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 macro_rules! impl_external_encode_bls {
     ($ext:ident $(:: $ext_path:ident)*, $group:ty, $byte_len:expr) => {
         impl crate::encoding::Encodable for $ext $(:: $ext_path)* {
-            fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+            fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
                 let bytes = self.0.to_compressed();
                 writer.write_all(&bytes)?;
                 Ok(bytes.len())
@@ -11,7 +11,7 @@ macro_rules! impl_external_encode_bls {
         }
 
         impl crate::encoding::Decodable for $ext $(:: $ext_path)* {
-            fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, crate::encoding::DecodeError> {
+            fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; $byte_len];
                 d.read_exact(&mut bytes).map_err(crate::encoding::DecodeError::from_err)?;
                 let msg = <$group>::from_compressed(&bytes);
@@ -32,7 +32,7 @@ impl_external_encode_bls!(tbs::BlindedSignature, tbs::MessagePoint, 48);
 impl_external_encode_bls!(tbs::Signature, tbs::MessagePoint, 48);
 
 impl Encodable for tbs::BlindingKey {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let bytes = self.0.to_bytes();
         writer.write_all(&bytes)?;
         Ok(bytes.len())
@@ -40,7 +40,7 @@ impl Encodable for tbs::BlindingKey {
 }
 
 impl Decodable for tbs::BlindingKey {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         let key = tbs::Scalar::from_bytes(&bytes);

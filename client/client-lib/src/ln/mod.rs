@@ -62,7 +62,7 @@ impl<'c> LnClient<'c> {
             hash: *invoice.payment_hash(),
             gateway_key: gateway.mint_pub_key,
             timelock,
-            user_key: user_sk.public_key(),
+            user_key: user_sk.x_only_public_key().0,
             invoice: invoice.to_string(),
             cancelled: false,
         };
@@ -177,6 +177,7 @@ impl<'c> LnClient<'c> {
         amount: Amount,
         payment_hash: Sha256Hash,
         payment_secret: Preimage,
+        expiry_time: Option<u64>,
     ) -> ContractOrOfferOutput {
         ContractOrOfferOutput::Offer(IncomingContractOffer {
             amount,
@@ -185,6 +186,7 @@ impl<'c> LnClient<'c> {
                 payment_secret,
                 &self.config.threshold_pub_key,
             ),
+            expiry_time,
         })
     }
 
@@ -256,6 +258,7 @@ mod tests {
     use crate::ln::LnClient;
     use crate::ClientContext;
     use async_trait::async_trait;
+    use bitcoin::hashes::{sha256, Hash};
     use bitcoin::Address;
     use fedimint_api::db::batch::DbBatch;
     use fedimint_api::db::mem_impl::MemDatabase;
@@ -397,7 +400,7 @@ mod tests {
         fed.lock().await.set_block_height(1);
 
         let out_point = OutPoint {
-            txid: Default::default(),
+            txid: sha256::Hash::hash(b"txid").into(),
             out_idx: 0,
         };
 
@@ -477,7 +480,7 @@ mod tests {
         fed.lock().await.set_block_height(timelock as u64);
 
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
-        let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key);
+        let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).0;
         assert_eq!(meta.keys, vec![refund_pk]);
         assert_eq!(meta.amount, expected_amount);
 

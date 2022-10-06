@@ -1,5 +1,6 @@
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hash_types::Txid;
@@ -7,10 +8,11 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
-    secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, Transaction, TxOut,
+    secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, PackedLockTime,
+    Transaction, TxOut,
 };
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::rngs::OsRng;
 
 use fedimint_api::Amount;
@@ -33,7 +35,7 @@ pub struct FakeLightningTest {
 impl FakeLightningTest {
     pub fn new() -> Self {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let kp = KeyPair::new(&ctx, &mut OsRng::new().unwrap());
+        let kp = KeyPair::new(&ctx, &mut OsRng);
         let amount_sent = Arc::new(Mutex::new(0));
 
         FakeLightningTest {
@@ -46,7 +48,7 @@ impl FakeLightningTest {
 }
 
 impl LightningTest for FakeLightningTest {
-    fn invoice(&self, amount: Amount) -> Invoice {
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         InvoiceBuilder::new(Currency::Regtest)
@@ -56,6 +58,9 @@ impl LightningTest for FakeLightningTest {
             .min_final_cltv_expiry(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(amount.milli_sat)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap()
     }
@@ -103,7 +108,7 @@ impl FakeBitcoinTest {
     fn new_transaction(out: Vec<TxOut>) -> Transaction {
         Transaction {
             version: 0,
-            lock_time: 0,
+            lock_time: PackedLockTime::ZERO,
             input: vec![],
             output: out,
         }
@@ -153,7 +158,7 @@ impl BitcoinTest for FakeBitcoinTest {
         let mut pending = self.pending.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
-            value: amount.as_sat(),
+            value: amount.to_sat(),
             script_pubkey: address.payload.script_pubkey(),
         }]);
 
@@ -174,7 +179,7 @@ impl BitcoinTest for FakeBitcoinTest {
 
     fn get_new_address(&self) -> Address {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let (_, public_key) = ctx.generate_keypair(&mut OsRng::new().unwrap());
+        let (_, public_key) = ctx.generate_keypair(&mut OsRng);
 
         Address::p2wpkh(&bitcoin::PublicKey::new(public_key), Network::Regtest).unwrap()
     }

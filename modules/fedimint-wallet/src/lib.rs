@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::convert::TryInto;
+use std::convert::{Infallible, TryInto};
 
 use std::hash::Hasher;
 
@@ -15,7 +15,7 @@ use crate::tweakable::Tweakable;
 use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
-use bitcoin::secp256k1::{All, Secp256k1};
+use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::util::psbt::raw::ProprietaryKey;
 use bitcoin::util::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::util::sighash::SighashCache;
@@ -23,6 +23,7 @@ use bitcoin::{
     Address, AddressType, Amount, BlockHash, EcdsaSig, EcdsaSighashType, Network, Script,
     Transaction, TxIn, TxOut, Txid,
 };
+use bitcoin::{PackedLockTime, Sequence};
 use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -32,9 +33,9 @@ use fedimint_api::module::ApiEndpoint;
 use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use fedimint_derive::UnzipConsensus;
 use miniscript::psbt::PsbtExt;
-use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+use miniscript::{Descriptor, TranslatePk};
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::Message;
+use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
 use std::ops::Sub;
 
@@ -497,13 +498,13 @@ impl FederationModule for Wallet {
 
     fn audit(&self, audit: &mut Audit) {
         audit.add_items(&self.db, &UTXOPrefixKey, |_, v| {
-            v.amount.as_sat() as i64 * 1000
+            v.amount.to_sat() as i64 * 1000
         });
         audit.add_items(&self.db, &UnsignedTransactionPrefixKey, |_, v| {
-            v.change.as_sat() as i64 * 1000
+            v.change.to_sat() as i64 * 1000
         });
         audit.add_items(&self.db, &PendingTransactionPrefixKey, |_, v| {
-            v.change.as_sat() as i64 * 1000
+            v.change.to_sat() as i64 * 1000
         });
     }
 
@@ -890,7 +891,7 @@ impl Wallet {
         let sat_sum = self
             .available_utxos()
             .into_iter()
-            .map(|(_, utxo)| utxo.amount.as_sat())
+            .map(|(_, utxo)| utxo.amount.to_sat())
             .sum();
         bitcoin::Amount::from_sat(sat_sum)
     }
@@ -962,11 +963,11 @@ impl<'a> StatelessWallet<'a> {
         let change = total_selected_value - fees - peg_out_amount;
         let output: Vec<TxOut> = vec![
             TxOut {
-                value: peg_out_amount.as_sat(),
+                value: peg_out_amount.to_sat(),
                 script_pubkey: destination,
             },
             TxOut {
-                value: change.as_sat(),
+                value: change.to_sat(),
                 script_pubkey: change_script,
             },
         ];
@@ -977,23 +978,23 @@ impl<'a> StatelessWallet<'a> {
 
         info!(
             inputs = selected_utxos.len(),
-            input_sats = total_selected_value.as_sat(),
-            peg_out_sats = peg_out_amount.as_sat(),
-            fees_sats = fees.as_sat(),
+            input_sats = total_selected_value.to_sat(),
+            peg_out_sats = peg_out_amount.to_sat(),
+            fees_sats = fees.to_sat(),
             fee_rate = fee_rate.sats_per_kvb,
-            change_sats = change.as_sat(),
+            change_sats = change.to_sat(),
             "Creating peg-out tx",
         );
 
         let transaction = Transaction {
             version: 2,
-            lock_time: 0,
+            lock_time: PackedLockTime::ZERO,
             input: selected_utxos
                 .iter()
                 .map(|(utxo_key, _utxo)| TxIn {
                     previous_output: utxo_key.0,
                     script_sig: Default::default(),
-                    sequence: 0xFFFFFFFF,
+                    sequence: Sequence::MAX,
                     witness: bitcoin::Witness::new(),
                 })
                 .collect(),
@@ -1018,7 +1019,7 @@ impl<'a> StatelessWallet<'a> {
                     Input {
                         non_witness_utxo: None,
                         witness_utxo: Some(TxOut {
-                            value: utxo.amount.as_sat(),
+                            value: utxo.amount.to_sat(),
                             script_pubkey,
                         }),
                         partial_sigs: Default::default(),
@@ -1074,13 +1075,11 @@ impl<'a> StatelessWallet<'a> {
             .enumerate()
         {
             let tweaked_secret = {
-                let mut secret_key = *self.secret_key;
-
                 let tweak_pk_bytes = psbt_input
                     .proprietary
                     .get(&proprietary_tweak_key())
                     .expect("Malformed PSBT: expected tweak");
-                let pub_key = secp256k1::PublicKey::from_secret_key(self.secp, &secret_key);
+                let pub_key = secp256k1::PublicKey::from_secret_key(self.secp, self.secret_key);
 
                 let tweak = {
                     let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
@@ -1088,10 +1087,9 @@ impl<'a> StatelessWallet<'a> {
                     Hmac::from_engine(hasher).into_inner()
                 };
 
-                secret_key
-                    .add_assign(&tweak[..])
-                    .expect("Tweaking priv key failed"); // TODO: why could this happen?
-                secret_key
+                self.secret_key
+                    .add_tweak(&Scalar::from_be_bytes(tweak).expect("can't fail"))
+                    .expect("Tweaking priv key failed") // TODO: why could this happen?
             };
 
             let tx_hash = tx_hasher
@@ -1125,20 +1123,48 @@ impl<'a> StatelessWallet<'a> {
     }
 
     fn derive_script(&self, tweak: &[u8]) -> Script {
-        let descriptor = self.descriptor.translate_pk2_infallible(|pub_key| {
-            let hashed_tweak = {
-                let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.key.serialize()[..]);
-                hasher.input(tweak);
-                Hmac::from_engine(hasher).into_inner()
-            };
+        struct CompressedPublicKeyTranslator<'t, 's, Ctx: Verification> {
+            tweak: &'t [u8],
+            secp: &'s Secp256k1<Ctx>,
+        }
 
-            let mut tweak_key = pub_key.key;
-            tweak_key
-                .add_exp_assign(self.secp, &hashed_tweak)
-                .expect("tweaking failed");
+        impl<'t, 's, Ctx: Verification>
+            miniscript::PkTranslator<CompressedPublicKey, CompressedPublicKey, Infallible>
+            for CompressedPublicKeyTranslator<'t, 's, Ctx>
+        {
+            fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
+                let hashed_tweak = {
+                    let mut hasher = HmacEngine::<sha256::Hash>::new(&pk.key.serialize()[..]);
+                    hasher.input(self.tweak);
+                    Hmac::from_engine(hasher).into_inner()
+                };
 
-            CompressedPublicKey { key: tweak_key }
-        });
+                Ok(CompressedPublicKey {
+                    key: pk
+                        .key
+                        .add_exp_tweak(
+                            self.secp,
+                            &Scalar::from_be_bytes(hashed_tweak).expect("can't fail"),
+                        )
+                        .expect("tweaking failed"),
+                })
+            }
+
+            fn pkh(
+                &mut self,
+                pkh: &CompressedPublicKey,
+            ) -> Result<CompressedPublicKey, Infallible> {
+                self.pk(pkh)
+            }
+        }
+
+        let descriptor = self
+            .descriptor
+            .translate_pk(&mut CompressedPublicKeyTranslator {
+                tweak,
+                secp: self.secp,
+            })
+            .expect("can't fail");
 
         descriptor.script_pubkey()
     }

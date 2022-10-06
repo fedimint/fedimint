@@ -236,6 +236,7 @@ enum Command {
         #[clap(value_parser = parse_fedimint_amount)]
         amount: Amount,
         description: String,
+        expiry_time: Option<u64>,
     },
 
     /// Wait for incoming invoice to be paid
@@ -357,10 +358,7 @@ async fn main() {
             .or_terminate(CliErrorKind::IOError, "could not open transaction db")
             .into();
 
-        let rng = rand::rngs::OsRng::new().or_terminate(
-            CliErrorKind::OSError,
-            "failed to acquire random number generator from OS",
-        );
+        let rng = rand::rngs::OsRng;
 
         let client = Client::new(cfg.clone(), db, Default::default());
 
@@ -525,8 +523,9 @@ async fn handle_command(
         Command::LnInvoice {
             amount,
             description,
+            expiry_time,
         } => client
-            .generate_invoice(amount, description, &mut rng)
+            .generate_invoice(amount, description, &mut rng, expiry_time)
             .await
             .transform(
                 |confirmed_invoice| CliOutput::LnInvoice {

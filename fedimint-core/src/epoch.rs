@@ -151,13 +151,13 @@ pub enum EpochVerifyError {
 }
 
 impl Encodable for EpochSignature {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
 impl Decodable for EpochSignature {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignature(Signature::from_bytes(&bytes).unwrap()))
@@ -165,13 +165,13 @@ impl Decodable for EpochSignature {
 }
 
 impl Encodable for EpochSignatureShare {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         self.0.to_bytes().consensus_encode(writer)
     }
 }
 
 impl Decodable for EpochSignatureShare {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignatureShare(
@@ -184,7 +184,7 @@ impl Decodable for EpochSignatureShare {
 mod tests {
     use crate::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
     use crate::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
-    use fedimint_api::rand::Rand07Compat;
+    use bitcoin::hashes::Hash;
     use fedimint_api::PeerId;
     use rand::rngs::OsRng;
     use std::collections::HashSet;
@@ -221,8 +221,8 @@ mod tests {
 
     #[test]
     fn adds_sig_to_prev_epoch() {
-        let rng = OsRng::new().unwrap();
-        let sk_set = SecretKeySet::random(2, &mut Rand07Compat(rng));
+        let mut rng = OsRng;
+        let sk_set = SecretKeySet::random(2, &mut rng);
         let pk_set = sk_set.public_keys();
 
         let epoch0 = history(0, &None, None);
@@ -265,7 +265,7 @@ mod tests {
     fn verifies_hash() {
         let sk: SecretKey = SecretKey::random();
         let _pk = sk.public_key();
-        let wrong_hash: Sha256 = Default::default();
+        let wrong_hash: Sha256 = Hash::hash(b"wrong");
         let sig = EpochSignature(sk.sign(&wrong_hash));
 
         let epoch0 = history(0, &None, Some(sig));

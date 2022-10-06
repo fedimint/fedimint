@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::env;
 use std::iter::repeat;
 use std::net::SocketAddr;
@@ -20,6 +20,7 @@ use fedimint_api::OutPoint;
 use fedimint_api::PeerId;
 use fedimint_ln::LightningModule;
 use fedimint_mint::Mint;
+use fedimint_server::config::connect;
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_wallet::Wallet;
 use futures::executor::block_on;
@@ -77,7 +78,7 @@ static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
-    OsRng::new().unwrap()
+    OsRng
 }
 
 pub fn sats(amount: u64) -> Amount {
@@ -104,7 +105,7 @@ pub async fn fixtures(
     GatewayTest,
     Box<dyn LightningTest>,
 ) {
-    let base_port = BASE_PORT.fetch_add(num_peers * 2 + 1, Ordering::Relaxed);
+    let base_port = BASE_PORT.fetch_add(num_peers * 10, Ordering::Relaxed);
 
     // in case we need to output logs using 'cargo test -- --nocapture'
     if base_port == 4000 {
@@ -115,22 +116,21 @@ pub async fn fixtures(
             )
             .init();
     }
-
-    let params = ServerConfigParams {
-        federation_name: "Test federation".into(),
-        hbbft_base_port: base_port,
-        api_base_port: base_port + num_peers,
-        amount_tiers: amount_tiers.to_vec(),
-        bitcoind_rpc: "127.0.0.1:18443".into(),
-    };
     let peers = (0..num_peers as u16).map(PeerId::from).collect::<Vec<_>>();
-
-    let (server_config, client_config) =
-        ServerConfig::trusted_dealer_gen(&peers, &params, OsRng::new().unwrap());
+    let params = ServerConfigParams::gen_local(
+        &peers,
+        amount_tiers.to_vec(),
+        base_port,
+        "test",
+        "127.0.0.1:18443",
+    );
+    let max_evil = hbbft::util::max_faulty(peers.len());
 
     match env::var("FM_TEST_DISABLE_MOCKS") {
         Ok(s) if s == "1" => {
             info!("Testing with REAL Bitcoin and Lightning services");
+            let (server_config, client_config) = distributed_config(&peers, params, max_evil).await;
+
             let dir = env::var("FM_TEST_DIR").expect("Must have test dir defined for real tests");
             let wallet_config = server_config.iter().last().unwrap().1.wallet.clone();
             let bitcoin_rpc = bitcoincore_rpc::make_bitcoind_rpc(&wallet_config.btc_rpc)
@@ -175,6 +175,9 @@ pub async fn fixtures(
         }
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
+            let (server_config, client_config) =
+                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
+
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
             let lightning = FakeLightningTest::new();
@@ -204,6 +207,35 @@ pub async fn fixtures(
     }
 }
 
+async fn distributed_config(
+    peers: &[PeerId],
+    params: HashMap<PeerId, ServerConfigParams>,
+    _max_evil: usize,
+) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
+    let configs: Vec<(PeerId, (ServerConfig, ClientConfig))> = join_all(peers.iter().map(|peer| {
+        let params = params.clone();
+        let peers = peers.to_vec();
+
+        async move {
+            let our_params = params[peer].clone();
+            let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
+
+            let rng = OsRng;
+            let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
+            (*peer, cfg.await.expect("generation failed"))
+        }
+    }))
+    .await;
+
+    let (_, (_, client_config)) = configs.first().unwrap().clone();
+    let server_configs = configs
+        .into_iter()
+        .map(|(peer, (server, _))| (peer, server))
+        .collect();
+
+    (server_configs, client_config)
+}
+
 fn rocks(dir: String) -> fedimint_rocksdb::RocksDb {
     let db_dir = PathBuf::from(dir).join(format!("db-{}", rng().next_u64()));
     fedimint_rocksdb::RocksDb::open(db_dir).unwrap()
@@ -230,7 +262,7 @@ pub trait BitcoinTest {
 
 pub trait LightningTest {
     /// Creates invoice from a non-gateway LN node
-    fn invoice(&self, amount: Amount) -> Invoice;
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
 
     /// Returns the amount that the gateway LN node has sent
     fn amount_sent(&self) -> Amount;
@@ -251,12 +283,12 @@ impl GatewayTest {
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
         let keys = LightningGateway {
-            mint_pub_key: kp.public_key(),
+            mint_pub_key: kp.x_only_public_key().0,
             node_pub_key,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
@@ -556,37 +588,36 @@ impl FederationTest {
             out_idx: 0,
         };
 
-        user.client
-            .receive_coins(amount, OsRng::new().unwrap(), |tokens| {
-                for server in &self.servers {
-                    let mut batch = DbBatch::new();
-                    let mut batch_tx = batch.transaction();
-                    let transaction = fedimint_server::transaction::Transaction {
-                        inputs: vec![],
-                        outputs: vec![Output::Mint(tokens.clone())],
-                        signature: None,
-                    };
+        user.client.receive_coins(amount, OsRng, |tokens| {
+            for server in &self.servers {
+                let mut batch = DbBatch::new();
+                let mut batch_tx = batch.transaction();
+                let transaction = fedimint_server::transaction::Transaction {
+                    inputs: vec![],
+                    outputs: vec![Output::Mint(tokens.clone())],
+                    signature: None,
+                };
 
-                    batch_tx.append_insert(
-                        fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                        fedimint_server::consensus::AcceptedTransaction {
-                            epoch: 0,
-                            transaction,
-                        },
-                    );
+                batch_tx.append_insert(
+                    fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                    fedimint_server::consensus::AcceptedTransaction {
+                        epoch: 0,
+                        transaction,
+                    },
+                );
 
-                    batch_tx.commit();
-                    server
-                        .borrow_mut()
-                        .fedimint
-                        .consensus
-                        .mint
-                        .apply_output(batch.transaction(), &tokens, out_point)
-                        .unwrap();
-                    server.borrow_mut().database.apply_batch(batch).unwrap();
-                }
-                out_point
-            });
+                batch_tx.commit();
+                server
+                    .borrow_mut()
+                    .fedimint
+                    .consensus
+                    .mint
+                    .apply_output(batch.transaction(), &tokens, out_point)
+                    .unwrap();
+                server.borrow_mut().database.apply_batch(batch).unwrap();
+            }
+            out_point
+        });
         out_point
     }
 

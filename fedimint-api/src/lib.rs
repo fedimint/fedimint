@@ -1,9 +1,9 @@
 extern crate self as fedimint_api;
 
 use bitcoin::Denomination;
+use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
-use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 pub use module::{FederationModule, InputMeta};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -22,7 +22,7 @@ pub mod db;
 pub mod encoding;
 pub mod macros;
 pub mod module;
-pub mod rand;
+pub mod net;
 pub mod task;
 pub mod tiered;
 pub mod tiered_multi;
@@ -278,15 +278,15 @@ impl FromStr for Amount {
 
 impl From<bitcoin::Amount> for Amount {
     fn from(amt: bitcoin::Amount) -> Self {
-        assert!(amt.as_sat() <= 2_100_000_000_000_000);
+        assert!(amt.to_sat() <= 2_100_000_000_000_000);
         Amount {
-            milli_sat: amt.as_sat() * 1000,
+            milli_sat: amt.to_sat() * 1000,
         }
     }
 }
 
 impl Encodable for TransactionId {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let bytes = &self[..];
         writer.write_all(bytes)?;
         Ok(bytes.len())
@@ -294,7 +294,7 @@ impl Encodable for TransactionId {
 }
 
 impl Decodable for TransactionId {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))

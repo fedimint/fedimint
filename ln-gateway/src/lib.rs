@@ -288,7 +288,7 @@ impl LnGateway {
     }
 
     async fn handle_pay_invoice_msg(&self, contract_id: ContractId) -> Result<()> {
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let rng = rand::rngs::OsRng;
         let outpoint = self.pay_invoice(contract_id, rng).await?;
         self.await_outgoing_contract_claimed(contract_id, outpoint)
             .await?;
@@ -298,8 +298,7 @@ impl LnGateway {
     async fn handle_htlc_incoming_msg(&self, htlc_accepted: HtlcAccepted) -> Result<Preimage> {
         let invoice_amount = htlc_accepted.htlc.amount;
         let payment_hash = htlc_accepted.htlc.payment_hash;
-        let mut rng =
-            rand::rngs::OsRng::new().expect("only systems with a randomness source are supported");
+        let mut rng = rand::rngs::OsRng;
 
         debug!("Incoming htlc for payment hash {}", payment_hash);
         self.buy_preimage_internal(&payment_hash, &invoice_amount, &mut rng)
@@ -314,12 +313,12 @@ impl LnGateway {
         Ok(self.federation_client.coins().total_amount())
     }
     async fn handle_address_msg(&self) -> Result<Address> {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = rand::rngs::OsRng;
         Ok(self.federation_client.get_new_pegin_address(&mut rng))
     }
 
     async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let rng = rand::rngs::OsRng;
         self.federation_client
             .peg_in(deposit.0, deposit.1, rng)
             .await
@@ -327,7 +326,7 @@ impl LnGateway {
     }
 
     async fn handle_withdraw_msg(&self, withdraw: WithdrawPayload) -> Result<TransactionId> {
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let rng = rand::rngs::OsRng;
         let peg_out = self
             .federation_client
             .new_peg_out_with_fees(withdraw.1, withdraw.0)
@@ -417,11 +416,11 @@ pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializ
     if d.is_human_readable() {
         let bytes = hex::decode::<String>(Deserialize::deserialize(d)?)
             .map_err(serde::de::Error::custom)?;
-        T::consensus_decode(Cursor::new(&bytes))
+        T::consensus_decode(&mut Cursor::new(&bytes))
             .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
     } else {
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
-        T::consensus_decode(Cursor::new(&bytes))
+        T::consensus_decode(&mut Cursor::new(&bytes))
             .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
     }
 }

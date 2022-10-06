@@ -1,7 +1,7 @@
 use crate::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
+use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
-use bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ pub struct IncomingContractOffer {
     pub amount: fedimint_api::Amount,
     pub hash: bitcoin_hashes::sha256::Hash,
     pub encrypted_preimage: EncryptedPreimage,
+    pub expiry_time: Option<u64>,
 }
 
 impl IncomingContractOffer {
@@ -86,13 +87,13 @@ impl IdentifyableContract for IncomingContract {
 }
 
 impl Encodable for OfferId {
-    fn consensus_encode<W: std::io::Write>(&self, writer: W) -> Result<usize, Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.as_inner().consensus_encode(writer)
     }
 }
 
 impl Decodable for OfferId {
-    fn consensus_decode<D: std::io::Read>(d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         Ok(OfferId::from_inner(Decodable::consensus_decode(d)?))
     }
 }

@@ -27,11 +27,11 @@ pub struct RealLightningTest {
 }
 
 impl LightningTest for RealLightningTest {
-    fn invoice(&self, amount: Amount) -> Invoice {
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice = self
             .rpc_other
-            .invoice(amount.milli_sat, &random.to_string(), "", None)
+            .invoice(amount.milli_sat, &random.to_string(), "", expiry_time)
             .unwrap();
         Invoice::from_str(&invoice.bolt11).unwrap()
     }
@@ -121,7 +121,7 @@ impl BitcoinTest for RealBitcoinTest {
             .client
             .get_raw_transaction(&id, None)
             .expect(Self::ERROR);
-        let proof = TxOutProof::consensus_decode(Cursor::new(
+        let proof = TxOutProof::consensus_decode(&mut Cursor::new(
             self.client
                 .get_tx_out_proof(&[id], None)
                 .expect(Self::ERROR),

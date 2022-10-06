@@ -7,7 +7,9 @@ use crate::net::connect::{AnyConnector, SharedAnyConnector};
 use crate::net::framed::AnyFramedTransport;
 use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 use async_trait::async_trait;
+use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::PeerId;
+use fedimint_core::config::Node;
 use futures::future::select_all;
 use futures::{SinkExt, StreamExt};
 use hbbft::Target;
@@ -15,8 +17,9 @@ use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
+use std::ops::Sub;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
@@ -27,49 +30,9 @@ use url::Url;
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
 
-/// Owned [`PeerConnections`] trait object type
-pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
-
 /// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 pub type PeerConnector<M> = AnyConnector<PeerMessage<M>>;
-
-/// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and resent on reconnect, this
-///   avoids the need to rejoin the consensus, which is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
-#[async_trait]
-pub trait PeerConnections<T>
-where
-    T: Serialize + DeserializeOwned + Unpin + Send,
-{
-    /// Send a message to a target, either all peers or a specific one.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and only cached
-    /// otherwise.
-    async fn send(&mut self, target: Target<PeerId>, msg: T);
-
-    /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> (PeerId, T);
-
-    /// Removes a peer connection in case of misbehavior
-    async fn ban_peer(&mut self, peer: PeerId);
-
-    /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> AnyPeerConnections<T>
-    where
-        Self: Sized + Send + Unpin + 'static,
-    {
-        Box::new(self)
-    }
-}
 
 /// Connection manager that automatically reconnects to peers
 ///
@@ -102,10 +65,8 @@ pub struct NetworkConfig {
 /// Information needed to connect to one other federation member
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
-    /// The peer's hbbft network address and port (e.g. `10.42.0.10:4000`)
-    pub hbbft_addr: String,
-    /// The peer's websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    pub api_addr: Url,
+    /// The peer's network address and port (e.g. `10.42.0.10:4000`)
+    pub address: String,
 }
 
 /// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -146,6 +107,19 @@ enum PeerConnectionState<M> {
     Connected(ConnectedPeerConnectionState<M>),
 }
 
+impl NetworkConfig {
+    pub fn nodes(&self, prefix: &str, names: HashMap<PeerId, String>) -> Vec<Node> {
+        self.peers
+            .iter()
+            .map(|(peer, connection)| Node {
+                name: names[peer].to_string(),
+                url: Url::parse(&format!("{}{}", prefix, connection.address))
+                    .expect("Could not parse Url"),
+            })
+            .collect()
+    }
+}
+
 impl<T: 'static> ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
@@ -155,8 +129,6 @@ where
     /// requirements on the `Connector`.
     #[instrument(skip_all)]
     pub async fn new(cfg: NetworkConfig, connect: PeerConnector<T>) -> Self {
-        info!("Starting mint {}", cfg.identity);
-
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
 
         let (connection_senders, connections) = cfg
@@ -229,29 +201,33 @@ where
     }
 }
 
+pub trait PeerSlice {
+    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId>;
+}
+
+impl PeerSlice for Target<PeerId> {
+    fn peers(&self, all_peers: &BTreeSet<PeerId>) -> Vec<PeerId> {
+        let set = match self {
+            Target::AllExcept(exclude) => all_peers.sub(exclude),
+            Target::Nodes(include) => include.clone(),
+        };
+
+        set.into_iter().collect()
+    }
+}
+
 #[async_trait]
 impl<T> PeerConnections<T> for ReconnectPeerConnections<T>
 where
     T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + 'static,
 {
-    async fn send(&mut self, target: Target<PeerId>, msg: T) {
-        trace!(?target, "Sending message to");
-        match target {
-            Target::AllExcept(not_to) => {
-                for (peer, connection) in &mut self.connections {
-                    if !not_to.contains(peer) {
-                        connection.send(msg.clone()).await;
-                    }
-                }
-            }
-            Target::Nodes(peer_ids) => {
-                for peer_id in peer_ids {
-                    if let Some(peer) = self.connections.get_mut(&peer_id) {
-                        peer.send(msg.clone()).await;
-                    } else {
-                        trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
-                    }
-                }
+    async fn send(&mut self, peers: &[PeerId], msg: T) {
+        for peer_id in peers {
+            trace!(?peer_id, "Sending message to");
+            if let Some(peer) = self.connections.get_mut(peer_id) {
+                peer.send(msg.clone()).await;
+            } else {
+                trace!(peer = ?peer_id, "Not sending message to unknown peer (maybe banned)");
             }
         }
     }
@@ -364,7 +340,7 @@ where
 
         let reconnect_at = {
             let scaling_factor = disconnect_count as f64;
-            let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor, 4.0 * scaling_factor);
+            let delay: f64 = thread_rng().gen_range(1.0 * scaling_factor..4.0 * scaling_factor);
             debug!(delay, "Scheduling reopening of connection");
             Instant::now() + Duration::from_secs_f64(delay)
         };
@@ -504,7 +480,7 @@ where
 
     async fn try_reconnect(&self) -> Result<AnyFramedTransport<PeerMessage<M>>, anyhow::Error> {
         debug!("Trying to reconnect");
-        let addr = &self.cfg.hbbft_addr;
+        let addr = &self.cfg.address;
         let (connected_peer, conn) = self.connect.connect_framed(addr.clone(), self.peer).await?;
 
         if connected_peer == self.peer {
@@ -594,12 +570,11 @@ mod tests {
     };
     use fedimint_api::PeerId;
     use futures::Future;
-    use hbbft::Target;
-    use std::collections::{BTreeSet, HashMap};
-    use std::iter::FromIterator;
+
+    use std::collections::HashMap;
+
     use std::time::Duration;
     use tracing_subscriber::EnvFilter;
-    use url::Url;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where
@@ -624,9 +599,7 @@ mod tests {
             .enumerate()
             .map(|(idx, &peer)| {
                 let cfg = ConnectionConfig {
-                    hbbft_addr: peer.to_string(),
-                    api_addr: Url::parse(format!("http://{}", peer).as_str())
-                        .expect("Could not parse Url"),
+                    address: peer.to_string(),
                 };
                 (PeerId::from(idx as u16 + 1), cfg)
             })
@@ -647,16 +620,12 @@ mod tests {
         let mut peers_a = build_peers("a", 1).await;
         let mut peers_b = build_peers("b", 2).await;
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(2)])), 42)
-            .await;
+        peers_a.send(&[PeerId::from(2)], 42).await;
         let recv = timeout(peers_b.receive()).await.unwrap();
         assert_eq!(recv.0, PeerId::from(1));
         assert_eq!(recv.1, 42);
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(3)])), 21)
-            .await;
+        peers_a.send(&[PeerId::from(3)], 21).await;
 
         let mut peers_c = build_peers("c", 3).await;
         let recv = timeout(peers_c.receive()).await.unwrap();
