@@ -157,7 +157,7 @@ async fn run_dkg(
     let param_map = HashMap::from([(our_id, params.clone())]);
     let peer_ids: Vec<PeerId> = peers.keys().cloned().collect();
     let mut server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).await;
-    let rng = OsRng::new().unwrap();
+    let rng = OsRng;
     ServerConfig::distributed_gen(&mut server_conn, &our_id, &peer_ids, &param_map, rng)
         .await
         .expect("failed to run DKG to generate configs")

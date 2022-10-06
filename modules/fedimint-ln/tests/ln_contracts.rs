@@ -1,3 +1,4 @@
+use bitcoin_hashes::sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::module::testing::FakeFed;
 use fedimint_api::{Amount, OutPoint};
@@ -17,7 +18,7 @@ use secp256k1::KeyPair;
 
 #[test_log::test(tokio::test)]
 async fn test_account() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = secp256k1::rand::rngs::OsRng;
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -29,7 +30,7 @@ async fn test_account() {
     let ctx = secp256k1::Secp256k1::new();
     let kp = KeyPair::new(&ctx, &mut rng);
     let contract = Contract::Account(AccountContract {
-        key: kp.public_key(),
+        key: kp.x_only_public_key().0,
     });
 
     let account_output = ContractOrOfferOutput::Contract(ContractOutput {
@@ -37,7 +38,7 @@ async fn test_account() {
         contract: contract.clone(),
     });
     let account_out_point = OutPoint {
-        txid: Default::default(),
+        txid: sha256::Hash::hash(b"").into(),
         out_idx: 0,
     };
     let outputs = [(account_out_point, account_output)];
@@ -56,7 +57,7 @@ async fn test_account() {
         witness: None,
     };
     let meta = fed.verify_input(&account_input).unwrap();
-    assert_eq!(meta.keys, vec![kp.public_key()]);
+    assert_eq!(meta.keys, vec![kp.x_only_public_key().0]);
 
     fed.consensus_round(&[account_input.clone()], &[]).await;
 
@@ -65,7 +66,7 @@ async fn test_account() {
 
 #[test_log::test(tokio::test)]
 async fn test_outgoing() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = secp256k1::rand::rngs::OsRng;
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -75,8 +76,8 @@ async fn test_outgoing() {
     .await;
 
     let ctx = secp256k1::Secp256k1::new();
-    let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
-    let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
+    let gw_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
+    let user_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
     let preimage = Preimage([42u8; 32]);
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
 
@@ -94,7 +95,7 @@ async fn test_outgoing() {
         contract: contract.clone(),
     });
     let outgoing_out_point = OutPoint {
-        txid: Default::default(),
+        txid: sha256::Hash::hash(b"x").into(),
         out_idx: 0,
     };
     let outputs = [(outgoing_out_point, outgoing_output)];
@@ -141,7 +142,7 @@ async fn test_outgoing() {
 
 #[test_log::test(tokio::test)]
 async fn test_incoming() {
-    let mut rng = secp256k1::rand::rngs::OsRng::new().unwrap();
+    let mut rng = secp256k1::rand::rngs::OsRng;
 
     let mut fed = FakeFed::<LightningModule, LightningModuleClientConfig>::new(
         4,
@@ -151,8 +152,8 @@ async fn test_incoming() {
     .await;
 
     let ctx = secp256k1::Secp256k1::new();
-    let gw_pk = KeyPair::new(&ctx, &mut rng).public_key();
-    let user_pk = KeyPair::new(&ctx, &mut rng).public_key();
+    let gw_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
+    let user_pk = KeyPair::new(&ctx, &mut rng).x_only_public_key().0;
 
     let preimage = Preimage(user_pk.serialize());
     let hash = secp256k1::hashes::sha256::Hash::hash(&preimage.0);
@@ -168,7 +169,7 @@ async fn test_incoming() {
     };
     let offer_output = ContractOrOfferOutput::Offer(offer.clone());
     let offer_out_point = OutPoint {
-        txid: Default::default(),
+        txid: sha256::Hash::hash(b"").into(),
         out_idx: 0,
     };
 
@@ -188,7 +189,7 @@ async fn test_incoming() {
         contract: contract.clone(),
     });
     let incoming_out_point = OutPoint {
-        txid: Default::default(),
+        txid: sha256::Hash::hash(b"").into(),
         out_idx: 1,
     };
     let outputs = [(incoming_out_point, incoming_output)];

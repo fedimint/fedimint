@@ -194,12 +194,12 @@ impl<C> Encodable for TieredMulti<C>
 where
     C: Encodable,
 {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
-        len += (self.iter_items().count() as u64).consensus_encode(&mut writer)?;
+        len += (self.iter_items().count() as u64).consensus_encode(writer)?;
         for (amount, i) in self.iter_items() {
-            len += amount.consensus_encode(&mut writer)?;
-            len += i.consensus_encode(&mut writer)?;
+            len += amount.consensus_encode(writer)?;
+            len += i.consensus_encode(writer)?;
         }
         Ok(len)
     }
@@ -209,12 +209,12 @@ impl<C> Decodable for TieredMulti<C>
 where
     C: Decodable,
 {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let mut res = BTreeMap::new();
-        let len = u64::consensus_decode(&mut d)?;
+        let len = u64::consensus_decode(d)?;
         for _ in 0..len {
-            let amt = Amount::consensus_decode(&mut d)?;
-            let v = C::consensus_decode(&mut d)?;
+            let amt = Amount::consensus_decode(d)?;
+            let v = C::consensus_decode(d)?;
             res.entry(amt).or_insert_with(Vec::new).push(v);
         }
         Ok(TieredMulti(res))

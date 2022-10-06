@@ -1,5 +1,4 @@
 use crate::net::peers::AnyPeerConnections;
-use crate::rand::Rand07Compat;
 use crate::PeerId;
 use async_trait::async_trait;
 use hbbft::crypto::group::Curve;
@@ -69,7 +68,7 @@ impl<G: DkgGroup> Dkg<G> {
         our_id: PeerId,
         peers: Vec<PeerId>,
         threshold: usize,
-        rng: &mut impl rand07::RngCore,
+        rng: &mut impl rand::RngCore,
     ) -> (Self, DkgStep<G>) {
         let f1_poly: Poly<Scalar, Scalar> = Poly::random(threshold - 1, rng);
         let f2_poly: Poly<Scalar, Scalar> = Poly::random(threshold - 1, rng);
@@ -278,7 +277,6 @@ where
         connections: &mut AnyPeerConnections<(T, DkgMessage<G>)>,
         rng: &mut (impl RngCore + CryptoRng),
     ) -> HashMap<T, DkgKeys<G>> {
-        let mut rng = Rand07Compat(rng);
         let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
         let mut results: HashMap<T, DkgKeys<G>> = HashMap::new();
 
@@ -286,7 +284,7 @@ where
         for (key, threshold) in self.dkg_config.iter() {
             let our_id = self.our_id;
             let peers = self.peers.clone();
-            let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, &mut rng);
+            let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, rng);
             if let DkgStep::Messages(messages) = step {
                 for (peer, msg) in messages {
                     connections.send(&[peer], (key.clone(), msg)).await;
@@ -429,7 +427,7 @@ mod tests {
     use fedimint_api::config::DkgStep;
     use hbbft::crypto::group::Curve;
     use hbbft::crypto::{G1Projective, G2Projective};
-    use rand07::rngs::OsRng;
+    use rand::rngs::OsRng;
     use std::collections::{HashMap, VecDeque};
 
     #[test_log::test]

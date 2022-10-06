@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
-use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -35,9 +34,9 @@ impl GenerateConfig for LightningModuleConfig {
     fn trusted_dealer_gen(
         peers: &[PeerId],
         _params: &Self::Params,
-        rng: impl RngCore + CryptoRng,
+        mut rng: impl RngCore + CryptoRng,
     ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig) {
-        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut Rand07Compat(rng));
+        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut rng);
         let pks = sks.public_keys();
 
         let server_cfg = peers

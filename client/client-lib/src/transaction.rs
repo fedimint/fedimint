@@ -58,7 +58,7 @@ impl TransactionBuilder {
 
                 // We check for coin validity in case we got it from an untrusted third party. We
                 // don't want to needlessly create invalid tx and bother the federation with them.
-                let spend_pub_key = spend_key.public_key();
+                let spend_pub_key = spend_key.x_only_public_key().0;
                 if &spend_pub_key == coin.note.spend_key() {
                     Ok((spend_key, (amt, coin.note)))
                 } else {

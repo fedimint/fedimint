@@ -252,7 +252,7 @@ impl<C: JsonRpcClient + Send + Sync> IFederationApi for WsFederationApi<C> {
     ) -> Result<Option<PegOutFees>> {
         self.request(
             "/wallet/peg_out_fees",
-            (address, amount.as_sat()),
+            (address, amount.to_sat()),
             EventuallyConsistent::new(self.peers().one_honest()),
         )
         .await

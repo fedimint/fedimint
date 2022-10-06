@@ -78,7 +78,7 @@ static BASE_PORT: AtomicU16 = AtomicU16::new(4000_u16);
 
 // Helper functions for easier test writing
 pub fn rng() -> OsRng {
-    OsRng::new().unwrap()
+    OsRng
 }
 
 pub fn sats(amount: u64) -> Amount {
@@ -176,7 +176,7 @@ pub async fn fixtures(
         _ => {
             info!("Testing with FAKE Bitcoin and Lightning services");
             let (server_config, client_config) =
-                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng::new().unwrap());
+                ServerConfig::trusted_dealer_gen(&peers, &params, OsRng);
 
             let bitcoin = FakeBitcoinTest::new();
             let bitcoin_rpc = || bitcoin.clone().into();
@@ -220,7 +220,7 @@ async fn distributed_config(
             let our_params = params[peer].clone();
             let mut server_conn = connect(our_params.server_dkg, our_params.tls).await;
 
-            let rng = OsRng::new().unwrap();
+            let rng = OsRng;
             let cfg = ServerConfig::distributed_gen(&mut server_conn, peer, &peers, &params, rng);
             (*peer, cfg.await.expect("generation failed"))
         }
@@ -283,12 +283,12 @@ impl GatewayTest {
         node_pub_key: secp256k1::PublicKey,
         bind_port: u16,
     ) -> Self {
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng;
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
 
         let keys = LightningGateway {
-            mint_pub_key: kp.public_key(),
+            mint_pub_key: kp.x_only_public_key().0,
             node_pub_key,
             api: Url::parse("http://example.com")
                 .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
@@ -588,37 +588,36 @@ impl FederationTest {
             out_idx: 0,
         };
 
-        user.client
-            .receive_coins(amount, OsRng::new().unwrap(), |tokens| {
-                for server in &self.servers {
-                    let mut batch = DbBatch::new();
-                    let mut batch_tx = batch.transaction();
-                    let transaction = fedimint_server::transaction::Transaction {
-                        inputs: vec![],
-                        outputs: vec![Output::Mint(tokens.clone())],
-                        signature: None,
-                    };
+        user.client.receive_coins(amount, OsRng, |tokens| {
+            for server in &self.servers {
+                let mut batch = DbBatch::new();
+                let mut batch_tx = batch.transaction();
+                let transaction = fedimint_server::transaction::Transaction {
+                    inputs: vec![],
+                    outputs: vec![Output::Mint(tokens.clone())],
+                    signature: None,
+                };
 
-                    batch_tx.append_insert(
-                        fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                        fedimint_server::consensus::AcceptedTransaction {
-                            epoch: 0,
-                            transaction,
-                        },
-                    );
+                batch_tx.append_insert(
+                    fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                    fedimint_server::consensus::AcceptedTransaction {
+                        epoch: 0,
+                        transaction,
+                    },
+                );
 
-                    batch_tx.commit();
-                    server
-                        .borrow_mut()
-                        .fedimint
-                        .consensus
-                        .mint
-                        .apply_output(batch.transaction(), &tokens, out_point)
-                        .unwrap();
-                    server.borrow_mut().database.apply_batch(batch).unwrap();
-                }
-                out_point
-            });
+                batch_tx.commit();
+                server
+                    .borrow_mut()
+                    .fedimint
+                    .consensus
+                    .mint
+                    .apply_output(batch.transaction(), &tokens, out_point)
+                    .unwrap();
+                server.borrow_mut().database.apply_batch(batch).unwrap();
+            }
+            out_point
+        });
         out_point
     }
 

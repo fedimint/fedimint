@@ -239,7 +239,10 @@ where
     M: Into<secp256k1_zkp::Message>,
 {
     let msg = msg.into();
-    let pub_keys = keys.iter().map(|key| key.public_key()).collect::<Vec<_>>();
+    let pub_keys = keys
+        .iter()
+        .map(|key| key.x_only_public_key().0)
+        .collect::<Vec<_>>();
     let pre_session = new_pre_session(&pub_keys, ctx);
 
     let session_id: [u8; 32] = rng.gen();

@@ -8,7 +8,8 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{
-    secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, Transaction, TxOut,
+    secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, PackedLockTime,
+    Transaction, TxOut,
 };
 use lightning::ln::PaymentSecret;
 use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
@@ -34,7 +35,7 @@ pub struct FakeLightningTest {
 impl FakeLightningTest {
     pub fn new() -> Self {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let kp = KeyPair::new(&ctx, &mut OsRng::new().unwrap());
+        let kp = KeyPair::new(&ctx, &mut OsRng);
         let amount_sent = Arc::new(Mutex::new(0));
 
         FakeLightningTest {
@@ -107,7 +108,7 @@ impl FakeBitcoinTest {
     fn new_transaction(out: Vec<TxOut>) -> Transaction {
         Transaction {
             version: 0,
-            lock_time: 0,
+            lock_time: PackedLockTime::ZERO,
             input: vec![],
             output: out,
         }
@@ -157,7 +158,7 @@ impl BitcoinTest for FakeBitcoinTest {
         let mut pending = self.pending.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
-            value: amount.as_sat(),
+            value: amount.to_sat(),
             script_pubkey: address.payload.script_pubkey(),
         }]);
 
@@ -178,7 +179,7 @@ impl BitcoinTest for FakeBitcoinTest {
 
     fn get_new_address(&self) -> Address {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let (_, public_key) = ctx.generate_keypair(&mut OsRng::new().unwrap());
+        let (_, public_key) = ctx.generate_keypair(&mut OsRng);
 
         Address::p2wpkh(&bitcoin::PublicKey::new(public_key), Network::Regtest).unwrap()
     }

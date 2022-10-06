@@ -10,7 +10,6 @@ use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOu
 
 use crate::ApiError;
 use fedimint_core::modules::wallet::PegOutOutcome;
-use miniscript::descriptor::DescriptorTrait;
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
@@ -40,7 +39,7 @@ impl<'c> WalletClient<'c> {
         mut rng: R,
     ) -> Address {
         let peg_in_keypair = bitcoin::KeyPair::new(&self.context.secp, &mut rng);
-        let peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&peg_in_keypair);
+        let peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(&peg_in_keypair).0;
 
         // TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -92,7 +91,7 @@ impl<'c> WalletClient<'c> {
             txout_proof,
             btc_transaction,
             output_idx as u32,
-            secret_tweak_key.public_key(),
+            secret_tweak_key.x_only_public_key().0,
         )
         .map_err(WalletClientError::PegInProofError)?;
 
@@ -146,6 +145,7 @@ mod tests {
     use crate::wallet::WalletClient;
     use crate::ClientContext;
     use async_trait::async_trait;
+    use bitcoin::hashes::sha256;
     use bitcoin::{Address, Txid};
 
     use fedimint_api::config::BitcoindRpcCfg;
@@ -324,7 +324,7 @@ mod tests {
         let amount = bitcoin::Amount::from_sat(42000);
 
         let out_point = OutPoint {
-            txid: Default::default(),
+            txid: sha256::Hash::hash(b"txid").into(),
             out_idx: 0,
         };
         let output = PegOut {

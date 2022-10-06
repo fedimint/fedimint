@@ -65,7 +65,7 @@ fn main() {
             federation_name,
             bitcoind_rpc,
         } => {
-            let mut rng = OsRng::new().unwrap();
+            let mut rng = OsRng;
             // Recursively create config directory if it doesn't exist
             std::fs::create_dir_all(&cfg_path).expect("Failed to create config directory");
 

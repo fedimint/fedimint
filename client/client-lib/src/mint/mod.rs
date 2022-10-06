@@ -291,7 +291,7 @@ impl NoteIssuanceRequest {
         C: Signing,
     {
         let spend_key = bitcoin::KeyPair::new(ctx, rng);
-        let nonce = Nonce(spend_key.public_key());
+        let nonce = Nonce(spend_key.x_only_public_key().0);
         let (blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         let cr = NoteIssuanceRequest {
@@ -514,7 +514,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn create_output() {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = rand::rngs::OsRng;
         let (fed, client_config, client_context) = new_mint_and_client().await;
 
         let client = MintClient {
@@ -530,7 +530,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn create_input() {
-        let mut rng = rand::rngs::OsRng::new().unwrap();
+        let mut rng = rand::rngs::OsRng;
 
         const SPEND_AMOUNT: Amount = Amount::from_sat(21);
 
@@ -554,7 +554,7 @@ mod tests {
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
         let tbs_pks = &client.config.tbs_pks;
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let rng = rand::rngs::OsRng;
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let (spend_keys, input) = builder
             .create_input_from_coins(coins.clone(), secp)
@@ -569,7 +569,7 @@ mod tests {
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
                 .collect::<Vec<_>>()
         );
 
@@ -588,7 +588,7 @@ mod tests {
         let mut batch = DbBatch::new();
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
-        let rng = rand::rngs::OsRng::new().unwrap();
+        let rng = rand::rngs::OsRng;
         let (spend_keys, input) = builder
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
@@ -602,7 +602,7 @@ mod tests {
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
                 .collect::<Vec<_>>()
         );
 

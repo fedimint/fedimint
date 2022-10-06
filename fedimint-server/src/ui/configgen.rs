@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, HashMap};
 use crate::net::peers::ConnectionConfig;
 use crate::{CryptoRng, RngCore};
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
-use fedimint_api::rand::Rand07Compat;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::{ClientConfig, Node};
 use fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -23,7 +22,7 @@ pub fn configgen(
     let amount_tiers = (1..12)
         .map(|amount| Amount::from_sat(10 * amount))
         .collect();
-    let mut rng = OsRng::new().unwrap();
+    let mut rng = OsRng;
     let num_peers = guardians.len() as u16;
     let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
     let params = SetupConfigParams {
@@ -59,9 +58,9 @@ fn trusted_dealer_gen(
 ) -> (BTreeMap<PeerId, ServerConfig>, ClientConfig) {
     let hbbft_base_port = 17240;
     let api_base_port = 17340;
-    let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
+    let netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
         .expect("Could not generate HBBFT netinfo");
-    let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut Rand07Compat(&mut rng))
+    let epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), &mut rng)
         .expect("Could not generate HBBFT epochinfo");
     let hostnames: Vec<String> = params
         .guardians

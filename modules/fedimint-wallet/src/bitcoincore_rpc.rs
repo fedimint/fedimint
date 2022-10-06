@@ -191,7 +191,7 @@ where
         .expect("Bitcoind returned an error") // TODO: implement retry logic in case bitcoind is temporarily unreachable
         .fee_rate
         .map(|per_kb| Feerate {
-            sats_per_kvb: per_kb.as_sat(),
+            sats_per_kvb: per_kb.to_sat(),
         }))
     }
 

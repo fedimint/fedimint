@@ -3,11 +3,12 @@ use crate::tweakable::{Contract, Tweakable};
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-use miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::hash::Hash;
 use std::io::Cursor;
 use thiserror::Error;
@@ -53,9 +54,9 @@ impl TxOutProof {
 }
 
 impl Decodable for TxOutProof {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
-        let block_header = BlockHeader::consensus_decode(&mut d)?;
-        let merkle_proof = PartialMerkleTree::consensus_decode(&mut d)?;
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+        let block_header = BlockHeader::consensus_decode(d)?;
+        let merkle_proof = PartialMerkleTree::consensus_decode(d)?;
 
         let mut transactions = Vec::new();
         let mut indices = Vec::new();
@@ -77,11 +78,11 @@ impl Decodable for TxOutProof {
 }
 
 impl Encodable for TxOutProof {
-    fn consensus_encode<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut written = 0;
 
-        written += self.block_header.consensus_encode(&mut writer)?;
-        written += self.merkle_proof.consensus_encode(&mut writer)?;
+        written += self.block_header.consensus_encode(writer)?;
+        written += self.merkle_proof.consensus_encode(writer)?;
 
         Ok(written)
     }
@@ -169,9 +170,32 @@ impl PegInProof {
 
 impl Tweakable for Descriptor<CompressedPublicKey> {
     fn tweak<Ctx: Verification, Ctr: Contract>(&self, tweak: &Ctr, secp: &Secp256k1<Ctx>) -> Self {
-        self.translate_pk2_infallible(|pk| CompressedPublicKey {
-            key: pk.key.tweak(tweak, secp),
-        })
+        struct CompressedPublicKeyTranslator<'t, 's, Ctx: Verification, Ctr: Contract> {
+            tweak: &'t Ctr,
+            secp: &'s Secp256k1<Ctx>,
+        }
+
+        impl<'t, 's, Ctx: Verification, Ctr: Contract>
+            miniscript::PkTranslator<CompressedPublicKey, CompressedPublicKey, Infallible>
+            for CompressedPublicKeyTranslator<'t, 's, Ctx, Ctr>
+        {
+            fn pk(&mut self, pk: &CompressedPublicKey) -> Result<CompressedPublicKey, Infallible> {
+                Ok(CompressedPublicKey::new(
+                    pk.key.tweak(self.tweak, self.secp),
+                ))
+            }
+
+            fn pkh(
+                &mut self,
+                pkh: &CompressedPublicKey,
+            ) -> Result<CompressedPublicKey, Infallible> {
+                Ok(CompressedPublicKey::new(
+                    pkh.key.tweak(self.tweak, self.secp),
+                ))
+            }
+        }
+        self.translate_pk(&mut CompressedPublicKeyTranslator { tweak, secp })
+            .expect("can't fail")
     }
 }
 
@@ -201,11 +225,11 @@ impl<'de> Deserialize<'de> for TxOutProof {
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
             let bytes =
                 hex::decode(hex_str.as_ref()).map_err(<D as Deserializer<'de>>::Error::custom)?;
-            Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
+            Ok(TxOutProof::consensus_decode(&mut Cursor::new(bytes))
                 .map_err(<D as Deserializer<'de>>::Error::custom)?)
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
-            Ok(TxOutProof::consensus_decode(Cursor::new(bytes))
+            Ok(TxOutProof::consensus_decode(&mut Cursor::new(bytes))
                 .map_err(<D as Deserializer<'de>>::Error::custom)?)
         }
     }
@@ -256,12 +280,12 @@ impl PartialEq for TxOutProof {
 impl Eq for TxOutProof {}
 
 impl Decodable for PegInProof {
-    fn consensus_decode<D: std::io::Read>(mut d: D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
         let slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(&mut d)?,
-            transaction: Transaction::consensus_decode(&mut d)?,
-            output_idx: u32::consensus_decode(&mut d)?,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(&mut d)?,
+            txout_proof: TxOutProof::consensus_decode(d)?,
+            transaction: Transaction::consensus_decode(d)?,
+            output_idx: u32::consensus_decode(d)?,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
@@ -303,7 +327,7 @@ mod tests {
         58a30f7ae5b909ffdd020073f04ff370000";
 
         let txoutproof =
-            TxOutProof::consensus_decode(Cursor::new(hex::decode(txoutproof_hex).unwrap()))
+            TxOutProof::consensus_decode(&mut Cursor::new(hex::decode(txoutproof_hex).unwrap()))
                 .unwrap();
 
         assert_eq!(

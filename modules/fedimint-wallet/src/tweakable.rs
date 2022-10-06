@@ -1,5 +1,5 @@
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
-use secp256k1::{Secp256k1, Verification};
+use secp256k1::{Scalar, Secp256k1, Verification};
 use std::io::Write;
 
 /// An object that can be used as a ricardian contract to tweak a key
@@ -20,11 +20,8 @@ impl Tweakable for secp256k1::PublicKey {
         tweak.encode(&mut hasher).expect("hashing is infallible");
         let tweak = Hmac::from_engine(hasher).into_inner();
 
-        let mut key = *self;
-        key.add_exp_assign(secp, &tweak[..])
-            .expect("tweak is always 32 bytes, other failure modes are negligible");
-
-        key
+        self.add_exp_tweak(secp, &Scalar::from_be_bytes(tweak).expect("can't fail"))
+            .expect("tweak is always 32 bytes, other failure modes are negligible")
     }
 }
 

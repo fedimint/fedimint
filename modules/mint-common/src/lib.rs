@@ -19,25 +19,29 @@ impl ModuleCommon for MintModuleCommon {
     fn module_key() -> ModuleKey {
         MINT_MODULE_KEY
     }
-    fn decode_spendable_output(d: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError> {
+    fn decode_spendable_output(mut d: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError> {
         Ok(SpendableOutput::from(
-            MintSpendableOutput::consensus_decode(d)?,
+            MintSpendableOutput::consensus_decode(&mut d)?,
         ))
     }
 
-    fn decode_pending_output(d: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
-        Ok(PendingOutput::from(MintPendingOutput::consensus_decode(d)?))
+    fn decode_pending_output(mut d: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        Ok(PendingOutput::from(MintPendingOutput::consensus_decode(
+            &mut d,
+        )?))
     }
 
-    fn decode_output(d: &mut dyn io::Read) -> Result<Output, DecodeError> {
-        Ok(Output::from(MintOutput::consensus_decode(d)?))
+    fn decode_output(mut d: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        Ok(Output::from(MintOutput::consensus_decode(&mut d)?))
     }
-    fn decode_output_outcome(d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
-        Ok(OutputOutcome::from(MintOutputOutcome::consensus_decode(d)?))
+    fn decode_output_outcome(mut d: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        Ok(OutputOutcome::from(MintOutputOutcome::consensus_decode(
+            &mut d,
+        )?))
     }
 
-    fn decode_input(d: &mut dyn io::Read) -> Result<Input, DecodeError> {
-        Ok(Input::from(MintInput::consensus_decode(d)?))
+    fn decode_input(mut d: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        Ok(Input::from(MintInput::consensus_decode(&mut d)?))
     }
 }
 

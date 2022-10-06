@@ -5,7 +5,6 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api::rand::Rand07Compat;
 use hbbft::honey_badger::{HoneyBadger, Message};
 use hbbft::{Epoched, NetworkInfo, Target};
 
@@ -126,7 +125,7 @@ impl FedimintServer {
     /// Loop `run_conensus_epoch` forever
     async fn run_consensus(mut self) {
         // FIXME: reusing the wallet CI leads to duplicate randomness beacons, not a problem for change, but maybe later for other use cases
-        let mut rng = OsRng::new().unwrap();
+        let mut rng = OsRng;
         let consensus = self.consensus.clone();
 
         // Rejoin consensus and catch up to the most recent epoch
@@ -348,7 +347,7 @@ impl FedimintServer {
     ) -> Vec<ConsensusOutcome> {
         let step = self
             .hbbft
-            .propose(&proposal.items, &mut Rand07Compat(rng))
+            .propose(&proposal.items, rng)
             .expect("HBBFT propose failed");
 
         for msg in step.messages {
@@ -433,6 +432,6 @@ impl RngGenerator for OsRngGen {
     type Rng = OsRng;
 
     fn get_rng(&self) -> Self::Rng {
-        OsRng::new().unwrap()
+        OsRng
     }
 }
