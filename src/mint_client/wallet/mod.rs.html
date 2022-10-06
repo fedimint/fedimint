@@ -388,7 +388,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::ApiError;
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOutOutcome;
-<span class="kw">use </span>miniscript::descriptor::DescriptorTrait;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
@@ -418,7 +417,7 @@
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; Address {
         <span class="kw">let </span>peg_in_keypair = bitcoin::KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>peg_in_keypair);
+        <span class="kw">let </span>peg_in_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>peg_in_keypair).<span class="number">0</span>;
 
         <span class="comment">// TODO: check at startup that no bare descriptor is used in config
         // TODO: check if there are other failure cases
@@ -470,7 +469,7 @@
             txout_proof,
             btc_transaction,
             output_idx <span class="kw">as </span>u32,
-            secret_tweak_key.public_key(),
+            secret_tweak_key.x_only_public_key().<span class="number">0</span>,
         )
         .map_err(WalletClientError::PegInProofError)<span class="question-mark">?</span>;
 
@@ -524,6 +523,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::wallet::WalletClient;
     <span class="kw">use </span><span class="kw">crate</span>::ClientContext;
     <span class="kw">use </span>async_trait::async_trait;
+    <span class="kw">use </span>bitcoin::hashes::sha256;
     <span class="kw">use </span>bitcoin::{Address, Txid};
 
     <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
@@ -702,7 +702,7 @@
         <span class="kw">let </span>amount = bitcoin::Amount::from_sat(<span class="number">42000</span>);
 
         <span class="kw">let </span>out_point = OutPoint {
-            txid: Default::default(),
+            txid: sha256::Hash::hash(<span class="string">b&quot;txid&quot;</span>).into(),
             out_idx: <span class="number">0</span>,
         };
         <span class="kw">let </span>output = PegOut {

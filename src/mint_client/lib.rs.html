@@ -1268,7 +1268,7 @@
 <span class="kw">impl </span>From&lt;GatewayClientConfig&gt; <span class="kw">for </span>LightningGateway {
     <span class="kw">fn </span>from(config: GatewayClientConfig) -&gt; <span class="self">Self </span>{
         LightningGateway {
-            mint_pub_key: config.redeem_key.public_key(),
+            mint_pub_key: config.redeem_key.x_only_public_key().<span class="number">0</span>,
             node_pub_key: config.node_pub_key,
             api: config.api,
         }
@@ -1785,7 +1785,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ConfirmedInvoice&gt; {
         <span class="kw">let </span>gateway = <span class="self">self</span>.fetch_active_gateway().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>payment_keypair = KeyPair::new(<span class="kw-2">&amp;</span><span class="self">self</span>.context.secp, <span class="kw-2">&amp;mut </span>rng);
-        <span class="kw">let </span>raw_payment_secret: [u8; <span class="number">32</span>] = payment_keypair.public_key().serialize();
+        <span class="kw">let </span>raw_payment_secret: [u8; <span class="number">32</span>] = payment_keypair.x_only_public_key().<span class="number">0</span>.serialize();
         <span class="kw">let </span>payment_hash = bitcoin::secp256k1::hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>raw_payment_secret);
         <span class="kw">let </span>payment_secret = PaymentSecret(raw_payment_secret);
 
@@ -1946,7 +1946,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PaymentParameters&gt; {
-        <span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key);
+        <span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key).<span class="number">0</span>;
 
         <span class="kw">if </span>account.contract.gateway_key != our_pub_key {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::NotOurKey);
@@ -2109,7 +2109,7 @@
         builder.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
 
         <span class="comment">// Outputs
-        </span><span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key);
+        </span><span class="kw">let </span>our_pub_key = secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span><span class="self">self</span>.config.redeem_key).<span class="number">0</span>;
         <span class="kw">let </span>contract = Contract::Incoming(IncomingContract {
             hash: offer.hash,
             encrypted_preimage: offer.encrypted_preimage.clone(),
@@ -2236,7 +2236,7 @@
 
         <span class="prelude-val">Ok</span>(KeyPair::from_secret_key(
             secp256k1_zkp::SECP256K1,
-            secret_key,
+            <span class="kw-2">&amp;</span>secret_key,
         ))
     }
 }

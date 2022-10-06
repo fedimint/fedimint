@@ -172,7 +172,6 @@
 <span id="172">172</span>
 <span id="173">173</span>
 <span id="174">174</span>
-<span id="175">175</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::ui::Guardian;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -180,7 +179,6 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::ConnectionConfig;
 <span class="kw">use crate</span>::{CryptoRng, RngCore};
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
-<span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, Node};
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -198,7 +196,7 @@
     <span class="kw">let </span>amount_tiers = (<span class="number">1</span>..<span class="number">12</span>)
         .map(|amount| Amount::from_sat(<span class="number">10 </span>* amount))
         .collect();
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
+    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
     <span class="kw">let </span>num_peers = guardians.len() <span class="kw">as </span>u16;
     <span class="kw">let </span>peers = (<span class="number">0</span>..num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="kw">let </span>params = SetupConfigParams {
@@ -234,9 +232,9 @@
 ) -&gt; (BTreeMap&lt;PeerId, ServerConfig&gt;, ClientConfig) {
     <span class="kw">let </span>hbbft_base_port = <span class="number">17240</span>;
     <span class="kw">let </span>api_base_port = <span class="number">17340</span>;
-    <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>Rand07Compat(<span class="kw-2">&amp;mut </span>rng))
+    <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
         .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
-    <span class="kw">let </span>epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>Rand07Compat(<span class="kw-2">&amp;mut </span>rng))
+    <span class="kw">let </span>epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
         .expect(<span class="string">&quot;Could not generate HBBFT epochinfo&quot;</span>);
     <span class="kw">let </span>hostnames: Vec&lt;String&gt; = params
         .guardians

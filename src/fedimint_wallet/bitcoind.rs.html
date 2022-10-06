@@ -254,7 +254,7 @@
     <span class="kw">use super</span>::{IBitcoindRpc, <span class="prelude-ty">Result</span>};
     <span class="kw">use </span><span class="kw">crate</span>::Feerate;
     <span class="kw">use </span>async_trait::async_trait;
-    <span class="kw">use </span>bitcoin::hashes::Hash;
+    <span class="kw">use </span>bitcoin::hashes::{sha256d, Hash};
     <span class="kw">use </span>bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
     <span class="kw">use </span>std::sync::{Arc, Mutex};
@@ -302,8 +302,8 @@
             <span class="prelude-val">Ok</span>(Block {
                 header: BlockHeader {
                     version: <span class="number">0</span>,
-                    prev_blockhash: Default::default(),
-                    merkle_root: Default::default(),
+                    prev_blockhash: sha256d::Hash::hash(<span class="string">b&quot;&quot;</span>).into(),
+                    merkle_root: sha256d::Hash::hash(<span class="string">b&quot;&quot;</span>).into(),
                     time: <span class="number">0</span>,
                     bits: <span class="number">0</span>,
                     nonce: <span class="number">0</span>,
@@ -360,7 +360,7 @@
                 .iter()
                 .flat_map(|tx| tx.output.iter())
                 .any(|output| {
-                    output.value == amount.as_sat()
+                    output.value == amount.to_sat()
                         &amp;&amp; output.script_pubkey == recipient.script_pubkey()
                 })
         }

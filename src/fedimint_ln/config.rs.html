@@ -120,11 +120,9 @@
 <span id="120">120</span>
 <span id="121">121</span>
 <span id="122">122</span>
-<span id="123">123</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
-<span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -158,9 +156,9 @@
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
         _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
-        rng: <span class="kw">impl </span>RngCore + CryptoRng,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
-        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>Rand07Compat(rng));
+        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>pks = sks.public_keys();
 
         <span class="kw">let </span>server_cfg = peers

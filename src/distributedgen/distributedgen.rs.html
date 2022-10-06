@@ -348,7 +348,7 @@
     <span class="kw">let </span>param_map = HashMap::from([(our_id, params.clone())]);
     <span class="kw">let </span>peer_ids: Vec&lt;PeerId&gt; = peers.keys().cloned().collect();
     <span class="kw">let </span><span class="kw-2">mut </span>server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).<span class="kw">await</span>;
-    <span class="kw">let </span>rng = OsRng::new().unwrap();
+    <span class="kw">let </span>rng = OsRng;
     ServerConfig::distributed_gen(<span class="kw-2">&amp;mut </span>server_conn, <span class="kw-2">&amp;</span>our_id, <span class="kw-2">&amp;</span>peer_ids, <span class="kw-2">&amp;</span>param_map, rng)
         .<span class="kw">await
         </span>.expect(<span class="string">&quot;failed to run DKG to generate configs&quot;</span>)

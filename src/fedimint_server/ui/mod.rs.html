@@ -614,7 +614,7 @@
 }
 
 <span class="kw">pub async fn </span>run_ui(cfg_path: PathBuf, sender: Sender&lt;UiMessage&gt;, port: u32) {
-    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng::new().unwrap();
+    <span class="kw">let </span><span class="kw-2">mut </span>rng = OsRng;
     <span class="kw">let </span>secp = bitcoin::secp256k1::Secp256k1::new();
     <span class="kw">let </span>(<span class="kw">_</span>, pubkey) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
     <span class="kw">let </span>connection_string = <span class="macro">format!</span>(<span class="string">&quot;{}&quot;</span>, pubkey);

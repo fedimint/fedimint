@@ -320,16 +320,41 @@
 <span id="320">320</span>
 <span id="321">321</span>
 <span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>miniscript::{Descriptor, DescriptorTrait, TranslatePk2};
+<span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>thiserror::Error;
@@ -375,9 +400,9 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
-        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d)<span class="question-mark">?</span>;
+        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
@@ -399,11 +424,11 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>written = <span class="number">0</span>;
 
-        written += <span class="self">self</span>.block_header.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-        written += <span class="self">self</span>.merkle_proof.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        written += <span class="self">self</span>.block_header.consensus_encode(writer)<span class="question-mark">?</span>;
+        written += <span class="self">self</span>.merkle_proof.consensus_encode(writer)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(written)
     }
@@ -491,9 +516,32 @@
 
 <span class="kw">impl </span>Tweakable <span class="kw">for </span>Descriptor&lt;CompressedPublicKey&gt; {
     <span class="kw">fn </span>tweak&lt;Ctx: Verification, Ctr: Contract&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>Ctr, secp: <span class="kw-2">&amp;</span>Secp256k1&lt;Ctx&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.translate_pk2_infallible(|pk| CompressedPublicKey {
-            key: pk.key.tweak(tweak, secp),
-        })
+        <span class="kw">struct </span>CompressedPublicKeyTranslator&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx: Verification, Ctr: Contract&gt; {
+            tweak: <span class="kw-2">&amp;</span><span class="lifetime">&#39;t </span>Ctr,
+            secp: <span class="kw-2">&amp;</span><span class="lifetime">&#39;s </span>Secp256k1&lt;Ctx&gt;,
+        }
+
+        <span class="kw">impl</span>&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx: Verification, Ctr: Contract&gt;
+            miniscript::PkTranslator&lt;CompressedPublicKey, CompressedPublicKey, Infallible&gt;
+            <span class="kw">for </span>CompressedPublicKeyTranslator&lt;<span class="lifetime">&#39;t</span>, <span class="lifetime">&#39;s</span>, Ctx, Ctr&gt;
+        {
+            <span class="kw">fn </span>pk(<span class="kw-2">&amp;mut </span><span class="self">self</span>, pk: <span class="kw-2">&amp;</span>CompressedPublicKey) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
+                <span class="prelude-val">Ok</span>(CompressedPublicKey::new(
+                    pk.key.tweak(<span class="self">self</span>.tweak, <span class="self">self</span>.secp),
+                ))
+            }
+
+            <span class="kw">fn </span>pkh(
+                <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+                pkh: <span class="kw-2">&amp;</span>CompressedPublicKey,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;CompressedPublicKey, Infallible&gt; {
+                <span class="prelude-val">Ok</span>(CompressedPublicKey::new(
+                    pkh.key.tweak(<span class="self">self</span>.tweak, <span class="self">self</span>.secp),
+                ))
+            }
+        }
+        <span class="self">self</span>.translate_pk(<span class="kw-2">&amp;mut </span>CompressedPublicKeyTranslator { tweak, secp })
+            .expect(<span class="string">&quot;can&#39;t fail&quot;</span>)
     }
 }
 
@@ -523,11 +571,11 @@
             </span><span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
             <span class="kw">let </span>bytes =
                 hex::decode(hex_str.as_ref()).map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(Cursor::new(bytes))
+            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes))
                 .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
         } <span class="kw">else </span>{
             <span class="kw">let </span>bytes: <span class="kw-2">&amp;</span>[u8] = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(Cursor::new(bytes))
+            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes))
                 .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
         }
     }
@@ -578,12 +626,12 @@
 <span class="kw">impl </span>Eq <span class="kw">for </span>TxOutProof {}
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>PegInProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
-            transaction: Transaction::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
-            output_idx: u32::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
+            txout_proof: TxOutProof::consensus_decode(d)<span class="question-mark">?</span>,
+            transaction: Transaction::consensus_decode(d)<span class="question-mark">?</span>,
+            output_idx: u32::consensus_decode(d)<span class="question-mark">?</span>,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d)<span class="question-mark">?</span>,
         };
 
         validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
@@ -625,7 +673,7 @@
         58a30f7ae5b909ffdd020073f04ff370000&quot;</span>;
 
         <span class="kw">let </span>txoutproof =
-            TxOutProof::consensus_decode(Cursor::new(hex::decode(txoutproof_hex).unwrap()))
+            TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(hex::decode(txoutproof_hex).unwrap()))
                 .unwrap();
 
         <span class="macro">assert_eq!</span>(

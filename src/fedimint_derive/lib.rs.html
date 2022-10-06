@@ -285,6 +285,9 @@
 <span id="285">285</span>
 <span id="286">286</span>
 <span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
 </pre><pre class="rust"><code><span class="attribute">#![cfg_attr(feature = <span class="string">&quot;diagnostics&quot;</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>heck::ToSnakeCase;
@@ -383,9 +386,9 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(len += Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;)*
+                            #(len += Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(len)
                         }
                     }
@@ -398,9 +401,9 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                        <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(len += Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;)*
+                            #(len += Encodable::consensus_encode(<span class="kw-2">&amp;</span><span class="self">self</span>.#field_names, writer)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(len)
                         }
                     }
@@ -420,17 +423,20 @@
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote! </span>{
                         #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>) =&gt; {
-                            len += Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-                            #(len += Encodable::consensus_encode(#variant_fields, <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;)*
+                            len += Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
+                            #(len += Encodable::consensus_encode(#variant_fields, writer)<span class="question-mark">?</span>;)*
                         }
                     }
                 } <span class="kw">else </span>{
-                    <span class="kw">let </span>variant_fields =
-                        variant.fields.iter().map(|field| field.ident.clone().unwrap()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+                    <span class="kw">let </span>variant_fields = variant
+                        .fields
+                        .iter()
+                        .map(|field| field.ident.clone().unwrap())
+                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote! </span>{
                         #ident::#variant_ident { #(#variant_fields,)<span class="kw-2">*</span>} =&gt; {
-                            len += Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-                            #(len += Encodable::consensus_encode(#variant_fields, <span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;)*
+                            len += Encodable::consensus_encode(<span class="kw-2">&amp;</span>(#variant_idx <span class="kw">as </span>u64), writer)<span class="question-mark">?</span>;
+                            #(len += Encodable::consensus_encode(#variant_fields, writer)<span class="question-mark">?</span>;)*
                         }
                     }
                 }
@@ -438,7 +444,7 @@
 
             <span class="macro">quote! </span>{
                 <span class="kw">impl </span>Encodable <span class="kw">for </span>#ident {
-                    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
+                    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; std::result::Result&lt;usize, std::io::Error&gt; {
                         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
                         <span class="kw">match </span><span class="self">self </span>{
                             #(#match_arms)*
@@ -480,9 +486,9 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(<span class="kw">let </span>#field_names = Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;)*
+                            #(<span class="kw">let </span>#field_names = Decodable::consensus_decode(d)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#ident(#(#field_names,)<span class="kw-2">*</span>))
                         }
                     }
@@ -495,9 +501,9 @@
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                 <span class="macro">quote! </span>{
                     <span class="kw">impl </span>Decodable <span class="kw">for </span>#ident {
-                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
+                        <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
                             <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                            #(<span class="kw">let </span>#field_names = Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;)*
+                            #(<span class="kw">let </span>#field_names = Decodable::consensus_decode(d)<span class="question-mark">?</span>;)*
                             <span class="prelude-val">Ok</span>(#ident{
                                 #(#field_names,)*
                             })
@@ -519,7 +525,7 @@
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote! </span>{
                         #variant_idx =&gt; {
-                            #(<span class="kw">let </span>#variant_fields = Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;)*
+                            #(<span class="kw">let </span>#variant_fields = Decodable::consensus_decode(d)<span class="question-mark">?</span>;)*
                             #ident::#variant_ident(#(#variant_fields,)<span class="kw-2">*</span>)
                         }
                     }
@@ -531,7 +537,7 @@
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="macro">quote! </span>{
                         #variant_idx =&gt; {
-                            #(<span class="kw">let </span>#variant_fields = Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;)*
+                            #(<span class="kw">let </span>#variant_fields = Decodable::consensus_decode(d)<span class="question-mark">?</span>;)*
                             #ident::#variant_ident{
                                 #(#variant_fields,)*
                             }
@@ -542,8 +548,8 @@
 
             <span class="macro">quote! </span>{
                 <span class="kw">impl </span>Decodable <span class="kw">for </span>#ident {
-                    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
-                        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>Decodable&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">? </span><span class="kw">as </span>usize;
+                    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; std::result::Result&lt;<span class="self">Self</span>, ::fedimint_api::encoding::DecodeError&gt; {
+                        <span class="kw">let </span>variant = &lt;u64 <span class="kw">as </span>Decodable&gt;::consensus_decode(d)<span class="question-mark">? </span><span class="kw">as </span>usize;
                         <span class="kw">let </span>decoded = <span class="kw">match </span>variant {
                             #(#match_arms)*
                             <span class="kw">_ </span>=&gt; {

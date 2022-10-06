@@ -400,7 +400,7 @@
         .expect(<span class="string">&quot;Bitcoind returned an error&quot;</span>) <span class="comment">// TODO: implement retry logic in case bitcoind is temporarily unreachable
         </span>.fee_rate
         .map(|per_kb| Feerate {
-            sats_per_kvb: per_kb.as_sat(),
+            sats_per_kvb: per_kb.to_sat(),
         }))
     }
 

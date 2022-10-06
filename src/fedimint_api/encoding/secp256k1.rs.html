@@ -116,7 +116,7 @@
 <span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_zkp::ecdsa::Signature {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="self">self</span>.serialize_compact();
         writer.write_all(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(bytes.len())
@@ -124,13 +124,13 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_zkp::ecdsa::Signature {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         Signature::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode(d)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_zkp::XOnlyPublicKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="self">self</span>.serialize();
         writer.write_all(<span class="kw-2">&amp;</span>bytes[..])<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(bytes.len())
@@ -138,27 +138,27 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_zkp::XOnlyPublicKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         secp256k1_zkp::XOnlyPublicKey::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_zkp::PublicKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="self">self</span>.serialize().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_zkp::PublicKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         secp256k1_zkp::PublicKey::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">33</span>]&gt;::consensus_decode(d)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>secp256k1_zkp::schnorr::Signature {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="kw-2">&amp;</span><span class="self">self</span>[..];
         <span class="macro">assert_eq!</span>(
             bytes.len(),
@@ -170,20 +170,20 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>secp256k1_zkp::schnorr::Signature {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>bytes = &lt;[u8; secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE]&gt;::consensus_decode(d)<span class="question-mark">?</span>;
         secp256k1_zkp::schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::KeyPair {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.secret_bytes().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::KeyPair {
-    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>sec_bytes = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_seckey_slice(secp256k1_zkp::global::SECP256K1, <span class="kw-2">&amp;</span>sec_bytes) <span class="comment">// FIXME: evaluate security risk of global ctx
             </span>.map_err(DecodeError::from_err)
@@ -211,7 +211,7 @@
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_schnorr_pub_key() {
         <span class="kw">let </span>ctx = secp256k1_zkp::global::SECP256K1;
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>sec_key = bitcoin::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>pub_key = sec_key.public_key();
         test_roundtrip(pub_key);

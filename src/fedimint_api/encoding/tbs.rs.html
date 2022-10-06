@@ -77,7 +77,7 @@
 <span class="macro">macro_rules! </span>impl_external_encode_bls {
     (<span class="macro-nonterminal">$ext</span>:ident $(:: <span class="macro-nonterminal">$ext_path</span>:ident)<span class="kw-2">*</span>, <span class="macro-nonterminal">$group</span>:ty, <span class="macro-nonterminal">$byte_len</span>:expr) =&gt; {
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span><span class="macro-nonterminal">$ext </span>$(:: <span class="macro-nonterminal">$ext_path</span>)* {
-            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
                 <span class="kw">let </span>bytes = <span class="self">self</span>.<span class="number">0</span>.to_compressed();
                 writer.write_all(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(bytes.len())
@@ -85,7 +85,7 @@
         }
 
         <span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span><span class="macro-nonterminal">$ext </span>$(:: <span class="macro-nonterminal">$ext_path</span>)* {
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="macro-nonterminal">$byte_len</span>];
                 d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>;
                 <span class="kw">let </span>msg = &lt;<span class="macro-nonterminal">$group</span>&gt;::from_compressed(<span class="kw-2">&amp;</span>bytes);
@@ -106,7 +106,7 @@
 <span class="macro">impl_external_encode_bls!</span>(tbs::Signature, tbs::MessagePoint, <span class="number">48</span>);
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>tbs::BlindingKey {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span>bytes = <span class="self">self</span>.<span class="number">0</span>.to_bytes();
         writer.write_all(<span class="kw-2">&amp;</span>bytes)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(bytes.len())
@@ -114,7 +114,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>tbs::BlindingKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="kw">let </span>key = tbs::Scalar::from_bytes(<span class="kw-2">&amp;</span>bytes);

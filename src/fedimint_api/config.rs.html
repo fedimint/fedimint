@@ -490,10 +490,7 @@
 <span id="490">490</span>
 <span id="491">491</span>
 <span id="492">492</span>
-<span id="493">493</span>
-<span id="494">494</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::net::peers::AnyPeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::rand::Rand07Compat;
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>hbbft::crypto::group::Curve;
@@ -563,7 +560,7 @@
         our_id: PeerId,
         peers: Vec&lt;PeerId&gt;,
         threshold: usize,
-        rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>rand07::RngCore,
+        rng: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>rand::RngCore,
     ) -&gt; (<span class="self">Self</span>, DkgStep&lt;G&gt;) {
         <span class="kw">let </span>f1_poly: Poly&lt;Scalar, Scalar&gt; = Poly::random(threshold - <span class="number">1</span>, rng);
         <span class="kw">let </span>f2_poly: Poly&lt;Scalar, Scalar&gt; = Poly::random(threshold - <span class="number">1</span>, rng);
@@ -772,7 +769,6 @@
         connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;(T, DkgMessage&lt;G&gt;)&gt;,
         rng: <span class="kw-2">&amp;mut </span>(<span class="kw">impl </span>RngCore + CryptoRng),
     ) -&gt; HashMap&lt;T, DkgKeys&lt;G&gt;&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = Rand07Compat(rng);
         <span class="kw">let </span><span class="kw-2">mut </span>dkgs: HashMap&lt;T, Dkg&lt;G&gt;&gt; = HashMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>results: HashMap&lt;T, DkgKeys&lt;G&gt;&gt; = HashMap::new();
 
@@ -780,7 +776,7 @@
         </span><span class="kw">for </span>(key, threshold) <span class="kw">in </span><span class="self">self</span>.dkg_config.iter() {
             <span class="kw">let </span>our_id = <span class="self">self</span>.our_id;
             <span class="kw">let </span>peers = <span class="self">self</span>.peers.clone();
-            <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, <span class="kw-2">*</span>threshold, <span class="kw-2">&amp;mut </span>rng);
+            <span class="kw">let </span>(dkg, step) = Dkg::new(group, our_id, peers, <span class="kw-2">*</span>threshold, rng);
             <span class="kw">if let </span>DkgStep::Messages(messages) = step {
                 <span class="kw">for </span>(peer, msg) <span class="kw">in </span>messages {
                     connections.send(<span class="kw-2">&amp;</span>[peer], (key.clone(), msg)).<span class="kw">await</span>;
@@ -923,7 +919,7 @@
     <span class="kw">use </span>fedimint_api::config::DkgStep;
     <span class="kw">use </span>hbbft::crypto::group::Curve;
     <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective};
-    <span class="kw">use </span>rand07::rngs::OsRng;
+    <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>std::collections::{HashMap, VecDeque};
 
     <span class="attribute">#[test_log::test]

@@ -443,6 +443,9 @@
 <span id="443">443</span>
 <span id="444">444</span>
 <span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -469,8 +472,8 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for dyn </span>DynEncodable {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        <span class="self">self</span>.consensus_encode_dyn(<span class="kw-2">&amp;mut </span>writer)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        <span class="self">self</span>.consensus_encode_dyn(writer)
     }
 }
 
@@ -480,15 +483,15 @@
 {
     <span class="kw">fn </span>consensus_encode_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        writer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>std::io::Write,
+        <span class="kw-2">mut </span>writer: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>std::io::Write,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>Encodable&gt;::consensus_encode(<span class="self">self</span>, writer)
+        &lt;<span class="self">Self </span><span class="kw">as </span>Encodable&gt;::consensus_encode(<span class="self">self</span>, <span class="kw-2">&amp;mut </span>writer)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>Box&lt;<span class="kw">dyn </span>DynEncodable&gt; {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-        (<span class="kw-2">**</span><span class="self">self</span>).consensus_encode_dyn(<span class="kw-2">&amp;mut </span>writer)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).consensus_encode_dyn(writer)
     }
 }
 
@@ -498,23 +501,23 @@
     /// Returns the number of bytes written on success.
     ///
     /// The only errors returned are errors propagated from the writer.
-    </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt;;
+    </span><span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt;;
 }
 
 <span class="doccomment">/// Data which can be encoded in a consensus-consistent way
 </span><span class="kw">pub trait </span>Decodable: Sized {
     <span class="doccomment">/// Decode an object with a well-defined format
-    </span><span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;;
+    </span><span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;;
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>Url {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.to_string().consensus_encode(<span class="kw-2">&amp;mut </span>writer)
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.to_string().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>Url {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode(d)<span class="question-mark">?
             </span>.parse::&lt;Url&gt;()
             .map_err(DecodeError::from_err)
@@ -533,7 +536,7 @@
 <span class="macro">macro_rules! </span>impl_encode_decode_num {
     (<span class="macro-nonterminal">$num_type</span>:ty) =&gt; {
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
-            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
                 <span class="kw">let </span>bytes = <span class="self">self</span>.to_le_bytes();
                 writer.write_all(<span class="kw-2">&amp;</span>bytes[..])<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(bytes.len())
@@ -542,7 +545,7 @@
 
         <span class="kw">impl </span>Decodable <span class="kw">for </span><span class="macro-nonterminal">$num_type </span>{
             <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-                <span class="kw-2">mut </span>d: D,
+                d: <span class="kw-2">&amp;mut </span>D,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; (&lt;<span class="macro-nonterminal">$num_type</span>&gt;::BITS / <span class="number">8</span>) <span class="kw">as </span>usize];
                 d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
@@ -561,18 +564,18 @@
     ($(<span class="macro-nonterminal">$x</span>:ident),<span class="kw-2">*</span>) =&gt; (
         <span class="attribute">#[allow(non_snake_case)]
         </span><span class="kw">impl </span>&lt;$(<span class="macro-nonterminal">$x</span>: Encodable),<span class="kw-2">*</span>&gt; Encodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
-            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>s: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+            <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, s: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
                 <span class="kw">let </span><span class="kw-2">&amp;</span>($(<span class="kw-2">ref </span><span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) = <span class="self">self</span>;
                 <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-                $(len += <span class="macro-nonterminal">$x</span>.consensus_encode(<span class="kw-2">&amp;mut </span>s)<span class="question-mark">?</span>;)*
+                $(len += <span class="macro-nonterminal">$x</span>.consensus_encode(s)<span class="question-mark">?</span>;)*
                 <span class="prelude-val">Ok</span>(len)
             }
         }
 
         <span class="attribute">#[allow(non_snake_case)]
         </span><span class="kw">impl</span>&lt;$(<span class="macro-nonterminal">$x</span>: Decodable),<span class="kw-2">*</span>&gt; Decodable <span class="kw">for </span>($(<span class="macro-nonterminal">$x</span>),<span class="kw-2">*</span>) {
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+                <span class="prelude-val">Ok</span>(($({<span class="kw">let </span><span class="macro-nonterminal">$x </span>= Decodable::consensus_decode(d)<span class="question-mark">?</span>; <span class="macro-nonterminal">$x </span>}),<span class="kw-2">*</span>))
             }
         }
     );
@@ -586,11 +589,11 @@
 <span class="kw">where
     </span>T: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+        len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
-            len += item.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+            len += item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
     }
@@ -600,7 +603,7 @@
 <span class="kw">where
     </span>T: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         (<span class="self">self </span><span class="kw">as </span><span class="kw-2">&amp;</span>[T]).consensus_encode(writer)
     }
 }
@@ -609,9 +612,9 @@
 <span class="kw">where
     </span>T: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>len = u64::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
-        (<span class="number">0</span>..len).map(|<span class="kw">_</span>| T::consensus_decode(<span class="kw-2">&amp;mut </span>d)).collect()
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>len = u64::consensus_decode(d)<span class="question-mark">?</span>;
+        (<span class="number">0</span>..len).map(|<span class="kw">_</span>| T::consensus_decode(d)).collect()
     }
 }
 
@@ -619,10 +622,10 @@
 <span class="kw">where
     </span>T: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
-            len += item.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+            len += item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
     }
@@ -632,11 +635,11 @@
 <span class="kw">where
     </span>T: Decodable + Debug + Default + Copy,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="comment">// todo: impl without copy
         </span><span class="kw">let </span><span class="kw-2">mut </span>data = [T::default(); SIZE];
         <span class="kw">for </span>item <span class="kw">in </span>data.iter_mut() {
-            <span class="kw-2">*</span>item = T::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+            <span class="kw-2">*</span>item = T::consensus_decode(d)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(data)
     }
@@ -646,13 +649,13 @@
 <span class="kw">where
     </span>T: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self </span>{
-            len += <span class="number">1u8</span>.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-            len += inner.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+            len += <span class="number">1u8</span>.consensus_encode(writer)<span class="question-mark">?</span>;
+            len += inner.consensus_encode(writer)<span class="question-mark">?</span>;
         } <span class="kw">else </span>{
-            len += <span class="number">0u8</span>.consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
+            len += <span class="number">0u8</span>.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
     }
@@ -662,11 +665,11 @@
 <span class="kw">where
     </span>T: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>flag = u8::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>flag = u8::consensus_decode(d)<span class="question-mark">?</span>;
         <span class="kw">match </span>flag {
             <span class="number">0 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(T::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>)),
+            <span class="number">1 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(T::consensus_decode(d)<span class="question-mark">?</span>)),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">&quot;Invalid flag for option enum, expected 0 or 1&quot;</span>,
             )),
@@ -678,7 +681,7 @@
 <span class="kw">where
     </span>T: Encodable,
 {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.as_ref().consensus_encode(writer)
     }
 }
@@ -687,43 +690,46 @@
 <span class="kw">where
     </span>T: Decodable,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(Box::new(T::consensus_decode(d)<span class="question-mark">?</span>))
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>() {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, _writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _writer: <span class="kw-2">&amp;mut </span>W,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="prelude-val">Ok</span>(<span class="number">0</span>)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>() {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(_d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(_d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(())
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>String {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.as_bytes().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>String {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::from_utf8(Decodable::consensus_decode(d)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>lightning_invoice::Invoice {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.to_string().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>lightning_invoice::Invoice {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode(d)<span class="question-mark">?
             </span>.parse::&lt;lightning_invoice::Invoice&gt;()
             .map_err(DecodeError::from_err)
@@ -731,7 +737,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bool {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span>bool_as_u8 = <span class="kw">if </span><span class="kw-2">*</span><span class="self">self </span>{ <span class="number">1 </span>} <span class="kw">else </span>{ <span class="number">0 </span>};
         writer.write_all(<span class="kw-2">&amp;</span>[bool_as_u8])<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="number">1</span>)
@@ -739,7 +745,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>bool {
-    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(<span class="kw-2">mut </span>d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bool_as_u8 = [<span class="number">0u8</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bool_as_u8)
             .map_err(DecodeError::from_err)<span class="question-mark">?</span>;

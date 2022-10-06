@@ -98,9 +98,9 @@
 <span id="98">98</span>
 <span id="99">99</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::contracts::{ContractId, DecryptedPreimage, EncryptedPreimage, IdentifyableContract};
+<span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_api::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -186,13 +186,13 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>OfferId {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.as_inner().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>OfferId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(OfferId::from_inner(Decodable::consensus_decode(d)<span class="question-mark">?</span>))
     }
 }

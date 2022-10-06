@@ -364,19 +364,19 @@
         <span class="kw">impl </span>Encodable <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(
                 <span class="kw-2">&amp;</span><span class="self">self</span>,
-                <span class="kw-2">mut </span>writer: W,
+                writer: <span class="kw-2">&amp;mut </span>W,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
-                <span class="self">self</span>.<span class="number">0</span>.module_key().consensus_encode(<span class="kw-2">&amp;mut </span>writer)<span class="question-mark">?</span>;
-                <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(<span class="kw-2">&amp;mut </span>writer)
+                <span class="self">self</span>.<span class="number">0</span>.module_key().consensus_encode(writer)<span class="question-mark">?</span>;
+                <span class="self">self</span>.<span class="number">0</span>.consensus_encode_dyn(writer)
             }
         }
 
         <span class="kw">impl </span>ModuleDecodable&lt;<span class="macro-nonterminal">$crate::server::ServerModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-                <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span>R,
+                r: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::server::ServerModule</span>&gt;,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="macro-nonterminal">$crate::encode::module_decode_key_prefixed_decodable</span>(<span class="kw-2">&amp;mut </span>r, modules, |r, m| {
+                <span class="macro-nonterminal">$crate::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
                     m.<span class="macro-nonterminal">$decode_fn</span>(r)
                 })
             }
@@ -384,10 +384,10 @@
 
         <span class="kw">impl </span>ModuleDecodable&lt;<span class="macro-nonterminal">$crate::client::ClientModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-                <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span>R,
+                r: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::client::ClientModule</span>&gt;,
             ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-                <span class="macro-nonterminal">$crate::encode::module_decode_key_prefixed_decodable</span>(<span class="kw-2">&amp;mut </span>r, modules, |r, m| {
+                <span class="macro-nonterminal">$crate::encode::module_decode_key_prefixed_decodable</span>(r, modules, |r, m| {
                     m.<span class="macro-nonterminal">$decode_fn</span>(r)
                 })
             }

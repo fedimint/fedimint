@@ -224,7 +224,6 @@
 <span id="224">224</span>
 <span id="225">225</span>
 <span id="226">226</span>
-<span id="227">227</span>
 </pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
@@ -274,8 +273,7 @@
         <span class="kw">let </span>peers = (<span class="number">0</span>..members)
             .map(|idx| PeerId::from(idx <span class="kw">as </span>u16))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>(server_cfg, client_cfg) =
-            C::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, params, rand::rngs::OsRng::new().unwrap());
+        <span class="kw">let </span>(server_cfg, client_cfg) = C::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, params, rand::rngs::OsRng);
 
         <span class="kw">let </span><span class="kw-2">mut </span>members = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(peer, cfg) <span class="kw">in </span>server_cfg {
@@ -325,7 +323,7 @@
     ) <span class="kw">where
         </span>&lt;M <span class="kw">as </span>FederationModule&gt;::TxInput: Send + Sync,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>fake_ic = FakeInterconnect::new_block_height_responder(<span class="self">self</span>.block_height.clone());
 
         <span class="comment">// TODO: only include some of the proposals for realism

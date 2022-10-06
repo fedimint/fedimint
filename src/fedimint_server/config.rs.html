@@ -529,16 +529,15 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
-<span id="532">532</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
 <span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
-<span class="kw">use </span>fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
 <span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleConfig;
@@ -619,11 +618,10 @@
         params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
         <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
     ) -&gt; (BTreeMap&lt;PeerId, <span class="self">Self</span>&gt;, <span class="self">Self</span>::ClientConfig) {
-        <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>Rand07Compat(<span class="kw-2">&amp;mut </span>rng))
+        <span class="kw">let </span>netinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
             .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
-        <span class="kw">let </span>epochinfo =
-            hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>Rand07Compat(<span class="kw-2">&amp;mut </span>rng))
-                .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
+        <span class="kw">let </span>epochinfo = hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>rng)
+            .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
         <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(

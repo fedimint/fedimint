@@ -225,7 +225,7 @@
 
                 <span class="comment">// We check for coin validity in case we got it from an untrusted third party. We
                 // don&#39;t want to needlessly create invalid tx and bother the federation with them.
-                </span><span class="kw">let </span>spend_pub_key = spend_key.public_key();
+                </span><span class="kw">let </span>spend_pub_key = spend_key.x_only_public_key().<span class="number">0</span>;
                 <span class="kw">if </span><span class="kw-2">&amp;</span>spend_pub_key == coin.note.spend_key() {
                     <span class="prelude-val">Ok</span>((spend_key, (amt, coin.note)))
                 } <span class="kw">else </span>{

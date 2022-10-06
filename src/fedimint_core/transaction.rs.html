@@ -283,6 +283,9 @@
 <span id="283">283</span>
 <span id="284">284</span>
 <span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::FeeConsensus;
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
@@ -524,7 +527,10 @@
     M: Into&lt;secp256k1_zkp::Message&gt;,
 {
     <span class="kw">let </span>msg = msg.into();
-    <span class="kw">let </span>pub_keys = keys.iter().map(|key| key.public_key()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+    <span class="kw">let </span>pub_keys = keys
+        .iter()
+        .map(|key| key.x_only_public_key().<span class="number">0</span>)
+        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="kw">let </span>pre_session = new_pre_session(<span class="kw-2">&amp;</span>pub_keys, ctx);
 
     <span class="kw">let </span>session_id: [u8; <span class="number">32</span>] = rng.gen();

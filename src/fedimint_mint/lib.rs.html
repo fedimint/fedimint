@@ -1664,7 +1664,7 @@
     <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;MintConfig&gt;, MintClientConfig) {
         <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>(mint_cfg, client_cfg) =
-            MintConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>)], OsRng::new().unwrap());
+            MintConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>peers, <span class="kw-2">&amp;</span>[Amount::from_sat(<span class="number">1</span>)], OsRng);
 
         (mint_cfg.into_iter().map(|(<span class="kw">_</span>, c)| c).collect(), client_cfg)
     }

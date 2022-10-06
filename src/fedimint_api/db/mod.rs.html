@@ -536,6 +536,8 @@
 <span id="536">536</span>
 <span id="537">537</span>
 <span id="538">538</span>
+<span id="539">539</span>
+<span id="540">540</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 <span class="kw">use </span>anyhow::Result;
@@ -844,8 +846,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodingError::wrong_prefix(<span class="self">Self</span>::DB_PREFIX, data[<span class="number">0</span>]));
         }
 
-        &lt;<span class="self">Self </span><span class="kw">as </span><span class="kw">crate</span>::encoding::Decodable&gt;::consensus_decode(std::io::Cursor::new(<span class="kw-2">&amp;</span>data[<span class="number">1</span>..]))
-            .map_err(|decode_error| DecodingError::Other(decode_error.<span class="number">0</span>))
+        &lt;<span class="self">Self </span><span class="kw">as </span><span class="kw">crate</span>::encoding::Decodable&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(
+            <span class="kw-2">&amp;</span>data[<span class="number">1</span>..],
+        ))
+        .map_err(|decode_error| DecodingError::Other(decode_error.<span class="number">0</span>))
     }
 }
 
@@ -866,7 +870,7 @@
     </span>T: SerializableDatabaseValue + Decodable,
 {
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
-        T::consensus_decode(std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
     }
 }
 

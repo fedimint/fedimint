@@ -105,6 +105,10 @@
 <span id="105">105</span>
 <span id="106">106</span>
 <span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::io;
 
 <span class="kw">use </span>fedimint_api::{
@@ -126,25 +130,29 @@
     <span class="kw">fn </span>module_key() -&gt; ModuleKey {
         MINT_MODULE_KEY
     }
-    <span class="kw">fn </span>decode_spendable_output(d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
+    <span class="kw">fn </span>decode_spendable_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;SpendableOutput, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(SpendableOutput::from(
-            MintSpendableOutput::consensus_decode(d)<span class="question-mark">?</span>,
+            MintSpendableOutput::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>,
         ))
     }
 
-    <span class="kw">fn </span>decode_pending_output(d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(PendingOutput::from(MintPendingOutput::consensus_decode(d)<span class="question-mark">?</span>))
+    <span class="kw">fn </span>decode_pending_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;PendingOutput, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(PendingOutput::from(MintPendingOutput::consensus_decode(
+            <span class="kw-2">&amp;mut </span>d,
+        )<span class="question-mark">?</span>))
     }
 
-    <span class="kw">fn </span>decode_output(d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Output::from(MintOutput::consensus_decode(d)<span class="question-mark">?</span>))
+    <span class="kw">fn </span>decode_output(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Output, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(Output::from(MintOutput::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>))
     }
-    <span class="kw">fn </span>decode_output_outcome(d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(OutputOutcome::from(MintOutputOutcome::consensus_decode(d)<span class="question-mark">?</span>))
+    <span class="kw">fn </span>decode_output_outcome(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;OutputOutcome, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(OutputOutcome::from(MintOutputOutcome::consensus_decode(
+            <span class="kw-2">&amp;mut </span>d,
+        )<span class="question-mark">?</span>))
     }
 
-    <span class="kw">fn </span>decode_input(d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Input::from(MintInput::consensus_decode(d)<span class="question-mark">?</span>))
+    <span class="kw">fn </span>decode_input(<span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Read) -&gt; <span class="prelude-ty">Result</span>&lt;Input, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(Input::from(MintInput::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>))
     }
 }
 

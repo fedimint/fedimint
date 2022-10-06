@@ -190,9 +190,9 @@
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
+<span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>bitcoin_hashes::{borrow_slice_impl, hash_newtype, hex_fmt_impl, index_impl, serde_impl};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_api::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -291,13 +291,13 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ContractId {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.as_inner().consensus_encode(writer)
     }
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>ContractId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(ContractId::from_inner(Decodable::consensus_decode(d)<span class="question-mark">?</span>))
     }
 }
@@ -342,7 +342,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="comment">// TODO: get rid of bincode
         </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
         bytes.consensus_encode(writer)
@@ -350,7 +350,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EncryptedPreimage(
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
@@ -359,7 +359,7 @@
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="comment">// TODO: get rid of bincode
         </span><span class="kw">let </span>bytes = bincode::serialize(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">&quot;Serialization shouldn&#39;t fail&quot;</span>);
         bytes.consensus_encode(writer)
@@ -367,7 +367,7 @@
 }
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(PreimageDecryptionShare(
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,

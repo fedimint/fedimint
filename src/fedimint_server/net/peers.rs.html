@@ -975,7 +975,7 @@
 
         <span class="kw">let </span>reconnect_at = {
             <span class="kw">let </span>scaling_factor = disconnect_count <span class="kw">as </span>f64;
-            <span class="kw">let </span>delay: f64 = thread_rng().gen_range(<span class="number">1.0 </span>* scaling_factor, <span class="number">4.0 </span>* scaling_factor);
+            <span class="kw">let </span>delay: f64 = thread_rng().gen_range(<span class="number">1.0 </span>* scaling_factor..<span class="number">4.0 </span>* scaling_factor);
             <span class="macro">debug!</span>(delay, <span class="string">&quot;Scheduling reopening of connection&quot;</span>);
             Instant::now() + Duration::from_secs_f64(delay)
         };

@@ -432,7 +432,6 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
-<span id="435">435</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>webserver;
@@ -723,7 +722,7 @@
     }
 
     <span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, contract_id: ContractId) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>outpoint = <span class="self">self</span>.pay_invoice(contract_id, rng).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.await_outgoing_contract_claimed(contract_id, outpoint)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -733,8 +732,7 @@
     <span class="kw">async fn </span>handle_htlc_incoming_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc_accepted: HtlcAccepted) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">let </span>invoice_amount = htlc_accepted.htlc.amount;
         <span class="kw">let </span>payment_hash = htlc_accepted.htlc.payment_hash;
-        <span class="kw">let </span><span class="kw-2">mut </span>rng =
-            rand::rngs::OsRng::new().expect(<span class="string">&quot;only systems with a randomness source are supported&quot;</span>);
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
 
         <span class="macro">debug!</span>(<span class="string">&quot;Incoming htlc for payment hash {}&quot;</span>, payment_hash);
         <span class="self">self</span>.buy_preimage_internal(<span class="kw-2">&amp;</span>payment_hash, <span class="kw-2">&amp;</span>invoice_amount, <span class="kw-2">&amp;mut </span>rng)
@@ -749,12 +747,12 @@
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.federation_client.coins().total_amount())
     }
     <span class="kw">async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.federation_client.get_new_pegin_address(<span class="kw-2">&amp;mut </span>rng))
     }
 
     <span class="kw">async fn </span>handle_deposit_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, deposit: DepositPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="self">self</span>.federation_client
             .peg_in(deposit.<span class="number">0</span>, deposit.<span class="number">1</span>, rng)
             .<span class="kw">await
@@ -762,7 +760,7 @@
     }
 
     <span class="kw">async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, withdraw: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>peg_out = <span class="self">self
             </span>.federation_client
             .new_peg_out_with_fees(withdraw.<span class="number">1</span>, withdraw.<span class="number">0</span>)
@@ -852,11 +850,11 @@
     <span class="kw">if </span>d.is_human_readable() {
         <span class="kw">let </span>bytes = hex::decode::&lt;String&gt;(Deserialize::deserialize(d)<span class="question-mark">?</span>)
             .map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
-        T::consensus_decode(Cursor::new(<span class="kw-2">&amp;</span>bytes))
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes))
             .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
     } <span class="kw">else </span>{
         <span class="kw">let </span>bytes: Vec&lt;u8&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
-        T::consensus_decode(Cursor::new(<span class="kw-2">&amp;</span>bytes))
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes))
             .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
     }
 }

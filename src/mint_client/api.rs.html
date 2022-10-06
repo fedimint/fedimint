@@ -954,7 +954,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PegOutFees&gt;&gt; {
         <span class="self">self</span>.request(
             <span class="string">&quot;/wallet/peg_out_fees&quot;</span>,
-            (address, amount.as_sat()),
+            (address, amount.to_sat()),
             EventuallyConsistent::new(<span class="self">self</span>.peers().one_honest()),
         )
         .<span class="kw">await

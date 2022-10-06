@@ -903,7 +903,7 @@
         </span>C: Signing,
     {
         <span class="kw">let </span>spend_key = bitcoin::KeyPair::new(ctx, rng);
-        <span class="kw">let </span>nonce = Nonce(spend_key.public_key());
+        <span class="kw">let </span>nonce = Nonce(spend_key.x_only_public_key().<span class="number">0</span>);
         <span class="kw">let </span>(blinding_key, blinded_nonce) = blind_message(nonce.to_message());
 
         <span class="kw">let </span>cr = NoteIssuanceRequest {
@@ -1126,7 +1126,7 @@
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_output() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(fed, client_config, client_context) = new_mint_and_client().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = MintClient {
@@ -1142,7 +1142,7 @@
 
     <span class="attribute">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>create_input() {
-        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
 
         <span class="kw">const </span>SPEND_AMOUNT: Amount = Amount::from_sat(<span class="number">21</span>);
 
@@ -1166,7 +1166,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>secp = <span class="kw-2">&amp;</span>client.context.secp;
         <span class="kw">let </span>tbs_pks = <span class="kw-2">&amp;</span>client.config.tbs_pks;
-        <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
         <span class="kw">let </span>(spend_keys, input) = builder
             .create_input_from_coins(coins.clone(), secp)
@@ -1181,7 +1181,7 @@
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>key).<span class="number">0</span>)
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         );
 
@@ -1200,7 +1200,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>batch = DbBatch::new();
         <span class="kw">let </span><span class="kw-2">mut </span>builder = TransactionBuilder::default();
         <span class="kw">let </span>coins = client.select_coins(SPEND_AMOUNT).unwrap();
-        <span class="kw">let </span>rng = rand::rngs::OsRng::new().unwrap();
+        <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>(spend_keys, input) = builder
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
@@ -1214,7 +1214,7 @@
             meta.keys,
             spend_keys
                 .into_iter()
-                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>key))
+                .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(<span class="kw-2">&amp;</span>key).<span class="number">0</span>)
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
         );
 
