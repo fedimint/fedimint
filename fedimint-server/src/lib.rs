@@ -5,31 +5,28 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use hbbft::honey_badger::{HoneyBadger, Message};
-use hbbft::{Epoched, NetworkInfo, Target};
-
-use rand::rngs::OsRng;
-use rand::{CryptoRng, RngCore};
-use tokio::task::spawn;
-use tracing::{info, warn};
-
 use config::ServerConfig;
-use fedimint_api::{NumPeers, PeerId};
-
-use crate::fedimint_api::net::peers::PeerConnections;
-use crate::net::peers::PeerSlice;
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::{NumPeers, PeerId};
 use fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 pub use fedimint_core::*;
+use hbbft::honey_badger::{HoneyBadger, Message};
+use hbbft::{Epoched, NetworkInfo, Target};
 use mint_client::api::{IFederationApi, WsFederationApi};
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
+use tokio::task::spawn;
+use tracing::{info, warn};
 
 use crate::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
 };
 use crate::db::{EpochHistoryKey, LastEpochKey};
+use crate::fedimint_api::net::peers::PeerConnections;
 use crate::net::connect::{Connector, TlsTcpConnector};
+use crate::net::peers::PeerSlice;
 use crate::net::peers::{PeerConnector, ReconnectPeerConnections};
 use crate::rng::RngGenerator;
 

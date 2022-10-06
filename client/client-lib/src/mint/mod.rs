@@ -1,8 +1,6 @@
 pub mod db;
 
-use crate::api::ApiError;
-use crate::transaction::TransactionBuilder;
-use crate::utils::ClientContext;
+use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
@@ -14,14 +12,16 @@ use fedimint_core::modules::mint::config::MintClientConfig;
 use fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-
 use rand::{CryptoRng, RngCore};
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 use thiserror::Error;
 use tracing::{debug, trace, warn};
+
+use crate::api::ApiError;
+use crate::transaction::TransactionBuilder;
+use crate::utils::ClientContext;
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -357,10 +357,8 @@ impl From<InvalidAmountTierError> for CoinFinalizationError {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::IFederationApi;
+    use std::sync::Arc;
 
-    use crate::mint::MintClient;
-    use crate::{ClientContext, TransactionBuilder};
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
@@ -379,8 +377,11 @@ mod tests {
     use fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     use fedimint_core::transaction::Transaction;
     use futures::executor::block_on;
-    use std::sync::Arc;
     use threshold_crypto::PublicKey;
+
+    use crate::api::IFederationApi;
+    use crate::mint::MintClient;
+    use crate::{ClientContext, TransactionBuilder};
 
     type Fed = FakeFed<Mint, MintClientConfig>;
 

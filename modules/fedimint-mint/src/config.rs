@@ -1,11 +1,12 @@
+use std::collections::{BTreeMap, HashMap};
+use std::iter::FromIterator;
+
 use async_trait::async_trait;
 use fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-use std::iter::FromIterator;
 use tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
 use threshold_crypto::group::Curve;
 use threshold_crypto::G2Projective;

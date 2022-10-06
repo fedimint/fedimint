@@ -1,9 +1,10 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, NumPeers, PeerId};
 use fedimint_server::config::{ServerConfig, ServerConfigParams};
 use rand::rngs::OsRng;
-use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Cli {

@@ -1,8 +1,9 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use fedimint_ln::contracts::Preimage;
 use ln_gateway::ln::{LightningError, LnRpc};
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 /// A proxy for the underlying LnRpc which can be used to add behavoir to it using the "Decorator pattern"

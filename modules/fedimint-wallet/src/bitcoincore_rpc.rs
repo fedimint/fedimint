@@ -1,6 +1,6 @@
-use crate::bitcoind::IBitcoindRpc;
-use crate::bitcoind::Result;
-use crate::{bitcoind::BitcoindRpc, Feerate};
+use std::future::Future;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use bitcoin::{Block, BlockHash, Network, Transaction};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -10,10 +10,12 @@ use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::module::__reexports::serde_json::Value;
 use jsonrpc::error::Error as JsonError;
 use serde::Deserialize;
-use std::future::Future;
-use std::time::Duration;
 use tracing::info;
 use tracing::warn;
+
+use crate::bitcoind::IBitcoindRpc;
+use crate::bitcoind::Result;
+use crate::{bitcoind::BitcoindRpc, Feerate};
 
 // <https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48>
 const RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -27;

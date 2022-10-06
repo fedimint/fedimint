@@ -1,12 +1,13 @@
 //! Adapter that implements a message based protocol on top of a stream based one
-use bytes::{Buf, BufMut, BytesMut};
-use futures::{Sink, Stream};
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+use bytes::{Buf, BufMut, BytesMut};
+use futures::{Sink, Stream};
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf, WriteHalf};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -227,11 +228,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::net::framed::BidiFramed;
+    use std::time::Duration;
+
     use futures::{SinkExt, StreamExt};
     use serde::{Deserialize, Serialize};
-    use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
+
+    use crate::net::framed::BidiFramed;
 
     #[tokio::test]
     async fn test_roundtrip() {

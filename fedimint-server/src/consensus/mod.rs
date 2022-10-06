@@ -4,17 +4,10 @@ mod conflictfilter;
 pub mod debug;
 mod interconnect;
 
-use crate::config::ServerConfig;
-use crate::consensus::conflictfilter::ConflictFilterable;
-use crate::consensus::interconnect::FedimintInterconnect;
-use crate::db::{
-    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
-    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
-};
-use crate::outcome::OutputOutcome;
-use crate::rng::RngGenerator;
-use crate::transaction::{Input, Output, Transaction, TransactionError};
-use crate::OsRngGen;
+use std::collections::{BTreeMap, HashSet};
+use std::iter::FromIterator;
+use std::sync::Arc;
+
 use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -31,12 +24,21 @@ use futures::future::select_all;
 use hbbft::honey_badger::Batch;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
-use std::iter::FromIterator;
-use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Notify;
 use tracing::{debug, error, info, info_span, instrument, trace, warn};
+
+use crate::config::ServerConfig;
+use crate::consensus::conflictfilter::ConflictFilterable;
+use crate::consensus::interconnect::FedimintInterconnect;
+use crate::db::{
+    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
+    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
+};
+use crate::outcome::OutputOutcome;
+use crate::rng::RngGenerator;
+use crate::transaction::{Input, Output, Transaction, TransactionError};
+use crate::OsRngGen;
 
 pub type ConsensusOutcome = Batch<Vec<ConsensusItem>, PeerId>;
 pub type HoneyBadgerMessage = hbbft::honey_badger::Message<PeerId>;

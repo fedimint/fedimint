@@ -1,10 +1,10 @@
-use crate::consensus::FedimintConsensus;
 use async_trait::async_trait;
-
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiError;
 use fedimint_api::FederationModule;
 use serde_json::Value;
+
+use crate::consensus::FedimintConsensus;
 
 pub struct FedimintInterconnect<'a> {
     pub fedimint: &'a FedimintConsensus,

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use fedimint_api::{
     db::batch::BatchTx,
@@ -13,7 +15,6 @@ use fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput, MINT_MODULE_KEY,
 };
-use std::collections::HashSet;
 
 #[derive(Encodable, Decodable, Clone)]
 pub struct MintVerificationCache;

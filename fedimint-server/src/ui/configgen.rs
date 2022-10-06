@@ -1,9 +1,5 @@
-use crate::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
-use crate::ui::Guardian;
 use std::collections::{BTreeMap, HashMap};
 
-use crate::net::peers::ConnectionConfig;
-use crate::{CryptoRng, RngCore};
 use fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::{ClientConfig, Node};
@@ -13,6 +9,11 @@ use fedimint_wallet::config::WalletConfig;
 use rand::rngs::OsRng;
 use threshold_crypto::serde_impl::SerdeSecret;
 use url::Url;
+
+use crate::config::{gen_cert_and_key, Peer as ServerPeer, ServerConfig};
+use crate::net::peers::ConnectionConfig;
+use crate::ui::Guardian;
+use crate::{CryptoRng, RngCore};
 
 pub fn configgen(
     federation_name: String,

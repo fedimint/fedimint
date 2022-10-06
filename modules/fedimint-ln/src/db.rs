@@ -1,9 +1,10 @@
-use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
-use crate::{ContractAccount, LightningGateway, OutputOutcome};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{OutPoint, PeerId};
 use secp256k1::PublicKey;
+
+use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
+use crate::{ContractAccount, LightningGateway, OutputOutcome};
 
 const DB_PREFIX_CONTRACT: u8 = 0x40;
 const DB_PREFIX_OFFER: u8 = 0x41;

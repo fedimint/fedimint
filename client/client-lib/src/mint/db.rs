@@ -1,8 +1,9 @@
-use crate::mint::{NoteIssuanceRequests, SpendableNote};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::modules::mint::Nonce;
+
+use crate::mint::{NoteIssuanceRequests, SpendableNote};
 
 pub const DB_PREFIX_COIN: u8 = 0x20;
 pub const DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = 0x21;

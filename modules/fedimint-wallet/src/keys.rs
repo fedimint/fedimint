@@ -1,10 +1,12 @@
-use crate::tweakable::{Contract, Tweakable};
+use std::str::FromStr;
+
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
 use miniscript::{MiniscriptKey, ToPublicKey};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+
+use crate::tweakable::{Contract, Tweakable};
 
 #[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct CompressedPublicKey {

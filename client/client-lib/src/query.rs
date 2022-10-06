@@ -1,12 +1,14 @@
-use crate::api::{FedResponse, Result};
-use crate::ApiError;
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
+
 use fedimint_api::PeerId;
 use fedimint_core::epoch::EpochHistory;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
-use std::collections::{HashMap, HashSet};
-use std::hash::Hash;
 use threshold_crypto::PublicKey;
+
+use crate::api::{FedResponse, Result};
+use crate::ApiError;
 
 /// Returns a result from the first responding peer
 pub struct TrustAllPeers;

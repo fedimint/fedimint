@@ -14,6 +14,27 @@ pub mod config;
 pub mod contracts;
 mod db;
 
+use std::collections::{HashMap, HashSet};
+use std::ops::Sub;
+
+use async_trait::async_trait;
+use bitcoin_hashes::Hash as BitcoinHash;
+use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
+use fedimint_api::db::batch::BatchTx;
+use fedimint_api::db::{Database, DatabaseTransaction};
+use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::audit::Audit;
+use fedimint_api::module::interconnect::ModuleInterconect;
+use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
+use fedimint_api::{Amount, FederationModule, PeerId};
+use fedimint_api::{InputMeta, OutPoint};
+use itertools::Itertools;
+use secp256k1::rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tracing::{debug, error, info_span, instrument, trace, warn};
+use url::Url;
+
 use crate::config::LightningModuleConfig;
 use crate::contracts::{
     incoming::{IncomingContractOffer, OfferId},
@@ -25,27 +46,6 @@ use crate::db::{
     ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
     ProposeDecryptionShareKeyPrefix,
 };
-use async_trait::async_trait;
-use bitcoin_hashes::Hash as BitcoinHash;
-use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
-use itertools::Itertools;
-
-use fedimint_api::db::batch::BatchTx;
-use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::audit::Audit;
-use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
-use fedimint_api::{Amount, FederationModule, PeerId};
-use fedimint_api::{InputMeta, OutPoint};
-use secp256k1::rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::ops::Sub;
-use url::Url;
-
-use thiserror::Error;
-use tracing::{debug, error, info_span, instrument, trace, warn};
 
 /// The lightning module implements an account system. It does not have the privacy guarantees of
 /// the e-cash mint module but instead allows for smart contracting. There exist three contract

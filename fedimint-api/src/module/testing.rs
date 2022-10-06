@@ -1,19 +1,18 @@
-use async_trait::async_trait;
-
-use crate::config::GenerateConfig;
-use crate::db::batch::DbBatch;
-use crate::db::mem_impl::MemDatabase;
-use crate::db::Database;
-
-use crate::module::interconnect::ModuleInterconect;
-use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use async_trait::async_trait;
+
 use super::ApiError;
+use crate::config::GenerateConfig;
+use crate::db::batch::DbBatch;
+use crate::db::mem_impl::MemDatabase;
+use crate::db::Database;
+use crate::module::interconnect::ModuleInterconect;
+use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, Database)>,

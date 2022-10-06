@@ -1,4 +1,3 @@
-use crate::config::FeeConsensus;
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::encoding::{Decodable, Encodable};
@@ -7,6 +6,8 @@ use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::config::FeeConsensus;
 
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///

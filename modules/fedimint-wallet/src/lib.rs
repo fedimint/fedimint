@@ -1,18 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::{Infallible, TryInto};
-
 use std::hash::Hasher;
+use std::ops::Sub;
+use std::time::Duration;
 
-use crate::bitcoind::BitcoindRpc;
-use crate::config::WalletConfig;
-use crate::db::{
-    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
-    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
-    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
-};
-use crate::keys::CompressedPublicKey;
-use crate::tweakable::Tweakable;
-use crate::txoproof::{PegInProof, PegInProofError};
 use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -28,8 +19,10 @@ use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::api_endpoint;
+use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
+use fedimint_api::task::sleep;
 use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use fedimint_derive::UnzipConsensus;
 use miniscript::psbt::PsbtExt;
@@ -37,13 +30,19 @@ use miniscript::{Descriptor, TranslatePk};
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{Message, Scalar};
 use serde::{Deserialize, Serialize};
-use std::ops::Sub;
-
-use fedimint_api::module::audit::Audit;
-use fedimint_api::task::sleep;
-use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, error, info, instrument, trace, warn};
+
+use crate::bitcoind::BitcoindRpc;
+use crate::config::WalletConfig;
+use crate::db::{
+    BlockHashKey, PegOutBitcoinTransaction, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
+    PendingTransactionKey, PendingTransactionPrefixKey, RoundConsensusKey, UTXOKey, UTXOPrefixKey,
+    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+};
+use crate::keys::CompressedPublicKey;
+use crate::tweakable::Tweakable;
+use crate::txoproof::{PegInProof, PegInProofError};
 
 pub mod bitcoind;
 pub mod config;

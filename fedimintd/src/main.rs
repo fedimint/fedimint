@@ -5,10 +5,9 @@ use fedimint_api::db::Database;
 use fedimint_core::modules::ln::LightningModule;
 use fedimint_mint_server::MintServerModule;
 use fedimint_server::config::{load_from_file, ServerConfig};
-use fedimint_server::FedimintServer;
-
 use fedimint_server::consensus::FedimintConsensus;
 use fedimint_server::ui::run_ui;
+use fedimint_server::FedimintServer;
 use fedimint_wallet::{bitcoincore_rpc, Wallet};
 use tokio::spawn;
 use tracing_subscriber::prelude::*;

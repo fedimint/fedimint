@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use axum::{routing::post, Extension, Json, Router};
+use fedimint_server::modules::ln::contracts::ContractId;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
@@ -8,7 +9,6 @@ use tracing::{debug, instrument};
 
 use crate::GatewayRequestInner;
 use crate::{GatewayRequest, LnGatewayError};
-use fedimint_server::modules::ln::contracts::ContractId;
 
 #[instrument(skip_all, err)]
 pub async fn pay_invoice(

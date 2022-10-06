@@ -1,44 +1,41 @@
+use std::sync::Arc;
+use std::time::Duration;
+
 use async_trait::async_trait;
+use bitcoin::{Address, Amount};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::task::{RwLock, RwLockWriteGuard};
 use fedimint_api::{dyn_newtype_define, NumPeers, OutPoint, PeerId, TransactionId};
+use fedimint_core::config::ClientConfig;
+use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::{ContractAccount, LightningGateway};
+use fedimint_core::modules::wallet::PegOutFees;
 use fedimint_core::outcome::{TransactionStatus, TryIntoOutcome};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::CoreError;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
+#[cfg(target_os = "android")]
+use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
 use jsonrpsee_types::error::CallError as RpcCallError;
-use serde::{Deserialize, Serialize};
-
-use tracing::{error, info, instrument};
-use url::Url;
-
-#[cfg(target_os = "android")]
-use jsonrpsee_core::client::CertificateStore;
-#[cfg(not(target_family = "wasm"))]
-use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
-
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+#[cfg(not(target_family = "wasm"))]
+use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use threshold_crypto::PublicKey;
+use tracing::{error, info, instrument};
+use url::Url;
 
 use crate::query::{
     CurrentConsensus, EventuallyConsistent, QueryStep, QueryStrategy, Retry404, UnionResponses,
     ValidHistory,
 };
-use bitcoin::{Address, Amount};
-use fedimint_core::config::ClientConfig;
-use fedimint_core::epoch::EpochHistory;
-use fedimint_core::modules::wallet::PegOutFees;
-use futures::stream::FuturesUnordered;
-
-use futures::StreamExt;
-use std::sync::Arc;
-use std::time::Duration;
-use thiserror::Error;
-use threshold_crypto::PublicKey;
 
 #[cfg_attr(target_family = "wasm", async_trait(? Send))]
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
@@ -475,8 +472,6 @@ impl<C: JsonRpcClient> WsFederationApi<C> {
 
 #[cfg(test)]
 mod tests {
-    use anyhow::anyhow;
-    use once_cell::sync::Lazy;
     use std::{
         collections::HashSet,
         str::FromStr,
@@ -485,6 +480,9 @@ mod tests {
             Mutex,
         },
     };
+
+    use anyhow::anyhow;
+    use once_cell::sync::Lazy;
 
     use super::*;
 
