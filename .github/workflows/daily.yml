@@ -1,4 +1,8 @@
 on:
+  push:
+    branches:
+      - master
+  pull_request:
   schedule:
     - cron:  '30 5,17 * * *'
   # Allows you to run this workflow manually from the Actions tab
