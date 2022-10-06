@@ -177,6 +177,7 @@ impl<'c> LnClient<'c> {
         amount: Amount,
         payment_hash: Sha256Hash,
         payment_secret: Preimage,
+        expiry_time: Option<u64>,
     ) -> ContractOrOfferOutput {
         ContractOrOfferOutput::Offer(IncomingContractOffer {
             amount,
@@ -185,6 +186,7 @@ impl<'c> LnClient<'c> {
                 payment_secret,
                 &self.config.threshold_pub_key,
             ),
+            expiry_time,
         })
     }
 

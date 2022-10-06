@@ -262,7 +262,7 @@ pub trait BitcoinTest {
 
 pub trait LightningTest {
     /// Creates invoice from a non-gateway LN node
-    fn invoice(&self, amount: Amount) -> Invoice;
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
 
     /// Returns the amount that the gateway LN node has sent
     fn amount_sent(&self) -> Amount;

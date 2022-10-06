@@ -13,6 +13,7 @@ pub struct IncomingContractOffer {
     pub amount: fedimint_api::Amount,
     pub hash: bitcoin_hashes::sha256::Hash,
     pub encrypted_preimage: EncryptedPreimage,
+    pub expiry_time: Option<u64>,
 }
 
 impl IncomingContractOffer {

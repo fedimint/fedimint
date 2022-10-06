@@ -50,7 +50,7 @@ use fedimint_core::{
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};
-use lightning_invoice::{CreationError, Invoice, InvoiceBuilder};
+use lightning_invoice::{CreationError, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use ln::db::LightningGatewayKey;
 use mint::NoteIssuanceRequests;
 use rand::{CryptoRng, RngCore};
@@ -623,6 +623,7 @@ impl Client<UserClientConfig> {
         amount: Amount,
         description: String,
         mut rng: R,
+        expiry_time: Option<u64>,
     ) -> Result<ConfirmedInvoice> {
         let gateway = self.fetch_active_gateway().await?;
         let payment_keypair = KeyPair::new(&self.context.secp, &mut rng);
@@ -664,6 +665,9 @@ impl Client<UserClientConfig> {
             .min_final_cltv_expiry(18)
             .payee_pub_key(node_public_key)
             .private_route(gateway_route_hint)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
             .build_signed(|hash| {
                 self.context
                     .secp
@@ -674,6 +678,7 @@ impl Client<UserClientConfig> {
             amount,
             payment_hash,
             Preimage(raw_payment_secret),
+            expiry_time,
         );
         let ln_output = Output::LN(offer_output);
 

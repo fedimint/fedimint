@@ -1,5 +1,6 @@
 use std::iter::repeat;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hash_types::Txid;
@@ -10,7 +11,7 @@ use bitcoin::{
     secp256k1, Address, Block, BlockHash, BlockHeader, KeyPair, Network, Transaction, TxOut,
 };
 use lightning::ln::PaymentSecret;
-use lightning_invoice::{Currency, Invoice, InvoiceBuilder};
+use lightning_invoice::{Currency, Invoice, InvoiceBuilder, DEFAULT_EXPIRY_TIME};
 use rand::rngs::OsRng;
 
 use fedimint_api::Amount;
@@ -46,7 +47,7 @@ impl FakeLightningTest {
 }
 
 impl LightningTest for FakeLightningTest {
-    fn invoice(&self, amount: Amount) -> Invoice {
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         InvoiceBuilder::new(Currency::Regtest)
@@ -56,6 +57,9 @@ impl LightningTest for FakeLightningTest {
             .min_final_cltv_expiry(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(amount.milli_sat)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap()
     }

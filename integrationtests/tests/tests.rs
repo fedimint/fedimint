@@ -252,7 +252,7 @@ async fn drop_peers_who_dont_contribute_decryption_shares() {
     // Create lightning invoice whose associated "offer" is accepted by federation consensus
     let invoice = tokio::join!(
         user.client
-            .generate_invoice(payment_amount, "".into(), rng()),
+            .generate_invoice(payment_amount, "".into(), rng(), None),
         fed.await_consensus_epochs(1) // create offer
     )
     .0
@@ -333,7 +333,7 @@ async fn lightning_gateway_pays_internal_invoice() {
     let confirmed_invoice = tokio::join!(
         receiving_user
             .client
-            .generate_invoice(sats(1000), "".into(), rng()),
+            .generate_invoice(sats(1000), "".into(), rng(), None),
         fed.await_consensus_epochs(1),
     )
     .0
@@ -409,7 +409,7 @@ async fn lightning_gateway_pays_internal_invoice() {
 async fn lightning_gateway_pays_outgoing_invoice() {
     let (fed, user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
-    let invoice = lightning.invoice(sats(1000));
+    let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
     let (contract_id, outpoint) = user
@@ -466,7 +466,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() {
     let confirmed_invoice = tokio::join!(
         receiving_user
             .client
-            .generate_invoice(sats(1000), "".into(), rng()),
+            .generate_invoice(sats(1000), "".into(), rng(), None),
         fed.await_consensus_epochs(1),
     )
     .0
@@ -516,6 +516,13 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn set_lightning_invoice_expiry() {
+    let (_, _, _, _, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let invoice = lightning.invoice(sats(1000), 600.into());
+    assert_eq!(invoice.expiry_time(), Duration::from_secs(600));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn receive_lightning_payment_valid_preimage() {
     let starting_balance = sats(2000);
     let preimage_price = sats(100);
@@ -528,7 +535,7 @@ async fn receive_lightning_payment_valid_preimage() {
     // Create lightning invoice whose associated "offer" is accepted by federation consensus
     let invoice = tokio::join!(
         user.client
-            .generate_invoice(preimage_price, "".into(), rng()),
+            .generate_invoice(preimage_price, "".into(), rng(), None),
         fed.await_consensus_epochs(1),
     )
     .0
@@ -599,6 +606,7 @@ async fn receive_lightning_payment_invalid_preimage() {
         payment_amount,
         payment_hash,
         Preimage(kp.public_key().serialize()),
+        None,
     );
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
@@ -652,7 +660,7 @@ async fn receive_lightning_payment_invalid_preimage() {
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() {
     let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
-    let invoice = lightning.invoice(sats(1000));
+    let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
@@ -686,7 +694,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
-    let invoice = lightning.invoice(sats(1000));
+    let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
@@ -783,7 +791,7 @@ async fn audit_negative_balance_sheet_panics() {
 async fn unbalanced_transactions_get_rejected() {
     let (fed, user, bitcoin, _, lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
     // cannot make change for this invoice (results in unbalanced tx)
-    let invoice = lightning.invoice(sats(777));
+    let invoice = lightning.invoice(sats(777), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
     let response = user.client.fund_outgoing_ln_contract(invoice, rng()).await;
