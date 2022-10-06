@@ -106,6 +106,7 @@
             };
 
         fenixChannel = fenix.packages.${system}.stable;
+        fenixChannelNightly = fenix.packages.${system}.latest;
 
         fenixToolchain = (fenixChannel.withComponents [
           "rustc"
@@ -113,8 +114,11 @@
           "clippy"
           "rust-analysis"
           "rust-src"
-          "rustfmt"
           "llvm-tools-preview"
+        ]);
+
+        fenixToolchainRustfmt = (fenixChannelNightly.withComponents [
+          "rustfmt"
         ]);
 
         fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
@@ -714,6 +718,7 @@
             buildInputs = commonArgs.buildInputs;
             nativeBuildInputs = with pkgs; commonArgs.nativeBuildInputs ++ [
               fenix.packages.${system}.rust-analyzer
+              fenixToolchainRustfmt
               cargo-llvm-cov
               cargo-udeps
 
@@ -776,7 +781,7 @@
             # of stuff to avoid building and caching things we don't need
             lint = pkgs.mkShell {
               nativeBuildInputs = [
-                pkgs.rustfmt
+                fenixToolchainRustfmt
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
