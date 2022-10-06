@@ -11,18 +11,13 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use api::FederationApi;
-use fedimint_api::db::Database;
-use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::TieredMulti;
-use futures::StreamExt;
-
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
-
 use bitcoin_hashes::{sha256, Hash};
-use futures::stream::FuturesUnordered;
-
+use fedimint_api::db::Database;
 use fedimint_api::task::sleep;
+use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::TieredMulti;
 use fedimint_api::{
     db::batch::{Accumulator, BatchItem, DbBatch},
     Amount, FederationModule, OutPoint, PeerId, TransactionId,
@@ -47,6 +42,8 @@ use fedimint_core::{
     },
     transaction::{Input, Output},
 };
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use lightning::ln::PaymentSecret;
 use lightning::routing::gossip::RoutingFees;
 use lightning::routing::router::{RouteHint, RouteHintHop};

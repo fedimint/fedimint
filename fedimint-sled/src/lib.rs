@@ -1,6 +1,9 @@
 //! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
+use std::collections::BTreeMap;
+use std::path::Path;
+
 use anyhow::Result;
 use fedimint_api::db::batch::{BatchItem, DbBatch};
 use fedimint_api::db::{
@@ -8,12 +11,9 @@ use fedimint_api::db::{
     PrefixIter,
 };
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
-use sled::transaction::TransactionError;
-use std::collections::BTreeMap;
-use std::path::Path;
-use tracing::error;
-
 pub use sled;
+use sled::transaction::TransactionError;
+use tracing::error;
 
 #[derive(Debug)]
 pub struct SledDb(sled::Tree);

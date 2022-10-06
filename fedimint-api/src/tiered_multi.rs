@@ -1,10 +1,12 @@
-use crate::tiered::InvalidAmountTierError;
-use crate::{Amount, Tiered};
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
+
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use serde::{Deserialize, Serialize};
+
+use crate::tiered::InvalidAmountTierError;
+use crate::{Amount, Tiered};
 
 /// Represents coins of different denominations.
 ///
@@ -278,8 +280,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::TieredMulti;
     use fedimint_api::Amount;
+
+    use crate::TieredMulti;
 
     #[test]
     fn select_coins_returns_exact_amount() {

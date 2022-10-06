@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Extension, Router, Server};
@@ -12,8 +15,6 @@ use clientd::{Json as JsonExtract, SpendPayload};
 use fedimint_core::config::load_from_file;
 use mint_client::{Client, UserClientConfig};
 use rand::rngs::OsRng;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tower::ServiceBuilder;

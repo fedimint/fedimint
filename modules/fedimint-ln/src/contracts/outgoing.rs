@@ -1,7 +1,8 @@
-use crate::contracts::{ContractId, IdentifyableContract};
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::encoding::{Decodable, Encodable};
 use serde::{Deserialize, Serialize};
+
+use crate::contracts::{ContractId, IdentifyableContract};
 
 const CANCELLATION_TAG: &str = "outgoing contract cancellation";
 

@@ -1,7 +1,8 @@
-use crate::{Nonce, PartialSigResponse, SigResponse};
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{Amount, OutPoint, PeerId};
+
+use crate::{Nonce, PartialSigResponse, SigResponse};
 
 const DB_PREFIX_COIN_NONCE: u8 = 0x10;
 const DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = 0x11;

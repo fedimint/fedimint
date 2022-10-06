@@ -2,7 +2,14 @@ pub mod cln;
 pub mod ln;
 pub mod webserver;
 
-use crate::ln::{LightningError, LnRpc};
+use std::borrow::Cow;
+use std::net::SocketAddr;
+use std::{
+    io::Cursor,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Transaction};
@@ -16,17 +23,12 @@ use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer};
-use std::borrow::Cow;
-use std::net::SocketAddr;
-use std::{
-    io::Cursor,
-    sync::Arc,
-    time::{Duration, Instant},
-};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
 use webserver::run_webserver;
+
+use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 

@@ -3,9 +3,12 @@
 //! The main interface is [`PeerConnections`] and its main implementation is
 //! [`ReconnectPeerConnections`], see these for details.
 
-use crate::net::connect::{AnyConnector, SharedAnyConnector};
-use crate::net::framed::AnyFramedTransport;
-use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
+use std::cmp::min;
+use std::collections::{BTreeSet, HashMap};
+use std::fmt::Debug;
+use std::ops::Sub;
+use std::time::Duration;
+
 use async_trait::async_trait;
 use fedimint_api::net::peers::PeerConnections;
 use fedimint_api::PeerId;
@@ -16,16 +19,15 @@ use hbbft::Target;
 use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::cmp::min;
-use std::collections::{BTreeSet, HashMap};
-use std::fmt::Debug;
-use std::ops::Sub;
-use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use url::Url;
+
+use crate::net::connect::{AnyConnector, SharedAnyConnector};
+use crate::net::framed::AnyFramedTransport;
+use crate::net::queue::{MessageId, MessageQueue, UniqueMessage};
 
 /// Maximum connection failures we consider for our back-off strategy
 const MAX_FAIL_RECONNECT_COUNTER: u64 = 300;
@@ -563,18 +565,18 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    use fedimint_api::PeerId;
+    use futures::Future;
+    use tracing_subscriber::EnvFilter;
+
     use crate::net::connect::mock::MockNetwork;
     use crate::net::connect::Connector;
     use crate::net::peers::{
         ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
     };
-    use fedimint_api::PeerId;
-    use futures::Future;
-
-    use std::collections::HashMap;
-
-    use std::time::Duration;
-    use tracing_subscriber::EnvFilter;
 
     async fn timeout<F, T>(f: F) -> Option<T>
     where

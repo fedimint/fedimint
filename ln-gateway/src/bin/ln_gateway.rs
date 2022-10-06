@@ -5,6 +5,11 @@ use std::sync::Arc;
 use bitcoin_hashes::hex::ToHex;
 use cln_plugin::{options, Builder, Error, Plugin};
 use cln_rpc::ClnRpc;
+use fedimint_server::config::load_from_file;
+use ln_gateway::{
+    cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
+    GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
+};
 use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::KeyPair;
@@ -13,12 +18,6 @@ use tokio::io::{stdin, stdout};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::error;
 use url::Url;
-
-use fedimint_server::config::load_from_file;
-use ln_gateway::{
-    cln::HtlcAccepted, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    GatewayRequestTrait, LnGateway, LnGatewayError, WithdrawPayload,
-};
 
 type PluginState = Arc<Mutex<mpsc::Sender<GatewayRequest>>>;
 

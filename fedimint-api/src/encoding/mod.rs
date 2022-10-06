@@ -6,9 +6,10 @@ mod btc;
 mod secp256k1;
 mod tbs;
 
-pub use fedimint_derive::{Decodable, Encodable};
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+
+pub use fedimint_derive::{Decodable, Encodable};
 use thiserror::Error;
 use url::Url;
 

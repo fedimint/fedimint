@@ -1,4 +1,3 @@
-use crate::ln::outgoing::OutgoingContractData;
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_core::modules::ln::contracts::ContractId;
@@ -6,6 +5,7 @@ use fedimint_core::modules::ln::LightningGateway;
 
 use super::incoming::ConfirmedInvoice;
 use super::outgoing::OutgoingContractAccount;
+use crate::ln::outgoing::OutgoingContractData;
 
 const DB_PREFIX_OUTGOING_PAYMENT: u8 = 0x23;
 const DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = 0x24;

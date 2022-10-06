@@ -1,6 +1,8 @@
-use crate::encoding::{Decodable, DecodeError, Encodable};
-use secp256k1_zkp::ecdsa::Signature;
 use std::io::{Error, Read, Write};
+
+use secp256k1_zkp::ecdsa::Signature;
+
+use crate::encoding::{Decodable, DecodeError, Encodable};
 
 impl Encodable for secp256k1_zkp::ecdsa::Signature {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
@@ -79,9 +81,10 @@ impl Decodable for bitcoin::KeyPair {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::test_roundtrip;
     use secp256k1_zkp::hashes::Hash as BitcoinHash;
     use secp256k1_zkp::Message;
+
+    use super::super::tests::test_roundtrip;
 
     #[test_log::test]
     fn test_ecdsa_sig() {

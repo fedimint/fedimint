@@ -1,12 +1,14 @@
-use crate::dyn_newtype_define;
-use crate::encoding::{Decodable, Encodable};
-use anyhow::Result;
-use batch::DbBatch;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::Arc;
+
+use anyhow::Result;
+use batch::DbBatch;
 use thiserror::Error;
 use tracing::{trace, warn};
+
+use crate::dyn_newtype_define;
+use crate::encoding::{Decodable, Encodable};
 
 pub mod batch;
 pub mod mem_impl;

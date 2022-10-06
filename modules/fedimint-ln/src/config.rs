@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
+
 use async_trait::async_trait;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::{NumPeers, PeerId};
 use secp256k1::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use threshold_crypto::serde_impl::SerdeSecret;
 use threshold_crypto::G1Projective;
 

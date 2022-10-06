@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
-
 use fedimint_api::config::GenerateConfig;
 use fedimint_api::{Amount, PeerId};
 use fedimint_core::config::ClientConfig;

@@ -4,16 +4,17 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that is used on both client and sever side.
-use crate::encode::ModuleDecodable;
+use std::io;
+use std::{any::Any, collections::BTreeMap};
+
+pub use bitcoin::KeyPair;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
     Amount,
 };
-use std::io;
-use std::{any::Any, collections::BTreeMap};
 
-pub use bitcoin::KeyPair;
+use crate::encode::ModuleDecodable;
 pub mod encode;
 
 pub mod client;

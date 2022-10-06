@@ -2,13 +2,14 @@ pub mod account;
 pub mod incoming;
 pub mod outgoing;
 
+use std::io::Error;
+
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
-use std::io::Error;
 
 /// Anything representing a contract which thus has an associated [`ContractId`]
 pub trait IdentifyableContract: Encodable {

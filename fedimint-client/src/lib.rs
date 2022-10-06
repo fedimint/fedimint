@@ -2,9 +2,10 @@
 //!
 //! It's not being used by anything yet.
 
+use std::collections::BTreeMap;
+
 use fedimint_api::Amount;
 use fedimint_core_client::{ClientModule, ModuleKey, Output, SpendableOutput, Transaction};
-use std::collections::BTreeMap;
 use thiserror::Error;
 
 /// Transaction, without a signature yet

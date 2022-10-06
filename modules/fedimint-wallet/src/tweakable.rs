@@ -1,6 +1,7 @@
+use std::io::Write;
+
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
 use secp256k1::{Scalar, Secp256k1, Verification};
-use std::io::Write;
 
 /// An object that can be used as a ricardian contract to tweak a key
 pub trait Contract {

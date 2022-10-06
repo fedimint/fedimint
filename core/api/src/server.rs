@@ -4,6 +4,8 @@
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
+use std::{collections::HashSet, sync::Arc};
+
 use async_trait::async_trait;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::{
@@ -12,7 +14,6 @@ use fedimint_api::{
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
 };
-use std::{collections::HashSet, sync::Arc};
 use thiserror::Error;
 
 use super::*;

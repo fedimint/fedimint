@@ -1,26 +1,27 @@
 //! Implements the client API through which users interact with the federation
-use crate::config::ServerConfig;
-use crate::consensus::FedimintConsensus;
-use crate::transaction::Transaction;
+use std::fmt::Formatter;
+use std::panic::AssertUnwindSafe;
+use std::sync::Arc;
+
 use fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
+use fedimint_core::config::ClientConfig;
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::outcome::TransactionStatus;
 use futures::FutureExt;
-use std::fmt::Formatter;
-use std::panic::AssertUnwindSafe;
-use std::sync::Arc;
-use tracing::{debug, error};
-
-use fedimint_core::config::ClientConfig;
 use jsonrpsee::{
     types::{error::CallError, ErrorObject},
     ws_server::WsServerBuilder,
     RpcModule,
 };
+use tracing::{debug, error};
+
+use crate::config::ServerConfig;
+use crate::consensus::FedimintConsensus;
+use crate::transaction::Transaction;
 
 #[derive(Clone)]
 struct State {

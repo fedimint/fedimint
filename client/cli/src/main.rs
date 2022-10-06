@@ -1,11 +1,16 @@
+use core::fmt;
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::fmt::Debug;
+use std::path::PathBuf;
+use std::process::exit;
+
 use bitcoin::{secp256k1, Address, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 use fedimint_core::config::{load_from_file, ClientConfig};
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::wallet::txoproof::TxOutProof;
-
-use core::fmt;
 use mint_client::api::{WsFederationApi, WsFederationConnect};
 use mint_client::mint::SpendableNote;
 use mint_client::query::CurrentConsensus;
@@ -16,11 +21,6 @@ use mint_client::utils::{
 use mint_client::{Client, UserClientConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
-use std::error::Error;
-use std::fmt::Debug;
-use std::path::PathBuf;
-use std::process::exit;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Serialize)]

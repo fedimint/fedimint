@@ -1,12 +1,13 @@
 use std::str::FromStr;
 
-use crate::api::FederationApi;
-use crate::mint::SpendableNote;
 use bitcoin::{secp256k1, Network};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::{ParseAmountError, TieredMulti};
 use lightning_invoice::Currency;
+
+use crate::api::FederationApi;
+use crate::mint::SpendableNote;
 
 pub fn parse_coins(s: &str) -> anyhow::Result<TieredMulti<SpendableNote>> {
     let bytes = base64::decode(s)?;

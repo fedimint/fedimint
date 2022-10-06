@@ -1,21 +1,21 @@
 extern crate self as fedimint_api;
 
+use std::collections::BTreeMap;
+use std::io::Error;
+use std::num::ParseIntError;
+use std::str::FromStr;
+
 use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
 pub use module::{FederationModule, InputMeta};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::io::Error;
-use std::num::ParseIntError;
-use std::str::FromStr;
 use thiserror::Error;
-
-use crate::encoding::{Decodable, DecodeError, Encodable};
-
 pub use tiered::Tiered;
 pub use tiered_multi::*;
+
+use crate::encoding::{Decodable, DecodeError, Encodable};
 
 pub mod config;
 pub mod db;

@@ -1,5 +1,7 @@
-use crate::net::peers::AnyPeerConnections;
-use crate::PeerId;
+use std::collections::{BTreeMap, HashMap};
+use std::hash::Hash;
+use std::ops::Mul;
+
 use async_trait::async_trait;
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
@@ -9,13 +11,13 @@ use hbbft::pairing::group::Group;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::{BTreeMap, HashMap};
-use std::hash::Hash;
-use std::ops::Mul;
 use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
+
+use crate::net::peers::AnyPeerConnections;
+use crate::PeerId;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
 #[async_trait(?Send)]
@@ -366,9 +368,9 @@ impl<T: Group + Mul<Scalar, Output = T> + Curve + GroupEncoding + SGroup + Unpin
 
 /// Handling the Group serialization with a wrapper
 mod serde_commit {
-    use crate::config::DkgGroup;
-
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::config::DkgGroup;
 
     pub fn serialize<S: Serializer, G: DkgGroup>(vec: &[G], s: S) -> Result<S::Ok, S::Error> {
         let wrap_vec: Vec<Wrap<G>> = vec.iter().cloned().map(Wrap).collect();
@@ -422,13 +424,15 @@ impl SGroup for G1Projective {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::{scalar, Dkg, DkgGroup, DkgKeys};
-    use crate::PeerId;
+    use std::collections::{HashMap, VecDeque};
+
     use fedimint_api::config::DkgStep;
     use hbbft::crypto::group::Curve;
     use hbbft::crypto::{G1Projective, G2Projective};
     use rand::rngs::OsRng;
-    use std::collections::{HashMap, VecDeque};
+
+    use crate::config::{scalar, Dkg, DkgGroup, DkgKeys};
+    use crate::PeerId;
 
     #[test_log::test]
     fn test_dkg() {

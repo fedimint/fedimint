@@ -1,5 +1,8 @@
-use crate::keys::CompressedPublicKey;
-use crate::tweakable::{Contract, Tweakable};
+use std::borrow::Cow;
+use std::convert::Infallible;
+use std::hash::Hash;
+use std::io::Cursor;
+
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -7,12 +10,11 @@ use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::borrow::Cow;
-use std::convert::Infallible;
-use std::hash::Hash;
-use std::io::Cursor;
 use thiserror::Error;
 use validator::{Validate, ValidationError};
+
+use crate::keys::CompressedPublicKey;
+use crate::tweakable::{Contract, Tweakable};
 
 /// A proof about a script owning a certain output. Verifyable using headers only.
 #[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
@@ -307,9 +309,11 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
-    use super::TxOutProof;
-    use fedimint_api::encoding::Decodable;
     use std::io::Cursor;
+
+    use fedimint_api::encoding::Decodable;
+
+    use super::TxOutProof;
 
     #[test_log::test]
     fn test_txoutproof_happy_path() {

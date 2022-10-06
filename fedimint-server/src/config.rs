@@ -1,8 +1,5 @@
-use crate::fedimint_api::net::peers::PeerConnections;
-use crate::net::connect::Connector;
-use crate::net::connect::TlsConfig;
-use crate::net::peers::{ConnectionConfig, NetworkConfig};
-use crate::{ReconnectPeerConnections, TlsTcpConnector};
+use std::collections::{BTreeMap, HashMap};
+
 use async_trait::async_trait;
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
@@ -16,11 +13,16 @@ use hbbft::crypto::serde_impl::SerdeSecret;
 use rand::{CryptoRng, RngCore};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
 use threshold_crypto::G1Projective;
 use tokio_rustls::rustls;
 use tracing::info;
 use url::Url;
+
+use crate::fedimint_api::net::peers::PeerConnections;
+use crate::net::connect::Connector;
+use crate::net::connect::TlsConfig;
+use crate::net::peers::{ConnectionConfig, NetworkConfig};
+use crate::{ReconnectPeerConnections, TlsTcpConnector};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -483,9 +485,10 @@ pub fn gen_cert_and_key(
 }
 
 mod serde_tls_cert {
+    use std::borrow::Cow;
+
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::borrow::Cow;
     use tokio_rustls::rustls;
 
     pub fn serialize<S>(cert: &rustls::Certificate, serializer: S) -> Result<S::Ok, S::Error>
@@ -507,9 +510,10 @@ mod serde_tls_cert {
 }
 
 mod serde_tls_key {
+    use std::borrow::Cow;
+
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
-    use std::borrow::Cow;
     use tokio_rustls::rustls;
 
     pub fn serialize<S>(key: &rustls::PrivateKey, serializer: S) -> Result<S::Ok, S::Error>

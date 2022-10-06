@@ -1,7 +1,8 @@
-use fedimint_api::Amount;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
+
+use fedimint_api::Amount;
+use serde::{Deserialize, Serialize};
 use tbs::{PublicKeyShare, SecretKeyShare};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Deserialize, Serialize)]

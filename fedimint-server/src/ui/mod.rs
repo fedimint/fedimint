@@ -14,6 +14,7 @@ use axum::{
 use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_core::config::ClientConfig;
 use http::StatusCode;
+use mint_client::api::WsFederationConnect;
 use qrcode_generator::QrCodeEcc;
 use rand::rngs::OsRng;
 use serde::Deserialize;
@@ -21,7 +22,6 @@ use tokio::sync::mpsc::Sender;
 
 use crate::ui::configgen::configgen;
 use crate::ServerConfig;
-use mint_client::api::WsFederationConnect;
 
 fn run_fedimint(state: &mut RwLockWriteGuard<State>) {
     let sender = state.sender.clone();

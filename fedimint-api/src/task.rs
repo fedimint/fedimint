@@ -9,9 +9,9 @@ pub struct Elapsed;
 
 #[cfg(not(target_family = "wasm"))]
 mod imp {
-    use super::*;
-
     pub use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+    use super::*;
 
     pub fn spawn<F>(future: F)
     where
@@ -47,11 +47,10 @@ mod imp {
 
 #[cfg(target_family = "wasm")]
 mod imp {
+    pub use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
     use futures::FutureExt;
 
     use super::*;
-
-    pub use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
     pub fn spawn<F>(future: F)
     where
