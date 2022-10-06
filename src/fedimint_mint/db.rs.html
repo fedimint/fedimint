@@ -103,10 +103,12 @@
 <span id="103">103</span>
 <span id="104">104</span>
 <span id="105">105</span>
-</pre><pre class="rust"><code><span class="kw">use crate</span>::{Nonce, PartialSigResponse, SigResponse};
-<span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
+<span id="106">106</span>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, PeerId};
+
+<span class="kw">use crate</span>::{Nonce, PartialSigResponse, SigResponse};
 
 <span class="kw">const </span>DB_PREFIX_COIN_NONCE: u8 = <span class="number">0x10</span>;
 <span class="kw">const </span>DB_PREFIX_PROPOSED_PARTIAL_SIG: u8 = <span class="number">0x11</span>;

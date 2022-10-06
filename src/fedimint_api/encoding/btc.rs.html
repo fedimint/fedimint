@@ -122,9 +122,15 @@
 <span id="122">122</span>
 <span id="123">123</span>
 <span id="124">124</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::io::Error;
+
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>std::io::Error;
+
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 
 <span class="macro">macro_rules! </span>impl_encode_decode_bridge {
     (<span class="macro-nonterminal">$btc_type</span>:ty) =&gt; {
@@ -205,10 +211,12 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
-    <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::str::FromStr;
+
+    <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>sha256_roundtrip() {

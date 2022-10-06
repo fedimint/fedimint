@@ -102,7 +102,6 @@
 <span id="102">102</span>
 <span id="103">103</span>
 <span id="104">104</span>
-<span id="105">105</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::path::{Path, PathBuf};
 
 <span class="kw">use </span>clap::Parser;
@@ -110,10 +109,9 @@
 <span class="kw">use </span>fedimint_core::modules::ln::LightningModule;
 <span class="kw">use </span>fedimint_mint_server::MintServerModule;
 <span class="kw">use </span>fedimint_server::config::{load_from_file, ServerConfig};
-<span class="kw">use </span>fedimint_server::FedimintServer;
-
 <span class="kw">use </span>fedimint_server::consensus::FedimintConsensus;
 <span class="kw">use </span>fedimint_server::ui::run_ui;
+<span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_wallet::{bitcoincore_rpc, Wallet};
 <span class="kw">use </span>tokio::spawn;
 <span class="kw">use </span>tracing_subscriber::prelude::<span class="kw-2">*</span>;

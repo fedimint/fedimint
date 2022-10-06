@@ -558,13 +558,16 @@
 <span id="558">558</span>
 <span id="559">559</span>
 <span id="560">560</span>
+<span id="561">561</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
 //!
 //! This (Rust) module defines common interoperability types
 //! and functionality that are only used on the server side.
-</span><span class="kw">use </span>async_trait::async_trait;
+</span><span class="kw">use </span>std::{collections::HashSet, sync::Arc};
+
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_api::{
     db::batch::BatchTx,
@@ -572,7 +575,6 @@
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
 };
-<span class="kw">use </span>std::{collections::HashSet, sync::Arc};
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::<span class="kw-2">*</span>;

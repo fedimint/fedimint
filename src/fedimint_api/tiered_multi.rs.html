@@ -322,13 +322,18 @@
 <span id="322">322</span>
 <span id="323">323</span>
 <span id="324">324</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::tiered::InvalidAmountTierError;
-<span class="kw">use crate</span>::{Amount, Tiered};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::BTreeMap;
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::marker::PhantomData;
+
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="kw">use </span><span class="kw">crate</span>::tiered::InvalidAmountTierError;
+<span class="kw">use crate</span>::{Amount, Tiered};
 
 <span class="doccomment">/// Represents coins of different denominations.
 ///
@@ -602,8 +607,9 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>test {
-    <span class="kw">use </span><span class="kw">crate</span>::TieredMulti;
     <span class="kw">use </span>fedimint_api::Amount;
+
+    <span class="kw">use </span><span class="kw">crate</span>::TieredMulti;
 
     <span class="attribute">#[test]
     </span><span class="kw">fn </span>select_coins_returns_exact_amount() {

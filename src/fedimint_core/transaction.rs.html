@@ -286,8 +286,8 @@
 <span id="286">286</span>
 <span id="287">287</span>
 <span id="288">288</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::FeeConsensus;
-<span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
+<span id="289">289</span>
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, TransactionId};
@@ -295,6 +295,8 @@
 <span class="kw">use </span>secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
+
+<span class="kw">use </span><span class="kw">crate</span>::config::FeeConsensus;
 
 <span class="doccomment">/// An atomic value transfer operation within the Fedimint system and consensus
 ///

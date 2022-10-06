@@ -191,13 +191,17 @@
 <span id="191">191</span>
 <span id="192">192</span>
 <span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span><span class="kw">crate</span>::Feerate;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{BlockHash, Transaction};
 <span class="kw">use </span>fedimint_api::dyn_newtype_define;
 <span class="kw">use </span>thiserror::Error;
+
+<span class="kw">use </span><span class="kw">crate</span>::Feerate;
 
 <span class="attribute">#[derive(Error, Debug)]
 </span><span class="kw">pub enum </span>Error {
@@ -251,13 +255,15 @@
 
 <span class="attribute">#[allow(dead_code)]
 </span><span class="kw">pub mod </span>test {
-    <span class="kw">use super</span>::{IBitcoindRpc, <span class="prelude-ty">Result</span>};
-    <span class="kw">use </span><span class="kw">crate</span>::Feerate;
+    <span class="kw">use </span>std::collections::{HashMap, VecDeque};
+    <span class="kw">use </span>std::sync::{Arc, Mutex};
+
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::{sha256d, Hash};
     <span class="kw">use </span>bitcoin::{Block, BlockHash, BlockHeader, Network, Transaction};
-    <span class="kw">use </span>std::collections::{HashMap, VecDeque};
-    <span class="kw">use </span>std::sync::{Arc, Mutex};
+
+    <span class="kw">use super</span>::{IBitcoindRpc, <span class="prelude-ty">Result</span>};
+    <span class="kw">use </span><span class="kw">crate</span>::Feerate;
 
     <span class="attribute">#[derive(Debug, Default)]
     </span><span class="kw">pub struct </span>FakeBitcoindRpcState {

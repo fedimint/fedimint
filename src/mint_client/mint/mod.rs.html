@@ -610,11 +610,10 @@
 <span id="610">610</span>
 <span id="611">611</span>
 <span id="612">612</span>
+<span id="613">613</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
-<span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
-<span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
@@ -626,14 +625,16 @@
 <span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
-
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>secp256k1_zkp::{Secp256k1, Signing};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tbs::{blind_message, unblind_signature, AggregatePublicKey, BlindedMessage, BlindingKey};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, trace, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
+<span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -969,10 +970,8 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
+    <span class="kw">use </span>std::sync::Arc;
 
-    <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
-    <span class="kw">use crate</span>::{ClientContext, TransactionBuilder};
     <span class="kw">use </span>async_trait::async_trait;
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>bitcoin::Address;
@@ -991,8 +990,11 @@
     <span class="kw">use </span>fedimint_core::outcome::{OutputOutcome, TransactionStatus};
     <span class="kw">use </span>fedimint_core::transaction::Transaction;
     <span class="kw">use </span>futures::executor::block_on;
-    <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>threshold_crypto::PublicKey;
+
+    <span class="kw">use </span><span class="kw">crate</span>::api::IFederationApi;
+    <span class="kw">use </span><span class="kw">crate</span>::mint::MintClient;
+    <span class="kw">use crate</span>::{ClientContext, TransactionBuilder};
 
     <span class="kw">type </span>Fed = FakeFed&lt;Mint, MintClientConfig&gt;;
 

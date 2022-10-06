@@ -64,11 +64,13 @@
 <span id="64">64</span>
 <span id="65">65</span>
 <span id="66">66</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
-<span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
+<span id="67">67</span>
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{Amount, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::modules::mint::Nonce;
+
+<span class="kw">use </span><span class="kw">crate</span>::mint::{NoteIssuanceRequests, SpendableNote};
 
 <span class="kw">pub const </span>DB_PREFIX_COIN: u8 = <span class="number">0x20</span>;
 <span class="kw">pub const </span>DB_PREFIX_OUTPUT_FINALIZATION_DATA: u8 = <span class="number">0x21</span>;

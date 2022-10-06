@@ -48,9 +48,11 @@
 <span id="48">48</span>
 <span id="49">49</span>
 <span id="50">50</span>
-</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
+<span id="51">51</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::io::Write;
+
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, Hmac, HmacEngine};
 <span class="kw">use </span>secp256k1::{Scalar, Secp256k1, Verification};
-<span class="kw">use </span>std::io::Write;
 
 <span class="doccomment">/// An object that can be used as a ricardian contract to tweak a key
 </span><span class="kw">pub trait </span>Contract {

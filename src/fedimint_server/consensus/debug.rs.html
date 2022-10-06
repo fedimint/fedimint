@@ -93,13 +93,17 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
-</pre><pre class="rust"><code><span class="kw">use crate</span>::{ConsensusItem, ConsensusOutcome};
+<span id="96">96</span>
+<span id="97">97</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Write;
+
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::Contract;
 <span class="kw">use </span>fedimint_core::modules::ln::{ContractOrOfferOutput, ContractOutput, DecryptionShareCI};
 <span class="kw">use </span>fedimint_core::modules::mint::PartiallySignedRequest;
 <span class="kw">use </span>fedimint_core::transaction::{Input, Output, Transaction};
 <span class="kw">use </span>fedimint_wallet::{PegOutSignatureItem, RoundConsensusItem, WalletConsensusItem};
-<span class="kw">use </span>std::fmt::Write;
+
+<span class="kw">use crate</span>::{ConsensusItem, ConsensusOutcome};
 
 <span class="doccomment">/// outputs a useful debug message for epochs indicating what happened
 </span><span class="kw">pub fn </span>epoch_message(consensus: <span class="kw-2">&amp;</span>ConsensusOutcome) -&gt; String {

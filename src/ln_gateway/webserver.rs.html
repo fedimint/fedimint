@@ -51,6 +51,7 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{routing::post, Extension, Json, Router};
+<span class="kw">use </span>fedimint_server::modules::ln::contracts::ContractId;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
@@ -58,7 +59,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::GatewayRequestInner;
 <span class="kw">use crate</span>::{GatewayRequest, LnGatewayError};
-<span class="kw">use </span>fedimint_server::modules::ln::contracts::ContractId;
 
 <span class="attribute">#[instrument(skip_all, err)]
 </span><span class="kw">pub async fn </span>pay_invoice(

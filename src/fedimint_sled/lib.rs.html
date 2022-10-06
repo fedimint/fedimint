@@ -263,19 +263,19 @@
 </pre><pre class="rust"><code><span class="doccomment">//! Sled implementation of the `Database` trait. It should not be used anymore since it has known
 //! issues and is unmaintained. Please use `rocksdb` instead.
 
-</span><span class="kw">use </span>anyhow::Result;
+</span><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::path::Path;
+
+<span class="kw">use </span>anyhow::Result;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, DbBatch};
 <span class="kw">use </span>fedimint_api::db::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     PrefixIter,
 };
 <span class="kw">use </span>fedimint_api::db::{IDatabase, IDatabaseTransaction};
-<span class="kw">use </span>sled::transaction::TransactionError;
-<span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::path::Path;
-<span class="kw">use </span>tracing::error;
-
 <span class="kw">pub use </span>sled;
+<span class="kw">use </span>sled::transaction::TransactionError;
+<span class="kw">use </span>tracing::error;
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub struct </span>SledDb(sled::Tree);

@@ -94,13 +94,17 @@
 <span id="94">94</span>
 <span id="95">95</span>
 <span id="96">96</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
+<span id="97">97</span>
+<span id="98">98</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
+
 <span class="kw">use </span>bitcoin::hashes::Hash;
 <span class="kw">use </span>bitcoin::secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>bitcoin::PublicKey;
 <span class="kw">use </span>miniscript::{MiniscriptKey, ToPublicKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::str::FromStr;
+
+<span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
 
 <span class="attribute">#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>CompressedPublicKey {

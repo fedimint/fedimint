@@ -160,29 +160,31 @@
 <span id="160">160</span>
 <span id="161">161</span>
 <span id="162">162</span>
+<span id="163">163</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
-</span><span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
+</span><span class="kw">use </span>std::fmt::Formatter;
+<span class="kw">use </span>std::panic::AssertUnwindSafe;
+<span class="kw">use </span>std::sync::Arc;
+
 <span class="kw">use </span>fedimint_api::{
     config::GenerateConfig,
     module::{api_endpoint, ApiEndpoint, ApiError},
     FederationModule, TransactionId,
 };
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>std::fmt::Formatter;
-<span class="kw">use </span>std::panic::AssertUnwindSafe;
-<span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>tracing::{debug, error};
-
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>jsonrpsee::{
     types::{error::CallError, ErrorObject},
     ws_server::WsServerBuilder,
     RpcModule,
 };
+<span class="kw">use </span>tracing::{debug, error};
+
+<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="attribute">#[derive(Clone)]
 </span><span class="kw">struct </span>State {

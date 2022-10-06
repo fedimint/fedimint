@@ -67,12 +67,14 @@
 <span id="67">67</span>
 <span id="68">68</span>
 <span id="69">69</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_ln::config::LightningModuleClientConfig;
+<span id="70">70</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::path::Path;
+
+<span class="kw">use </span>fedimint_ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_mint::config::MintClientConfig;
 <span class="kw">use </span>fedimint_wallet::config::WalletClientConfig;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

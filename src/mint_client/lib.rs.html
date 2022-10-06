@@ -1153,9 +1153,6 @@
 <span id="1153">1153</span>
 <span id="1154">1154</span>
 <span id="1155">1155</span>
-<span id="1156">1156</span>
-<span id="1157">1157</span>
-<span id="1158">1158</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1169,18 +1166,13 @@
 </span><span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>api::FederationApi;
-<span class="kw">use </span>fedimint_api::db::Database;
-<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::TieredMulti;
-<span class="kw">use </span>futures::StreamExt;
-
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
-
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
-<span class="kw">use </span>futures::stream::FuturesUnordered;
-
+<span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::task::sleep;
+<span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
+<span class="kw">use </span>fedimint_api::TieredMulti;
 <span class="kw">use </span>fedimint_api::{
     db::batch::{Accumulator, BatchItem, DbBatch},
     Amount, FederationModule, OutPoint, PeerId, TransactionId,
@@ -1205,6 +1197,8 @@
     },
     transaction::{Input, Output},
 };
+<span class="kw">use </span>futures::stream::FuturesUnordered;
+<span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning::ln::PaymentSecret;
 <span class="kw">use </span>lightning::routing::gossip::RoutingFees;
 <span class="kw">use </span>lightning::routing::router::{RouteHint, RouteHintHop};

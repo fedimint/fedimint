@@ -176,14 +176,16 @@
 <span id="176">176</span>
 <span id="177">177</span>
 <span id="178">178</span>
-</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span id="179">179</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::iter::FromIterator;
+
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-<span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
 <span class="kw">use </span>threshold_crypto::group::Curve;
 <span class="kw">use </span>threshold_crypto::G2Projective;

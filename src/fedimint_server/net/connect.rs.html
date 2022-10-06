@@ -585,22 +585,29 @@
 <span id="585">585</span>
 <span id="586">586</span>
 <span id="587">587</span>
+<span id="588">588</span>
+<span id="589">589</span>
+<span id="590">590</span>
+<span id="591">591</span>
+<span id="592">592</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Provides an abstract network connection interface and multiple implementations
 
-</span><span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
-<span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>fedimint_api::PeerId;
-<span class="kw">use </span>futures::Stream;
-<span class="kw">use </span>std::collections::HashMap;
+</span><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::convert::TryFrom;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>futures::Stream;
 <span class="kw">use </span>tokio::io::{ReadHalf, WriteHalf};
 <span class="kw">use </span>tokio::net::{TcpListener, TcpStream};
 <span class="kw">use </span>tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
 <span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="kw">use </span>tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
+
+<span class="kw">use </span><span class="kw">crate</span>::net::framed::{AnyFramedTransport, BidiFramed, FramedTransport};
 
 <span class="doccomment">/// Shared [`Connector`] trait object
 </span><span class="kw">pub type </span>SharedAnyConnector&lt;M&gt; = Arc&lt;<span class="kw">dyn </span>Connector&lt;M&gt; + Send + Sync + Unpin + <span class="lifetime">&#39;static</span>&gt;;
@@ -805,22 +812,24 @@
 <span class="doccomment">/// Fake network stack used in tests
 </span><span class="attribute">#[allow(unused_imports)]
 </span><span class="kw">pub mod </span>mock {
-    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectResult, Connector};
-    <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
-    <span class="kw">use </span>anyhow::Error;
-    <span class="kw">use </span>fedimint_api::PeerId;
-    <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::fmt::Debug;
     <span class="kw">use </span>std::future::Future;
     <span class="kw">use </span>std::pin::Pin;
     <span class="kw">use </span>std::sync::Arc;
     <span class="kw">use </span>std::time::Duration;
+
+    <span class="kw">use </span>anyhow::Error;
+    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>futures::{FutureExt, SinkExt, Stream, StreamExt};
     <span class="kw">use </span>tokio::io::{
         AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf,
     };
     <span class="kw">use </span>tokio::sync::mpsc::Sender;
     <span class="kw">use </span>tokio::sync::Mutex;
+
+    <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectResult, Connector};
+    <span class="kw">use </span><span class="kw">crate</span>::net::framed::{BidiFramed, FramedTransport};
 
     <span class="kw">pub struct </span>MockNetwork {
         clients: Arc&lt;Mutex&lt;HashMap&lt;String, Sender&lt;DuplexStream&gt;&gt;&gt;&gt;,
@@ -988,12 +997,13 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>futures::{SinkExt, StreamExt};
+
     <span class="kw">use </span><span class="kw">crate</span>::config::gen_cert_and_key;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::{ConnectionListener, TlsConfig};
     <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
     <span class="kw">use crate</span>::{Connector, TlsTcpConnector};
-    <span class="kw">use </span>fedimint_api::PeerId;
-    <span class="kw">use </span>futures::{SinkExt, StreamExt};
 
     <span class="kw">fn </span>gen_connector_config(count: usize) -&gt; Vec&lt;TlsConfig&gt; {
         <span class="kw">let </span>peer_keys = (<span class="number">0</span>..count)

@@ -93,14 +93,14 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
-<span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::ln::LightningGateway;
 
 <span class="kw">use </span><span class="kw">super</span>::incoming::ConfirmedInvoice;
 <span class="kw">use </span><span class="kw">super</span>::outgoing::OutgoingContractAccount;
+<span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
 
 <span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT: u8 = <span class="number">0x23</span>;
 <span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = <span class="number">0x24</span>;

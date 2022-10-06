@@ -223,23 +223,21 @@
 <span id="223">223</span>
 <span id="224">224</span>
 <span id="225">225</span>
-<span id="226">226</span>
-</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
-
-<span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
-<span class="kw">use </span><span class="kw">crate</span>::db::batch::DbBatch;
-<span class="kw">use </span><span class="kw">crate</span>::db::mem_impl::MemDatabase;
-<span class="kw">use </span><span class="kw">crate</span>::db::Database;
-
-<span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
-<span class="kw">use crate</span>::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
-<span class="kw">use </span>std::collections::HashSet;
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>async_trait::async_trait;
+
 <span class="kw">use </span><span class="kw">super</span>::ApiError;
+<span class="kw">use </span><span class="kw">crate</span>::config::GenerateConfig;
+<span class="kw">use </span><span class="kw">crate</span>::db::batch::DbBatch;
+<span class="kw">use </span><span class="kw">crate</span>::db::mem_impl::MemDatabase;
+<span class="kw">use </span><span class="kw">crate</span>::db::Database;
+<span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
+<span class="kw">use crate</span>::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
 
 <span class="kw">pub struct </span>FakeFed&lt;M, CC&gt; {
     members: Vec&lt;(PeerId, M, Database)&gt;,

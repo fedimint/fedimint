@@ -134,7 +134,10 @@
 <span id="134">134</span>
 <span id="135">135</span>
 <span id="136">136</span>
-</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span id="137">137</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::{
     db::batch::BatchTx,
     encoding::{Decodable, Encodable},
@@ -149,7 +152,6 @@
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput, MINT_MODULE_KEY,
 };
-<span class="kw">use </span>std::collections::HashSet;
 
 <span class="attribute">#[derive(Encodable, Decodable, Clone)]
 </span><span class="kw">pub struct </span>MintVerificationCache;

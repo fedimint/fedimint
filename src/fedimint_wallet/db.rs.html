@@ -112,13 +112,15 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
-</pre><pre class="rust"><code><span class="kw">use crate</span>::{
-    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
-};
-<span class="kw">use </span>bitcoin::{BlockHash, Txid};
+<span id="115">115</span>
+</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{BlockHash, Txid};
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>secp256k1::ecdsa::Signature;
+
+<span class="kw">use crate</span>::{
+    PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
+};
 
 <span class="kw">const </span>DB_PREFIX_BLOCK_HASH: u8 = <span class="number">0x30</span>;
 <span class="kw">const </span>DB_PREFIX_UTXO: u8 = <span class="number">0x31</span>;

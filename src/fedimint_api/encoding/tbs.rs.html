@@ -72,6 +72,7 @@
 <span id="72">72</span>
 <span id="73">73</span>
 <span id="74">74</span>
+<span id="75">75</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 
 <span class="macro">macro_rules! </span>impl_external_encode_bls {
@@ -131,8 +132,9 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
     <span class="kw">use </span>tbs::{BlindedMessage, BlindingKey};
+
+    <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_message_macro() {

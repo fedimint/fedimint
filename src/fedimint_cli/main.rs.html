@@ -621,14 +621,19 @@
 <span id="621">621</span>
 <span id="622">622</span>
 <span id="623">623</span>
-</pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
+</pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::error::Error;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::process::exit;
+
+<span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, OutPoint, TieredMulti, TransactionId};
 <span class="kw">use </span>fedimint_core::config::{load_from_file, ClientConfig};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::TxOutProof;
-
-<span class="kw">use </span>core::fmt;
 <span class="kw">use </span>mint_client::api::{WsFederationApi, WsFederationConnect};
 <span class="kw">use </span>mint_client::mint::SpendableNote;
 <span class="kw">use </span>mint_client::query::CurrentConsensus;
@@ -639,11 +644,6 @@
 <span class="kw">use </span>mint_client::{Client, UserClientConfig};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::{json, Value};
-<span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::error::Error;
-<span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::path::PathBuf;
-<span class="kw">use </span>std::process::exit;
 <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
 <span class="attribute">#[derive(Serialize)]

@@ -680,23 +680,18 @@
 <span id="680">680</span>
 <span id="681">681</span>
 <span id="682">682</span>
+<span id="683">683</span>
+<span id="684">684</span>
 </pre><pre class="rust"><code><span class="attribute">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">mod </span>conflictfilter;
 <span class="kw">pub mod </span>debug;
 <span class="kw">mod </span>interconnect;
 
-<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::conflictfilter::ConflictFilterable;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::FedimintInterconnect;
-<span class="kw">use </span><span class="kw">crate</span>::db::{
-    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
-    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
-};
-<span class="kw">use </span><span class="kw">crate</span>::outcome::OutputOutcome;
-<span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::{Input, Output, Transaction, TransactionError};
-<span class="kw">use </span><span class="kw">crate</span>::OsRngGen;
+<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>std::sync::Arc;
+
 <span class="kw">use </span>fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 <span class="kw">use </span>fedimint_api::db::Database;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -713,12 +708,21 @@
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
-<span class="kw">use </span>std::iter::FromIterator;
-<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, instrument, trace, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::conflictfilter::ConflictFilterable;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::interconnect::FedimintInterconnect;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    AcceptedTransactionKey, DropPeerKey, DropPeerKeyPrefix, EpochHistoryKey, LastEpochKey,
+    ProposedTransactionKey, ProposedTransactionKeyPrefix, RejectedTransactionKey,
+};
+<span class="kw">use </span><span class="kw">crate</span>::outcome::OutputOutcome;
+<span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::{Input, Output, Transaction, TransactionError};
+<span class="kw">use </span><span class="kw">crate</span>::OsRngGen;
 
 <span class="kw">pub type </span>ConsensusOutcome = Batch&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;;
 <span class="kw">pub type </span>HoneyBadgerMessage = hbbft::honey_badger::Message&lt;PeerId&gt;;

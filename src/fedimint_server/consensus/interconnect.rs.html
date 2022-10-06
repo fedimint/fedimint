@@ -40,13 +40,13 @@
 <span id="40">40</span>
 <span id="41">41</span>
 <span id="42">42</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
-<span class="kw">use </span>async_trait::async_trait;
-
+</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::ApiError;
 <span class="kw">use </span>fedimint_api::FederationModule;
 <span class="kw">use </span>serde_json::Value;
+
+<span class="kw">use </span><span class="kw">crate</span>::consensus::FedimintConsensus;
 
 <span class="kw">pub struct </span>FedimintInterconnect&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub </span>fedimint: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span>FedimintConsensus,

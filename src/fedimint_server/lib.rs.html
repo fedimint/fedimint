@@ -432,9 +432,6 @@
 <span id="432">432</span>
 <span id="433">433</span>
 <span id="434">434</span>
-<span id="435">435</span>
-<span id="436">436</span>
-<span id="437">437</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -442,31 +439,28 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>hbbft::honey_badger::{HoneyBadger, Message};
-<span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
-
-<span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>rand::{CryptoRng, RngCore};
-<span class="kw">use </span>tokio::task::spawn;
-<span class="kw">use </span>tracing::{info, warn};
-
 <span class="kw">use </span>config::ServerConfig;
-<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
-
-<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
+<span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
+<span class="kw">use </span>hbbft::honey_badger::{HoneyBadger, Message};
+<span class="kw">use </span>hbbft::{Epoched, NetworkInfo, Target};
 <span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+<span class="kw">use </span>tokio::task::spawn;
+<span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::consensus::{
     ConsensusOutcome, ConsensusOutcomeConversion, ConsensusProposal, FedimintConsensus,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{EpochHistoryKey, LastEpochKey};
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, ReconnectPeerConnections};
 <span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
 

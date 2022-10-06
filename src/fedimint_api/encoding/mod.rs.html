@@ -446,6 +446,7 @@
 <span id="446">446</span>
 <span id="447">447</span>
 <span id="448">448</span>
+<span id="449">449</span>
 </pre><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for consensus critical
 //! encoding thant e.g. `bincode`. Over time all structs that need to be encoded to binary will
 //! be migrated to this interface.
@@ -454,9 +455,10 @@
 <span class="kw">mod </span>secp256k1;
 <span class="kw">mod </span>tbs;
 
-<span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
+
+<span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 

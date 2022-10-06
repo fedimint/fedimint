@@ -919,12 +919,13 @@
 <span id="919">919</span>
 <span id="920">920</span>
 <span id="921">921</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
-<span class="kw">use </span><span class="kw">crate</span>::db::{
-    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
-    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
-    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
-};
+<span id="922">922</span>
+<span id="923">923</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
+<span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::iter::FromIterator;
+<span class="kw">use </span>std::ops::Sub;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
@@ -940,17 +941,19 @@
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
-
-<span class="kw">use </span>std::hash::Hash;
-<span class="kw">use </span>std::iter::FromIterator;
-<span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>tbs::{
     combine_valid_shares, sign_blinded_msg, verify_blind_share, Aggregatable, AggregatePublicKey,
     PublicKeyShare, SecretKeyShare,
 };
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::config::MintConfig;
+<span class="kw">use </span><span class="kw">crate</span>::db::{
+    MintAuditItemKey, MintAuditItemKeyPrefix, NonceKey, OutputOutcomeKey,
+    ProposedPartialSignatureKey, ProposedPartialSignaturesKeyPrefix, ReceivedPartialSignatureKey,
+    ReceivedPartialSignatureKeyOutputPrefix, ReceivedPartialSignaturesKeyPrefix,
+};
 
 <span class="kw">pub mod </span>config;
 
@@ -1650,13 +1653,14 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>test {
-    <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
-    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
     <span class="kw">use </span>fedimint_api::config::GenerateConfig;
     <span class="kw">use </span>fedimint_api::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_api::{Amount, PeerId, TieredMulti};
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>tbs::{blind_message, unblind_signature, verify, AggregatePublicKey, Message};
+
+    <span class="kw">use </span><span class="kw">crate</span>::config::{FeeConsensus, MintClientConfig};
+    <span class="kw">use crate</span>::{BlindNonce, CombineError, Mint, MintConfig, PeerErrorType};
 
     <span class="kw">const </span>THRESHOLD: usize = <span class="number">1</span>;
     <span class="kw">const </span>MINTS: usize = <span class="number">5</span>;

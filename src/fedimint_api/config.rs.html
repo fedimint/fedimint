@@ -490,8 +490,14 @@
 <span id="490">490</span>
 <span id="491">491</span>
 <span id="492">492</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::net::peers::AnyPeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::PeerId;
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::ops::Mul;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>hbbft::crypto::group::Curve;
 <span class="kw">use </span>hbbft::crypto::group::GroupEncoding;
@@ -501,13 +507,13 @@
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-<span class="kw">use </span>std::hash::Hash;
-<span class="kw">use </span>std::ops::Mul;
 <span class="kw">use </span>tbs::hash::hash_bytes_to_curve;
 <span class="kw">use </span>tbs::poly::Poly;
 <span class="kw">use </span>tbs::serde_impl;
 <span class="kw">use </span>tbs::Scalar;
+
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::AnyPeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// Part of a config that needs to be generated to bootstrap a new federation.
 </span><span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
@@ -858,9 +864,9 @@
 
 <span class="doccomment">/// Handling the Group serialization with a wrapper
 </span><span class="kw">mod </span>serde_commit {
-    <span class="kw">use </span><span class="kw">crate</span>::config::DkgGroup;
-
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    <span class="kw">use </span><span class="kw">crate</span>::config::DkgGroup;
 
     <span class="kw">pub fn </span>serialize&lt;S: Serializer, G: DkgGroup&gt;(vec: <span class="kw-2">&amp;</span>[G], s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
         <span class="kw">let </span>wrap_vec: Vec&lt;Wrap&lt;G&gt;&gt; = vec.iter().cloned().map(Wrap).collect();
@@ -914,13 +920,15 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::config::{scalar, Dkg, DkgGroup, DkgKeys};
-    <span class="kw">use </span><span class="kw">crate</span>::PeerId;
+    <span class="kw">use </span>std::collections::{HashMap, VecDeque};
+
     <span class="kw">use </span>fedimint_api::config::DkgStep;
     <span class="kw">use </span>hbbft::crypto::group::Curve;
     <span class="kw">use </span>hbbft::crypto::{G1Projective, G2Projective};
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>std::collections::{HashMap, VecDeque};
+
+    <span class="kw">use </span><span class="kw">crate</span>::config::{scalar, Dkg, DkgGroup, DkgKeys};
+    <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_dkg() {

@@ -172,12 +172,9 @@
 <span id="172">172</span>
 <span id="173">173</span>
 <span id="174">174</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig};
-<span class="kw">use </span><span class="kw">crate</span>::ui::Guardian;
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span id="175">175</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::ConnectionConfig;
-<span class="kw">use crate</span>::{CryptoRng, RngCore};
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
 <span class="kw">use </span>fedimint_api::{Amount, PeerId};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, Node};
@@ -187,6 +184,11 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>url::Url;
+
+<span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::ConnectionConfig;
+<span class="kw">use </span><span class="kw">crate</span>::ui::Guardian;
+<span class="kw">use crate</span>::{CryptoRng, RngCore};
 
 <span class="kw">pub fn </span>configgen(
     federation_name: String,

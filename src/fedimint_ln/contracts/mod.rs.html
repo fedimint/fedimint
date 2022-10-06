@@ -186,9 +186,12 @@
 <span id="186">186</span>
 <span id="187">187</span>
 <span id="188">188</span>
+<span id="189">189</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>account;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
+
+<span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -196,7 +199,6 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_api::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::io::Error;
 
 <span class="doccomment">/// Anything representing a contract which thus has an associated [`ContractId`]
 </span><span class="kw">pub trait </span>IdentifyableContract: Encodable {

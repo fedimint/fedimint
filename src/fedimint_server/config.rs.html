@@ -529,11 +529,12 @@
 <span id="529">529</span>
 <span id="530">530</span>
 <span id="531">531</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
-<span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
+<span id="532">532</span>
+<span id="533">533</span>
+<span id="534">534</span>
+<span id="535">535</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
@@ -547,11 +548,16 @@
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>threshold_crypto::G1Projective;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>url::Url;
+
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
+<span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfig {
@@ -1014,9 +1020,10 @@
 }
 
 <span class="kw">mod </span>serde_tls_cert {
+    <span class="kw">use </span>std::borrow::Cow;
+
     <span class="kw">use </span>serde::de::Error;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-    <span class="kw">use </span>std::borrow::Cow;
     <span class="kw">use </span>tokio_rustls::rustls;
 
     <span class="kw">pub fn </span>serialize&lt;S&gt;(cert: <span class="kw-2">&amp;</span>rustls::Certificate, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
@@ -1038,9 +1045,10 @@
 }
 
 <span class="kw">mod </span>serde_tls_key {
+    <span class="kw">use </span>std::borrow::Cow;
+
     <span class="kw">use </span>serde::de::Error;
     <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-    <span class="kw">use </span>std::borrow::Cow;
     <span class="kw">use </span>tokio_rustls::rustls;
 
     <span class="kw">pub fn </span>serialize&lt;S&gt;(key: <span class="kw-2">&amp;</span>rustls::PrivateKey, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;

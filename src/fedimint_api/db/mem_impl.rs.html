@@ -198,17 +198,21 @@
 <span id="198">198</span>
 <span id="199">199</span>
 <span id="200">200</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::batch::{BatchItem, DbBatch};
+<span id="201">201</span>
+<span id="202">202</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::sync::Mutex;
+
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>tracing::error;
+
+<span class="kw">use </span><span class="kw">super</span>::batch::{BatchItem, DbBatch};
 <span class="kw">use super</span>::{
     DatabaseDeleteOperation, DatabaseInsertOperation, DatabaseOperation, DatabaseTransaction,
     IDatabase, IDatabaseTransaction,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::PrefixIter;
-<span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::sync::Mutex;
-<span class="kw">use </span>tracing::error;
 
 <span class="attribute">#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>MemDatabase {

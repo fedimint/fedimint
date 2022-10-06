@@ -538,15 +538,19 @@
 <span id="538">538</span>
 <span id="539">539</span>
 <span id="540">540</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
-<span class="kw">use </span>anyhow::Result;
-<span class="kw">use </span>batch::DbBatch;
-<span class="kw">use </span>std::error::Error;
+<span id="541">541</span>
+<span id="542">542</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>anyhow::Result;
+<span class="kw">use </span>batch::DbBatch;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{trace, warn};
+
+<span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
 <span class="kw">pub mod </span>batch;
 <span class="kw">pub mod </span>mem_impl;

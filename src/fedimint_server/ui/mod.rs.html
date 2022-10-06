@@ -344,6 +344,7 @@
 <span class="kw">use </span>fedimint_api::config::BitcoindRpcCfg;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>http::StatusCode;
+<span class="kw">use </span>mint_client::api::WsFederationConnect;
 <span class="kw">use </span>qrcode_generator::QrCodeEcc;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>serde::Deserialize;
@@ -351,7 +352,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::ui::configgen::configgen;
 <span class="kw">use </span><span class="kw">crate</span>::ServerConfig;
-<span class="kw">use </span>mint_client::api::WsFederationConnect;
 
 <span class="kw">fn </span>run_fedimint(state: <span class="kw-2">&amp;mut </span>RwLockWriteGuard&lt;State&gt;) {
     <span class="kw">let </span>sender = state.sender.clone();

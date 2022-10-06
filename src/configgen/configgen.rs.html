@@ -102,12 +102,14 @@
 <span id="102">102</span>
 <span id="103">103</span>
 <span id="104">104</span>
-</pre><pre class="rust"><code><span class="kw">use </span>clap::{Parser, Subcommand};
+<span id="105">105</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
+
+<span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
 <span class="kw">use </span>fedimint_server::config::{ServerConfig, ServerConfigParams};
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>std::path::PathBuf;
 
 <span class="attribute">#[derive(Parser)]
 </span><span class="kw">struct </span>Cli {

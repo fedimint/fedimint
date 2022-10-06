@@ -633,14 +633,19 @@
 <span id="633">633</span>
 <span id="634">634</span>
 <span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
 //! [`ReconnectPeerConnections`], see these for details.
 
-</span><span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
-<span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
+</span><span class="kw">use </span>std::cmp::min;
+<span class="kw">use </span>std::collections::{BTreeSet, HashMap};
+<span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::ops::Sub;
+<span class="kw">use </span>std::time::Duration;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::PeerId;
@@ -651,16 +656,15 @@
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::cmp::min;
-<span class="kw">use </span>std::collections::{BTreeSet, HashMap};
-<span class="kw">use </span>std::fmt::Debug;
-<span class="kw">use </span>std::ops::Sub;
-<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
 <span class="kw">use </span>tokio::task::JoinHandle;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, error, info, instrument, trace, warn};
 <span class="kw">use </span>url::Url;
+
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::{AnyConnector, SharedAnyConnector};
+<span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
+<span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
 
 <span class="doccomment">/// Maximum connection failures we consider for our back-off strategy
 </span><span class="kw">const </span>MAX_FAIL_RECONNECT_COUNTER: u64 = <span class="number">300</span>;
@@ -1198,18 +1202,18 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::HashMap;
+    <span class="kw">use </span>std::time::Duration;
+
+    <span class="kw">use </span>fedimint_api::PeerId;
+    <span class="kw">use </span>futures::Future;
+    <span class="kw">use </span>tracing_subscriber::EnvFilter;
+
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::MockNetwork;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
     <span class="kw">use </span><span class="kw">crate</span>::net::peers::{
         ConnectionConfig, NetworkConfig, PeerConnections, ReconnectPeerConnections,
     };
-    <span class="kw">use </span>fedimint_api::PeerId;
-    <span class="kw">use </span>futures::Future;
-
-    <span class="kw">use </span>std::collections::HashMap;
-
-    <span class="kw">use </span>std::time::Duration;
-    <span class="kw">use </span>tracing_subscriber::EnvFilter;
 
     <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
     <span class="kw">where

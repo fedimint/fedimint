@@ -84,13 +84,17 @@
 <span id="84">84</span>
 <span id="85">85</span>
 <span id="86">86</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
-<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
+<span id="87">87</span>
+<span id="88">88</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
+
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
-<span class="kw">use </span>std::fmt::Debug;
+
+<span class="kw">use </span><span class="kw">crate</span>::consensus::AcceptedTransaction;
+<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="kw">pub const </span>DB_PREFIX_PROPOSED_TRANSACTION: u8 = <span class="number">0x01</span>;
 <span class="kw">pub const </span>DB_PREFIX_ACCEPTED_TRANSACTION: u8 = <span class="number">0x02</span>;

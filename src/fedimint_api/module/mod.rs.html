@@ -247,22 +247,24 @@
 <span id="247">247</span>
 <span id="248">248</span>
 <span id="249">249</span>
+<span id="250">250</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>audit;
 <span class="kw">pub mod </span>interconnect;
 <span class="kw">pub mod </span>testing;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::batch::BatchTx;
-<span class="kw">use </span><span class="kw">crate</span>::db::DatabaseTransaction;
-<span class="kw">use crate</span>::{Amount, PeerId};
+<span class="kw">use </span>std::collections::HashSet;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>futures::future::BoxFuture;
 <span class="kw">use </span>rand::CryptoRng;
 <span class="kw">use </span>secp256k1_zkp::rand::RngCore;
 <span class="kw">use </span>secp256k1_zkp::XOnlyPublicKey;
-<span class="kw">use </span>std::collections::HashSet;
 
+<span class="kw">use </span><span class="kw">crate</span>::db::batch::BatchTx;
+<span class="kw">use </span><span class="kw">crate</span>::db::DatabaseTransaction;
 <span class="kw">use </span><span class="kw">crate</span>::module::audit::Audit;
 <span class="kw">use </span><span class="kw">crate</span>::module::interconnect::ModuleInterconect;
+<span class="kw">use crate</span>::{Amount, PeerId};
 
 <span class="kw">pub struct </span>InputMeta&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">pub </span>amount: Amount,

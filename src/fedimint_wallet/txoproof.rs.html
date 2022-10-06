@@ -344,8 +344,15 @@
 <span id="344">344</span>
 <span id="345">345</span>
 <span id="346">346</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
-<span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::convert::Infallible;
+<span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::io::Cursor;
+
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -353,12 +360,11 @@
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
-<span class="kw">use </span>std::borrow::Cow;
-<span class="kw">use </span>std::convert::Infallible;
-<span class="kw">use </span>std::hash::Hash;
-<span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>validator::{Validate, ValidationError};
+
+<span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
+<span class="kw">use </span><span class="kw">crate</span>::tweakable::{Contract, Tweakable};
 
 <span class="doccomment">/// A proof about a script owning a certain output. Verifyable using headers only.
 </span><span class="attribute">#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
@@ -653,9 +659,11 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
-    <span class="kw">use </span>fedimint_api::encoding::Decodable;
     <span class="kw">use </span>std::io::Cursor;
+
+    <span class="kw">use </span>fedimint_api::encoding::Decodable;
+
+    <span class="kw">use </span><span class="kw">super</span>::TxOutProof;
 
     <span class="attribute">#[test_log::test]
     </span><span class="kw">fn </span>test_txoutproof_happy_path() {

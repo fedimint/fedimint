@@ -207,9 +207,11 @@
 <span id="207">207</span>
 <span id="208">208</span>
 <span id="209">209</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::bitcoind::IBitcoindRpc;
-<span class="kw">use </span><span class="kw">crate</span>::bitcoind::Result;
-<span class="kw">use crate</span>::{bitcoind::BitcoindRpc, Feerate};
+<span id="210">210</span>
+<span id="211">211</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::future::Future;
+<span class="kw">use </span>std::time::Duration;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::{Block, BlockHash, Network, Transaction};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
@@ -219,10 +221,12 @@
 <span class="kw">use </span>fedimint_api::module::__reexports::serde_json::Value;
 <span class="kw">use </span>jsonrpc::error::Error <span class="kw">as </span>JsonError;
 <span class="kw">use </span>serde::Deserialize;
-<span class="kw">use </span>std::future::Future;
-<span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing::warn;
+
+<span class="kw">use </span><span class="kw">crate</span>::bitcoind::IBitcoindRpc;
+<span class="kw">use </span><span class="kw">crate</span>::bitcoind::Result;
+<span class="kw">use crate</span>::{bitcoind::BitcoindRpc, Feerate};
 
 <span class="comment">// &lt;https://github.com/bitcoin/bitcoin/blob/ec0a4ad67769109910e3685da9c56c1b9f42414e/src/rpc/protocol.h#L48&gt;
 </span><span class="kw">const </span>RPC_VERIFY_ALREADY_IN_CHAIN: i32 = -<span class="number">27</span>;

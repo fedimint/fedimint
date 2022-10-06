@@ -112,13 +112,17 @@
 <span id="112">112</span>
 <span id="113">113</span>
 <span id="114">114</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::FromRandom;
-<span class="kw">use </span>ff::Field;
-<span class="kw">use </span>rand::RngCore;
-<span class="kw">use </span>std::fmt::Debug;
+<span id="115">115</span>
+<span id="116">116</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::marker::PhantomData;
 <span class="kw">use </span>std::ops::{Add, AddAssign, Mul, MulAssign};
 <span class="kw">use </span>std::slice::Iter;
+
+<span class="kw">use </span>ff::Field;
+<span class="kw">use </span>rand::RngCore;
+
+<span class="kw">use </span><span class="kw">crate</span>::FromRandom;
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Poly&lt;G, S&gt;

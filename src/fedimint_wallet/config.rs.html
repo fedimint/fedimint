@@ -178,8 +178,10 @@
 <span id="178">178</span>
 <span id="179">179</span>
 <span id="180">180</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
-<span class="kw">use crate</span>::{Feerate, PegInDescriptor};
+<span id="181">181</span>
+<span id="182">182</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>bitcoin::Network;
@@ -189,7 +191,9 @@
 <span class="kw">use </span>miniscript::descriptor::Wsh;
 <span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::BTreeMap;
+
+<span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
+<span class="kw">use crate</span>::{Feerate, PegInDescriptor};
 
 <span class="kw">const </span>FINALITY_DELAY: u32 = <span class="number">10</span>;
 

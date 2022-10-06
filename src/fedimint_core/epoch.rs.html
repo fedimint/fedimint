@@ -328,7 +328,12 @@
 <span id="328">328</span>
 <span id="329">329</span>
 <span id="330">330</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
+
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
@@ -336,8 +341,9 @@
 <span class="kw">use </span>fedimint_derive::UnzipConsensus;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
+
+<span class="kw">use </span><span class="kw">crate</span>::transaction::Transaction;
 
 <span class="attribute">#[derive(
     Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
@@ -512,13 +518,15 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
-    <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
+    <span class="kw">use </span>std::collections::HashSet;
+
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>rand::rngs::OsRng;
-    <span class="kw">use </span>std::collections::HashSet;
     <span class="kw">use </span>threshold_crypto::{SecretKey, SecretKeySet};
+
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{ConsensusItem, EpochSignatureShare, Sha256};
+    <span class="kw">use </span><span class="kw">crate</span>::epoch::{EpochHistory, EpochSignature, EpochVerifyError, OutcomeHistory};
 
     <span class="kw">fn </span>signed_history(
         epoch: u16,
