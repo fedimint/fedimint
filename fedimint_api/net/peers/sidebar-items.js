@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":[["PeerConnections","Connection manager that tries to keep connections open to all peers"]],"type":[["AnyPeerConnections","Owned [`PeerConnections`] trait object type"]]};

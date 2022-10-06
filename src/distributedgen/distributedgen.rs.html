@@ -1,0 +1,384 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimintd/src/bin/distributedgen.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>distributedgen.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../distributedgen/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a><h2 class="location"></h2></nav><nav class="sidebar"><a class="sidebar-logo" href="../../distributedgen/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../distributedgen/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<span id="2">2</span>
+<span id="3">3</span>
+<span id="4">4</span>
+<span id="5">5</span>
+<span id="6">6</span>
+<span id="7">7</span>
+<span id="8">8</span>
+<span id="9">9</span>
+<span id="10">10</span>
+<span id="11">11</span>
+<span id="12">12</span>
+<span id="13">13</span>
+<span id="14">14</span>
+<span id="15">15</span>
+<span id="16">16</span>
+<span id="17">17</span>
+<span id="18">18</span>
+<span id="19">19</span>
+<span id="20">20</span>
+<span id="21">21</span>
+<span id="22">22</span>
+<span id="23">23</span>
+<span id="24">24</span>
+<span id="25">25</span>
+<span id="26">26</span>
+<span id="27">27</span>
+<span id="28">28</span>
+<span id="29">29</span>
+<span id="30">30</span>
+<span id="31">31</span>
+<span id="32">32</span>
+<span id="33">33</span>
+<span id="34">34</span>
+<span id="35">35</span>
+<span id="36">36</span>
+<span id="37">37</span>
+<span id="38">38</span>
+<span id="39">39</span>
+<span id="40">40</span>
+<span id="41">41</span>
+<span id="42">42</span>
+<span id="43">43</span>
+<span id="44">44</span>
+<span id="45">45</span>
+<span id="46">46</span>
+<span id="47">47</span>
+<span id="48">48</span>
+<span id="49">49</span>
+<span id="50">50</span>
+<span id="51">51</span>
+<span id="52">52</span>
+<span id="53">53</span>
+<span id="54">54</span>
+<span id="55">55</span>
+<span id="56">56</span>
+<span id="57">57</span>
+<span id="58">58</span>
+<span id="59">59</span>
+<span id="60">60</span>
+<span id="61">61</span>
+<span id="62">62</span>
+<span id="63">63</span>
+<span id="64">64</span>
+<span id="65">65</span>
+<span id="66">66</span>
+<span id="67">67</span>
+<span id="68">68</span>
+<span id="69">69</span>
+<span id="70">70</span>
+<span id="71">71</span>
+<span id="72">72</span>
+<span id="73">73</span>
+<span id="74">74</span>
+<span id="75">75</span>
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+<span id="83">83</span>
+<span id="84">84</span>
+<span id="85">85</span>
+<span id="86">86</span>
+<span id="87">87</span>
+<span id="88">88</span>
+<span id="89">89</span>
+<span id="90">90</span>
+<span id="91">91</span>
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::path::{Path, PathBuf};
+
+<span class="kw">use </span>clap::{Parser, Subcommand};
+
+<span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span class="kw">use </span>fedimint_api::{Amount, PeerId};
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_server::config::{PeerServerParams, ServerConfig, ServerConfigParams};
+<span class="kw">use </span>itertools::Itertools;
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>tokio_rustls::rustls;
+<span class="kw">use </span>tracing_subscriber::EnvFilter;
+
+<span class="kw">const </span>TLS_PK: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-pk&quot;</span>;
+<span class="kw">const </span>TLS_CERT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;tls-cert&quot;</span>;
+
+<span class="attribute">#[derive(Parser)]
+</span><span class="kw">struct </span>Cli {
+    <span class="attribute">#[clap(subcommand)]
+    </span>command: Command,
+}
+
+<span class="attribute">#[derive(Subcommand)]
+</span><span class="kw">enum </span>Command {
+    <span class="doccomment">/// Print the latest git commit hash this bin. was build with
+    </span>VersionHash,
+    <span class="doccomment">/// Creates a connection cert string that must be shared with all other peers
+    </span>CreateCert {
+        <span class="doccomment">/// Directory to output all the generated config files
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span>dir_out_path: PathBuf,
+
+        <span class="doccomment">/// Our external address
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;address&quot;</span>, default_value = <span class="string">&quot;127.0.0.1&quot;</span>)]
+        </span>address: String,
+
+        <span class="doccomment">/// Our base port, ports may be used from base_port to base_port+10
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;base-port&quot;</span>, default_value = <span class="string">&quot;4000&quot;</span>)]
+        </span>base_port: u16,
+
+        <span class="doccomment">/// Our node name, must be unique among peers
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;name&quot;</span>)]
+        </span>name: String,
+    },
+    <span class="doccomment">/// All peers must run distributed key gen at the same time to create configs
+    </span>Run {
+        <span class="doccomment">/// Directory to output all the generated config files
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;out-dir&quot;</span>)]
+        </span>dir_out_path: PathBuf,
+
+        <span class="doccomment">/// Federation name, same for all peers
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;federation-name&quot;</span>, default_value = <span class="string">&quot;Hal&#39;s trusty mint&quot;</span>)]
+        </span>federation_name: String,
+
+        <span class="doccomment">/// Comma-separated list of connection certs from all peers (including ours)
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;certs&quot;</span>, value_delimiter = <span class="string">&#39;,&#39;</span>)]
+        </span>certs: Vec&lt;String&gt;,
+
+        <span class="doccomment">/// `bitcoind` json rpc endpoint
+        </span><span class="attribute">#[arg(long = <span class="string">&quot;bitcoind-rpc&quot;</span>, default_value = <span class="string">&quot;127.0.0.1:18443&quot;</span>)]
+        </span>bitcoind_rpc: String,
+
+        <span class="doccomment">/// Available denominations of notes issues by the federation (comma separated)
+        /// default = 1 msat - 1M sats by powers of 10
+        </span><span class="attribute">#[arg(
+        long = <span class="string">&quot;denominations&quot;</span>,
+        value_delimiter = <span class="string">&#39;,&#39;</span>,
+        num_args = <span class="number">1</span>..,
+        default_value = <span class="string">&quot;1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000&quot;
+        </span>)]
+        </span>denominations: Vec&lt;Amount&gt;,
+    },
+}
+
+<span class="attribute">#[tokio::main]
+</span><span class="kw">async fn </span>main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|<span class="kw">_</span>| EnvFilter::new(<span class="string">&quot;info&quot;</span>)),
+        )
+        .init();
+
+    <span class="kw">let </span>command: Command = Cli::parse().command;
+    <span class="kw">match </span>command {
+        Command::CreateCert {
+            dir_out_path,
+            address,
+            base_port,
+            name,
+        } =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, gen_tls(<span class="kw-2">&amp;</span>dir_out_path, address, base_port, name));
+        }
+        Command::Run {
+            dir_out_path,
+            federation_name,
+            certs,
+            bitcoind_rpc,
+            denominations,
+        } =&gt; {
+            <span class="kw">let </span>(server, client) = run_dkg(
+                <span class="kw-2">&amp;</span>dir_out_path,
+                denominations,
+                federation_name,
+                certs,
+                bitcoind_rpc,
+            )
+            .<span class="kw">await</span>;
+
+            <span class="kw">let </span>server_path =
+                dir_out_path.join(<span class="macro">format!</span>(<span class="string">&quot;server-{}.json&quot;</span>, server.identity.to_usize()));
+            <span class="kw">let </span>server_file = fs::File::create(server_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
+            serde_json::to_writer_pretty(server_file, <span class="kw-2">&amp;</span>server).unwrap();
+
+            <span class="kw">let </span>client_path: PathBuf = dir_out_path.join(<span class="string">&quot;client.json&quot;</span>);
+            <span class="kw">let </span>client_file = fs::File::create(client_path).expect(<span class="string">&quot;Could not create cfg file&quot;</span>);
+            serde_json::to_writer_pretty(client_file, <span class="kw-2">&amp;</span>client).unwrap();
+        }
+        Command::VersionHash =&gt; {
+            <span class="macro">println!</span>(<span class="string">&quot;{}&quot;</span>, <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>));
+        }
+    }
+}
+
+<span class="kw">async fn </span>run_dkg(
+    dir_out_path: <span class="kw-2">&amp;</span>Path,
+    denominations: Vec&lt;Amount&gt;,
+    federation_name: String,
+    certs: Vec&lt;String&gt;,
+    bitcoind_rpc: String,
+) -&gt; (ServerConfig, ClientConfig) {
+    <span class="kw">let </span>peers: BTreeMap&lt;PeerId, PeerServerParams&gt; = certs
+        .into_iter()
+        .sorted()
+        .enumerate()
+        .map(|(idx, cert)| (PeerId::from(idx <span class="kw">as </span>u16), parse_peer_params(cert)))
+        .collect();
+
+    <span class="kw">let </span>pk_string = fs::read_to_string(dir_out_path.join(TLS_PK)).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
+    <span class="kw">let </span>cert_string = fs::read_to_string(dir_out_path.join(TLS_CERT)).expect(<span class="string">&quot;Can&#39;t read file.&quot;</span>);
+    <span class="kw">let </span>pk = rustls::PrivateKey(hex::decode(pk_string).expect(<span class="string">&quot;not hex encoded&quot;</span>));
+    <span class="kw">let </span>our_params = parse_peer_params(cert_string);
+    <span class="kw">let </span>our_id = peers
+        .iter()
+        .find(|(_peer, params)| params.cert == our_params.cert)
+        .map(|(peer, <span class="kw">_</span>)| <span class="kw-2">*</span>peer)
+        .expect(<span class="string">&quot;could not find our cert among peers&quot;</span>);
+    <span class="kw">let </span>params = ServerConfigParams::gen_params(
+        pk,
+        our_id,
+        denominations,
+        <span class="kw-2">&amp;</span>peers,
+        federation_name,
+        bitcoind_rpc,
+    );
+    <span class="kw">let </span>param_map = HashMap::from([(our_id, params.clone())]);
+    <span class="kw">let </span>peer_ids: Vec&lt;PeerId&gt; = peers.keys().cloned().collect();
+    <span class="kw">let </span><span class="kw-2">mut </span>server_conn = fedimint_server::config::connect(params.server_dkg, params.tls).<span class="kw">await</span>;
+    <span class="kw">let </span>rng = OsRng::new().unwrap();
+    ServerConfig::distributed_gen(<span class="kw-2">&amp;mut </span>server_conn, <span class="kw-2">&amp;</span>our_id, <span class="kw-2">&amp;</span>peer_ids, <span class="kw-2">&amp;</span>param_map, rng)
+        .<span class="kw">await
+        </span>.expect(<span class="string">&quot;failed to run DKG to generate configs&quot;</span>)
+}
+
+<span class="kw">fn </span>parse_peer_params(url: String) -&gt; PeerServerParams {
+    <span class="kw">let </span>split: Vec&lt;<span class="kw-2">&amp;</span>str&gt; = url.split(<span class="string">&#39;:&#39;</span>).collect();
+    <span class="macro">assert_eq!</span>(split.len(), <span class="number">4</span>, <span class="string">&quot;Cannot parse cert string&quot;</span>);
+    <span class="kw">let </span>base_port = split[<span class="number">1</span>].parse().expect(<span class="string">&quot;could not parse base port&quot;</span>);
+    <span class="kw">let </span>hex_cert = hex::decode(split[<span class="number">3</span>]).expect(<span class="string">&quot;cert was not hex encoded&quot;</span>);
+    PeerServerParams {
+        cert: rustls::Certificate(hex_cert),
+        address: split[<span class="number">0</span>].to_string(),
+        base_port,
+        name: split[<span class="number">2</span>].to_string(),
+    }
+}
+
+<span class="kw">fn </span>gen_tls(dir_out_path: <span class="kw-2">&amp;</span>Path, address: String, base_port: u16, name: String) -&gt; String {
+    <span class="kw">let </span>(cert, pk) = fedimint_server::config::gen_cert_and_key(<span class="kw-2">&amp;</span>name).expect(<span class="string">&quot;TLS gen failed&quot;</span>);
+
+    <span class="kw">let </span>pk_string = hex::encode(pk.<span class="number">0</span>);
+    <span class="kw">let </span>cert_string = hex::encode(cert.<span class="number">0</span>);
+    rustls::ServerName::try_from(name.as_str()).expect(<span class="string">&quot;Valid DNS name&quot;</span>);
+    <span class="comment">// TODO Base64 encode name, hash fingerprint cert_string
+    </span><span class="kw">let </span>cert_url = <span class="macro">format!</span>(<span class="string">&quot;{}:{}:{}:{}&quot;</span>, address, base_port, name, cert_string);
+
+    fs::write(dir_out_path.join(TLS_PK), <span class="kw-2">&amp;</span>pk_string).unwrap();
+    fs::write(dir_out_path.join(TLS_CERT), <span class="kw-2">&amp;</span>cert_url).unwrap();
+    cert_url
+}
+</code></pre></div>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="distributedgen" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

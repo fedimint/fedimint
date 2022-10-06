@@ -126,13 +126,68 @@
 <span id="126">126</span>
 <span id="127">127</span>
 <span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{Feerate, PegInDescriptor};
+<span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>fedimint_api::config::{BitcoindRpcCfg, GenerateConfig};
+<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>miniscript::descriptor::Wsh;
+<span class="kw">use </span>secp256k1::SecretKey;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::BTreeMap;
 
@@ -177,9 +232,12 @@
     }
 }
 
-<span class="kw">impl </span>GenerateConfig <span class="kw">for </span>WalletConfig {
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>WalletConfig {
     <span class="kw">type </span>Params = BitcoindRpcCfg;
     <span class="kw">type </span>ClientConfig = WalletClientConfig;
+    <span class="kw">type </span>ConfigMessage = CompressedPublicKey;
+    <span class="kw">type </span>ConfigError = ();
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
@@ -193,44 +251,24 @@
             .map(|<span class="kw-2">&amp;</span>id| (id, secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng)))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-        <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
-            Wsh::new_sortedmulti(
-                peers.threshold(),
-                btc_pegin_keys
-                    .iter()
-                    .map(|(<span class="kw">_</span>, (<span class="kw">_</span>, pk))| CompressedPublicKey { key: <span class="kw-2">*</span>pk })
-                    .collect(),
-            )
-            .unwrap(),
-        );
-
-        <span class="kw">let </span>wallet_cfg = btc_pegin_keys
+        <span class="kw">let </span>wallet_cfg: BTreeMap&lt;PeerId, WalletConfig&gt; = btc_pegin_keys
             .iter()
             .map(|(id, (sk, <span class="kw">_</span>))| {
-                <span class="kw">let </span>cfg = WalletConfig {
-                    network: Network::Regtest,
-                    peg_in_descriptor: peg_in_descriptor.clone(), <span class="comment">// TODO: remove redundancy?
-                    </span>peer_peg_in_keys: btc_pegin_keys
+                <span class="kw">let </span>cfg = WalletConfig::new(
+                    btc_pegin_keys
                         .iter()
                         .map(|(peer_id, (<span class="kw">_</span>, pk))| (<span class="kw-2">*</span>peer_id, CompressedPublicKey { key: <span class="kw-2">*</span>pk }))
                         .collect(),
-                    peg_in_key: <span class="kw-2">*</span>sk,
-                    finality_delay: FINALITY_DELAY,
-                    default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
-                    btc_rpc: params.clone(),
-                    fee_consensus: FeeConsensus::default(),
-                };
-
+                    <span class="kw-2">*</span>sk,
+                    peers.threshold(),
+                    params.clone(),
+                );
                 (<span class="kw-2">*</span>id, cfg)
             })
             .collect();
 
-        <span class="kw">let </span>client_cfg = WalletClientConfig {
-            peg_in_descriptor,
-            network: Network::Regtest,
-            finality_delay: FINALITY_DELAY,
-            fee_consensus: FeeConsensus::default(),
-        };
+        <span class="kw">let </span>descriptor = wallet_cfg[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].peg_in_descriptor.clone();
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(descriptor);
 
         (wallet_cfg, client_cfg)
     }
@@ -253,6 +291,72 @@
             <span class="string">&quot;Bitcoin wallet private key doesn&#39;t match multisig pubkey&quot;
         </span>);
     }
+
+    <span class="kw">async fn </span>distributed_gen(
+        connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;<span class="self">Self</span>::ConfigMessage&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt; {
+        <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
+        <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>rng);
+        <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = BTreeMap::new();
+
+        connections.send(peers, our_key.clone()).<span class="kw">await</span>;
+
+        <span class="kw">for _ in </span><span class="number">1</span>..peers.len() {
+            <span class="kw">let </span>(peer, msg) = connections.receive().<span class="kw">await</span>;
+            peer_peg_in_keys.insert(peer, msg);
+        }
+        peer_peg_in_keys.insert(<span class="kw-2">*</span>our_id, our_key);
+        <span class="macro">assert_eq!</span>(peer_peg_in_keys.len(), peers.len());
+
+        <span class="kw">let </span>wallet_cfg = WalletConfig::new(peer_peg_in_keys, sk, peers.threshold(), params.clone());
+        <span class="kw">let </span>client_cfg = WalletClientConfig::new(wallet_cfg.peg_in_descriptor.clone());
+
+        <span class="prelude-val">Ok</span>((wallet_cfg, client_cfg))
+    }
+}
+
+<span class="kw">impl </span>WalletConfig {
+    <span class="kw">pub fn </span>new(
+        pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
+        sk: SecretKey,
+        threshold: usize,
+        btc_rpc: BitcoindRpcCfg,
+    ) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>peg_in_descriptor = PegInDescriptor::Wsh(
+            Wsh::new_sortedmulti(
+                threshold,
+                pubkeys.iter().map(|(<span class="kw">_</span>, pk)| pk.clone()).collect(),
+            )
+            .unwrap(),
+        );
+
+        <span class="self">Self </span>{
+            network: Network::Regtest,
+            peg_in_descriptor,
+            peer_peg_in_keys: pubkeys,
+            peg_in_key: sk,
+            default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
+            finality_delay: FINALITY_DELAY,
+            fee_consensus: FeeConsensus::default(),
+            btc_rpc,
+        }
+    }
+}
+
+<span class="kw">impl </span>WalletClientConfig {
+    <span class="kw">pub fn </span>new(peg_in_descriptor: PegInDescriptor) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            peg_in_descriptor,
+            network: Network::Regtest,
+            finality_delay: <span class="number">0</span>,
+            fee_consensus: Default::default(),
+        }
+    }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

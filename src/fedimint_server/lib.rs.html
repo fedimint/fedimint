@@ -429,6 +429,13 @@
 <span id="429">429</span>
 <span id="430">430</span>
 <span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
@@ -448,7 +455,10 @@
 <span class="kw">use </span>config::ServerConfig;
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 
+<span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::PeerSlice;
 <span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_core::epoch::{ConsensusItem, EpochHistory, EpochVerifyError};
 <span class="kw">pub use </span>fedimint_core::<span class="kw-2">*</span>;
 <span class="kw">use </span>mint_client::api::{IFederationApi, WsFederationApi};
@@ -459,9 +469,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{EpochHistoryKey, LastEpochKey};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{
-    AnyPeerConnections, PeerConnections, PeerConnector, ReconnectPeerConnections,
-};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{PeerConnector, ReconnectPeerConnections};
 <span class="kw">use </span><span class="kw">crate</span>::rng::RngGenerator;
 
 <span class="doccomment">/// The actual implementation of the federated mint
@@ -498,6 +506,7 @@
     <span class="kw">pub </span>cfg: ServerConfig,
     <span class="kw">pub </span>hbbft: HoneyBadger&lt;Vec&lt;ConsensusItem&gt;, PeerId&gt;,
     <span class="kw">pub </span>api: Arc&lt;<span class="kw">dyn </span>IFederationApi&gt;,
+    <span class="kw">pub </span>peers: BTreeSet&lt;PeerId&gt;,
 }
 
 <span class="kw">impl </span>FedimintServer {
@@ -539,7 +548,7 @@
             .peers
             .clone()
             .into_iter()
-            .map(|(id, peer)| (id, peer.connection.api_addr));
+            .map(|(id, peer)| (id, peer.api_addr));
         <span class="kw">let </span>api = Arc::new(WsFederationApi::new(api_endpoints.collect()));
 
         FedimintServer {
@@ -548,6 +557,7 @@
             consensus: Arc::new(consensus),
             cfg: cfg.clone(),
             api,
+            peers: cfg.peers.keys().cloned().collect(),
         }
     }
 
@@ -662,7 +672,7 @@
 
         <span class="self">self</span>.connections
             .send(
-                Target::AllExcept(BTreeSet::new()),
+                <span class="kw-2">&amp;</span>Target::AllExcept(BTreeSet::new()).peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
                 EpochMessage::RejoinRequest,
             )
             .<span class="kw">await</span>;
@@ -707,9 +717,8 @@
                     }
                 }
                 <span class="prelude-val">Ok</span>((peer, EpochMessage::RejoinRequest)) =&gt; {
-                    <span class="kw">let </span>target = Target::Nodes(BTreeSet::from([peer]));
                     <span class="kw">let </span>msg = EpochMessage::Rejoin(<span class="self">self</span>.last_signed_epoch(next_epoch), next_epoch);
-                    <span class="self">self</span>.connections.send(target, msg).<span class="kw">await</span>;
+                    <span class="self">self</span>.connections.send(<span class="kw-2">&amp;</span>[peer], msg).<span class="kw">await</span>;
                 }
                 <span class="prelude-val">Ok</span>(msg) =&gt; msg_buffer.push(msg),
                 <span class="comment">// if peers had an opportunity to reply take max(next_epoch) from a peer threshold
@@ -782,7 +791,10 @@
 
         <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
             <span class="self">self</span>.connections
-                .send(msg.target, EpochMessage::Continue(msg.message))
+                .send(
+                    <span class="kw-2">&amp;</span>msg.target.peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
+                    EpochMessage::Continue(msg.message),
+                )
                 .<span class="kw">await</span>;
         }
 
@@ -810,11 +822,10 @@
         <span class="kw">match </span>msg {
             (<span class="kw">_</span>, EpochMessage::Rejoin(<span class="kw">_</span>, <span class="kw">_</span>)) =&gt; <span class="macro">vec!</span>[],
             (peer, EpochMessage::RejoinRequest) =&gt; {
-                <span class="kw">let </span>target = Target::Nodes(BTreeSet::from([peer]));
                 <span class="kw">let </span>last_signed = <span class="self">self</span>.last_signed_epoch(<span class="self">self</span>.hbbft.epoch());
 
                 <span class="kw">let </span>msg = EpochMessage::Rejoin(last_signed, <span class="self">self</span>.hbbft.next_epoch());
-                <span class="self">self</span>.connections.send(target, msg).<span class="kw">await</span>;
+                <span class="self">self</span>.connections.send(<span class="kw-2">&amp;</span>[peer], msg).<span class="kw">await</span>;
                 <span class="macro">vec!</span>[]
             }
             (peer, EpochMessage::Continue(peer_msg)) =&gt; {
@@ -829,7 +840,10 @@
 
                 <span class="kw">for </span>msg <span class="kw">in </span>step.messages {
                     <span class="self">self</span>.connections
-                        .send(msg.target, EpochMessage::Continue(msg.message))
+                        .send(
+                            <span class="kw-2">&amp;</span>msg.target.peers(<span class="kw-2">&amp;</span><span class="self">self</span>.peers),
+                            EpochMessage::Continue(msg.message),
+                        )
                         .<span class="kw">await</span>;
                 }
 
@@ -861,4 +875,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

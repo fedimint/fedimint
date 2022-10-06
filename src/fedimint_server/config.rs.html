@@ -315,24 +315,244 @@
 <span id="315">315</span>
 <span id="316">316</span>
 <span id="317">317</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
-<span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
-
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
+<span id="347">347</span>
+<span id="348">348</span>
+<span id="349">349</span>
+<span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
+<span id="366">366</span>
+<span id="367">367</span>
+<span id="368">368</span>
+<span id="369">369</span>
+<span id="370">370</span>
+<span id="371">371</span>
+<span id="372">372</span>
+<span id="373">373</span>
+<span id="374">374</span>
+<span id="375">375</span>
+<span id="376">376</span>
+<span id="377">377</span>
+<span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
+<span id="404">404</span>
+<span id="405">405</span>
+<span id="406">406</span>
+<span id="407">407</span>
+<span id="408">408</span>
+<span id="409">409</span>
+<span id="410">410</span>
+<span id="411">411</span>
+<span id="412">412</span>
+<span id="413">413</span>
+<span id="414">414</span>
+<span id="415">415</span>
+<span id="416">416</span>
+<span id="417">417</span>
+<span id="418">418</span>
+<span id="419">419</span>
+<span id="420">420</span>
+<span id="421">421</span>
+<span id="422">422</span>
+<span id="423">423</span>
+<span id="424">424</span>
+<span id="425">425</span>
+<span id="426">426</span>
+<span id="427">427</span>
+<span id="428">428</span>
+<span id="429">429</span>
+<span id="430">430</span>
+<span id="431">431</span>
+<span id="432">432</span>
+<span id="433">433</span>
+<span id="434">434</span>
+<span id="435">435</span>
+<span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
+<span id="459">459</span>
+<span id="460">460</span>
+<span id="461">461</span>
+<span id="462">462</span>
+<span id="463">463</span>
+<span id="464">464</span>
+<span id="465">465</span>
+<span id="466">466</span>
+<span id="467">467</span>
+<span id="468">468</span>
+<span id="469">469</span>
+<span id="470">470</span>
+<span id="471">471</span>
+<span id="472">472</span>
+<span id="473">473</span>
+<span id="474">474</span>
+<span id="475">475</span>
+<span id="476">476</span>
+<span id="477">477</span>
+<span id="478">478</span>
+<span id="479">479</span>
+<span id="480">480</span>
+<span id="481">481</span>
+<span id="482">482</span>
+<span id="483">483</span>
+<span id="484">484</span>
+<span id="485">485</span>
+<span id="486">486</span>
+<span id="487">487</span>
+<span id="488">488</span>
+<span id="489">489</span>
+<span id="490">490</span>
+<span id="491">491</span>
+<span id="492">492</span>
+<span id="493">493</span>
+<span id="494">494</span>
+<span id="495">495</span>
+<span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::fedimint_api::net::peers::PeerConnections;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
+<span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{ConnectionConfig, NetworkConfig};
-<span class="kw">use </span>fedimint_api::config::GenerateConfig;
-<span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use crate</span>::{ReconnectPeerConnections, TlsTcpConnector};
+<span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
+<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
+<span class="kw">use </span>fedimint_api::{config::BitcoindRpcCfg, rand::Rand07Compat};
+<span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId};
+<span class="kw">pub use </span>fedimint_core::config::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletConfig;
 <span class="kw">use </span>hbbft::crypto::serde_impl::SerdeSecret;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
-<span class="kw">use </span>url::Url;
-
+<span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
-
-<span class="kw">use </span><span class="kw">crate</span>::net::connect::TlsConfig;
+<span class="kw">use </span>threshold_crypto::G1Projective;
 <span class="kw">use </span>tokio_rustls::rustls;
+<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>url::Url;
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfig {
@@ -363,23 +583,36 @@
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>Peer {
-    <span class="kw">pub </span>connection: ConnectionConfig,
+    <span class="kw">pub </span>hbbft: ConnectionConfig,
     <span class="attribute">#[serde(with = <span class="string">&quot;serde_tls_cert&quot;</span>)]
     </span><span class="kw">pub </span>tls_cert: rustls::Certificate,
+    <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
+    </span><span class="kw">pub </span>api_addr: Url,
+    <span class="doccomment">/// human-readable name
+    </span><span class="kw">pub </span>name: String,
 }
 
-<span class="attribute">#[derive(Debug)]
+<span class="attribute">#[derive(Debug, Clone)]
+</span><span class="doccomment">/// network config for a server
 </span><span class="kw">pub struct </span>ServerConfigParams {
-    <span class="kw">pub </span>hbbft_base_port: u16,
-    <span class="kw">pub </span>api_base_port: u16,
-    <span class="kw">pub </span>amount_tiers: Vec&lt;fedimint_api::Amount&gt;,
+    <span class="kw">pub </span>tls: TlsConfig,
+    <span class="kw">pub </span>hbbft: NetworkConfig,
+    <span class="kw">pub </span>api: NetworkConfig,
+    <span class="kw">pub </span>server_dkg: NetworkConfig,
+    <span class="kw">pub </span>wallet_dkg: NetworkConfig,
+    <span class="kw">pub </span>lightning_dkg: NetworkConfig,
+    <span class="kw">pub </span>mint_dkg: NetworkConfig,
+    <span class="kw">pub </span>amount_tiers: Vec&lt;Amount&gt;,
     <span class="kw">pub </span>federation_name: String,
     <span class="kw">pub </span>bitcoind_rpc: String,
 }
 
-<span class="kw">impl </span>GenerateConfig <span class="kw">for </span>ServerConfig {
-    <span class="kw">type </span>Params = ServerConfigParams;
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>ServerConfig {
+    <span class="kw">type </span>Params = HashMap&lt;PeerId, ServerConfigParams&gt;;
     <span class="kw">type </span>ClientConfig = ClientConfig;
+    <span class="kw">type </span>ConfigMessage = (KeyType, DkgMessage&lt;G1Projective&gt;);
+    <span class="kw">type </span>ConfigError = ();
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
@@ -392,60 +625,33 @@
             hbbft::NetworkInfo::generate_map(peers.to_vec(), <span class="kw-2">&amp;mut </span>Rand07Compat(<span class="kw-2">&amp;mut </span>rng))
                 .expect(<span class="string">&quot;Could not generate HBBFT netinfo&quot;</span>);
 
-        <span class="kw">let </span>tls_keys = peers
-            .iter()
-            .map(|peer| {
-                <span class="kw">let </span>(cert, key) = gen_cert_and_key(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize())).unwrap();
-                (<span class="kw-2">*</span>peer, (cert, key))
-            })
-            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-
-        <span class="kw">let </span>cfg_peers = netinfo
-            .iter()
-            .map(|(<span class="kw-2">&amp;</span>id, <span class="kw">_</span>)| {
-                <span class="kw">let </span>id_u16: u16 = id.into();
-                <span class="kw">let </span>peer = Peer {
-                    connection: ConnectionConfig {
-                        hbbft_addr: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, params.hbbft_base_port + id_u16),
-                        api_addr: Url::parse(
-                            <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + id_u16).as_str(),
-                        )
-                        .expect(<span class="string">&quot;Could not parse URL&quot;</span>),
-                    },
-                    tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
-                };
-
-                (id, peer)
-            })
-            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
-
+        <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
         <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) = WalletConfig::trusted_dealer_gen(
             peers,
             <span class="kw-2">&amp;</span>BitcoindRpcCfg {
-                btc_rpc_address: params.bitcoind_rpc.clone(),
+                btc_rpc_address: peer0.bitcoind_rpc.clone(),
                 btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
                 btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
             },
             <span class="kw-2">&amp;mut </span>rng,
         );
         <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) =
-            MintConfig::trusted_dealer_gen(peers, params.amount_tiers.as_ref(), <span class="kw-2">&amp;mut </span>rng);
+            MintConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>peer0.amount_tiers, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) =
             LightningModuleConfig::trusted_dealer_gen(peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng);
 
         <span class="kw">let </span>server_config = netinfo
             .iter()
             .map(|(<span class="kw-2">&amp;</span>id, netinf)| {
-                <span class="kw">let </span>id_u16: u16 = id.into();
                 <span class="kw">let </span>epoch_keys = epochinfo.get(<span class="kw-2">&amp;</span>id).unwrap();
                 <span class="kw">let </span>config = ServerConfig {
-                    federation_name: params.federation_name.clone(),
+                    federation_name: params[<span class="kw-2">&amp;</span>id].federation_name.clone(),
                     identity: id,
-                    hbbft_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, params.hbbft_base_port + id_u16),
-                    api_bind_addr: <span class="macro">format!</span>(<span class="string">&quot;127.0.0.1:{}&quot;</span>, params.api_base_port + id_u16),
-                    tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
-                    tls_key: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">1</span>.clone(),
-                    peers: cfg_peers.clone(),
+                    hbbft_bind_addr: params[<span class="kw-2">&amp;</span>id].hbbft.bind_addr.clone(),
+                    api_bind_addr: params[<span class="kw-2">&amp;</span>id].api.bind_addr.clone(),
+                    tls_cert: params[<span class="kw-2">&amp;</span>id].tls.our_certificate.clone(),
+                    tls_key: params[<span class="kw-2">&amp;</span>id].tls.our_private_key.clone(),
+                    peers: params[<span class="kw-2">&amp;</span>id].peers(),
                     hbbft_sks: SerdeSecret(netinf.secret_key_share().unwrap().clone()),
                     hbbft_pk_set: netinf.public_key_set().clone(),
                     epoch_sks: SerdeSecret(epoch_keys.secret_key_share().unwrap().clone()),
@@ -458,19 +664,14 @@
             })
             .collect();
 
+        <span class="kw">let </span>names: HashMap&lt;PeerId, String&gt; = peers
+            .iter()
+            .map(|peer| (<span class="kw-2">*</span>peer, <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize())))
+            .collect();
+
         <span class="kw">let </span>client_config = ClientConfig {
-            federation_name: params.federation_name.clone(),
-            nodes: peers
-                .iter()
-                .map(|<span class="kw-2">&amp;</span>peer| Node {
-                    name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, u16::from(peer)),
-                    url: Url::parse(
-                        <span class="macro">format!</span>(<span class="string">&quot;ws://127.0.0.1:{}&quot;</span>, params.api_base_port + u16::from(peer))
-                            .as_str(),
-                    )
-                    .expect(<span class="string">&quot;Could not parse Url&quot;</span>),
-                })
-                .collect(),
+            federation_name: peer0.federation_name.clone(),
+            nodes: peer0.api.nodes(<span class="string">&quot;ws://&quot;</span>, names),
             mint: mint_client_cfg,
             wallet: wallet_client_cfg,
             ln: ln_client_cfg,
@@ -484,7 +685,7 @@
             </span>.peers
             .iter()
             .map(|(peer_id, peer)| Node {
-                url: peer.connection.api_addr.clone(),
+                url: peer.api_addr.clone(),
                 name: <span class="macro">format!</span>(<span class="string">&quot;node #{}&quot;</span>, peer_id),
             })
             .collect();
@@ -523,6 +724,84 @@
         <span class="self">self</span>.ln.validate_config(identity);
         <span class="self">self</span>.wallet.validate_config(identity);
     }
+
+    <span class="kw">async fn </span>distributed_gen(
+        connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;<span class="self">Self</span>::ConfigMessage&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt; {
+        <span class="comment">// in case we are running by ourselves, avoid DKG
+        </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
+            <span class="kw">let </span>(server, client) = <span class="self">Self</span>::trusted_dealer_gen(peers, params, rng);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>((server[our_id].clone(), client));
+        }
+        <span class="macro">info!</span>(<span class="string">&quot;Peer {} running distributed key generation...&quot;</span>, our_id);
+
+        <span class="kw">let </span>params = params[our_id].clone();
+        <span class="comment">// hbbft uses a lower threshold of signing keys (f+1)
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new(KeyType::Hbbft, peers.one_honest(), our_id, peers);
+        dkg.add(KeyType::Epoch, peers.threshold());
+
+        <span class="comment">// run DKG for epoch and hbbft keys
+        </span><span class="kw">let </span>keys = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>;
+        <span class="kw">let </span>(hbbft_pks, hbbft_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Hbbft].threshold_crypto();
+        <span class="kw">let </span>(epoch_pks, epoch_sks) = keys[<span class="kw-2">&amp;</span>KeyType::Epoch].threshold_crypto();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>wallet = connect(params.wallet_dkg.clone(), params.tls.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>bitcoin = <span class="kw-2">&amp;</span>BitcoindRpcCfg {
+            btc_rpc_address: params.bitcoind_rpc.clone(),
+            btc_rpc_user: <span class="string">&quot;bitcoin&quot;</span>.into(),
+            btc_rpc_pass: <span class="string">&quot;bitcoin&quot;</span>.into(),
+        };
+        <span class="kw">let </span>(wallet_server_cfg, wallet_client_cfg) =
+            WalletConfig::distributed_gen(<span class="kw-2">&amp;mut </span>wallet, our_id, peers, bitcoin, <span class="kw-2">&amp;mut </span>rng)
+                .<span class="kw">await
+                </span>.expect(<span class="string">&quot;wallet error&quot;</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>ln = connect(params.lightning_dkg.clone(), params.tls.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>(ln_server_cfg, ln_client_cfg) =
+            LightningModuleConfig::distributed_gen(<span class="kw-2">&amp;mut </span>ln, our_id, peers, <span class="kw-2">&amp;</span>(), <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>mint = connect(params.mint_dkg.clone(), params.tls.clone()).<span class="kw">await</span>;
+        <span class="kw">let </span>param = <span class="kw-2">&amp;</span>params.amount_tiers;
+        <span class="kw">let </span>(mint_server_cfg, mint_client_cfg) =
+            MintConfig::distributed_gen(<span class="kw-2">&amp;mut </span>mint, our_id, peers, param, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>server = ServerConfig {
+            federation_name: params.federation_name.clone(),
+            identity: <span class="kw-2">*</span>our_id,
+            hbbft_bind_addr: params.hbbft.bind_addr.clone(),
+            api_bind_addr: params.api.bind_addr.clone(),
+            tls_cert: params.tls.our_certificate.clone(),
+            tls_key: params.tls.our_private_key.clone(),
+            peers: params.peers(),
+            hbbft_sks: SerdeSecret(hbbft_sks),
+            hbbft_pk_set: hbbft_pks,
+            epoch_sks: SerdeSecret(epoch_sks),
+            epoch_pk_set: epoch_pks,
+            wallet: wallet_server_cfg,
+            mint: mint_server_cfg,
+            ln: ln_server_cfg,
+        };
+
+        <span class="kw">let </span>client = ClientConfig {
+            federation_name: params.federation_name,
+            nodes: params.api.nodes(<span class="string">&quot;ws://&quot;</span>, params.tls.peer_names),
+            mint: mint_client_cfg,
+            wallet: wallet_client_cfg,
+            ln: ln_client_cfg,
+        };
+
+        <span class="prelude-val">Ok</span>((server, client))
+    }
+}
+
+<span class="attribute">#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>KeyType {
+    Hbbft,
+    Epoch,
 }
 
 <span class="kw">impl </span>ServerConfig {
@@ -533,7 +812,7 @@
             peers: <span class="self">self
                 </span>.peers
                 .iter()
-                .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.connection.clone()))
+                .map(|(<span class="kw-2">&amp;</span>id, peer)| (id, peer.hbbft.clone()))
                 .collect(),
         }
     }
@@ -546,6 +825,11 @@
                 </span>.peers
                 .iter()
                 .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.tls_cert.clone()))
+                .collect(),
+            peer_names: <span class="self">self
+                </span>.peers
+                .iter()
+                .map(|(peer, cfg)| (<span class="kw-2">*</span>peer, cfg.name.to_string()))
                 .collect(),
         }
     }
@@ -563,7 +847,153 @@
     }
 }
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>gen_cert_and_key(
+<span class="kw">pub struct </span>PeerServerParams {
+    <span class="kw">pub </span>cert: rustls::Certificate,
+    <span class="kw">pub </span>address: String,
+    <span class="kw">pub </span>base_port: u16,
+    <span class="kw">pub </span>name: String,
+}
+
+<span class="kw">impl </span>ServerConfigParams {
+    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, Peer&gt; {
+        <span class="self">self</span>.hbbft
+            .peers
+            .iter()
+            .map(|(peer, hbbft)| {
+                (
+                    <span class="kw-2">*</span>peer,
+                    Peer {
+                        name: <span class="self">self</span>.tls.peer_names[peer].clone(),
+                        hbbft: hbbft.clone(),
+                        tls_cert: <span class="self">self</span>.tls.peer_certs[peer].clone(),
+                        api_addr: Url::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;ws://{}&quot;</span>, <span class="self">self</span>.api.peers[peer].address))
+                            .expect(<span class="string">&quot;Could not parse URL&quot;</span>),
+                    },
+                )
+            })
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+    }
+
+    <span class="kw">pub fn </span>gen_params(
+        key: rustls::PrivateKey,
+        our_id: PeerId,
+        amount_tiers: Vec&lt;Amount&gt;,
+        peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
+        federation_name: String,
+        bitcoind_rpc: String,
+    ) -&gt; ServerConfigParams {
+        <span class="kw">let </span>peer_certs: HashMap&lt;PeerId, rustls::Certificate&gt; = peers
+            .iter()
+            .map(|(peer, params)| (<span class="kw-2">*</span>peer, params.cert.clone()))
+            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>peer_names: HashMap&lt;PeerId, String&gt; = peers
+            .iter()
+            .map(|(peer, params)| (<span class="kw-2">*</span>peer, params.name.to_string()))
+            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>tls = TlsConfig {
+            our_certificate: peers[<span class="kw-2">&amp;</span>our_id].cert.clone(),
+            our_private_key: key,
+            peer_certs,
+            peer_names,
+        };
+
+        ServerConfigParams {
+            tls,
+            hbbft: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">0</span>, peers),
+            api: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">1</span>, peers),
+            server_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">2</span>, peers),
+            wallet_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">3</span>, peers),
+            lightning_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">4</span>, peers),
+            mint_dkg: <span class="self">Self</span>::gen_network(<span class="kw-2">&amp;</span>our_id, <span class="number">5</span>, peers),
+            amount_tiers,
+            federation_name,
+            bitcoind_rpc,
+        }
+    }
+
+    <span class="kw">fn </span>gen_network(
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        offset: u16,
+        peers: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, PeerServerParams&gt;,
+    ) -&gt; NetworkConfig {
+        NetworkConfig {
+            identity: <span class="kw-2">*</span>our_id,
+            bind_addr: <span class="macro">format!</span>(
+                <span class="string">&quot;{}:{}&quot;</span>,
+                peers[our_id].address,
+                peers[our_id].base_port + offset
+            ),
+            peers: peers
+                .iter()
+                .map(|(peer, params)| {
+                    <span class="kw">let </span>connection = ConnectionConfig {
+                        address: <span class="macro">format!</span>(<span class="string">&quot;{}:{}&quot;</span>, params.address, params.base_port + offset),
+                    };
+                    (<span class="kw-2">*</span>peer, connection)
+                })
+                .collect(),
+        }
+    }
+
+    <span class="doccomment">/// config for servers running on different ports on a local network
+    </span><span class="kw">pub fn </span>gen_local(
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        amount_tiers: Vec&lt;Amount&gt;,
+        base_port: u16,
+        federation_name: <span class="kw-2">&amp;</span>str,
+        bitcoind_rpc: <span class="kw-2">&amp;</span>str,
+    ) -&gt; HashMap&lt;PeerId, ServerConfigParams&gt; {
+        <span class="kw">let </span>keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
+            .iter()
+            .map(|peer| {
+                <span class="kw">let </span>(cert, key) = gen_cert_and_key(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize())).unwrap();
+                (<span class="kw-2">*</span>peer, (cert, key))
+            })
+            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>peer_params: BTreeMap&lt;PeerId, PeerServerParams&gt; = peers
+            .iter()
+            .map(|peer| {
+                <span class="kw">let </span>params: PeerServerParams = PeerServerParams {
+                    cert: keys[peer].<span class="number">0</span>.clone(),
+                    address: <span class="string">&quot;127.0.0.1&quot;</span>.to_string(),
+                    base_port: base_port + (u16::from(<span class="kw-2">*</span>peer) * <span class="number">6</span>),
+                    name: <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, peer.to_usize()),
+                };
+                (<span class="kw-2">*</span>peer, params)
+            })
+            .collect();
+
+        peers
+            .iter()
+            .map(|peer| {
+                <span class="kw">let </span>params: ServerConfigParams = <span class="self">Self</span>::gen_params(
+                    keys[peer].<span class="number">1</span>.clone(),
+                    <span class="kw-2">*</span>peer,
+                    amount_tiers.clone(),
+                    <span class="kw-2">&amp;</span>peer_params,
+                    federation_name.to_string(),
+                    bitcoind_rpc.to_string(),
+                );
+                (<span class="kw-2">*</span>peer, params)
+            })
+            .collect()
+    }
+}
+
+<span class="kw">pub async fn </span>connect&lt;T&gt;(network: NetworkConfig, certs: TlsConfig) -&gt; AnyPeerConnections&lt;T&gt;
+<span class="kw">where
+    </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
+{
+    <span class="kw">let </span>connector = TlsTcpConnector::new(certs).into_dyn();
+    ReconnectPeerConnections::new(network, connector)
+        .<span class="kw">await
+        </span>.into_dyn()
+}
+
+<span class="kw">pub fn </span>gen_cert_and_key(
     name: <span class="kw-2">&amp;</span>str,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(rustls::Certificate, rustls::PrivateKey), anyhow::Error&gt; {
     <span class="kw">let </span>keypair = rcgen::KeyPair::generate(<span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256)<span class="question-mark">?</span>;
@@ -633,4 +1063,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

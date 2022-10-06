@@ -89,12 +89,48 @@
 <span id="89">89</span>
 <span id="90">90</span>
 <span id="91">91</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span id="92">92</span>
+<span id="93">93</span>
+<span id="94">94</span>
+<span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::config::{DkgMessage, DkgRunner, GenerateConfig};
+<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::rand::Rand07Compat;
 <span class="kw">use </span>fedimint_api::{NumPeers, PeerId};
 <span class="kw">use </span>secp256k1::rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>threshold_crypto::serde_impl::SerdeSecret;
+<span class="kw">use </span>threshold_crypto::G1Projective;
 
 <span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>LightningModuleConfig {
@@ -112,9 +148,12 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="kw">impl </span>GenerateConfig <span class="kw">for </span>LightningModuleConfig {
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>LightningModuleConfig {
     <span class="kw">type </span>Params = ();
     <span class="kw">type </span>ClientConfig = LightningModuleClientConfig;
+    <span class="kw">type </span>ConfigMessage = ((), DkgMessage&lt;G1Projective&gt;);
+    <span class="kw">type </span>ConfigError = ();
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
@@ -164,6 +203,31 @@
             <span class="string">&quot;Lightning private key doesn&#39;t match pubkey share&quot;
         </span>)
     }
+
+    <span class="kw">async fn </span>distributed_gen(
+        connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;<span class="self">Self</span>::ConfigMessage&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        _params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
+        <span class="kw">let </span>(pks, sks) = dkg.run_g1(connections, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span>[<span class="kw-2">&amp;</span>()].threshold_crypto();
+
+        <span class="kw">let </span>server = LightningModuleConfig {
+            threshold_pub_keys: pks.clone(),
+            threshold_sec_key: SerdeSecret(sks),
+            threshold: peers.threshold(),
+            fee_consensus: Default::default(),
+        };
+
+        <span class="kw">let </span>client = LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: Default::default(),
+        };
+
+        <span class="prelude-val">Ok</span>((server, client))
+    }
 }
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -181,4 +245,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

@@ -118,13 +118,75 @@
 <span id="118">118</span>
 <span id="119">119</span>
 <span id="120">120</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::config::GenerateConfig;
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+</pre><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::config::{scalar, DkgMessage, DkgRunner, GenerateConfig};
+<span class="kw">use </span>fedimint_api::net::peers::AnyPeerConnections;
 <span class="kw">use </span>fedimint_api::{Amount, NumPeers, PeerId, Tiered, TieredMultiZip};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>tbs::{dealer_keygen, Aggregatable, AggregatePublicKey, PublicKeyShare};
+<span class="kw">use </span>threshold_crypto::group::Curve;
+<span class="kw">use </span>threshold_crypto::G2Projective;
 
 <span class="attribute">#[derive(Clone, Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MintConfig {
@@ -140,9 +202,12 @@
     <span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
-<span class="kw">impl </span>GenerateConfig <span class="kw">for </span>MintConfig {
+<span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="kw">impl </span>GenerateConfig <span class="kw">for </span>MintConfig {
     <span class="kw">type </span>Params = [Amount];
     <span class="kw">type </span>ClientConfig = MintClientConfig;
+    <span class="kw">type </span>ConfigMessage = (Amount, DkgMessage&lt;G2Projective&gt;);
+    <span class="kw">type </span>ConfigError = ();
 
     <span class="kw">fn </span>trusted_dealer_gen(
         peers: <span class="kw-2">&amp;</span>[PeerId],
@@ -222,6 +287,57 @@
             <span class="self">self</span>.peer_tbs_pks.get(identity).unwrap().as_map().clone();
         <span class="macro">assert_eq!</span>(sks, pks, <span class="string">&quot;Mint private key doesn&#39;t match pubkey share&quot;</span>);
     }
+
+    <span class="kw">async fn </span>distributed_gen(
+        connections: <span class="kw-2">&amp;mut </span>AnyPeerConnections&lt;<span class="self">Self</span>::ConfigMessage&gt;,
+        our_id: <span class="kw-2">&amp;</span>PeerId,
+        peers: <span class="kw-2">&amp;</span>[PeerId],
+        params: <span class="kw-2">&amp;</span><span class="self">Self</span>::Params,
+        <span class="kw-2">mut </span>rng: <span class="kw">impl </span>RngCore + CryptoRng,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="self">Self</span>, <span class="self">Self</span>::ClientConfig), <span class="self">Self</span>::ConfigError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dkg = DkgRunner::multi(params.to_vec(), peers.threshold(), our_id, peers);
+        <span class="kw">let </span>amounts_keys = dkg
+            .run_g2(connections, <span class="kw-2">&amp;mut </span>rng)
+            .<span class="kw">await
+            </span>.into_iter()
+            .map(|(amount, keys)| (amount, keys.tbs()))
+            .collect::&lt;HashMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">let </span>server = MintConfig {
+            tbs_sks: amounts_keys
+                .iter()
+                .map(|(amount, (<span class="kw">_</span>, sks))| (<span class="kw-2">*</span>amount, <span class="kw-2">*</span>sks))
+                .collect(),
+            peer_tbs_pks: peers
+                .iter()
+                .map(|peer| {
+                    <span class="kw">let </span>pks = amounts_keys
+                        .iter()
+                        .map(|(amount, (pks, <span class="kw">_</span>))| {
+                            <span class="kw">let </span>pks = PublicKeyShare(pks.evaluate(scalar(peer)).to_affine());
+                            (<span class="kw-2">*</span>amount, pks)
+                        })
+                        .collect::&lt;Tiered&lt;PublicKeyShare&gt;&gt;();
+
+                    (<span class="kw-2">*</span>peer, pks)
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+            threshold: peers.threshold(),
+        };
+
+        <span class="kw">let </span>client = MintClientConfig {
+            tbs_pks: amounts_keys
+                .iter()
+                .map(|(amount, (pks, <span class="kw">_</span>))| {
+                    (<span class="kw-2">*</span>amount, AggregatePublicKey(pks.evaluate(<span class="number">0</span>).to_affine()))
+                })
+                .collect(),
+            fee_consensus: Default::default(),
+        };
+
+        <span class="prelude-val">Ok</span>((server, client))
+    }
 }
 
 <span class="attribute">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -239,4 +355,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_mint" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

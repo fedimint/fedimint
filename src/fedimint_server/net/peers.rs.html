@@ -633,37 +633,6 @@
 <span id="633">633</span>
 <span id="634">634</span>
 <span id="635">635</span>
-<span id="636">636</span>
-<span id="637">637</span>
-<span id="638">638</span>
-<span id="639">639</span>
-<span id="640">640</span>
-<span id="641">641</span>
-<span id="642">642</span>
-<span id="643">643</span>
-<span id="644">644</span>
-<span id="645">645</span>
-<span id="646">646</span>
-<span id="647">647</span>
-<span id="648">648</span>
-<span id="649">649</span>
-<span id="650">650</span>
-<span id="651">651</span>
-<span id="652">652</span>
-<span id="653">653</span>
-<span id="654">654</span>
-<span id="655">655</span>
-<span id="656">656</span>
-<span id="657">657</span>
-<span id="658">658</span>
-<span id="659">659</span>
-<span id="660">660</span>
-<span id="661">661</span>
-<span id="662">662</span>
-<span id="663">663</span>
-<span id="664">664</span>
-<span id="665">665</span>
-<span id="666">666</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation members
 //!
 //! The main interface is [`PeerConnections`] and its main implementation is
@@ -673,7 +642,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::framed::AnyFramedTransport;
 <span class="kw">use </span><span class="kw">crate</span>::net::queue::{MessageId, MessageQueue, UniqueMessage};
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::net::peers::PeerConnections;
 <span class="kw">use </span>fedimint_api::PeerId;
+<span class="kw">use </span>fedimint_core::config::Node;
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>futures::{SinkExt, StreamExt};
 <span class="kw">use </span>hbbft::Target;
@@ -681,8 +652,9 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>std::cmp::min;
-<span class="kw">use </span>std::collections::HashMap;
+<span class="kw">use </span>std::collections::{BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::ops::Sub;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>tokio::sync::mpsc::{Receiver, Sender};
 <span class="kw">use </span>tokio::task::JoinHandle;
@@ -693,49 +665,9 @@
 <span class="doccomment">/// Maximum connection failures we consider for our back-off strategy
 </span><span class="kw">const </span>MAX_FAIL_RECONNECT_COUNTER: u64 = <span class="number">300</span>;
 
-<span class="doccomment">/// Owned [`PeerConnections`] trait object type
-</span><span class="kw">pub type </span>AnyPeerConnections&lt;M&gt; = Box&lt;<span class="kw">dyn </span>PeerConnections&lt;M&gt; + Send + Unpin + <span class="lifetime">&#39;static</span>&gt;;
-
 <span class="doccomment">/// Owned [`Connector`](crate::net::connect::Connector) trait object used by
 /// [`ReconnectPeerConnections`]
 </span><span class="kw">pub type </span>PeerConnector&lt;M&gt; = AnyConnector&lt;PeerMessage&lt;M&gt;&gt;;
-
-<span class="doccomment">/// Connection manager that tries to keep connections open to all peers
-///
-/// Production implementations of this trait have to ensure that:
-/// * Connections to peers are authenticated and encrypted
-/// * Messages are received exactly once and in the order they were sent
-/// * Connections are reopened when closed
-/// * Messages are cached in case of short-lived network interruptions and resent on reconnect, this
-///   avoids the need to rejoin the consensus, which is more tricky.
-///
-/// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
-/// The thus disconnected peer will need to rejoin the consensus at a later time.  
-</span><span class="attribute">#[async_trait]
-</span><span class="kw">pub trait </span>PeerConnections&lt;T&gt;
-<span class="kw">where
-    </span>T: Serialize + DeserializeOwned + Unpin + Send,
-{
-    <span class="doccomment">/// Send a message to a target, either all peers or a specific one.
-    ///
-    /// The message is sent immediately and cached if the peer is reachable and only cached
-    /// otherwise.
-    </span><span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: Target&lt;PeerId&gt;, msg: T);
-
-    <span class="doccomment">/// Await receipt of a message from any connected peer.
-    </span><span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; (PeerId, T);
-
-    <span class="doccomment">/// Removes a peer connection in case of misbehavior
-    </span><span class="kw">async fn </span>ban_peer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId);
-
-    <span class="doccomment">/// Converts the struct to a `PeerConnection` trait object
-    </span><span class="kw">fn </span>into_dyn(<span class="self">self</span>) -&gt; AnyPeerConnections&lt;T&gt;
-    <span class="kw">where
-        </span><span class="self">Self</span>: Sized + Send + Unpin + <span class="lifetime">&#39;static</span>,
-    {
-        Box::new(<span class="self">self</span>)
-    }
-}
 
 <span class="doccomment">/// Connection manager that automatically reconnects to peers
 ///
@@ -768,10 +700,8 @@
 <span class="doccomment">/// Information needed to connect to one other federation member
 </span><span class="attribute">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ConnectionConfig {
-    <span class="doccomment">/// The peer&#39;s hbbft network address and port (e.g. `10.42.0.10:4000`)
-    </span><span class="kw">pub </span>hbbft_addr: String,
-    <span class="doccomment">/// The peer&#39;s websocket network address and port (e.g. `ws://10.42.0.10:5000`)
-    </span><span class="kw">pub </span>api_addr: Url,
+    <span class="doccomment">/// The peer&#39;s network address and port (e.g. `10.42.0.10:4000`)
+    </span><span class="kw">pub </span>address: String,
 }
 
 <span class="doccomment">/// Internal message type for [`ReconnectPeerConnections`], just public because it appears in the
@@ -812,6 +742,19 @@
     Connected(ConnectedPeerConnectionState&lt;M&gt;),
 }
 
+<span class="kw">impl </span>NetworkConfig {
+    <span class="kw">pub fn </span>nodes(<span class="kw-2">&amp;</span><span class="self">self</span>, prefix: <span class="kw-2">&amp;</span>str, names: HashMap&lt;PeerId, String&gt;) -&gt; Vec&lt;Node&gt; {
+        <span class="self">self</span>.peers
+            .iter()
+            .map(|(peer, connection)| Node {
+                name: names[peer].to_string(),
+                url: Url::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">&quot;{}{}&quot;</span>, prefix, connection.address))
+                    .expect(<span class="string">&quot;Could not parse Url&quot;</span>),
+            })
+            .collect()
+    }
+}
+
 <span class="kw">impl</span>&lt;T: <span class="lifetime">&#39;static</span>&gt; ReconnectPeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync,
@@ -821,8 +764,6 @@
     /// requirements on the `Connector`.
     </span><span class="attribute">#[instrument(skip_all)]
     </span><span class="kw">pub async fn </span>new(cfg: NetworkConfig, connect: PeerConnector&lt;T&gt;) -&gt; <span class="self">Self </span>{
-        <span class="macro">info!</span>(<span class="string">&quot;Starting mint {}&quot;</span>, cfg.identity);
-
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
 
         <span class="kw">let </span>(connection_senders, connections) = cfg
@@ -895,29 +836,33 @@
     }
 }
 
+<span class="kw">pub trait </span>PeerSlice {
+    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>, all_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;) -&gt; Vec&lt;PeerId&gt;;
+}
+
+<span class="kw">impl </span>PeerSlice <span class="kw">for </span>Target&lt;PeerId&gt; {
+    <span class="kw">fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>, all_peers: <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;) -&gt; Vec&lt;PeerId&gt; {
+        <span class="kw">let </span>set = <span class="kw">match </span><span class="self">self </span>{
+            Target::AllExcept(exclude) =&gt; all_peers.sub(exclude),
+            Target::Nodes(include) =&gt; include.clone(),
+        };
+
+        set.into_iter().collect()
+    }
+}
+
 <span class="attribute">#[async_trait]
 </span><span class="kw">impl</span>&lt;T&gt; PeerConnections&lt;T&gt; <span class="kw">for </span>ReconnectPeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Serialize + DeserializeOwned + Clone + Unpin + Send + Sync + <span class="lifetime">&#39;static</span>,
 {
-    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, target: Target&lt;PeerId&gt;, msg: T) {
-        <span class="macro">trace!</span>(<span class="question-mark">?</span>target, <span class="string">&quot;Sending message to&quot;</span>);
-        <span class="kw">match </span>target {
-            Target::AllExcept(not_to) =&gt; {
-                <span class="kw">for </span>(peer, connection) <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.connections {
-                    <span class="kw">if </span>!not_to.contains(peer) {
-                        connection.send(msg.clone()).<span class="kw">await</span>;
-                    }
-                }
-            }
-            Target::Nodes(peer_ids) =&gt; {
-                <span class="kw">for </span>peer_id <span class="kw">in </span>peer_ids {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = <span class="self">self</span>.connections.get_mut(<span class="kw-2">&amp;</span>peer_id) {
-                        peer.send(msg.clone()).<span class="kw">await</span>;
-                    } <span class="kw">else </span>{
-                        <span class="macro">trace!</span>(peer = <span class="question-mark">?</span>peer_id, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
-                    }
-                }
+    <span class="kw">async fn </span>send(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peers: <span class="kw-2">&amp;</span>[PeerId], msg: T) {
+        <span class="kw">for </span>peer_id <span class="kw">in </span>peers {
+            <span class="macro">trace!</span>(<span class="question-mark">?</span>peer_id, <span class="string">&quot;Sending message to&quot;</span>);
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(peer) = <span class="self">self</span>.connections.get_mut(peer_id) {
+                peer.send(msg.clone()).<span class="kw">await</span>;
+            } <span class="kw">else </span>{
+                <span class="macro">trace!</span>(peer = <span class="question-mark">?</span>peer_id, <span class="string">&quot;Not sending message to unknown peer (maybe banned)&quot;</span>);
             }
         }
     }
@@ -1170,7 +1115,7 @@
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">debug!</span>(<span class="string">&quot;Trying to reconnect&quot;</span>);
-        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.hbbft_addr;
+        <span class="kw">let </span>addr = <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.address;
         <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr.clone(), <span class="self">self</span>.peer).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer {
@@ -1260,12 +1205,11 @@
     };
     <span class="kw">use </span>fedimint_api::PeerId;
     <span class="kw">use </span>futures::Future;
-    <span class="kw">use </span>hbbft::Target;
-    <span class="kw">use </span>std::collections::{BTreeSet, HashMap};
-    <span class="kw">use </span>std::iter::FromIterator;
+
+    <span class="kw">use </span>std::collections::HashMap;
+
     <span class="kw">use </span>std::time::Duration;
     <span class="kw">use </span>tracing_subscriber::EnvFilter;
-    <span class="kw">use </span>url::Url;
 
     <span class="kw">async fn </span>timeout&lt;F, T&gt;(f: F) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt;
     <span class="kw">where
@@ -1290,9 +1234,7 @@
             .enumerate()
             .map(|(idx, <span class="kw-2">&amp;</span>peer)| {
                 <span class="kw">let </span>cfg = ConnectionConfig {
-                    hbbft_addr: peer.to_string(),
-                    api_addr: Url::parse(<span class="macro">format!</span>(<span class="string">&quot;http://{}&quot;</span>, peer).as_str())
-                        .expect(<span class="string">&quot;Could not parse Url&quot;</span>),
+                    address: peer.to_string(),
                 };
                 (PeerId::from(idx <span class="kw">as </span>u16 + <span class="number">1</span>), cfg)
             })
@@ -1313,16 +1255,12 @@
         <span class="kw">let </span><span class="kw-2">mut </span>peers_a = build_peers(<span class="string">&quot;a&quot;</span>, <span class="number">1</span>).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>peers_b = build_peers(<span class="string">&quot;b&quot;</span>, <span class="number">2</span>).<span class="kw">await</span>;
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(<span class="number">2</span>)])), <span class="number">42</span>)
-            .<span class="kw">await</span>;
+        peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">2</span>)], <span class="number">42</span>).<span class="kw">await</span>;
         <span class="kw">let </span>recv = timeout(peers_b.receive()).<span class="kw">await</span>.unwrap();
         <span class="macro">assert_eq!</span>(recv.<span class="number">0</span>, PeerId::from(<span class="number">1</span>));
         <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
 
-        peers_a
-            .send(Target::Nodes(BTreeSet::from_iter([PeerId::from(<span class="number">3</span>)])), <span class="number">21</span>)
-            .<span class="kw">await</span>;
+        peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>peers_c = build_peers(<span class="string">&quot;c&quot;</span>, <span class="number">3</span>).<span class="kw">await</span>;
         <span class="kw">let </span>recv = timeout(peers_c.receive()).<span class="kw">await</span>.unwrap();
@@ -1331,4 +1269,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>

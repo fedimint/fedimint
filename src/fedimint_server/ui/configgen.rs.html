@@ -172,6 +172,7 @@
 <span id="172">172</span>
 <span id="173">173</span>
 <span id="174">174</span>
+<span id="175">175</span>
 </pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, Peer <span class="kw">as </span>ServerPeer, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::ui::Guardian;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -260,22 +261,23 @@
         .map(|(<span class="kw-2">&amp;</span>id, <span class="kw">_</span>)| {
             <span class="kw">let </span>id_u16: u16 = id.into();
             <span class="kw">let </span>peer = ServerPeer {
-                connection: ConnectionConfig {
-                    hbbft_addr: <span class="macro">format!</span>(
+                hbbft: ConnectionConfig {
+                    address: <span class="macro">format!</span>(
                         <span class="string">&quot;{}:{}&quot;</span>,
                         hostnames[id_u16 <span class="kw">as </span>usize].clone(),
                         hbbft_base_port + id_u16
                     ),
-                    api_addr: {
-                        <span class="kw">let </span>s = <span class="macro">format!</span>(
-                            <span class="string">&quot;ws://{}:{}&quot;</span>,
-                            hostnames[id_u16 <span class="kw">as </span>usize].clone(),
-                            api_base_port + id_u16
-                        );
-                        Url::parse(<span class="kw-2">&amp;</span>s).expect(<span class="string">&quot;Could not parse URL&quot;</span>)
-                    },
+                },
+                api_addr: {
+                    <span class="kw">let </span>s = <span class="macro">format!</span>(
+                        <span class="string">&quot;ws://{}:{}&quot;</span>,
+                        hostnames[id_u16 <span class="kw">as </span>usize].clone(),
+                        api_base_port + id_u16
+                    );
+                    Url::parse(<span class="kw-2">&amp;</span>s).expect(<span class="string">&quot;Could not parse URL&quot;</span>)
                 },
                 tls_cert: tls_keys[<span class="kw-2">&amp;</span>id].<span class="number">0</span>.clone(),
+                name: <span class="macro">format!</span>(<span class="string">&quot;peer-{}&quot;</span>, id.to_usize()),
             };
 
             (id, peer)
@@ -347,4 +349,4 @@
     (server_config, client_config)
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (01af5040f 2022-10-04)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>
