@@ -1006,7 +1006,7 @@
 
     params.key_pair = <span class="prelude-val">Some</span>(keypair);
     params.alg = <span class="kw-2">&amp;</span>rcgen::PKCS_ECDSA_P256_SHA256;
-    params.is_ca = rcgen::IsCa::SelfSignedOnly;
+    params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
         .push(rcgen::DnType::CommonName, name);
@@ -1069,4 +1069,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (c97d02cdb 2022-10-05)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_server" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (0ca356586 2022-10-06)" ></div></body></html>
