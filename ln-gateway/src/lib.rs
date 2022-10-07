@@ -22,6 +22,7 @@ use fedimint_server::{
     modules::wallet::txoproof::TxOutProof,
 };
 use futures::Future;
+use ln::{LnRpcFactory, LnRpcRef};
 use mint_client::GatewayClient;
 use mint_client::PaymentParameters;
 use mint_client::{mint::MintClientError, Client, ClientError, GatewayClientConfig};
@@ -35,7 +36,7 @@ use tokio::{
 use tracing::{debug, instrument, warn};
 
 use crate::{
-    ln::{GatewayLnRpcConfig, GatewayLnRpcConfigError, LightningError, LnRpc},
+    ln::{LightningError, LnRpc},
     messaging::{GatewayMessageChannel, GatewayMessageReceiver},
     webserver::run_webserver,
 };
@@ -413,40 +414,32 @@ impl LnGateway {
     /// If there was an existing RPC, a successful registration of a new ln rpc will replace the old one.
     pub async fn register_ln_rpc(
         &mut self,
-        gateway_ln_rpc_config: Arc<Mutex<GatewayLnRpcConfig>>,
-    ) -> Result<&mut Self> {
+        ln_rpc_factory: Arc<dyn LnRpcFactory>,
+    ) -> Result<Arc<LnRpcRef>> {
         let (sender, receiver): (mpsc::Sender<GatewayRequest>, mpsc::Receiver<GatewayRequest>) =
             mpsc::channel(100);
 
         let ln_rpc_messenger = GatewayMessageChannel::new(&sender);
 
         // Register the lightning RPC client
-        match gateway_ln_rpc_config
-            .lock()
-            .await
-            .init(ln_rpc_messenger)
-            .await
-        {
-            Ok(config) => {
-                self.ln_rpc = Some(Arc::clone(&config.ln_rpc));
+        let ln_ref = ln_rpc_factory.create(ln_rpc_messenger).await?;
+        let ln_ref_copy = ln_ref.clone();
 
-                // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
-                // Run a webserver on the rpc bind address
-                let webserver_messenger = GatewayMessageChannel::new(&sender);
-                let webserver = tokio::spawn(async move {
-                    run_webserver(webserver_messenger, &config.bind_addr).await
-                });
-                self.webserver = Some(webserver);
-            }
-            Err(e) => {
-                return Err(LnGatewayError::LnRpcConfigE(e));
-            }
-        }
+        self.ln_rpc = Some(Arc::clone(&ln_ref.ln_rpc));
+
+        // TODO: figure out how to bind a single gateway webserver to any [+ multiple?] ln rpcs
+        // Run a webserver on the rpc bind address
+        let webserver_messenger = GatewayMessageChannel::new(&sender);
+        let webserver =
+            tokio::spawn(
+                async move { run_webserver(webserver_messenger, &ln_ref.bind_addr).await },
+            );
+        self.webserver = Some(webserver);
 
         // Temp: We keep a reference to the receiver so we can later istantiate an actor on demand
         self.receiver = Some(receiver); // TODO: instantiate a 'MessageRouter' with the receiver
 
-        Ok(self)
+        Ok(ln_ref_copy)
     }
 
     /// Register a federation to the gateway.
@@ -515,8 +508,6 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
-    #[error("Mint error: {0:?}")]
-    LnRpcConfigE(#[from] GatewayLnRpcConfigError),
     #[error("Other: {0:?}")]
     Other(#[from] anyhow::Error),
 }

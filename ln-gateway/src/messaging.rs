@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use anyhow::Error;
 use async_trait::async_trait;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{GatewayRequest, GatewayRequestTrait, Result};
 
@@ -13,7 +11,7 @@ pub trait GatewayMessageReceiver: Send + Sync + 'static {
 
 #[derive(Debug, Clone)]
 pub struct GatewayMessageChannel {
-    sender: Arc<Mutex<mpsc::Sender<GatewayRequest>>>,
+    sender: mpsc::Sender<GatewayRequest>,
 }
 
 /// A two-way message channel for [`GatewayRequest`]s.
@@ -23,7 +21,7 @@ pub struct GatewayMessageChannel {
 impl GatewayMessageChannel {
     pub fn new(sender: &mpsc::Sender<GatewayRequest>) -> Self {
         Self {
-            sender: Arc::new(Mutex::new(sender.clone())),
+            sender: sender.clone(),
         }
     }
 
@@ -33,9 +31,7 @@ impl GatewayMessageChannel {
     {
         let (sender, receiver) = oneshot::channel::<Result<R::Response>>();
         let msg = message.to_enum(sender);
-
-        let gw_sender = { self.sender.lock().await.clone() };
-        gw_sender
+        self.sender
             .send(msg)
             .await
             .expect("failed to send over channel");

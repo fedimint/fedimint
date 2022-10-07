@@ -50,17 +50,13 @@ use futures::future::{join_all, select_all};
 use hbbft::honey_badger::Batch;
 use itertools::Itertools;
 use lightning_invoice::Invoice;
-use ln_gateway::{
-    ln::{GatewayLnRpcConfig, LnRpcFactory},
-    GatewayActor, LnGateway,
-};
+use ln_gateway::{ln::LnRpcFactory, GatewayActor, LnGateway};
 use mint_client::api::WsFederationApi;
 use mint_client::mint::SpendableNote;
 use mint_client::{GatewayClient, GatewayClientConfig, UserClient, UserClientConfig};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use real::{RealBitcoinTest, RealLightningTest};
-use tokio::sync::Mutex;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -271,10 +267,9 @@ pub struct GatewayTest {
 impl GatewayTest {
     async fn new(ln_rpc_factory: Arc<dyn LnRpcFactory>, client_config: ClientConfig) -> Self {
         let mut gateway = LnGateway::new();
-        let rpc_config_mx = Arc::new(Mutex::new(GatewayLnRpcConfig::new(ln_rpc_factory.clone())));
 
-        gateway
-            .register_ln_rpc(rpc_config_mx.clone())
+        let ln_config = gateway
+            .register_ln_rpc(ln_rpc_factory)
             .await
             .expect("Failed to register LN RPC");
 
@@ -282,12 +277,6 @@ impl GatewayTest {
         let mut rng = rng();
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut rng);
-
-        let ln_config = rpc_config_mx
-            .lock()
-            .await
-            .config()
-            .expect("Failed to get rpc config");
 
         // Build user client and test
         let user_cfg = UserClientConfig(client_config.clone());

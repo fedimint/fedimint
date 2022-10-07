@@ -9,7 +9,7 @@ use fedimint_api::{config::BitcoindRpcCfg, encoding::Decodable, Amount};
 use fedimint_wallet::txoproof::TxOutProof;
 use lightning_invoice::Invoice;
 use ln_gateway::{
-    ln::{LnRpc, LnRpcConfig, LnRpcFactory},
+    ln::{LnRpc, LnRpcFactory, LnRpcRef},
     messaging::GatewayMessageChannel,
 };
 use serde::Serialize;
@@ -66,14 +66,14 @@ impl LnRpcFactory for RealLightningTest {
         &self,
         // TODO: Apply messaging in RealLightningTest scenario
         _messenger: GatewayMessageChannel,
-    ) -> Result<Arc<LnRpcConfig>, anyhow::Error> {
+    ) -> Result<Arc<LnRpcRef>, anyhow::Error> {
         let gateway_cln_rpc = ClnRpc::new(self.gateway_workdir.clone())
             .await
             .expect("connect to ln_socket");
 
         let gateway_pub_key = PublicKey::from_str(&self.gateway_rpc.getinfo().unwrap().id).unwrap();
 
-        Ok(Arc::new(LnRpcConfig {
+        Ok(Arc::new(LnRpcRef {
             ln_rpc: Arc::new(Mutex::new(gateway_cln_rpc)) as Arc<dyn LnRpc>,
             bind_addr: self.gateway_bind_addr,
             work_dir: self.gateway_workdir.clone(),

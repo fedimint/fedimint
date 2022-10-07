@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    ln::{LightningError, LnRpc, LnRpcConfig, LnRpcFactory},
+    ln::{LightningError, LnRpc, LnRpcFactory, LnRpcRef},
     BalancePayload, DepositAddressPayload, DepositPayload, GatewayMessageChannel, WithdrawPayload,
 };
 
@@ -220,7 +220,7 @@ impl ClnRpcFactory {
         }
     }
 
-    async fn build_cln_rpc(&self, messenger: GatewayMessageChannel) -> Result<LnRpcConfig, Error> {
+    async fn build_cln_rpc(&self, messenger: GatewayMessageChannel) -> Result<LnRpcRef, Error> {
         let plugin = self.build_cln_plugin(messenger).await?;
 
         let work_dir = match plugin.option("fedimint-cfg") {
@@ -254,7 +254,7 @@ impl ClnRpcFactory {
 
         let pub_key = self.get_node_pub_key(&mut cln_rpc).await?;
 
-        Ok(LnRpcConfig {
+        Ok(LnRpcRef {
             ln_rpc: Arc::new(Mutex::new(cln_rpc)),
             bind_addr,
             pub_key,
@@ -281,7 +281,7 @@ impl ClnRpcFactory {
 
 #[async_trait]
 impl LnRpcFactory for ClnRpcFactory {
-    async fn create(&self, messenger: GatewayMessageChannel) -> Result<Arc<LnRpcConfig>, Error> {
+    async fn create(&self, messenger: GatewayMessageChannel) -> Result<Arc<LnRpcRef>, Error> {
         match self.build_cln_rpc(messenger).await {
             Ok(res) => Ok(Arc::new(res)),
             Err(e) => Err(e),
