@@ -471,7 +471,7 @@ pub fn gen_cert_and_key(
 
     params.key_pair = Some(keypair);
     params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-    params.is_ca = rcgen::IsCa::SelfSignedOnly;
+    params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
         .push(rcgen::DnType::CommonName, name);
