@@ -39,7 +39,7 @@ pub trait IClientModule {
 
 dyn_newtype_define! {
     #[derive(Clone)]
-    ClientModule(Arc<IClientModule>)
+    pub ClientModule(Arc<IClientModule>)
 }
 
 /// Result of [`ClientModulePlugin::poll_pending_outputs`]

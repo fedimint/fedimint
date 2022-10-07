@@ -160,7 +160,7 @@ module_plugin_trait_define! {
 
 dyn_newtype_define! {
     /// An owned, immutable input to a [`Transaction`]
-    Input(Box<ModuleInput>)
+    pub Input(Box<ModuleInput>)
 }
 module_dyn_newtype_impl_encode_decode! {
     Input, decode_input
@@ -180,7 +180,7 @@ pub trait ModuleOutput: DynEncodable {
 
 dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`]
-    Output(Box<ModuleOutput>)
+    pub Output(Box<ModuleOutput>)
 }
 module_plugin_trait_define! {
     Output, PluginOutput, ModuleOutput,
@@ -218,7 +218,7 @@ pub trait ModuleSpendableOutput: DynEncodable {
 
 dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] after it was finalized (so it's spendable)
-    SpendableOutput(Box<ModuleSpendableOutput>)
+    pub SpendableOutput(Box<ModuleSpendableOutput>)
 }
 module_plugin_trait_define! {
     SpendableOutput, PluginSpendableOutput, ModuleSpendableOutput,
@@ -260,7 +260,7 @@ pub trait ModulePendingOutput: DynEncodable {
 
 dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    PendingOutput(Box<ModulePendingOutput>)
+    pub PendingOutput(Box<ModulePendingOutput>)
 }
 module_plugin_trait_define! {
     PendingOutput, PluginPendingOutput, ModulePendingOutput,
@@ -287,7 +287,7 @@ pub trait ModuleOutputOutcome: DynEncodable {
 
 dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`] before it was finalized
-    OutputOutcome(Box<ModuleOutputOutcome>)
+    pub OutputOutcome(Box<ModuleOutputOutcome>)
 }
 module_plugin_trait_define! {
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
