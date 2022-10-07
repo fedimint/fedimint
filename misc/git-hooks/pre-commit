@@ -31,7 +31,7 @@ nixpkgs-fmt --check $(echo "$git_ls_files" | grep -E '.*\.nix$')
 # Note: avoid `cargo fmt --all` so we don't need extra stuff in `ci` shell
 # so that CI is faster
 # shellcheck disable=SC2046
-rustfmt --edition 2021 --check $(echo "$git_ls_files" | grep -E '.*\.rs$')
+cargo fmt --all --check
 
 
 >&2 echo "Checking shell script files ..."
