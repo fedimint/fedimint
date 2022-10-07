@@ -33,7 +33,7 @@ rand = "0.8"
 serde = { version = "1.0.145", features = [ "derive" ] }
 tokio = { version = "1.21.2", features = ["full"] }
 tracing ="0.1.22"
-tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 url = "2.3.1"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }

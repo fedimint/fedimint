@@ -44,4 +44,4 @@ tokio = { version = "1.21.2", features = ["rt", "rt-multi-thread", "sync", "time
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
-tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

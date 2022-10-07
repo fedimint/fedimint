@@ -21,4 +21,4 @@ tracing = "0.1.22"
 [dev-dependencies]
 tempfile = "3.3.0"
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
-tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }

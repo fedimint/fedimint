@@ -30,5 +30,5 @@ tracing ="0.1.22"
 
 [dev-dependencies]
 rand = "0.8"
-tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
