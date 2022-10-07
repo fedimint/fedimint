@@ -35,13 +35,6 @@ fn run_fedimint(state: &mut RwLockWriteGuard<State>) {
     state.running = true;
 }
 
-#[derive(Deserialize, Debug, Clone)]
-#[allow(dead_code)]
-pub struct Guardian {
-    name: String,
-    connection_string: String,
-}
-
 #[derive(Template)]
 #[template(path = "home.html")]
 struct HomeTemplate {

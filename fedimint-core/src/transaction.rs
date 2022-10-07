@@ -1,7 +1,7 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::{Amount, FederationModule, TransactionId};
+use fedimint_api::{Amount, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -29,18 +29,39 @@ pub struct Transaction {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Input {
     // TODO: maybe treat every coin as a seperate input?
-    Mint(<fedimint_mint::Mint as FederationModule>::TxInput),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::TxInput),
-    LN(<fedimint_ln::LightningModule as FederationModule>::TxInput),
+    // Mint(<fedimint_mint::Mint as FederationModule>::TxInput),
+    // Wallet(<fedimint_wallet::Wallet as FederationModule>::TxInput),
+    // LN(<fedimint_ln::LightningModule as FederationModule>::TxInput),
 }
 
+impl Input {
+    /// Note: temporary, as we switch from hardcoded to injected modules
+    pub fn get_module_key(&self) -> fedimint_api::module::ModuleKey {
+        match self {
+            // Input::Mint(_) => 0,
+            Input::Wallet(_) => 1,
+            Input::LN(_) => 2,
+        }
+    }
+}
 // TODO: check if clippy is right
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum Output {
-    Mint(<fedimint_mint::Mint as FederationModule>::TxOutput),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::TxOutput),
-    LN(<fedimint_ln::LightningModule as FederationModule>::TxOutput),
+    // Mint(<fedimint_mint::Mint as FederationModule>::TxOutput),
+    // Wallet(<fedimint_wallet::Wallet as FederationModule>::TxOutput),
+    // LN(<fedimint_ln::LightningModule as FederationModule>::TxOutput),
+}
+
+impl Output {
+    /// Note: temporary, as we switch from hardcoded to injected modules
+    pub fn get_module_key(&self) -> fedimint_api::module::ModuleKey {
+        match self {
+            // Output::Mint(_) => 0,
+            Output::Wallet(_) => 1,
+            Output::LN(_) => 2,
+        }
+    }
 }
 
 impl Transaction {

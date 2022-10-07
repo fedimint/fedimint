@@ -1,21 +1,45 @@
 use std::{collections::BTreeMap, io};
 
+use fedimint_api::module::{
+    ConsensusItem, Input, ModuleKey, Output, OutputOutcome, PendingOutput, PluginConsensusItem,
+    PluginDecoder, PluginInput, PluginOutput, PluginOutputOutcome, PluginPendingOutput,
+    PluginSpendableOutput, SpendableOutput,
+};
 use fedimint_api::{
     encoding::{Decodable, DecodeError, Encodable},
-    Amount,
+    Amount, Tiered, TieredMulti,
 };
-use fedimint_core_api::{
-    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
-    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
-};
+use serde::{Deserialize, Serialize};
+use tbs::AggregatePublicKey;
 
 pub const MINT_MODULE_KEY: u16 = 0;
 
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct MintClientConfig {
+    // TODO: make a `String` so we don't have to pull in whole `tbs` just to send over a key?
+    pub tbs_pks: Tiered<AggregatePublicKey>,
+    pub fee_consensus: FeeConsensus,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct FeeConsensus {
+    pub coin_issuance_abs: fedimint_api::Amount,
+    pub coin_spend_abs: fedimint_api::Amount,
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            coin_issuance_abs: fedimint_api::Amount::ZERO,
+            coin_spend_abs: fedimint_api::Amount::ZERO,
+        }
+    }
+}
 // TODO: DELME
 #[derive(Default, Clone)]
 pub struct MintModuleCommon;
 
-impl ModuleCommon for MintModuleCommon {
+impl PluginDecoder for MintModuleCommon {
     fn module_key() -> ModuleKey {
         MINT_MODULE_KEY
     }
@@ -51,6 +75,15 @@ impl ModuleCommon for MintModuleCommon {
             &BTreeMap::<_, ()>::new(),
         )?))
     }
+
+    fn decode_consensus_item(
+        mut r: &mut dyn io::Read,
+    ) -> Result<fedimint_api::module::ConsensusItem, DecodeError> {
+        Ok(ConsensusItem::from(MintConsensusItem::consensus_decode(
+            &mut r,
+            &BTreeMap::<_, ()>::new(),
+        )?))
+    }
 }
 
 #[derive(Encodable, Decodable, Clone)]
@@ -79,12 +112,20 @@ impl PluginPendingOutput for MintPendingOutput {
     }
 }
 
+/// Blind signature for a [`SignRequest`]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct SigResponse(pub TieredMulti<tbs::BlindedSignature>);
+
 #[derive(Encodable, Decodable, Clone)]
-pub struct MintOutputOutcome;
+pub struct MintOutputOutcome(Option<SigResponse>);
 
 impl PluginOutputOutcome for MintOutputOutcome {
     fn module_key(&self) -> ModuleKey {
         MINT_MODULE_KEY
+    }
+
+    fn is_final(&self) -> bool {
+        self.0.is_some()
     }
 }
 
@@ -114,6 +155,19 @@ impl PluginInput for MintInput {
     }
 
     fn amount(&self) -> Amount {
+        todo!()
+    }
+}
+
+#[derive(Encodable, Decodable, Clone)]
+pub struct MintConsensusItem;
+
+impl PluginConsensusItem for MintConsensusItem {
+    fn module_key(&self) -> ModuleKey {
+        MINT_MODULE_KEY
+    }
+
+    fn is_final(&self) -> bool {
         todo!()
     }
 }

@@ -10,6 +10,7 @@ use tracing::{trace, warn};
 
 use crate::dyn_newtype_define;
 use crate::encoding::{Decodable, Encodable, ModuleRegistry};
+use crate::module::{ModuleDecoder, ServerModule};
 
 pub mod batch;
 pub mod mem_impl;
@@ -37,7 +38,7 @@ pub enum DatabaseOperation {
 pub trait DatabaseKeyPrefixConst {
     const DB_PREFIX: u8;
     type Key: DatabaseKey;
-    type Value: DatabaseValue<()>;
+    type Value: DatabaseValue;
 }
 
 pub trait DatabaseKeyPrefix: Debug {
@@ -52,8 +53,10 @@ pub trait SerializableDatabaseValue: Debug {
     fn to_bytes(&self) -> Vec<u8>;
 }
 
-pub trait DatabaseValue<M>: Sized + SerializableDatabaseValue {
-    fn from_bytes(data: &[u8], modules: &ModuleRegistry<M>) -> Result<Self, DecodingError>;
+pub trait DatabaseValue: Sized + SerializableDatabaseValue {
+    fn from_bytes<M>(data: &[u8], modules: &ModuleRegistry<M>) -> Result<Self, DecodingError>
+    where
+        M: ModuleDecoder;
 }
 
 pub type PrefixIter<'a> = Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + Send + 'a>;
@@ -92,7 +95,7 @@ impl Database {
                 );
                 Ok(Some(K::Value::from_bytes(
                     &old_val_bytes,
-                    &BTreeMap::new(),
+                    &BTreeMap::<_, ServerModule>::new(),
                 )?))
             }
             None => Ok(None),
@@ -114,7 +117,10 @@ impl Database {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &BTreeMap::new())?))
+        Ok(Some(K::Value::from_bytes(
+            &value_bytes,
+            &BTreeMap::<_, ServerModule>::new(),
+        )?))
     }
 
     pub fn remove_entry<K>(&self, key: &K) -> Result<Option<K::Value>>
@@ -132,7 +138,10 @@ impl Database {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &BTreeMap::new())?))
+        Ok(Some(K::Value::from_bytes(
+            &value_bytes,
+            &BTreeMap::<_, ServerModule>::new(),
+        )?))
     }
 
     pub fn find_by_prefix<KP>(
@@ -151,7 +160,8 @@ impl Database {
                     std::any::type_name::<KP::Value>(),
                     value_bytes
                 );
-                let value = KP::Value::from_bytes(&value_bytes, &BTreeMap::new())?;
+                let value =
+                    KP::Value::from_bytes(&value_bytes, &BTreeMap::<_, ServerModule>::new())?;
                 Ok((key, value))
             })
         })
@@ -205,7 +215,7 @@ impl<'a> DatabaseTransaction<'a> {
                 );
                 Ok(Some(K::Value::from_bytes(
                     &old_val_bytes,
-                    &BTreeMap::new(),
+                    &BTreeMap::<_, ServerModule>::new(),
                 )?))
             }
             None => Ok(None),
@@ -243,7 +253,10 @@ impl<'a> DatabaseTransaction<'a> {
             std::any::type_name::<K::Value>(),
             value_bytes
         );
-        Ok(Some(K::Value::from_bytes(&value_bytes, &BTreeMap::new())?))
+        Ok(Some(K::Value::from_bytes(
+            &value_bytes,
+            &BTreeMap::<_, ServerModule>::new(),
+        )?))
     }
 
     pub fn remove_entry<K>(&mut self, key: &K) -> Result<()>
@@ -288,7 +301,8 @@ impl<'a> DatabaseTransaction<'a> {
                     std::any::type_name::<KP::Value>(),
                     value_bytes
                 );
-                let value = KP::Value::from_bytes(&value_bytes, &BTreeMap::new())?;
+                let value =
+                    KP::Value::from_bytes(&value_bytes, &BTreeMap::<_, ServerModule>::new())?;
                 Ok((key, value))
             })
         })
@@ -310,7 +324,7 @@ where
 impl<T> DatabaseKey for T
 where
     // Note: key can only be `T` that can be decoded without modules (even if module type is `()`)
-    T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable<()> + Sized,
+    T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + crate::encoding::Decodable + Sized,
 {
     fn from_bytes(data: &[u8]) -> Result<Self, DecodingError> {
         if data.is_empty() {
@@ -322,7 +336,7 @@ where
             return Err(DecodingError::wrong_prefix(Self::DB_PREFIX, data[0]));
         }
 
-        <Self as crate::encoding::Decodable<()>>::consensus_decode(
+        <Self as crate::encoding::Decodable>::consensus_decode(
             &mut std::io::Cursor::new(&data[1..]),
             &BTreeMap::<_, ()>::new(),
         )
@@ -342,11 +356,14 @@ where
     }
 }
 
-impl<M, T> DatabaseValue<M> for T
+impl<T> DatabaseValue for T
 where
-    T: SerializableDatabaseValue + Decodable<M>,
+    T: SerializableDatabaseValue + Decodable,
 {
-    fn from_bytes(data: &[u8], modules: &ModuleRegistry<M>) -> Result<Self, DecodingError> {
+    fn from_bytes<M>(data: &[u8], modules: &ModuleRegistry<M>) -> Result<Self, DecodingError>
+    where
+        M: ModuleDecoder,
+    {
         T::consensus_decode(&mut std::io::Cursor::new(data), modules)
             .map_err(|e| DecodingError::Other(e.0))
     }

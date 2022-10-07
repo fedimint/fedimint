@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use fedimint_api::PeerId;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 /// Owned [`PeerConnections`] trait object type
-pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'static>;
+pub type AnyPeerConnections = Box<dyn PeerConnections + Send + Unpin + 'static>;
 
 /// Connection manager that tries to keep connections open to all peers
 ///
@@ -18,24 +16,21 @@ pub type AnyPeerConnections<M> = Box<dyn PeerConnections<M> + Send + Unpin + 'st
 /// In case of longer term interruptions the message cache has to be dropped to avoid DoS attacks.
 /// The thus disconnected peer will need to rejoin the consensus at a later time.  
 #[async_trait]
-pub trait PeerConnections<T>
-where
-    T: Serialize + DeserializeOwned + Unpin + Send,
-{
+pub trait PeerConnections {
     /// Send a message to a specific peer.
     ///
     /// The message is sent immediately and cached if the peer is reachable and only cached
     /// otherwise.
-    async fn send(&mut self, peers: &[PeerId], msg: T);
+    async fn send(&mut self, peers: &[PeerId], msg: serde_json::Value);
 
     /// Await receipt of a message from any connected peer.
-    async fn receive(&mut self) -> (PeerId, T);
+    async fn receive(&mut self) -> (PeerId, serde_json::Value);
 
     /// Removes a peer connection in case of misbehavior
     async fn ban_peer(&mut self, peer: PeerId);
 
     /// Converts the struct to a `PeerConnection` trait object
-    fn into_dyn(self) -> AnyPeerConnections<T>
+    fn into_dyn(self) -> AnyPeerConnections
     where
         Self: Sized + Send + Unpin + 'static,
     {

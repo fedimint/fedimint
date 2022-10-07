@@ -44,13 +44,6 @@ pub fn configgen(
         .collect();
     (server_configs, client_config)
 }
-#[derive(Debug)]
-pub struct SetupConfigParams {
-    pub federation_name: String,
-    pub guardians: Vec<Guardian>,
-    pub amount_tiers: Vec<fedimint_api::Amount>,
-    pub btc_rpc: BitcoindRpcCfg,
-}
 
 fn trusted_dealer_gen(
     peers: &[PeerId],

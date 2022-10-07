@@ -1,0 +1,36 @@
+[package]
+name = "fedimint-ln-server"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint server side LN module."
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "fedimint_ln_server"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = "0.1"
+bincode = "1"
+bitcoin_hashes = "0.11.0"
+futures = "0.3.24"
+itertools = "0.10.5"
+lightning = "0.0.111"
+lightning-invoice = "0.19.0"
+fedimint-api = { path = "../../fedimint-api" }
+fedimint-ln-common = { path = "../ln-common/" }
+secp256k1 = { version="0.24.0", default-features=false }
+serde = {version = "1.0.145", features = [ "derive" ] }
+thiserror = "1.0.37"
+threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
+tracing = "0.1.37"
+serde_json = "1.0.86"
+url = { version = "2.3.1", features = ["serde"] }
+hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
+
+[dev-dependencies]
+tokio = {version = "1.21.2", features = [ "full" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+test-log = { version = "0.2", features = [ "trace" ], default-features = false }

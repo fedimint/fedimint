@@ -1,0 +1,16 @@
+[package]
+name = "fedimint-l1-client"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint client-side L1 (on-chain) module"
+license = "MIT"
+
+[lib]
+name = "fedimint_l1_client"
+path = "src/lib.rs"
+
+[dependencies]
+fedimint-api = { path = "../../fedimint-api" }
+fedimint-l1-common = { path = "../l1-common/" }
+tracing ="0.1.37"

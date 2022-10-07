@@ -3,7 +3,6 @@ use std::hash::Hash;
 use std::io::Write;
 use std::ops::Mul;
 
-use async_trait::async_trait;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::BitcoinHash;
@@ -19,39 +18,10 @@ use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
+use tracing::log::warn;
 
 use crate::net::peers::AnyPeerConnections;
 use crate::PeerId;
-
-/// Part of a config that needs to be generated to bootstrap a new federation.
-#[async_trait(? Send)]
-pub trait GenerateConfig: Sized {
-    type Params: ?Sized;
-    type ClientConfig;
-    type ConfigMessage;
-    type ConfigError;
-
-    /// Function that generates the config of all peers locally. This is only meant to be used for
-    /// testing as the generating machine would be a single point of failure/compromise.
-    fn trusted_dealer_gen(
-        peers: &[PeerId],
-        params: &Self::Params,
-        rng: impl RngCore + CryptoRng,
-    ) -> (BTreeMap<PeerId, Self>, Self::ClientConfig);
-
-    fn to_client_config(&self) -> Self::ClientConfig;
-
-    /// Asserts that the public keys in the config are and panics otherwise (no way to recover)
-    fn validate_config(&self, identity: &PeerId);
-
-    async fn distributed_gen(
-        connections: &mut AnyPeerConnections<Self::ConfigMessage>,
-        our_id: &PeerId,
-        peers: &[PeerId],
-        params: &Self::Params,
-        rng: impl RngCore + CryptoRng,
-    ) -> Result<(Self, Self::ClientConfig), Self::ConfigError>;
-}
 
 struct Dkg<G> {
     gen_g: G,
@@ -291,7 +261,7 @@ where
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
     pub async fn run_g2(
         &mut self,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G2Projective>)>,
+        connections: &mut AnyPeerConnections, /*<(T, DkgMessage<G2Projective>)>*/
         rng: &mut (impl RngCore + CryptoRng),
     ) -> HashMap<T, DkgKeys<G2Projective>> {
         self.run(G2Projective::generator(), connections, rng).await
@@ -300,7 +270,7 @@ where
     /// Create keys from G1 (48B keys, 96B messages) used in `threshold_crypto`
     pub async fn run_g1(
         &mut self,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G1Projective>)>,
+        connections: &mut AnyPeerConnections, /*<(T, DkgMessage<G1Projective>)> */
         rng: &mut (impl RngCore + CryptoRng),
     ) -> HashMap<T, DkgKeys<G1Projective>> {
         self.run(G1Projective::generator(), connections, rng).await
@@ -310,7 +280,7 @@ where
     pub async fn run<G: DkgGroup>(
         &mut self,
         group: G,
-        connections: &mut AnyPeerConnections<(T, DkgMessage<G>)>,
+        connections: &mut AnyPeerConnections, /*<(T, DkgMessage<G>)>*/
         rng: &mut (impl RngCore + CryptoRng),
     ) -> HashMap<T, DkgKeys<G>> {
         let mut dkgs: HashMap<T, Dkg<G>> = HashMap::new();
@@ -323,7 +293,13 @@ where
             let (dkg, step) = Dkg::new(group, our_id, peers, *threshold, rng);
             if let DkgStep::Messages(messages) = step {
                 for (peer, msg) in messages {
-                    connections.send(&[peer], (key.clone(), msg)).await;
+                    connections
+                        .send(
+                            &[peer],
+                            serde_json::to_value((key.clone(), msg))
+                                .expect("serialization should not fail"),
+                        )
+                        .await;
                 }
             }
             dkgs.insert(key.clone(), dkg);
@@ -331,13 +307,26 @@ where
 
         // process steps for each key
         loop {
-            let (peer, (key, message)) = connections.receive().await;
+            let (peer, raw_message) = connections.receive().await;
+            let (key, message) = match serde_json::from_value(raw_message) {
+                Ok(o) => o,
+                Err(e) => {
+                    warn!("Invalid message from peer {peer}: {e}; ignoring...");
+                    continue;
+                }
+            };
             let step = dkgs.get_mut(&key).expect("exists").step(peer, message);
 
             match step {
                 DkgStep::Messages(messages) => {
                     for (peer, msg) in messages {
-                        connections.send(&[peer], (key.clone(), msg)).await;
+                        connections
+                            .send(
+                                &[peer],
+                                serde_json::to_value((key.clone(), msg))
+                                    .expect("serialization can't fail"),
+                            )
+                            .await;
                     }
                 }
                 DkgStep::Result(result) => {

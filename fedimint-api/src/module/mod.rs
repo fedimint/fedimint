@@ -1,23 +1,43 @@
+//! Fedimint Core API (common) module interface
+//!
+//! Fedimint supports externally implemented modules.
+//!
+//! This (Rust) module defines common interoperability types
+//! and functionality that is used on both client and sever side.
+//!
 pub mod audit;
 pub mod interconnect;
-pub mod testing;
 
-use std::collections::HashSet;
+use std::io;
+use std::{any::Any, collections::BTreeMap};
 
-use async_trait::async_trait;
-use futures::future::BoxFuture;
-use rand::CryptoRng;
-use secp256k1_zkp::rand::RngCore;
+pub use bitcoin::KeyPair;
+use fedimint_api::{
+    dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
+    encoding::{Decodable, DecodeError, DynEncodable, Encodable},
+    Amount,
+};
 use secp256k1_zkp::XOnlyPublicKey;
 
-use crate::db::DatabaseTransaction;
-use crate::module::audit::Audit;
-use crate::module::interconnect::ModuleInterconect;
-use crate::{Amount, PeerId};
+pub mod encode;
 
-pub struct InputMeta<'a> {
+pub mod client;
+pub mod server;
+pub mod setup;
+
+pub use client::*;
+pub use server::*;
+
+/// A module key identifing a module
+///
+/// Used as an unique ID, and also as prefix in serialization
+/// of module-specific data.
+pub type ModuleKey = u16;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct InputMeta {
     pub amount: TransactionItemAmount,
-    pub puk_keys: Box<dyn Iterator<Item = XOnlyPublicKey> + 'a>,
+    pub pub_keys: Vec<XOnlyPublicKey>,
 }
 
 /// Information about the amount represented by an input or output.
@@ -57,213 +77,406 @@ impl ApiError {
     }
 }
 
-#[async_trait]
-pub trait TypedApiEndpoint {
-    type State: Sync;
-
-    /// example: /transaction
-    const PATH: &'static str;
-
-    type Param: serde::de::DeserializeOwned + Send;
-    type Response: serde::Serialize;
-
-    async fn handle(state: &Self::State, params: Self::Param) -> Result<Self::Response, ApiError>;
-}
-
-#[doc(hidden)]
-pub mod __reexports {
-    pub use serde_json;
-}
-
-/// # Example
+/// Implement `Encodable` and `Decodable` for a "module dyn newtype"
 ///
-/// ```rust
-/// # use fedimint_api::module::{api_endpoint, ApiEndpoint};
-/// struct State;
-///
-/// let _: ApiEndpoint<State> = api_endpoint! {
-///     "/foobar",
-///     async |state: &State, params: ()| -> i32 {
-///         Ok(0)
-///     }
-/// };
-/// ```
+/// "Module dyn newtype" is just a "dyn newtype" used by general purpose
+/// Fedimint code to abstract away details of mint modules.
 #[macro_export]
-macro_rules! __api_endpoint {
+macro_rules! module_dyn_newtype_impl_module_prefixed_encode_decode {
     (
-        $path:expr,
-        async |$state:ident: &$state_ty:ty, $param:ident: $param_ty:ty| -> $resp_ty:ty $body:block
-    ) => {{
-        struct Endpoint;
-
-        #[async_trait::async_trait]
-        impl $crate::module::TypedApiEndpoint for Endpoint {
-            const PATH: &'static str = $path;
-            type State = $state_ty;
-            type Param = $param_ty;
-            type Response = $resp_ty;
-
-            async fn handle(
-                $state: &Self::State,
-                $param: Self::Param,
-            ) -> ::std::result::Result<Self::Response, $crate::module::ApiError> {
-                $body
+        $name:ident, $decode_fn:ident
+    ) => {
+        impl Encodable for $name {
+            fn consensus_encode<W: std::io::Write>(
+                &self,
+                writer: &mut W,
+            ) -> Result<usize, std::io::Error> {
+                self.0.module_key().consensus_encode(writer)?;
+                self.0.consensus_encode_dyn(writer)
             }
         }
 
-        ApiEndpoint {
-            path: <Endpoint as $crate::module::TypedApiEndpoint>::PATH,
-            handler: |m, param| {
-                Box::pin(async move {
-                    let params = $crate::module::__reexports::serde_json::from_value(param)
-                        .map_err(|e| $crate::module::ApiError::bad_request(e.to_string()))?;
+        impl Decodable for $name {
+            fn consensus_decode<M, R: std::io::Read>(
+                mut r: &mut R,
+                modules: &$crate::encoding::ModuleRegistry<M>,
+            ) -> Result<Self, DecodeError>
+            where
+                M: ModuleDecoder,
+            {
+                // $crate::module::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
+                //     m.$decode_fn(r)
+                // })
+                let key = ModuleKey::consensus_decode(&mut r, modules)?;
 
-                    let ret =
-                        <Endpoint as $crate::module::TypedApiEndpoint>::handle(m, params).await?;
-                    Ok($crate::module::__reexports::serde_json::to_value(ret)
-                        .expect("encoding error"))
-                })
-            },
+                match modules.get(&key) {
+                    Some(module) => module.$decode_fn(&mut r),
+                    None => Err(DecodeError::new_custom(anyhow::anyhow!(
+                        "Unsupported module with key: {key}",
+                    ))),
+                }
+            }
         }
-    }};
+    };
 }
 
-pub use __api_endpoint as api_endpoint;
+/// Define a "plugin" trait
+///
+/// "Plugin trait" is a trait that a developer of a mint module
+/// needs to implement when implementing mint module. It uses associated
+/// types with trait bonds to guide the developer.
+///
+/// Blanket implementations are used to convert the "plugin trait",
+/// incompatible with `dyn Trait` into "module types" and corresponding
+/// "module dyn newtypes", erasing the exact type and used in a common
+/// Fedimint code.
+#[macro_export]
+macro_rules! module_plugin_trait_define {
+    (   $(#[$outer:meta])*
+        $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* } { $($extra_bounds:tt)* }
+    ) => {
+        pub trait $plugin_ty:
+            DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static $($extra_bounds)*
+        {
+            fn module_key(&self) -> ModuleKey;
 
-/// Definition of an API endpoint defined by a module `M`.
-pub struct ApiEndpoint<M> {
-    /// Path under which the API endpoint can be reached. It should start with a `/`
-    /// e.g. `/transaction`. E.g. this API endpoint would be reachable under `/module_name/transaction`
-    /// depending on the module name returned by `[FedertionModule::api_base_name]`.
-    pub path: &'static str,
-    /// Handler for the API call that takes the following arguments:
-    ///   * Reference to the module which defined it
-    ///   * Request parameters parsed into JSON `[Value](serde_json::Value)`
-    pub handler:
-        for<'a> fn(&'a M, serde_json::Value) -> BoxFuture<'a, Result<serde_json::Value, ApiError>>,
+            $($extra_methods)*
+        }
+
+        impl<T> $module_ty for T
+        where
+            T: $plugin_ty + DynEncodable + 'static,
+        {
+            fn as_any(&self) -> &(dyn Any + 'static) {
+                self
+            }
+
+            fn module_key(&self) -> ModuleKey {
+                <Self as $plugin_ty>::module_key(self)
+            }
+
+            fn clone(&self) -> $newtype_ty {
+                <Self as Clone>::clone(self).into()
+            }
+
+            $($extra_impls)*
+        }
+    };
 }
 
-#[async_trait(?Send)]
-pub trait FederationModule: Sized {
-    type Error;
-    type TxInput: Send + Sync;
-    type TxOutput;
-    type TxOutputOutcome;
-    type ConsensusItem;
-    type VerificationCache;
+/// Common functionality of a Fedimint module
+///
+/// Both backend and server part of the module will need
+/// things like decoding module-specific data.
+pub trait PluginDecoder {
+    fn module_key() -> ModuleKey;
 
-    /// Blocks until a new `consensus_proposal` is available.
-    async fn await_consensus_proposal<'a>(&'a self, rng: impl RngCore + CryptoRng + 'a);
+    /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_spendable_output(r: &mut dyn io::Read) -> Result<SpendableOutput, DecodeError>;
 
-    /// This module's contribution to the next consensus proposal
-    async fn consensus_proposal<'a>(
-        &'a self,
-        rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<Self::ConsensusItem>;
+    /// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    fn decode_input(r: &mut dyn io::Read) -> Result<Input, DecodeError>;
 
-    /// This function is called once before transaction processing starts. All module consensus
-    /// items of this round are supplied as `consensus_items`. The batch will be committed to the
-    /// database after all other modules ran `begin_consensus_epoch`, so the results are available
-    /// when processing transactions.
-    async fn begin_consensus_epoch<'a>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'a>,
-        consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
-        rng: impl RngCore + CryptoRng + 'a,
-    );
+    /// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    fn decode_output(r: &mut dyn io::Read) -> Result<Output, DecodeError>;
 
-    /// Some modules may have slow to verify inputs that would block transaction processing. If the
-    /// slow part of verification can be modeled as a pure function not involving any system state
-    /// we can build a lookup table in a hyper-parallelized manner. This function is meant for
-    /// constructing such lookup tables.
-    fn build_verification_cache<'a>(
-        &'a self,
-        inputs: impl Iterator<Item = &'a Self::TxInput> + Send,
-    ) -> Self::VerificationCache;
+    /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_pending_output(r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
 
-    /// Validate a transaction input before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
-    fn validate_input<'a>(
+    /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    fn decode_output_outcome(r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
+    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    fn decode_consensus_item(r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+}
+
+pub trait ModuleDecoder {
+    fn module_key(&self) -> ModuleKey;
+
+    /// Decode `SpendableOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_spendable_output(&self, r: &mut dyn io::Read)
+        -> Result<SpendableOutput, DecodeError>;
+
+    /// Decode `Input` compatible with this module, after the module key prefix was already decoded
+    fn decode_input(&self, r: &mut dyn io::Read) -> Result<Input, DecodeError>;
+
+    /// Decode `Output` compatible with this module, after the module key prefix was already decoded
+    fn decode_output(&self, r: &mut dyn io::Read) -> Result<Output, DecodeError>;
+
+    /// Decode `PendingOutput` compatible with this module, after the module key prefix was already decoded
+    fn decode_pending_output(&self, r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError>;
+
+    /// Decode `OutputOutcome` compatible with this module, after the module key prefix was already decoded
+    fn decode_output_outcome(&self, r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError>;
+
+    /// Decode `ConsensusItem` compatible with this module, after the module key prefix was already decoded
+    fn decode_consensus_item(&self, r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError>;
+}
+
+impl ModuleDecoder for () {
+    fn module_key(&self) -> ModuleKey {
+        panic!("() is just a placeholder for when modules are not needed and should never be actually called");
+    }
+
+    fn decode_spendable_output(
         &self,
-        interconnect: &dyn ModuleInterconect,
-        verification_cache: &Self::VerificationCache,
-        input: &'a Self::TxInput,
-    ) -> Result<InputMeta<'a>, Self::Error>;
+        _r: &mut dyn io::Read,
+    ) -> Result<SpendableOutput, DecodeError> {
+        todo!()
+    }
+    fn decode_input(&self, _r: &mut dyn io::Read) -> Result<Input, DecodeError> {
+        todo!()
+    }
 
-    /// Try to spend a transaction input. On success all necessary updates will be part of the
-    /// database `batch`. On failure (e.g. double spend) the batch is reset and the operation will
-    /// take no effect.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
-    /// processed.
-    fn apply_input<'a, 'b, 'c>(
-        &'a self,
-        interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::TxInput,
-        verification_cache: &Self::VerificationCache,
-    ) -> Result<InputMeta<'b>, Self::Error>;
+    fn decode_output(&self, _r: &mut dyn io::Read) -> Result<Output, DecodeError> {
+        todo!()
+    }
 
-    /// Validate a transaction output before submitting it to the unconfirmed transaction pool. This
-    /// function has no side effects and may be called at any time. False positives due to outdated
-    /// database state are ok since they get filtered out after consensus has been reached on them
-    /// and merely generate a warning.
-    fn validate_output(
-        &self,
-        output: &Self::TxOutput,
-    ) -> Result<TransactionItemAmount, Self::Error>;
+    fn decode_pending_output(&self, _r: &mut dyn io::Read) -> Result<PendingOutput, DecodeError> {
+        todo!()
+    }
 
-    /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
-    /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
-    /// reset and the operation will take no effect.
-    ///
-    /// The supplied `out_point` identifies the operation (e.g. a peg-out or coin issuance) and can
-    /// be used to retrieve its outcome later using `output_status`.
-    ///
-    /// This function may only be called after `begin_consensus_epoch` and before
-    /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
-    /// processed.
-    fn apply_output<'a, 'b>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::TxOutput,
-        out_point: crate::OutPoint,
-    ) -> Result<TransactionItemAmount, Self::Error>;
+    fn decode_output_outcome(&self, _r: &mut dyn io::Read) -> Result<OutputOutcome, DecodeError> {
+        todo!()
+    }
 
-    /// This function is called once all transactions have been processed and changes were written
-    /// to the database. This allows running finalization code before the next epoch.
-    ///
-    /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
-    /// to drop if any are misbehaving.
-    async fn end_consensus_epoch<'a>(
-        &'a self,
-        consensus_peers: &HashSet<PeerId>,
-        dbtx: &mut DatabaseTransaction<'a>,
-        rng: impl RngCore + CryptoRng + 'a,
-    ) -> Vec<PeerId>;
+    fn decode_consensus_item(&self, _r: &mut dyn io::Read) -> Result<ConsensusItem, DecodeError> {
+        todo!()
+    }
+}
 
-    /// Retrieve the current status of the output. Depending on the module this might contain data
-    /// needed by the client to access funds or give an estimate of when funds will be available.
-    /// Returns `None` if the output is unknown, **NOT** if it is just not ready yet.
-    fn output_status(&self, out_point: crate::OutPoint) -> Option<Self::TxOutputOutcome>;
+/// Something that can be an [`Input`] in a [`Transaction`]
+///
+/// General purpose code should use [`Input`] instead
+pub trait ModuleInput: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + 'static);
+    fn module_key(&self) -> ModuleKey;
+    fn amount(&self) -> Amount;
+    fn clone(&self) -> Input;
+}
 
-    /// Queries the database and returns all assets and liabilities of the module.
-    ///
-    /// Summing over all modules, if liabilities > assets then an error has occurred in the database
-    /// and consensus should halt.
-    fn audit(&self, audit: &mut Audit);
+module_plugin_trait_define! {
+    Input, PluginInput, ModuleInput,
+    {
+        fn amount(&self) -> Amount;
+    }
+    {
+        fn amount(&self) -> Amount {
+            <Self as PluginInput>::amount(self)
+        }
+    }
+    {}
+}
 
-    /// Defines the prefix for API endpoints defined by the module.
-    ///
-    /// E.g. if the module's base path is `foo` and it defines API endpoints `bar` and `baz` then
-    /// these endpoints will be reachable under `/foo/bar` and `/foo/baz`.
-    fn api_base_name(&self) -> &'static str;
+dyn_newtype_define! {
+    /// An owned, immutable input to a [`Transaction`]
+    pub Input(Box<ModuleInput>)
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    Input, decode_input
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 
-    /// Returns a list of custom API endpoints defined by the module. These are made available both
-    /// to users as well as to other modules. They thus should be deterministic, only dependant on
-    /// their input and the current epoch.
-    fn api_endpoints(&self) -> &'static [ApiEndpoint<Self>];
+/// Something that can be an [`Output`] in a [`Transaction`]
+///
+/// General purpose code should use [`Output`] instead
+pub trait ModuleOutput: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + 'static);
+    fn module_key(&self) -> ModuleKey;
+    fn amount(&self) -> Amount;
+
+    fn clone(&self) -> Output;
+}
+
+dyn_newtype_define! {
+    /// An owned, immutable output of a [`Transaction`]
+    pub Output(Box<ModuleOutput>)
+}
+module_plugin_trait_define! {
+    Output, PluginOutput, ModuleOutput,
+    {
+        fn amount(&self) -> Amount;
+    }
+    {
+        fn amount(&self) -> Amount {
+            <Self as PluginOutput>::amount(self)
+        }
+    }
+    {}
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    Output, decode_output
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(Output);
+
+/// A spendable output - tracked and persisted by the client
+///
+/// Created by generating transaction [`Output`], spendable
+/// by converting to [`Input`].
+pub trait ModuleSpendableOutput: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + '_);
+    /// Module key
+    fn module_key(&self) -> ModuleKey;
+    fn amount(&self) -> Amount;
+    fn clone(&self) -> SpendableOutput;
+
+    // TODO: move to be module function
+    /// Prepare [`Input`] spending thish output in a transaction, and a key used to sign the [`Transaction`]
+    // fn to_input(&self) -> (Input, KeyPair);
+
+    fn key(&self) -> String;
+}
+
+dyn_newtype_define! {
+    /// An owned, immutable output of a [`Transaction`] after it was finalized (so it's spendable)
+    pub SpendableOutput(Box<ModuleSpendableOutput>)
+}
+module_plugin_trait_define! {
+    SpendableOutput, PluginSpendableOutput, ModuleSpendableOutput,
+    {
+        fn amount(&self) -> Amount;
+        fn key(&self) -> String;
+    }
+    {
+        fn amount(&self) -> Amount {
+            <Self as PluginSpendableOutput>::amount(self)
+        }
+        fn key(&self) -> String {
+            <Self as PluginSpendableOutput>::key(self)
+        }
+    }
+    {}
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    SpendableOutput, decode_spendable_output
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(SpendableOutput);
+
+pub enum FinalizationError {
+    SomethingWentWrong,
+}
+
+/// A pending output - tracked and persisted by the client
+///
+/// Created by generating transaction [`Output`], spendable
+/// by converting to [`Input`].
+pub trait ModulePendingOutput: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + 'static);
+    /// Module key
+    fn module_key(&self) -> ModuleKey;
+    fn amount(&self) -> Amount;
+    fn clone(&self) -> PendingOutput;
+
+    // fn key(&self) -> String;
+}
+
+dyn_newtype_define! {
+    /// An owned, immutable output of a [`Transaction`] before it was finalized
+    pub PendingOutput(Box<ModulePendingOutput>)
+}
+module_plugin_trait_define! {
+    PendingOutput, PluginPendingOutput, ModulePendingOutput,
+    {
+        fn amount(&self) -> Amount;
+    }
+    {
+        fn amount(&self) -> Amount {
+            <Self as PluginPendingOutput>::amount(self)
+        }
+    }
+    {}
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    PendingOutput, decode_pending_output
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(PendingOutput);
+
+pub trait ModuleOutputOutcome: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + '_);
+    /// Module key
+    fn module_key(&self) -> ModuleKey;
+    fn clone(&self) -> OutputOutcome;
+
+    fn is_final(&self) -> bool;
+}
+
+dyn_newtype_define! {
+    /// An owned, immutable output of a [`Transaction`] before it was finalized
+    pub OutputOutcome(Box<ModuleOutputOutcome>)
+}
+module_plugin_trait_define! {
+    OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
+    {
+        fn is_final(&self) -> bool;
+    }
+    {
+        fn is_final(&self) -> bool {
+            <Self as PluginOutputOutcome>::is_final(self)
+        }
+    }
+    {}
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    OutputOutcome, decode_output_outcome
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
+
+pub trait ModuleConsensusItem: DynEncodable {
+    fn as_any(&self) -> &(dyn Any + 'static);
+    /// Module key
+    fn module_key(&self) -> ModuleKey;
+    fn clone(&self) -> ConsensusItem;
+
+    fn is_final(&self) -> bool;
+}
+
+dyn_newtype_define! {
+    pub ConsensusItem(Box<ModuleConsensusItem>)
+}
+module_plugin_trait_define! {
+    ConsensusItem, PluginConsensusItem, ModuleConsensusItem,
+    {
+        fn is_final(&self) -> bool;
+    }
+    {
+        fn is_final(&self) -> bool {
+            <Self as PluginConsensusItem>::is_final(self)
+        }
+    }
+    {}
+}
+module_dyn_newtype_impl_module_prefixed_encode_decode! {
+    ConsensusItem, decode_consensus_item
+}
+dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
+
+#[derive(Encodable, Decodable)]
+pub struct Signature;
+
+/// Transaction that was already signed
+#[derive(Encodable)]
+pub struct Transaction {
+    inputs: Vec<Input>,
+    outputs: Vec<Output>,
+    signature: Signature,
+}
+
+impl Decodable for Transaction
+where
+    Input: Decodable,
+    Output: Decodable,
+{
+    fn consensus_decode<M, R: std::io::Read>(
+        r: &mut R,
+        modules: &BTreeMap<ModuleKey, M>,
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
+        Ok(Self {
+            inputs: Decodable::consensus_decode(r, modules)?,
+            outputs: Decodable::consensus_decode(r, modules)?,
+            signature: Decodable::consensus_decode(r, modules)?,
+        })
+    }
 }

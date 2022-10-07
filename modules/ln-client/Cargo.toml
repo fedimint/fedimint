@@ -1,0 +1,16 @@
+[package]
+name = "fedimint-ln-client"
+version = "0.1.0"
+authors = ["The Fedimint Developers"]
+edition = "2021"
+description = "Fedimint client LN module."
+license = "MIT"
+
+[lib]
+name = "fedimint_ln_client"
+path = "src/lib.rs"
+
+[dependencies]
+fedimint-api = { path = "../../fedimint-api" }
+fedimint-ln-common = { path = "../ln-common/" }
+tracing ="0.1.37"

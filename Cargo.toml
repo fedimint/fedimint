@@ -1,8 +1,5 @@
 [workspace]
 members = [
-    "core/api",
-    "core/client",
-    "core/server",
     "crypto/tbs",
     "ln-gateway",
     "fedimintd",
@@ -11,6 +8,8 @@ members = [
     "fedimint-derive",
     "fedimint-api",
     "fedimint-rocksdb",
+    # TODO: fix it
+    # "fedimint-testing",
     "fedimint-server",
     "fedimint-sled",
     "client/cli",
@@ -19,9 +18,12 @@ members = [
     "modules/mint-common",
     "modules/mint-server",
     "modules/mint-client",
-    "modules/fedimint-mint",
-    "modules/fedimint-ln",
-    "modules/fedimint-wallet",
+    "modules/l1-common",
+    "modules/l1-server",
+    "modules/l1-client",
+    "modules/ln-common",
+    "modules/ln-server",
+    "modules/ln-client",
     "integrationtests",
     "fedimint-build",
 ]

@@ -18,6 +18,7 @@ use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 use fedimint_core::modules::mint::{Mint, MintError};
 use fedimint_core::modules::wallet::{Wallet, WalletError};
 use fedimint_core::outcome::TransactionStatus;
+use fedimint_core_api::encode::ModuleDecodable;
 use fedimint_core_api::server::ServerModule;
 use fedimint_core_api::ModuleKey;
 use futures::future::select_all;
@@ -135,6 +136,32 @@ impl FedimintConsensus {
         }
         self
     }
+
+    /// Convert the legacy type `L` (like [`Input`]) to a new module-enable type (like [`fedimint_core_api::Input`]).
+    ///
+    /// This is done by serializing `L` and deserializaing `N` which relies on serialization being the same
+    /// due to module key and enum discrimant value being the same for a given module type.
+    pub fn convert_legacy_to_new<L, N>(&self, legacy: &L) -> N
+    where
+        L: Encodable,
+        N: ModuleDecodable<fedimint_core_api::server::ServerModule>,
+    {
+        let mut buf = vec![];
+        legacy.consensus_encode(&mut buf).expect("can't fail");
+
+        N::consensus_decode(&mut buf.as_slice(), &self.modules).expect("can't fail")
+    }
+
+    pub fn convert_new_to_legacy<N, L>(&self, new: &N) -> L
+    where
+        N: Encodable,
+        L: Decodable,
+    {
+        let mut buf = vec![];
+        new.consensus_encode(&mut buf).expect("can't fail");
+
+        L::consensus_decode(&mut buf.as_slice()).expect("can't fail")
+    }
 }
 
 impl FedimintConsensus {
@@ -154,47 +181,58 @@ impl FedimintConsensus {
 
         let mut pub_keys = Vec::new();
         for input in &transaction.inputs {
-            let meta = match input {
-                Input::Mint(coins) => {
-                    let cache = self.mint.build_verification_cache(std::iter::once(coins));
-                    self.mint
-                        .validate_input(&self.build_interconnect(), &cache, coins)
-                        .map_err(TransactionSubmissionError::InputCoinError)?
-                }
-                Input::Wallet(peg_in) => {
-                    let cache = self
-                        .wallet
-                        .build_verification_cache(std::iter::once(peg_in));
-                    self.wallet
-                        .validate_input(&self.build_interconnect(), &cache, peg_in)
-                        .map_err(TransactionSubmissionError::InputPegIn)?
-                }
-                Input::LN(input) => {
-                    let cache = self.ln.build_verification_cache(std::iter::once(input));
-                    self.ln
-                        .validate_input(&self.build_interconnect(), &cache, input)
-                        .map_err(TransactionSubmissionError::ContractInputError)?
+            let meta = if let Some(module) = self.modules.get(&input.get_module_key()) {
+                let input = self.convert_legacy_to_new(input);
+                let cache = module.build_verification_cache(&[&input]);
+                module.validate_input(&self.build_interconnect(), &cache, &input)?
+            } else {
+                match input {
+                    Input::Mint(coins) => {
+                        let cache = self.mint.build_verification_cache(std::iter::once(coins));
+                        self.mint
+                            .validate_input(&self.build_interconnect(), &cache, coins)
+                            .map_err(TransactionSubmissionError::InputCoinError)?
+                    }
+                    Input::Wallet(peg_in) => {
+                        let cache = self
+                            .wallet
+                            .build_verification_cache(std::iter::once(peg_in));
+                        self.wallet
+                            .validate_input(&self.build_interconnect(), &cache, peg_in)
+                            .map_err(TransactionSubmissionError::InputPegIn)?
+                    }
+                    Input::LN(input) => {
+                        let cache = self.ln.build_verification_cache(std::iter::once(input));
+                        self.ln
+                            .validate_input(&self.build_interconnect(), &cache, input)
+                            .map_err(TransactionSubmissionError::ContractInputError)?
+                    }
                 }
             };
-            pub_keys.push(meta.puk_keys);
+            pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for output in &transaction.outputs {
-            let amount = match output {
-                Output::Mint(coins) => self
-                    .mint
-                    .validate_output(coins)
-                    .map_err(TransactionSubmissionError::OutputCoinError)?,
-                Output::Wallet(peg_out) => self
-                    .wallet
-                    .validate_output(peg_out)
-                    .map_err(TransactionSubmissionError::OutputPegOut)?,
-                Output::LN(output) => self
-                    .ln
-                    .validate_output(output)
-                    .map_err(TransactionSubmissionError::ContractOutputError)?,
+            let amount = if let Some(module) = self.modules.get(&output.get_module_key()) {
+                let output = self.convert_legacy_to_new(output);
+                module.validate_output(&output)?
+            } else {
+                match output {
+                    Output::Mint(coins) => self
+                        .mint
+                        .validate_output(coins)
+                        .map_err(TransactionSubmissionError::OutputCoinError)?,
+                    Output::Wallet(peg_out) => self
+                        .wallet
+                        .validate_output(peg_out)
+                        .map_err(TransactionSubmissionError::OutputPegOut)?,
+                    Output::LN(output) => self
+                        .ln
+                        .validate_output(output)
+                        .map_err(TransactionSubmissionError::ContractOutputError)?,
+                }
             };
             funding_verifier.add_output(amount);
         }
@@ -228,6 +266,7 @@ impl FedimintConsensus {
             wallet: wallet_cis,
             mint: mint_cis,
             ln: ln_cis,
+            module,
         } = consensus_outcome
             .contributions
             .into_iter()
@@ -246,6 +285,7 @@ impl FedimintConsensus {
             self.ln
                 .begin_consensus_epoch(&mut dbtx, ln_cis, self.rng_gen.get_rng())
                 .await;
+
             dbtx.commit_tx().expect("DB Error");
         }
 
@@ -478,7 +518,7 @@ impl FedimintConsensus {
                     .apply_input(&self.build_interconnect(), dbtx, input, &caches.ln)
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
-            pub_keys.push(meta.puk_keys);
+            pub_keys.push(meta.pub_keys);
             funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
@@ -619,6 +659,9 @@ impl FedimintConsensus {
         self.mint.audit(&mut audit);
         self.ln.audit(&mut audit);
         self.wallet.audit(&mut audit);
+        for module in self.modules.values() {
+            module.audit(&mut audit);
+        }
         audit
     }
 
@@ -703,4 +746,8 @@ pub enum TransactionSubmissionError {
     ContractOutputError(LightningModuleError),
     #[error("Transaction conflict error")]
     TransactionConflictError,
+    #[error("Input validator error")]
+    InputValidationError(#[from] fedimint_core_api::server::InputValidationError),
+    #[error("Output validator error")]
+    OutputValidationError(#[from] fedimint_core_api::server::OutputValidationError),
 }

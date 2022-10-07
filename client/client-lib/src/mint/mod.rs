@@ -597,7 +597,7 @@ mod tests {
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
-            meta.keys,
+            meta.pub_keys,
             spend_keys
                 .into_iter()
                 .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)
@@ -630,7 +630,7 @@ mod tests {
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
-            meta.keys,
+            meta.pub_keys,
             spend_keys
                 .into_iter()
                 .map(|key| secp256k1_zkp::XOnlyPublicKey::from_keypair(&key).0)

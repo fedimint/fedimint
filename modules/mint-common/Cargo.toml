@@ -12,6 +12,7 @@ name = "fedimint_mint_common"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-core-api = { path = "../../core/api" }
 fedimint-api = { path = "../../fedimint-api" }
+serde = { version = "1.0.145", features = [ "derive" ] }
 tracing ="0.1.37"
+tbs = { path = "../../crypto/tbs" }

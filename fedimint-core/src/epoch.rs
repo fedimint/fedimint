@@ -3,22 +3,21 @@ use std::collections::{BTreeMap, HashSet};
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
-use fedimint_api::{BitcoinHash, FederationModule, PeerId};
+use fedimint_api::module::ModuleDecoder;
+use fedimint_api::{BitcoinHash, PeerId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
 
 use crate::transaction::Transaction;
 
-#[derive(
-    Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, UnzipConsensus, Encodable, Decodable,
-)]
+// TODO: encoding here is a bit meh now (two level prefix). Consider custom impl
+// to flatten it?
+#[derive(Debug, Clone, Eq, PartialEq, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
-    Mint(<fedimint_mint::Mint as FederationModule>::ConsensusItem),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::ConsensusItem),
-    LN(<fedimint_ln::LightningModule as FederationModule>::ConsensusItem),
+    Module(fedimint_api::module::ConsensusItem),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -157,11 +156,14 @@ impl Encodable for EpochSignature {
     }
 }
 
-impl<M> Decodable<M> for EpochSignature {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for EpochSignature {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignature(Signature::from_bytes(&bytes).unwrap()))
@@ -174,11 +176,14 @@ impl Encodable for EpochSignatureShare {
     }
 }
 
-impl<M> Decodable<M> for EpochSignatureShare {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for EpochSignatureShare {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         _modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignatureShare(

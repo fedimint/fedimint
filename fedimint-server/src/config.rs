@@ -46,9 +46,7 @@ pub struct ServerConfig {
     #[serde(with = "serde_binary_human_readable")]
     pub epoch_pk_set: hbbft::crypto::PublicKeySet,
 
-    pub wallet: WalletConfig,
-    pub mint: MintConfig,
-    pub ln: LightningModuleConfig,
+    pub modules: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

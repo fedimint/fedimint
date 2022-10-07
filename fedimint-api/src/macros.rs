@@ -112,6 +112,23 @@ macro_rules! _dyn_newtype_impl_deref_mut {
     };
 }
 
+#[macro_export]
+macro_rules! dyn_newtype_impl_debug {
+    ($name:ident<$lifetime:lifetime>) => {
+        impl<$lifetime> core::fmt::Debug for $name<$lifetime> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+    };
+    ($name:ident) => {
+        impl core::fmt::Debug for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> core::fmt::Result {
+                self.0.fmt(f)
+            }
+        }
+    };
+}
 /// Implement `Clone` on a "dyn newtype"
 ///
 /// ... by calling `clone` method on the underlying
@@ -132,6 +149,19 @@ macro_rules! dyn_newtype_impl_dyn_clone_passhthrough {
         impl Clone for $name {
             fn clone(&self) -> Self {
                 self.0.clone()
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! dyn_newtype_impl_dyn_eq {
+    ($name:ident) => {
+        impl Eq for $name {}
+
+        impl PartialEq for $name {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.eq(&*other.0)
             }
         }
     };

@@ -839,7 +839,6 @@ version = "0.1.0"
 dependencies = [
  "bitcoin",
  "fedimint-api",
- "fedimint-core-client",
  "fedimint-mint-client",
  "thiserror",
 ]
@@ -848,14 +847,12 @@ dependencies = [
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "fedimint-api",
- "fedimint-ln",
- "fedimint-mint",
- "fedimint-wallet",
  "futures",
  "hex",
  "itertools",
@@ -872,50 +869,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-core-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitcoin",
- "fedimint-api",
- "futures",
- "thiserror",
-]
-
-[[package]]
-name = "fedimint-core-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitcoin",
- "bitcoin_hashes",
- "fedimint-api",
- "fedimint-core-api",
- "rand",
- "secp256k1-zkp",
- "serde",
- "serde_json",
- "sha3",
- "tbs",
- "thiserror",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "fedimint-core-server"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "bitcoin",
- "fedimint-api",
- "fedimint-core-api",
- "rand",
- "thiserror",
-]
-
-[[package]]
 name = "fedimint-derive"
 version = "0.1.0"
 dependencies = [
@@ -926,13 +879,77 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-ln"
+name = "fedimint-l1-client"
+version = "0.1.0"
+dependencies = [
+ "fedimint-api",
+ "fedimint-l1-common",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-l1-common"
+version = "0.1.0"
+dependencies = [
+ "fedimint-api",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-l1-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "fedimint-api",
+ "fedimint-derive",
+ "fedimint-l1-common",
+ "hex",
+ "miniscript",
+ "rand",
+ "secp256k1",
+ "serde",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "validator",
+]
+
+[[package]]
+name = "fedimint-ln-client"
+version = "0.1.0"
+dependencies = [
+ "fedimint-api",
+ "fedimint-ln-common",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-ln-common"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "fedimint-api",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "threshold_crypto",
+ "tracing",
+]
+
+[[package]]
+name = "fedimint-ln-server"
 version = "0.1.0"
 dependencies = [
  "async-trait",
  "bincode",
  "bitcoin_hashes",
  "fedimint-api",
+ "fedimint-ln-common",
  "futures",
  "hbbft",
  "itertools",
@@ -951,34 +968,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "fedimint-mint"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "counter",
- "fedimint-api",
- "itertools",
- "rand",
- "rayon",
- "secp256k1-zkp",
- "serde",
- "tbs",
- "test-log",
- "thiserror",
- "threshold_crypto",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "fedimint-mint-client"
 version = "0.1.0"
 dependencies = [
  "fedimint-api",
- "fedimint-core-client",
  "fedimint-mint-common",
+ "serde",
+ "tbs",
  "tracing",
 ]
 
@@ -987,7 +983,8 @@ name = "fedimint-mint-common"
 version = "0.1.0"
 dependencies = [
  "fedimint-api",
- "fedimint-core-api",
+ "serde",
+ "tbs",
  "tracing",
 ]
 
@@ -995,11 +992,26 @@ dependencies = [
 name = "fedimint-mint-server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
+ "bincode",
+ "counter",
  "fedimint-api",
- "fedimint-core-server",
+ "fedimint-derive",
  "fedimint-mint-common",
+ "itertools",
+ "rand",
+ "rayon",
+ "secp256k1-zkp",
+ "serde",
+ "serde_json",
+ "tbs",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1031,8 +1043,6 @@ dependencies = [
  "fedimint-api",
  "fedimint-build",
  "fedimint-core",
- "fedimint-core-api",
- "fedimint-wallet",
  "futures",
  "hbbft",
  "hex",
@@ -1086,11 +1096,8 @@ dependencies = [
  "clightningrpc",
  "cln-rpc",
  "fedimint-api",
- "fedimint-ln",
- "fedimint-mint",
  "fedimint-rocksdb",
  "fedimint-server",
- "fedimint-wallet",
  "futures",
  "hbbft",
  "itertools",
@@ -1105,28 +1112,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "fedimint-wallet"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bitcoin",
- "bitcoincore-rpc",
- "fedimint-api",
- "hex",
- "miniscript",
- "rand",
- "secp256k1",
- "serde",
- "test-log",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "validator",
 ]
 
 [[package]]
@@ -1145,7 +1130,6 @@ dependencies = [
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
- "fedimint-wallet",
  "futures",
  "hbbft",
  "hex",

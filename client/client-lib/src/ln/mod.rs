@@ -519,7 +519,7 @@ mod tests {
 
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
         let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).0;
-        assert_eq!(meta.keys, vec![refund_pk]);
+        assert_eq!(meta.pub_keys, vec![refund_pk]);
         assert_eq!(meta.amount.amount, expected_amount);
 
         fed.lock().await.consensus_round(&[refund_input], &[]).await;

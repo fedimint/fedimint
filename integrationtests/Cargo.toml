@@ -24,10 +24,7 @@ ln-gateway = { path = "../ln-gateway" }
 lightning = "0.0.111"
 fedimint-server = { path = "../fedimint-server/" }
 fedimint-api = { path = "../fedimint-api" }
-fedimint-ln = { path = "../modules/fedimint-ln" }
-fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-fedimint-wallet = { path = "../modules/fedimint-wallet" }
 mint-client = { path = "../client/client-lib" }
 rand = "0.8"
 serde = { version = "1.0.145", features = [ "derive" ] }
