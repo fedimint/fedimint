@@ -121,6 +121,11 @@
           "rustfmt"
         ]);
 
+        fenixToolchainCargoFmt = (fenixChannelNightly.withComponents [
+          "cargo"
+          "rustfmt"
+        ]);
+
         fenixToolchainCrossAll = with fenix.packages.${system}; combine ([
           stable.cargo
           stable.rustc
@@ -781,7 +786,7 @@
             # of stuff to avoid building and caching things we don't need
             lint = pkgs.mkShell {
               nativeBuildInputs = [
-                fenixToolchainRustfmt
+                fenixToolchainCargoFmt
                 pkgs.nixpkgs-fmt
                 pkgs.shellcheck
                 pkgs.git
