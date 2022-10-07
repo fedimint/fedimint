@@ -1,3 +1,3 @@
 (function() {var implementors = {
-"fedimint_mint_common":[["impl PluginSpendableOutput for <a class=\"struct\" href=\"fedimint_mint_common/struct.MintSpendableOutput.html\" title=\"struct fedimint_mint_common::MintSpendableOutput\">MintSpendableOutput</a>"]]
+"fedimint_mint_common":[["impl <a class=\"trait\" href=\"fedimint_core_api/trait.PluginSpendableOutput.html\" title=\"trait fedimint_core_api::PluginSpendableOutput\">PluginSpendableOutput</a> for <a class=\"struct\" href=\"fedimint_mint_common/struct.MintSpendableOutput.html\" title=\"struct fedimint_mint_common::MintSpendableOutput\">MintSpendableOutput</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

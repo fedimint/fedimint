@@ -1153,6 +1153,7 @@
 <span id="1153">1153</span>
 <span id="1154">1154</span>
 <span id="1155">1155</span>
+<span id="1156">1156</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1902,23 +1903,24 @@
             </span>.map_err(|<span class="kw">_</span>| ClientError::OutgoingPaymentTimeout)<span class="question-mark">?
             </span>.map_err(ClientError::HttpError);
 
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = result {
-            <span class="kw">if </span>response.status().is_success() {
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(response) =&gt; {
+                <span class="kw">if </span>response.status().is_success() {
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+
+                fedimint_api::task::timeout(
+                    Duration::from_secs(<span class="number">10</span>),
+                    <span class="self">self</span>.ln_client().await_outgoing_refundable(contract_id),
+                )
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| ClientError::FailedPaymentNoRefund)<span class="question-mark">??</span>;
+
+                <span class="self">self</span>.try_refund_outgoing_contract(contract_id, rng).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Err</span>(ClientError::RefundedFailedPayment)
             }
-
-            fedimint_api::task::timeout(
-                Duration::from_secs(<span class="number">10</span>),
-                <span class="self">self</span>.ln_client().await_outgoing_refundable(contract_id),
-            )
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| ClientError::FailedPaymentNoRefund)<span class="question-mark">??</span>;
-
-            <span class="self">self</span>.try_refund_outgoing_contract(contract_id, rng).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ClientError::RefundedFailedPayment);
-        };
-
-        <span class="prelude-val">Ok</span>(())
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+        }
     }
 }
 
