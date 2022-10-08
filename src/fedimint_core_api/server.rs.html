@@ -592,7 +592,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// [`ApiEndpoint`] handler exposed by the server side module
-    </span>ApiHandler(Box&lt;ModuleApiHandler&gt;)
+    </span><span class="kw">pub </span>ApiHandler(Box&lt;ModuleApiHandler&gt;)
 }
 
 <span class="kw">pub trait </span>ModuleConsensusItem: DynEncodable {
@@ -602,7 +602,7 @@
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    ConsensusItem(Box&lt;ModuleConsensusItem&gt;)
+    <span class="kw">pub </span>ConsensusItem(Box&lt;ModuleConsensusItem&gt;)
 }
 <span class="macro">dyn_newtype_impl_dyn_clone_passhthrough!</span>(ConsensusItem);
 <span class="macro">module_plugin_trait_define!</span>(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
@@ -614,7 +614,7 @@
 }
 
 <span class="macro">dyn_newtype_define! </span>{
-    VerificationCache(Box&lt;ModuleVerificationCache&gt;)
+    <span class="kw">pub </span>VerificationCache(Box&lt;ModuleVerificationCache&gt;)
 }
 <span class="macro">module_plugin_trait_define!</span>(
     VerificationCache,
@@ -762,7 +762,7 @@
 
 <span class="macro">dyn_newtype_define!</span>(
     <span class="attribute">#[derive(Clone)]
-    </span>ServerModule(Arc&lt;IServerModule&gt;)
+    </span><span class="kw">pub </span>ServerModule(Arc&lt;IServerModule&gt;)
 );
 
 <span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]

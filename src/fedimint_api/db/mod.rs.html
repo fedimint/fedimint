@@ -616,7 +616,7 @@
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// A handle to a type-erased database implementation
     </span><span class="attribute">#[derive(Clone)]
-    </span>Database(Arc&lt;IDatabase&gt;)
+    </span><span class="kw">pub </span>Database(Arc&lt;IDatabase&gt;)
 }
 
 <span class="kw">impl </span>Database {
@@ -714,7 +714,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// A handle to a type-erased database implementation
-    </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(Box&lt;IDatabaseTransaction&gt;)
+    </span><span class="kw">pub </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;(Box&lt;IDatabaseTransaction&gt;)
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt; {

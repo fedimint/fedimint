@@ -488,7 +488,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// An owned, immutable input to a [`Transaction`]
-    </span>Input(Box&lt;ModuleInput&gt;)
+    </span><span class="kw">pub </span>Input(Box&lt;ModuleInput&gt;)
 }
 <span class="macro">module_dyn_newtype_impl_encode_decode! </span>{
     Input, decode_input
@@ -508,7 +508,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`]
-    </span>Output(Box&lt;ModuleOutput&gt;)
+    </span><span class="kw">pub </span>Output(Box&lt;ModuleOutput&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
     Output, PluginOutput, ModuleOutput,
@@ -546,7 +546,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`] after it was finalized (so it&#39;s spendable)
-    </span>SpendableOutput(Box&lt;ModuleSpendableOutput&gt;)
+    </span><span class="kw">pub </span>SpendableOutput(Box&lt;ModuleSpendableOutput&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
     SpendableOutput, PluginSpendableOutput, ModuleSpendableOutput,
@@ -588,7 +588,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
-    </span>PendingOutput(Box&lt;ModulePendingOutput&gt;)
+    </span><span class="kw">pub </span>PendingOutput(Box&lt;ModulePendingOutput&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
     PendingOutput, PluginPendingOutput, ModulePendingOutput,
@@ -615,7 +615,7 @@
 
 <span class="macro">dyn_newtype_define! </span>{
     <span class="doccomment">/// An owned, immutable output of a [`Transaction`] before it was finalized
-    </span>OutputOutcome(Box&lt;ModuleOutputOutcome&gt;)
+    </span><span class="kw">pub </span>OutputOutcome(Box&lt;ModuleOutputOutcome&gt;)
 }
 <span class="macro">module_plugin_trait_define! </span>{
     OutputOutcome, PluginOutputOutcome, ModuleOutputOutcome,
