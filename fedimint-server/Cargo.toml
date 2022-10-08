@@ -57,7 +57,7 @@ tower = { version = "0.4", features = ["util"] }
 qrcode-generator = "4.1.6"
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3.1", features = [ "env-filter" ] }
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 
 [build-dependencies]
 fedimint-build = { path = "../fedimint-build" }
