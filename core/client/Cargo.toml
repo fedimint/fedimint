@@ -25,7 +25,7 @@ serde_json = "1.0.61"
 sha3 = "0.10.4"
 tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.23"
-tracing ="0.1.22"
+tracing ="0.1.37"
 bitcoin_hashes = "0.11.0"
 url = { version = "2.2.2", features = ["serde"] }
 

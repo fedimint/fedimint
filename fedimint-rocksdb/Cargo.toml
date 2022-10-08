@@ -16,7 +16,7 @@ path = "src/lib.rs"
 anyhow = "1.0.64"
 fedimint-api = { path = "../fedimint-api" }
 rocksdb = { version = "0.19.0" }
-tracing = "0.1.22"
+tracing = "0.1.37"
 
 [dev-dependencies]
 tempfile = "3.3.0"
