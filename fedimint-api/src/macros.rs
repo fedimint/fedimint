@@ -9,37 +9,37 @@
 #[macro_export]
 macro_rules! dyn_newtype_define {
     (   $(#[$outer:meta])*
-        $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
+        $vis:vis $name:ident<$lifetime:lifetime>(Box<$trait:ident>)
     ) => {
         $crate::_dyn_newtype_define_inner!{
             $(#[$outer])*
-            $name<$lifetime>(Box<$trait>)
+            $vis $name<$lifetime>(Box<$trait>)
         }
         $crate::_dyn_newtype_impl_deref_mut!($name<$lifetime>);
     };
     (   $(#[$outer:meta])*
-        $name:ident(Box<$trait:ident>)
+        $vis:vis $name:ident(Box<$trait:ident>)
     ) => {
         $crate::_dyn_newtype_define_inner!{
             $(#[$outer])*
-            $name(Box<$trait>)
+            $vis $name(Box<$trait>)
         }
         $crate::_dyn_newtype_impl_deref_mut!($name);
     };
     (   $(#[$outer:meta])*
-        $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
+        $vis:vis $name:ident<$lifetime:lifetime>(Arc<$trait:ident>)
     ) => {
         $crate::_dyn_newtype_define_inner!{
             $(#[$outer])*
-            $name<$lifetime>(Arc<$trait>)
+            $vis $name<$lifetime>(Arc<$trait>)
         }
     };
     (   $(#[$outer:meta])*
-        $name:ident(Arc<$trait:ident>)
+        $vis:vis $name:ident(Arc<$trait:ident>)
     ) => {
         $crate::_dyn_newtype_define_inner!{
             $(#[$outer])*
-            $name(Arc<$trait>)
+            $vis $name(Arc<$trait>)
         }
     };
 }
@@ -47,10 +47,10 @@ macro_rules! dyn_newtype_define {
 #[macro_export]
 macro_rules! _dyn_newtype_define_inner {
     (   $(#[$outer:meta])*
-        $name:ident($container:ident<$trait:ident>)
+        $vis:vis $name:ident($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        pub struct $name($container<dyn $trait + Send + Sync + 'static>);
+        $vis struct $name($container<dyn $trait + Send + Sync + 'static>);
 
         impl std::ops::Deref for $name {
             type Target = dyn $trait + Send + Sync + 'static;
@@ -70,10 +70,10 @@ macro_rules! _dyn_newtype_define_inner {
         }
     };
     (   $(#[$outer:meta])*
-        $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
+        $vis:vis $name:ident<$lifetime:lifetime>($container:ident<$trait:ident>)
     ) => {
         $(#[$outer])*
-        pub struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>);
+        $vis struct $name<$lifetime>($container<dyn $trait<$lifetime> + Send + $lifetime>);
 
         impl<$lifetime> std::ops::Deref for $name<$lifetime> {
             type Target = dyn $trait<$lifetime> + Send + $lifetime;

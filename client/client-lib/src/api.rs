@@ -77,7 +77,7 @@ pub trait IFederationApi: Send + Sync {
 }
 
 dyn_newtype_define! {
-    FederationApi(Arc<IFederationApi>)
+    pub FederationApi(Arc<IFederationApi>)
 }
 
 impl FederationApi {

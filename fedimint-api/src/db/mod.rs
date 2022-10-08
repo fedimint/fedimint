@@ -74,7 +74,7 @@ pub trait IDatabase: Send + Sync {
 dyn_newtype_define! {
     /// A handle to a type-erased database implementation
     #[derive(Clone)]
-    Database(Arc<IDatabase>)
+    pub Database(Arc<IDatabase>)
 }
 
 impl Database {
@@ -172,7 +172,7 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
 dyn_newtype_define! {
     /// A handle to a type-erased database implementation
-    DatabaseTransaction<'a>(Box<IDatabaseTransaction>)
+    pub DatabaseTransaction<'a>(Box<IDatabaseTransaction>)
 }
 
 impl<'a> DatabaseTransaction<'a> {

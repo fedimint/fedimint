@@ -31,7 +31,7 @@ pub trait ModuleApiHandler {
 
 dyn_newtype_define! {
     /// [`ApiEndpoint`] handler exposed by the server side module
-    ApiHandler(Box<ModuleApiHandler>)
+    pub ApiHandler(Box<ModuleApiHandler>)
 }
 
 pub trait ModuleConsensusItem: DynEncodable {
@@ -41,7 +41,7 @@ pub trait ModuleConsensusItem: DynEncodable {
 }
 
 dyn_newtype_define! {
-    ConsensusItem(Box<ModuleConsensusItem>)
+    pub ConsensusItem(Box<ModuleConsensusItem>)
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
 module_plugin_trait_define!(ConsensusItem, PluginConsensusItem, ModuleConsensusItem, {} {});
@@ -53,7 +53,7 @@ pub trait ModuleVerificationCache: DynEncodable {
 }
 
 dyn_newtype_define! {
-    VerificationCache(Box<ModuleVerificationCache>)
+    pub VerificationCache(Box<ModuleVerificationCache>)
 }
 module_plugin_trait_define!(
     VerificationCache,
@@ -201,7 +201,7 @@ pub trait IServerModule {
 
 dyn_newtype_define!(
     #[derive(Clone)]
-    ServerModule(Arc<IServerModule>)
+    pub ServerModule(Arc<IServerModule>)
 );
 
 #[async_trait(?Send)]

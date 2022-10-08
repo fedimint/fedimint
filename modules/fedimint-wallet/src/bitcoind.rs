@@ -54,7 +54,7 @@ pub trait IBitcoindRpc: Send + Sync {
 
 dyn_newtype_define! {
     #[derive(Clone)]
-    BitcoindRpc(Arc<IBitcoindRpc>)
+    pub BitcoindRpc(Arc<IBitcoindRpc>)
 }
 
 #[allow(dead_code)]
