@@ -1,8 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
+use std::io::Write;
 use std::ops::Mul;
 
 use async_trait::async_trait;
+use bitcoin_hashes::sha256::Hash as Sha256;
+use bitcoin_hashes::sha256::HashEngine;
+use fedimint_api::BitcoinHash;
 use hbbft::crypto::group::Curve;
 use hbbft::crypto::group::GroupEncoding;
 use hbbft::crypto::poly::Commitment;
@@ -20,7 +24,7 @@ use crate::net::peers::AnyPeerConnections;
 use crate::PeerId;
 
 /// Part of a config that needs to be generated to bootstrap a new federation.
-#[async_trait(?Send)]
+#[async_trait(? Send)]
 pub trait GenerateConfig: Sized {
     type Params: ?Sized;
     type ClientConfig;
@@ -56,6 +60,7 @@ struct Dkg<G> {
     threshold: usize,
     f1_poly: Poly<Scalar, Scalar>,
     f2_poly: Poly<Scalar, Scalar>,
+    hashed_commits: BTreeMap<PeerId, Sha256>,
     commitments: BTreeMap<PeerId, Vec<G>>,
     sk_shares: BTreeMap<PeerId, Scalar>,
     pk_shares: BTreeMap<PeerId, Vec<G>>,
@@ -63,6 +68,8 @@ struct Dkg<G> {
 
 /// Implementation of "Secure Distributed Key Generation for Discrete-Log Based Cryptosystems"
 /// by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk and Tal Rabin
+///
+/// Prevents any manipulation of the secret key, but fails with any non-cooperative peers
 impl<G: DkgGroup> Dkg<G> {
     /// Creates the DKG and the first step of the algorithm
     pub fn new(
@@ -82,6 +89,7 @@ impl<G: DkgGroup> Dkg<G> {
             threshold,
             f1_poly,
             f2_poly,
+            hashed_commits: Default::default(),
             commitments: Default::default(),
             sk_shares: Default::default(),
             pk_shares: Default::default(),
@@ -96,8 +104,10 @@ impl<G: DkgGroup> Dkg<G> {
             .map(|(g, h)| g + h)
             .collect();
 
-        dkg.commitments.insert(our_id, commit.clone());
-        let step = dkg.broadcast(DkgMessage::Commit(commit));
+        let hashed = dkg.hash(commit.clone());
+        dkg.commitments.insert(our_id, commit);
+        dkg.hashed_commits.insert(our_id, hashed);
+        let step = dkg.broadcast(DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
     }
@@ -105,8 +115,22 @@ impl<G: DkgGroup> Dkg<G> {
     /// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
     pub fn step(&mut self, peer: PeerId, msg: DkgMessage<G>) -> DkgStep<G> {
         match msg {
+            DkgMessage::HashedCommit(hashed) => {
+                match self.hashed_commits.get(&peer) {
+                    Some(old) if *old != hashed => panic!("{} sent us two hashes!", peer),
+                    _ => self.hashed_commits.insert(peer, hashed),
+                };
+
+                if self.hashed_commits.len() == self.peers.len() {
+                    let our_commit = self.commitments[&self.our_id].clone();
+                    return self.broadcast(DkgMessage::Commit(our_commit));
+                }
+            }
             DkgMessage::Commit(commit) => {
+                let hash = self.hash(commit.clone());
                 assert_eq!(self.threshold, commit.len(), "wrong degree from {}", peer);
+                assert_eq!(hash, self.hashed_commits[&peer], "wrong hash from {}", peer);
+
                 match self.commitments.get(&peer) {
                     Some(old) if *old != commit => panic!("{} sent us two commitments!", peer),
                     _ => self.commitments.insert(peer, commit),
@@ -202,6 +226,16 @@ impl<G: DkgGroup> Dkg<G> {
         }
 
         DkgStep::Messages(vec![])
+    }
+
+    fn hash(&self, poly: Vec<G>) -> Sha256 {
+        let mut engine = HashEngine::default();
+        for element in poly.iter() {
+            engine
+                .write_all(element.to_bytes().as_ref())
+                .expect("hashes");
+        }
+        Sha256::from_engine(engine)
     }
 
     fn broadcast(&self, msg: DkgMessage<G>) -> DkgStep<G> {
@@ -350,6 +384,7 @@ impl DkgKeys<G1Projective> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum DkgMessage<G: DkgGroup> {
+    HashedCommit(Sha256),
     Commit(#[serde(with = "serde_commit")] Vec<G>),
     Share(
         #[serde(with = "serde_impl::scalar")] Scalar,
