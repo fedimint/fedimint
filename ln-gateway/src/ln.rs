@@ -1,10 +1,8 @@
-use std::convert::TryInto;
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
-use cln_rpc::model::requests::PayRequest;
 use fedimint_server::modules::ln::contracts::Preimage;
-use tokio::sync::Mutex;
-use tracing::{debug, instrument};
+use secp256k1::PublicKey;
 
 #[async_trait]
 pub trait LnRpc: Send + Sync + 'static {
@@ -17,54 +15,13 @@ pub trait LnRpc: Send + Sync + 'static {
     ) -> Result<Preimage, LightningError>;
 }
 
+#[derive(Clone)]
+pub struct LnRpcRef {
+    pub ln_rpc: Arc<dyn LnRpc>,
+    pub bind_addr: SocketAddr,
+    pub pub_key: PublicKey,
+    pub work_dir: PathBuf,
+}
+
 #[derive(Debug)]
 pub struct LightningError(pub Option<i32>);
-
-#[async_trait]
-impl LnRpc for Mutex<cln_rpc::ClnRpc> {
-    #[instrument(name = "LnRpc::pay", skip(self))]
-    async fn pay(
-        &self,
-        invoice: &str,
-        max_delay: u64,
-        max_fee_percent: f64,
-    ) -> Result<Preimage, LightningError> {
-        debug!("Attempting to pay invoice");
-
-        let pay_result = self
-            .lock()
-            .await
-            .call(cln_rpc::Request::Pay(PayRequest {
-                bolt11: invoice.to_string(),
-                amount_msat: None,
-                label: None,
-                riskfactor: None,
-                maxfeepercent: Some(max_fee_percent),
-                retry_for: None,
-                maxdelay: Some(max_delay as u16),
-                exemptfee: None,
-                localofferid: None,
-                exclude: None,
-                maxfee: None,
-                description: None,
-            }))
-            .await;
-
-        match pay_result {
-            Ok(cln_rpc::Response::Pay(pay_success)) => {
-                debug!("Successfully paid invoice");
-                let slice: [u8; 32] = pay_success.payment_preimage.to_vec().try_into().unwrap();
-                Ok(Preimage(slice))
-            }
-            Ok(_) => unreachable!("unexpected response from C-lightning"),
-            Err(cln_rpc::RpcError { code, message }) => {
-                if let Some(code) = code {
-                    debug!(%code, %message, "c-lightning pay returned error");
-                } else {
-                    debug!(%message, "c-lightning pay returned error");
-                }
-                Err(LightningError(code))
-            }
-        }
-    }
-}
