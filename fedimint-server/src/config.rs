@@ -306,14 +306,6 @@ impl ServerConfig {
     pub fn get_incoming_count(&self) -> u16 {
         self.identity.into()
     }
-
-    pub fn fee_consensus(&self) -> fedimint_core::config::FeeConsensus {
-        fedimint_core::config::FeeConsensus {
-            wallet: self.wallet.fee_consensus.clone(),
-            mint: self.mint.fee_consensus.clone(),
-            ln: self.ln.fee_consensus.clone(),
-        }
-    }
 }
 
 pub struct PeerServerParams {

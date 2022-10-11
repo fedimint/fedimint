@@ -18,10 +18,10 @@ use bitcoin::{PackedLockTime, Sequence};
 use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
-use fedimint_api::module::api_endpoint;
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
+use fedimint_api::module::{api_endpoint, TransactionItemAmount};
 use fedimint_api::task::sleep;
 use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 use fedimint_derive::UnzipConsensus;
@@ -316,7 +316,10 @@ impl FederationModule for Wallet {
         }
 
         Ok(InputMeta {
-            amount: fedimint_api::Amount::from_sat(input.tx_output().value),
+            amount: TransactionItemAmount {
+                amount: fedimint_api::Amount::from_sat(input.tx_output().value),
+                fee: self.cfg.fee_consensus.peg_in_abs,
+            },
             puk_keys: Box::new(std::iter::once(*input.tweak_contract_key())),
         })
     }
@@ -329,7 +332,7 @@ impl FederationModule for Wallet {
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
-        debug!(outpoint = %input.outpoint(), amount = %meta.amount, "Claiming peg-in");
+        debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
@@ -346,7 +349,7 @@ impl FederationModule for Wallet {
     fn validate_output(
         &self,
         output: &Self::TxOutput,
-    ) -> Result<fedimint_api::Amount, Self::Error> {
+    ) -> Result<TransactionItemAmount, Self::Error> {
         if !is_address_valid_for_network(&output.recipient, self.cfg.network) {
             return Err(WalletError::WrongNetwork(
                 self.cfg.network,
@@ -363,7 +366,10 @@ impl FederationModule for Wallet {
         if self.create_peg_out_tx(output).is_none() {
             return Err(WalletError::NotEnoughSpendableUTXO);
         }
-        Ok(output.amount.into())
+        Ok(TransactionItemAmount {
+            amount: (output.amount + output.fees.amount()).into(),
+            fee: self.cfg.fee_consensus.peg_out_abs,
+        })
     }
 
     fn apply_output<'a>(
@@ -371,7 +377,7 @@ impl FederationModule for Wallet {
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: fedimint_api::OutPoint,
-    ) -> Result<fedimint_api::Amount, Self::Error> {
+    ) -> Result<TransactionItemAmount, Self::Error> {
         let amount = self.validate_output(output)?;
         debug!(
             amount = %output.amount, recipient = %output.recipient,

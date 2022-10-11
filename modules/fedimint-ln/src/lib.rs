@@ -25,7 +25,7 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
+use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
 use fedimint_api::{Amount, FederationModule, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
 use itertools::Itertools;
@@ -256,7 +256,10 @@ impl FederationModule for LightningModule {
         };
 
         Ok(InputMeta {
-            amount: input.amount,
+            amount: TransactionItemAmount {
+                amount: input.amount,
+                fee: self.cfg.fee_consensus.contract_input,
+            },
             puk_keys: Box::new(std::iter::once(pub_key)),
         })
     }
@@ -276,14 +279,17 @@ impl FederationModule for LightningModule {
             .get_value(&account_db_key)
             .expect("DB error")
             .expect("Should fail validation if contract account doesn't exist");
-        contract_account.amount -= meta.amount;
+        contract_account.amount -= meta.amount.amount;
         batch.append_insert(account_db_key, contract_account);
 
         batch.commit();
         Ok(meta)
     }
 
-    fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
+    fn validate_output(
+        &self,
+        output: &Self::TxOutput,
+    ) -> Result<TransactionItemAmount, Self::Error> {
         match output {
             ContractOrOfferOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -306,14 +312,17 @@ impl FederationModule for LightningModule {
                 if contract.amount == Amount::ZERO {
                     Err(LightningModuleError::ZeroOutput)
                 } else {
-                    Ok(contract.amount)
+                    Ok(TransactionItemAmount {
+                        amount: contract.amount,
+                        fee: self.cfg.fee_consensus.contract_output,
+                    })
                 }
             }
             ContractOrOfferOutput::Offer(offer) => {
                 if !offer.encrypted_preimage.0.verify() {
                     Err(LightningModuleError::InvalidEncryptedPreimage)
                 } else {
-                    Ok(Amount::ZERO)
+                    Ok(TransactionItemAmount::ZERO)
                 }
             }
             ContractOrOfferOutput::CancelOutgoing {
@@ -341,7 +350,7 @@ impl FederationModule for LightningModule {
                     )
                     .map_err(|_| LightningModuleError::InvalidCancellationSignature)?;
 
-                Ok(Amount::ZERO)
+                Ok(TransactionItemAmount::ZERO)
             }
         }
     }
@@ -351,7 +360,7 @@ impl FederationModule for LightningModule {
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
-    ) -> Result<Amount, Self::Error> {
+    ) -> Result<TransactionItemAmount, Self::Error> {
         let amount = self.validate_output(output)?;
 
         match output {
@@ -362,11 +371,11 @@ impl FederationModule for LightningModule {
                     .get_value(&contract_db_key)
                     .expect("DB error")
                     .map(|mut value: ContractAccount| {
-                        value.amount += amount;
+                        value.amount += amount.amount;
                         value
                     })
                     .unwrap_or_else(|| ContractAccount {
-                        amount,
+                        amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
                 batch.append_insert(contract_db_key, updated_contract_account);

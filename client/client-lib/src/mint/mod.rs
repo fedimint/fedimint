@@ -5,11 +5,12 @@ use std::time::Duration;
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
-use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
-use fedimint_core::config::FeeConsensus;
+use fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
+use fedimint_core::config::ClientConfig;
 use fedimint_core::modules::mint::config::MintClientConfig;
-use fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
+use fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse, SignRequest};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rand::{CryptoRng, RngCore};
@@ -22,6 +23,7 @@ use tracing::{debug, trace, warn};
 use crate::api::ApiError;
 use crate::transaction::TransactionBuilder;
 use crate::utils::ClientContext;
+use crate::{Client, ModuleClient};
 
 /// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -61,6 +63,30 @@ pub struct SpendableNote {
     pub spend_key: [u8; 32],
 }
 
+impl<'a> ModuleClient for MintClient<'a> {
+    type Module = Mint;
+
+    fn input_amount(
+        &self,
+        input: &<Self::Module as FederationModule>::TxInput,
+    ) -> TransactionItemAmount {
+        TransactionItemAmount {
+            amount: input.total_amount(),
+            fee: self.config.fee_consensus.coin_spend_abs * (input.item_count() as u64),
+        }
+    }
+
+    fn output_amount(
+        &self,
+        output: &<Self::Module as FederationModule>::TxOutput,
+    ) -> TransactionItemAmount {
+        TransactionItemAmount {
+            amount: output.total_amount(),
+            fee: self.config.fee_consensus.coin_issuance_abs * (output.item_count() as u64),
+        }
+    }
+}
+
 impl<'c> MintClient<'c> {
     pub fn coins(&self) -> TieredMulti<SpendableNote> {
         self.context
@@ -82,14 +108,18 @@ impl<'c> MintClient<'c> {
         Ok(coins)
     }
 
-    pub async fn submit_tx_with_change<R: RngCore + CryptoRng>(
+    pub async fn submit_tx_with_change<C, R>(
         &self,
-        fee_consensus: &FeeConsensus,
+        client: &Client<C>,
         tx: TransactionBuilder,
         mut batch: Accumulator<BatchItem>,
         rng: R,
-    ) -> Result<TransactionId> {
-        let change_required = tx.change_required(fee_consensus);
+    ) -> Result<TransactionId>
+    where
+        C: AsRef<ClientConfig> + Clone,
+        R: RngCore + CryptoRng,
+    {
+        let change_required = tx.change_required(client);
         let final_tx = tx.build(
             change_required,
             batch.transaction(),
@@ -565,7 +595,7 @@ mod tests {
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
-        assert_eq!(meta.amount, SPEND_AMOUNT);
+        assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,
             spend_keys
@@ -598,7 +628,7 @@ mod tests {
         client_context.db.apply_batch(batch).unwrap();
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
-        assert_eq!(meta.amount, SPEND_AMOUNT);
+        assert_eq!(meta.amount.amount, SPEND_AMOUNT);
         assert_eq!(
             meta.keys,
             spend_keys

@@ -17,8 +17,25 @@ use crate::module::interconnect::ModuleInterconect;
 use crate::{Amount, PeerId};
 
 pub struct InputMeta<'a> {
-    pub amount: Amount,
+    pub amount: TransactionItemAmount,
     pub puk_keys: Box<dyn Iterator<Item = XOnlyPublicKey> + 'a>,
+}
+
+/// Information about the amount represented by an input or output.
+///
+/// * For **inputs** the amount is funding the transaction while the fee is consuming funding
+/// * For **outputs** the amount and the fee consume funding
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct TransactionItemAmount {
+    pub amount: Amount,
+    pub fee: Amount,
+}
+
+impl TransactionItemAmount {
+    pub const ZERO: TransactionItemAmount = TransactionItemAmount {
+        amount: Amount::ZERO,
+        fee: Amount::ZERO,
+    };
 }
 
 #[derive(Debug)]
@@ -195,7 +212,10 @@ pub trait FederationModule: Sized {
     /// function has no side effects and may be called at any time. False positives due to outdated
     /// database state are ok since they get filtered out after consensus has been reached on them
     /// and merely generate a warning.
-    fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error>;
+    fn validate_output(
+        &self,
+        output: &Self::TxOutput,
+    ) -> Result<TransactionItemAmount, Self::Error>;
 
     /// Try to create an output (e.g. issue coins, peg-out BTC, …). On success all necessary updates
     /// to the database will be part of the `batch`. On failure (e.g. double spend) the batch is
@@ -212,7 +232,7 @@ pub trait FederationModule: Sized {
         batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: crate::OutPoint,
-    ) -> Result<Amount, Self::Error>;
+    ) -> Result<TransactionItemAmount, Self::Error>;
 
     /// This function is called once all transactions have been processed and changes were written
     /// to the database. This allows running finalization code before the next epoch.
