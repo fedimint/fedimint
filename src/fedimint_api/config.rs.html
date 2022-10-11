@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../../fedimint_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a><h2 class="location"></h2></nav><nav class="sidebar"><a class="sidebar-logo" href="../../fedimint_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../fedimint_api/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-api/src/config.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>config.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../fedimint_api/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../fedimint_api/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -494,11 +494,50 @@
 <span id="494">494</span>
 <span id="495">495</span>
 <span id="496">496</span>
+<span id="497">497</span>
+<span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::hash::Hash;
+<span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::Mul;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
+<span class="kw">use </span>bitcoin_hashes::sha256::HashEngine;
+<span class="kw">use </span>fedimint_api::BitcoinHash;
 <span class="kw">use </span>hbbft::crypto::group::Curve;
 <span class="kw">use </span>hbbft::crypto::group::GroupEncoding;
 <span class="kw">use </span>hbbft::crypto::poly::Commitment;
@@ -516,7 +555,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::PeerId;
 
 <span class="doccomment">/// Part of a config that needs to be generated to bootstrap a new federation.
-</span><span class="attribute">#[async_trait(<span class="question-mark">?</span>Send)]
+</span><span class="attribute">#[async_trait(<span class="question-mark">? </span>Send)]
 </span><span class="kw">pub trait </span>GenerateConfig: Sized {
     <span class="kw">type </span>Params: <span class="question-mark">?</span>Sized;
     <span class="kw">type </span>ClientConfig;
@@ -552,6 +591,7 @@
     threshold: usize,
     f1_poly: Poly&lt;Scalar, Scalar&gt;,
     f2_poly: Poly&lt;Scalar, Scalar&gt;,
+    hashed_commits: BTreeMap&lt;PeerId, Sha256&gt;,
     commitments: BTreeMap&lt;PeerId, Vec&lt;G&gt;&gt;,
     sk_shares: BTreeMap&lt;PeerId, Scalar&gt;,
     pk_shares: BTreeMap&lt;PeerId, Vec&lt;G&gt;&gt;,
@@ -559,6 +599,8 @@
 
 <span class="doccomment">/// Implementation of &quot;Secure Distributed Key Generation for Discrete-Log Based Cryptosystems&quot;
 /// by Rosario Gennaro and Stanislaw Jarecki and Hugo Krawczyk and Tal Rabin
+///
+/// Prevents any manipulation of the secret key, but fails with any non-cooperative peers
 </span><span class="kw">impl</span>&lt;G: DkgGroup&gt; Dkg&lt;G&gt; {
     <span class="doccomment">/// Creates the DKG and the first step of the algorithm
     </span><span class="kw">pub fn </span>new(
@@ -578,6 +620,7 @@
             threshold,
             f1_poly,
             f2_poly,
+            hashed_commits: Default::default(),
             commitments: Default::default(),
             sk_shares: Default::default(),
             pk_shares: Default::default(),
@@ -592,8 +635,10 @@
             .map(|(g, h)| g + h)
             .collect();
 
-        dkg.commitments.insert(our_id, commit.clone());
-        <span class="kw">let </span>step = dkg.broadcast(DkgMessage::Commit(commit));
+        <span class="kw">let </span>hashed = dkg.hash(commit.clone());
+        dkg.commitments.insert(our_id, commit);
+        dkg.hashed_commits.insert(our_id, hashed);
+        <span class="kw">let </span>step = dkg.broadcast(DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
     }
@@ -601,8 +646,22 @@
     <span class="doccomment">/// Runs a single step of the DKG algorithm, processing a `msg` from `peer`
     </span><span class="kw">pub fn </span>step(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer: PeerId, msg: DkgMessage&lt;G&gt;) -&gt; DkgStep&lt;G&gt; {
         <span class="kw">match </span>msg {
+            DkgMessage::HashedCommit(hashed) =&gt; {
+                <span class="kw">match </span><span class="self">self</span>.hashed_commits.get(<span class="kw-2">&amp;</span>peer) {
+                    <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != hashed =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{} sent us two hashes!&quot;</span>, peer),
+                    <span class="kw">_ </span>=&gt; <span class="self">self</span>.hashed_commits.insert(peer, hashed),
+                };
+
+                <span class="kw">if </span><span class="self">self</span>.hashed_commits.len() == <span class="self">self</span>.peers.len() {
+                    <span class="kw">let </span>our_commit = <span class="self">self</span>.commitments[<span class="kw-2">&amp;</span><span class="self">self</span>.our_id].clone();
+                    <span class="kw">return </span><span class="self">self</span>.broadcast(DkgMessage::Commit(our_commit));
+                }
+            }
             DkgMessage::Commit(commit) =&gt; {
+                <span class="kw">let </span>hash = <span class="self">self</span>.hash(commit.clone());
                 <span class="macro">assert_eq!</span>(<span class="self">self</span>.threshold, commit.len(), <span class="string">&quot;wrong degree from {}&quot;</span>, peer);
+                <span class="macro">assert_eq!</span>(hash, <span class="self">self</span>.hashed_commits[<span class="kw-2">&amp;</span>peer], <span class="string">&quot;wrong hash from {}&quot;</span>, peer);
+
                 <span class="kw">match </span><span class="self">self</span>.commitments.get(<span class="kw-2">&amp;</span>peer) {
                     <span class="prelude-val">Some</span>(old) <span class="kw">if </span><span class="kw-2">*</span>old != commit =&gt; <span class="macro">panic!</span>(<span class="string">&quot;{} sent us two commitments!&quot;</span>, peer),
                     <span class="kw">_ </span>=&gt; <span class="self">self</span>.commitments.insert(peer, commit),
@@ -698,6 +757,16 @@
         }
 
         DkgStep::Messages(<span class="macro">vec!</span>[])
+    }
+
+    <span class="kw">fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>, poly: Vec&lt;G&gt;) -&gt; Sha256 {
+        <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
+        <span class="kw">for </span>element <span class="kw">in </span>poly.iter() {
+            engine
+                .write_all(element.to_bytes().as_ref())
+                .expect(<span class="string">&quot;hashes&quot;</span>);
+        }
+        Sha256::from_engine(engine)
     }
 
     <span class="kw">fn </span>broadcast(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: DkgMessage&lt;G&gt;) -&gt; DkgStep&lt;G&gt; {
@@ -846,6 +915,7 @@
 
 <span class="attribute">#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>DkgMessage&lt;G: DkgGroup&gt; {
+    HashedCommit(Sha256),
     Commit(<span class="attribute">#[serde(with = <span class="string">&quot;serde_commit&quot;</span>)] </span>Vec&lt;G&gt;),
     Share(
         <span class="attribute">#[serde(with = <span class="string">&quot;serde_impl::scalar&quot;</span>)] </span>Scalar,
@@ -991,4 +1061,4 @@
     <span class="kw">pub </span>btc_rpc_pass: String,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (8b0c05d9a 2022-10-07)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a6b7274a4 2022-10-10)" ></div></body></html>
