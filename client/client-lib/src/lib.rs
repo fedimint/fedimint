@@ -10,9 +10,8 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
-use async_trait::async_trait;
-
 use api::FederationApi;
+use async_trait::async_trait;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
