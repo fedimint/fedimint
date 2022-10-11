@@ -376,21 +376,47 @@
 <span id="376">376</span>
 <span id="377">377</span>
 <span id="378">378</span>
+<span id="379">379</span>
+<span id="380">380</span>
+<span id="381">381</span>
+<span id="382">382</span>
+<span id="383">383</span>
+<span id="384">384</span>
+<span id="385">385</span>
+<span id="386">386</span>
+<span id="387">387</span>
+<span id="388">388</span>
+<span id="389">389</span>
+<span id="390">390</span>
+<span id="391">391</span>
+<span id="392">392</span>
+<span id="393">393</span>
+<span id="394">394</span>
+<span id="395">395</span>
+<span id="396">396</span>
+<span id="397">397</span>
+<span id="398">398</span>
+<span id="399">399</span>
+<span id="400">400</span>
+<span id="401">401</span>
+<span id="402">402</span>
+<span id="403">403</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>bitcoin::KeyPair;
 <span class="kw">use </span>db::PegInKey;
 <span class="kw">use </span>fedimint_api::db::batch::BatchTx;
-<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
+<span class="kw">use </span>fedimint_api::{Amount, FederationModule};
 <span class="kw">use </span>fedimint_core::modules::wallet::config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::modules::wallet::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-<span class="kw">use </span>fedimint_core::modules::wallet::PegOutOutcome;
+<span class="kw">use </span>fedimint_core::modules::wallet::{PegOutOutcome, Wallet};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
-<span class="kw">use </span><span class="kw">crate</span>::ApiError;
+<span class="kw">use crate</span>::{ApiError, ModuleClient};
 
 <span class="kw">mod </span>db;
 
@@ -399,6 +425,30 @@
 </span><span class="kw">pub struct </span>WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>WalletClientConfig,
     <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ModuleClient <span class="kw">for </span>WalletClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Module = Wallet;
+
+    <span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxInput,
+    ) -&gt; TransactionItemAmount {
+        TransactionItemAmount {
+            amount: Amount::from_sat(input.tx_output().value),
+            fee: <span class="self">self</span>.config.fee_consensus.peg_in_abs,
+        }
+    }
+
+    <span class="kw">fn </span>output_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxOutput,
+    ) -&gt; TransactionItemAmount {
+        TransactionItemAmount {
+            amount: (output.amount + output.fees.amount()).into(),
+            fee: <span class="self">self</span>.config.fee_consensus.peg_out_abs,
+        }
+    }
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; WalletClient&lt;<span class="lifetime">&#39;c</span>&gt; {

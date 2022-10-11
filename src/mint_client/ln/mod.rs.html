@@ -496,6 +496,41 @@
 <span id="496">496</span>
 <span id="497">497</span>
 <span id="498">498</span>
+<span id="499">499</span>
+<span id="500">500</span>
+<span id="501">501</span>
+<span id="502">502</span>
+<span id="503">503</span>
+<span id="504">504</span>
+<span id="505">505</span>
+<span id="506">506</span>
+<span id="507">507</span>
+<span id="508">508</span>
+<span id="509">509</span>
+<span id="510">510</span>
+<span id="511">511</span>
+<span id="512">512</span>
+<span id="513">513</span>
+<span id="514">514</span>
+<span id="515">515</span>
+<span id="516">516</span>
+<span id="517">517</span>
+<span id="518">518</span>
+<span id="519">519</span>
+<span id="520">520</span>
+<span id="521">521</span>
+<span id="522">522</span>
+<span id="523">523</span>
+<span id="524">524</span>
+<span id="525">525</span>
+<span id="526">526</span>
+<span id="527">527</span>
+<span id="528">528</span>
+<span id="529">529</span>
+<span id="530">530</span>
+<span id="531">531</span>
+<span id="532">532</span>
+<span id="533">533</span>
 </pre><pre class="rust"><code><span class="comment">// TODO: once user and mint client are merged, make this private again
 </span><span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>incoming;
@@ -505,8 +540,9 @@
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256Hash;
 <span class="kw">use </span>fedimint_api::db::batch::BatchTx;
+<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::timeout;
-<span class="kw">use </span>fedimint_api::Amount;
+<span class="kw">use </span>fedimint_api::{Amount, FederationModule};
 <span class="kw">use </span>fedimint_core::modules::ln::config::LightningModuleClientConfig;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -515,6 +551,7 @@
 };
 <span class="kw">use </span>fedimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
+    LightningModule,
 };
 <span class="kw">use </span>lightning_invoice::Invoice;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -527,10 +564,43 @@
 <span class="kw">use </span><span class="kw">crate</span>::ln::incoming::IncomingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
+<span class="kw">use </span><span class="kw">crate</span>::ModuleClient;
 
 <span class="kw">pub struct </span>LnClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub </span>config: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>LightningModuleClientConfig,
     <span class="kw">pub </span>context: <span class="kw-2">&amp;</span><span class="lifetime">&#39;c </span>ClientContext,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ModuleClient <span class="kw">for </span>LnClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Module = LightningModule;
+
+    <span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxInput,
+    ) -&gt; TransactionItemAmount {
+        TransactionItemAmount {
+            amount: input.amount,
+            fee: <span class="self">self</span>.config.fee_consensus.contract_input,
+        }
+    }
+
+    <span class="kw">fn </span>output_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxOutput,
+    ) -&gt; TransactionItemAmount {
+        <span class="kw">match </span>output {
+            ContractOrOfferOutput::Contract(account_output) =&gt; TransactionItemAmount {
+                amount: account_output.amount,
+                fee: <span class="self">self</span>.config.fee_consensus.contract_output,
+            },
+            ContractOrOfferOutput::Offer(<span class="kw">_</span>) | ContractOrOfferOutput::CancelOutgoing { .. } =&gt; {
+                TransactionItemAmount {
+                    amount: Amount::ZERO,
+                    fee: Amount::ZERO,
+                }
+            }
+        }
+    }
 }
 
 <span class="attribute">#[allow(dead_code)]
@@ -983,7 +1053,7 @@
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>refund_input).unwrap();
         <span class="kw">let </span>refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).<span class="number">0</span>;
         <span class="macro">assert_eq!</span>(meta.keys, <span class="macro">vec!</span>[refund_pk]);
-        <span class="macro">assert_eq!</span>(meta.amount, expected_amount);
+        <span class="macro">assert_eq!</span>(meta.amount.amount, expected_amount);
 
         fed.lock().<span class="kw">await</span>.consensus_round(<span class="kw-2">&amp;</span>[refund_input], <span class="kw-2">&amp;</span>[]).<span class="kw">await</span>;
 

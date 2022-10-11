@@ -921,6 +921,18 @@
 <span id="921">921</span>
 <span id="922">922</span>
 <span id="923">923</span>
+<span id="924">924</span>
+<span id="925">925</span>
+<span id="926">926</span>
+<span id="927">927</span>
+<span id="928">928</span>
+<span id="929">929</span>
+<span id="930">930</span>
+<span id="931">931</span>
+<span id="932">932</span>
+<span id="933">933</span>
+<span id="934">934</span>
+<span id="935">935</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::iter::FromIterator;
@@ -932,7 +944,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::ApiEndpoint;
+<span class="kw">use </span>fedimint_api::module::{ApiEndpoint, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::{
     Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
@@ -1126,7 +1138,10 @@
         })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(InputMeta {
-            amount: input.total_amount(),
+            amount: TransactionItemAmount {
+                amount: input.total_amount(),
+                fee: <span class="self">self</span>.cfg.fee_consensus.coin_spend_abs * (input.item_count() <span class="kw">as </span>u64),
+            },
             puk_keys: Box::new(input.iter_items().map(|(<span class="kw">_</span>, coin)| <span class="kw-2">*</span>coin.spend_key())),
         })
     }
@@ -1152,7 +1167,10 @@
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">fn </span>validate_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = output.iter_items().find_map(|(amount, <span class="kw">_</span>)| {
             <span class="kw">if </span><span class="self">self</span>.pub_key.get(<span class="kw-2">&amp;</span>amount).is_none() {
                 <span class="prelude-val">Some</span>(amount)
@@ -1162,7 +1180,10 @@
         }) {
             <span class="prelude-val">Err</span>(MintError::InvalidAmountTier(amount))
         } <span class="kw">else </span>{
-            <span class="prelude-val">Ok</span>(output.total_amount())
+            <span class="prelude-val">Ok</span>(TransactionItemAmount {
+                amount: output.total_amount(),
+                fee: <span class="self">self</span>.cfg.fee_consensus.coin_issuance_abs * (output.item_count() <span class="kw">as </span>u64),
+            })
         }
     }
 
@@ -1171,7 +1192,9 @@
         <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
+        <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
+
         <span class="comment">// TODO: move actual signing to worker thread
         // TODO: get rid of clone
         </span><span class="kw">let </span>partial_sig = <span class="self">self</span>.blind_sign(output.clone())<span class="question-mark">?</span>;
@@ -1184,7 +1207,8 @@
         );
         batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.total_amount());
         batch.commit();
-        <span class="prelude-val">Ok</span>(output.total_amount())
+
+        <span class="prelude-val">Ok</span>(amount)
     }
 
     <span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(

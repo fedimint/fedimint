@@ -525,14 +525,6 @@
 <span id="525">525</span>
 <span id="526">526</span>
 <span id="527">527</span>
-<span id="528">528</span>
-<span id="529">529</span>
-<span id="530">530</span>
-<span id="531">531</span>
-<span id="532">532</span>
-<span id="533">533</span>
-<span id="534">534</span>
-<span id="535">535</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>async_trait::async_trait;
@@ -840,14 +832,6 @@
 
     <span class="kw">pub fn </span>get_incoming_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u16 {
         <span class="self">self</span>.identity.into()
-    }
-
-    <span class="kw">pub fn </span>fee_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_core::config::FeeConsensus {
-        fedimint_core::config::FeeConsensus {
-            wallet: <span class="self">self</span>.wallet.fee_consensus.clone(),
-            mint: <span class="self">self</span>.mint.fee_consensus.clone(),
-            ln: <span class="self">self</span>.ln.fee_consensus.clone(),
-        }
     }
 }
 

@@ -1287,6 +1287,12 @@
 <span id="1287">1287</span>
 <span id="1288">1288</span>
 <span id="1289">1289</span>
+<span id="1290">1290</span>
+<span id="1291">1291</span>
+<span id="1292">1292</span>
+<span id="1293">1293</span>
+<span id="1294">1294</span>
+<span id="1295">1295</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1307,10 +1313,10 @@
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_api::module::api_endpoint;
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::ApiEndpoint;
+<span class="kw">use </span>fedimint_api::module::{api_endpoint, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_derive::UnzipConsensus;
@@ -1605,7 +1611,10 @@
         }
 
         <span class="prelude-val">Ok</span>(InputMeta {
-            amount: fedimint_api::Amount::from_sat(input.tx_output().value),
+            amount: TransactionItemAmount {
+                amount: fedimint_api::Amount::from_sat(input.tx_output().value),
+                fee: <span class="self">self</span>.cfg.fee_consensus.peg_in_abs,
+            },
             puk_keys: Box::new(std::iter::once(<span class="kw-2">*</span>input.tweak_contract_key())),
         })
     }
@@ -1618,7 +1627,7 @@
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
         <span class="kw">let </span>meta = <span class="self">self</span>.validate_input(interconnect, cache, input)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
+        <span class="macro">debug!</span>(outpoint = %input.outpoint(), amount = %meta.amount.amount, <span class="string">&quot;Claiming peg-in&quot;</span>);
 
         batch.append_insert_new(
             UTXOKey(input.outpoint()),
@@ -1635,7 +1644,7 @@
     <span class="kw">fn </span>validate_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::Amount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">if </span>!is_address_valid_for_network(<span class="kw-2">&amp;</span>output.recipient, <span class="self">self</span>.cfg.network) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::WrongNetwork(
                 <span class="self">self</span>.cfg.network,
@@ -1652,7 +1661,10 @@
         <span class="kw">if </span><span class="self">self</span>.create_peg_out_tx(output).is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletError::NotEnoughSpendableUTXO);
         }
-        <span class="prelude-val">Ok</span>(output.amount.into())
+        <span class="prelude-val">Ok</span>(TransactionItemAmount {
+            amount: (output.amount + output.fees.amount()).into(),
+            fee: <span class="self">self</span>.cfg.fee_consensus.peg_out_abs,
+        })
     }
 
     <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
@@ -1660,7 +1672,7 @@
         <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: fedimint_api::OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_api::Amount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(
             amount = %output.amount, recipient = %output.recipient,

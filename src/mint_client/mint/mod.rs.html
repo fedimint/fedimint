@@ -611,6 +611,36 @@
 <span id="611">611</span>
 <span id="612">612</span>
 <span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
+<span id="617">617</span>
+<span id="618">618</span>
+<span id="619">619</span>
+<span id="620">620</span>
+<span id="621">621</span>
+<span id="622">622</span>
+<span id="623">623</span>
+<span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
+<span id="627">627</span>
+<span id="628">628</span>
+<span id="629">629</span>
+<span id="630">630</span>
+<span id="631">631</span>
+<span id="632">632</span>
+<span id="633">633</span>
+<span id="634">634</span>
+<span id="635">635</span>
+<span id="636">636</span>
+<span id="637">637</span>
+<span id="638">638</span>
+<span id="639">639</span>
+<span id="640">640</span>
+<span id="641">641</span>
+<span id="642">642</span>
+<span id="643">643</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::time::Duration;
@@ -618,11 +648,12 @@
 <span class="kw">use </span>db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
 <span class="kw">use </span>fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
-<span class="kw">use </span>fedimint_api::{Amount, OutPoint, Tiered, TieredMulti, TransactionId};
-<span class="kw">use </span>fedimint_core::config::FeeConsensus;
+<span class="kw">use </span>fedimint_api::{Amount, FederationModule, OutPoint, Tiered, TieredMulti, TransactionId};
+<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::modules::mint::config::MintClientConfig;
-<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Nonce, Note, SigResponse, SignRequest};
+<span class="kw">use </span>fedimint_core::modules::mint::{BlindNonce, Mint, Nonce, Note, SigResponse, SignRequest};
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
@@ -635,6 +666,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::api::ApiError;
 <span class="kw">use </span><span class="kw">crate</span>::transaction::TransactionBuilder;
 <span class="kw">use </span><span class="kw">crate</span>::utils::ClientContext;
+<span class="kw">use crate</span>::{Client, ModuleClient};
 
 <span class="doccomment">/// Federation module client for the Mint module. It can both create transaction inputs and outputs
 /// of the mint type.
@@ -674,6 +706,30 @@
     <span class="kw">pub </span>spend_key: [u8; <span class="number">32</span>],
 }
 
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; ModuleClient <span class="kw">for </span>MintClient&lt;<span class="lifetime">&#39;a</span>&gt; {
+    <span class="kw">type </span>Module = Mint;
+
+    <span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxInput,
+    ) -&gt; TransactionItemAmount {
+        TransactionItemAmount {
+            amount: input.total_amount(),
+            fee: <span class="self">self</span>.config.fee_consensus.coin_spend_abs * (input.item_count() <span class="kw">as </span>u64),
+        }
+    }
+
+    <span class="kw">fn </span>output_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxOutput,
+    ) -&gt; TransactionItemAmount {
+        TransactionItemAmount {
+            amount: output.total_amount(),
+            fee: <span class="self">self</span>.config.fee_consensus.coin_issuance_abs * (output.item_count() <span class="kw">as </span>u64),
+        }
+    }
+}
+
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;c</span>&gt; MintClient&lt;<span class="lifetime">&#39;c</span>&gt; {
     <span class="kw">pub fn </span>coins(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredMulti&lt;SpendableNote&gt; {
         <span class="self">self</span>.context
@@ -695,14 +751,18 @@
         <span class="prelude-val">Ok</span>(coins)
     }
 
-    <span class="kw">pub async fn </span>submit_tx_with_change&lt;R: RngCore + CryptoRng&gt;(
+    <span class="kw">pub async fn </span>submit_tx_with_change&lt;C, R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        fee_consensus: <span class="kw-2">&amp;</span>FeeConsensus,
+        client: <span class="kw-2">&amp;</span>Client&lt;C&gt;,
         tx: TransactionBuilder,
         <span class="kw-2">mut </span>batch: Accumulator&lt;BatchItem&gt;,
         rng: R,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
-        <span class="kw">let </span>change_required = tx.change_required(fee_consensus);
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt;
+    <span class="kw">where
+        </span>C: AsRef&lt;ClientConfig&gt; + Clone,
+        R: RngCore + CryptoRng,
+    {
+        <span class="kw">let </span>change_required = tx.change_required(client);
         <span class="kw">let </span>final_tx = tx.build(
             change_required,
             batch.transaction(),
@@ -1178,7 +1238,7 @@
         client_context.db.apply_batch(batch).unwrap();
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
-        <span class="macro">assert_eq!</span>(meta.amount, SPEND_AMOUNT);
+        <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
         <span class="macro">assert_eq!</span>(
             meta.keys,
             spend_keys
@@ -1211,7 +1271,7 @@
         client_context.db.apply_batch(batch).unwrap();
 
         <span class="kw">let </span>meta = fed.lock().<span class="kw">await</span>.verify_input(<span class="kw-2">&amp;</span>input).unwrap();
-        <span class="macro">assert_eq!</span>(meta.amount, SPEND_AMOUNT);
+        <span class="macro">assert_eq!</span>(meta.amount.amount, SPEND_AMOUNT);
         <span class="macro">assert_eq!</span>(
             meta.keys,
             spend_keys

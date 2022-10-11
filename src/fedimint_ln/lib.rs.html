@@ -747,6 +747,15 @@
 <span id="747">747</span>
 <span id="748">748</span>
 <span id="749">749</span>
+<span id="750">750</span>
+<span id="751">751</span>
+<span id="752">752</span>
+<span id="753">753</span>
+<span id="754">754</span>
+<span id="755">755</span>
+<span id="756">756</span>
+<span id="757">757</span>
+<span id="758">758</span>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -774,7 +783,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
-<span class="kw">use </span>fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError};
+<span class="kw">use </span>fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, PeerId};
 <span class="kw">use </span>fedimint_api::{InputMeta, OutPoint};
 <span class="kw">use </span>itertools::Itertools;
@@ -1005,7 +1014,10 @@
         };
 
         <span class="prelude-val">Ok</span>(InputMeta {
-            amount: input.amount,
+            amount: TransactionItemAmount {
+                amount: input.amount,
+                fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
+            },
             puk_keys: Box::new(std::iter::once(pub_key)),
         })
     }
@@ -1025,14 +1037,17 @@
             .get_value(<span class="kw-2">&amp;</span>account_db_key)
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .expect(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
-        contract_account.amount -= meta.amount;
+        contract_account.amount -= meta.amount.amount;
         batch.append_insert(account_db_key, contract_account);
 
         batch.commit();
         <span class="prelude-val">Ok</span>(meta)
     }
 
-    <span class="kw">fn </span>validate_output(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+    <span class="kw">fn </span>validate_output(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span><span class="self">Self</span>::TxOutput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">match </span>output {
             ContractOrOfferOutput::Contract(contract) =&gt; {
                 <span class="comment">// Incoming contracts are special, they need to match an offer
@@ -1055,14 +1070,17 @@
                 <span class="kw">if </span>contract.amount == Amount::ZERO {
                     <span class="prelude-val">Err</span>(LightningModuleError::ZeroOutput)
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Ok</span>(contract.amount)
+                    <span class="prelude-val">Ok</span>(TransactionItemAmount {
+                        amount: contract.amount,
+                        fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
+                    })
                 }
             }
             ContractOrOfferOutput::Offer(offer) =&gt; {
                 <span class="kw">if </span>!offer.encrypted_preimage.<span class="number">0</span>.verify() {
                     <span class="prelude-val">Err</span>(LightningModuleError::InvalidEncryptedPreimage)
                 } <span class="kw">else </span>{
-                    <span class="prelude-val">Ok</span>(Amount::ZERO)
+                    <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
                 }
             }
             ContractOrOfferOutput::CancelOutgoing {
@@ -1090,7 +1108,7 @@
                     )
                     .map_err(|<span class="kw">_</span>| LightningModuleError::InvalidCancellationSignature)<span class="question-mark">?</span>;
 
-                <span class="prelude-val">Ok</span>(Amount::ZERO)
+                <span class="prelude-val">Ok</span>(TransactionItemAmount::ZERO)
             }
         }
     }
@@ -1100,7 +1118,7 @@
         <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: OutPoint,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, <span class="self">Self</span>::Error&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
         <span class="kw">let </span>amount = <span class="self">self</span>.validate_output(output)<span class="question-mark">?</span>;
 
         <span class="kw">match </span>output {
@@ -1111,11 +1129,11 @@
                     .get_value(<span class="kw-2">&amp;</span>contract_db_key)
                     .expect(<span class="string">&quot;DB error&quot;</span>)
                     .map(|<span class="kw-2">mut </span>value: ContractAccount| {
-                        value.amount += amount;
+                        value.amount += amount.amount;
                         value
                     })
                     .unwrap_or_else(|| ContractAccount {
-                        amount,
+                        amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
                 batch.append_insert(contract_db_key, updated_contract_account);

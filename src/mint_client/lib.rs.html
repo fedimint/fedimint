@@ -1154,6 +1154,29 @@
 <span id="1154">1154</span>
 <span id="1155">1155</span>
 <span id="1156">1156</span>
+<span id="1157">1157</span>
+<span id="1158">1158</span>
+<span id="1159">1159</span>
+<span id="1160">1160</span>
+<span id="1161">1161</span>
+<span id="1162">1162</span>
+<span id="1163">1163</span>
+<span id="1164">1164</span>
+<span id="1165">1165</span>
+<span id="1166">1166</span>
+<span id="1167">1167</span>
+<span id="1168">1168</span>
+<span id="1169">1169</span>
+<span id="1170">1170</span>
+<span id="1171">1171</span>
+<span id="1172">1172</span>
+<span id="1173">1173</span>
+<span id="1174">1174</span>
+<span id="1175">1175</span>
+<span id="1176">1176</span>
+<span id="1177">1177</span>
+<span id="1178">1178</span>
+<span id="1179">1179</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>mint;
@@ -1166,11 +1189,14 @@
 <span class="attribute">#[cfg(not(target_family = <span class="string">&quot;wasm&quot;</span>))]
 </span><span class="kw">use </span>std::time::SystemTime;
 
+<span class="kw">use </span>async_trait::async_trait;
+
 <span class="kw">use </span>api::FederationApi;
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
 <span class="kw">use </span>bitcoin::{secp256k1, Address, Transaction <span class="kw">as </span>BitcoinTransaction};
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api::db::Database;
+<span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::tiered::InvalidAmountTierError;
 <span class="kw">use </span>fedimint_api::TieredMulti;
@@ -1181,7 +1207,7 @@
 <span class="kw">use </span>fedimint_core::epoch::EpochHistory;
 <span class="kw">use </span>fedimint_core::modules::wallet::PegOut;
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionItem};
+<span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::{
     config::ClientConfig,
     modules::{
@@ -1258,6 +1284,23 @@
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>api: Url,
     <span class="kw">pub </span>node_pub_key: bitcoin::secp256k1::PublicKey,
+}
+
+<span class="attribute">#[async_trait]
+</span><span class="kw">pub trait </span>ModuleClient {
+    <span class="kw">type </span>Module: FederationModule;
+
+    <span class="doccomment">/// Returns the amount represented by the input and the fee its processing requires
+    </span><span class="kw">fn </span>input_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxInput,
+    ) -&gt; TransactionItemAmount;
+
+    <span class="doccomment">/// Returns the amount represented by the output and the fee its processing requires
+    </span><span class="kw">fn </span>output_amount(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>FederationModule&gt;::TxOutput,
+    ) -&gt; TransactionItemAmount;
 }
 
 <span class="kw">impl </span>From&lt;GatewayClientConfig&gt; <span class="kw">for </span>LightningGateway {
@@ -1376,7 +1419,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.mint_client()
-            .submit_tx_with_change(<span class="kw-2">&amp;</span><span class="self">self</span>.config.as_ref().fee_consensus(), tx, batch, rng)
+            .submit_tx_with_change(<span class="self">self</span>, tx, batch, rng)
             .<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
@@ -1709,17 +1752,20 @@
             <span class="kw-2">&amp;mut </span>rng,
         )<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>contract_id = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
-            ContractOrOfferOutput::Contract(c) =&gt; c.contract.contract_id(),
+        <span class="kw">let </span>(contract_id, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>contract {
+            ContractOrOfferOutput::Contract(c) =&gt; {
+                <span class="kw">let </span>contract_id = c.contract.contract_id();
+                <span class="kw">let </span>amount = c.amount;
+                (contract_id, amount)
+            }
             ContractOrOfferOutput::Offer(<span class="kw">_</span>) | ContractOrOfferOutput::CancelOutgoing { .. } =&gt; {
                 <span class="macro">panic!</span>()
             } <span class="comment">// FIXME: impl TryFrom
         </span>};
-        <span class="kw">let </span>ln_output = Output::LN(contract);
 
-        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(ln_output.amount())<span class="question-mark">?</span>;
+        <span class="kw">let </span>coins = <span class="self">self</span>.mint_client().select_coins(amount)<span class="question-mark">?</span>;
         tx.input_coins(coins, <span class="kw-2">&amp;</span><span class="self">self</span>.context.secp)<span class="question-mark">?</span>;
-        tx.output(ln_output);
+        tx.output(Output::LN(contract));
         <span class="kw">let </span>txid = <span class="self">self</span>.submit_tx_with_change(tx, batch, <span class="kw-2">&amp;mut </span>rng).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>outpoint = OutPoint { txid, out_idx: <span class="number">0 </span>};
 
@@ -1750,7 +1796,7 @@
         tx.input(<span class="kw-2">&amp;mut </span><span class="macro">vec!</span>[<span class="kw-2">*</span>refund_key], Input::LN(refund_input));
         <span class="kw">let </span>txid = <span class="self">self
             </span>.mint_client()
-            .submit_tx_with_change(<span class="kw-2">&amp;</span><span class="self">self</span>.config.<span class="number">0</span>.fee_consensus(), tx, DbBatch::new(), rng)
+            .submit_tx_with_change(<span class="self">self</span>, tx, DbBatch::new(), rng)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.context
