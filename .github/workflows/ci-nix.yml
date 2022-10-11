@@ -104,7 +104,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: result/lcov.info
-          fail_ci_if_error: true
 
   wasm32:
     name: "Cross-compile: ${{ matrix.build }}"
