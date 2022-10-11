@@ -34,11 +34,11 @@ fi
 
 
 if [ -e "./target/debug/fedimintd" ]; then
-  >&2 echo "✔️  fedimintd built already"
+  >&2 echo "✅ fedimintd built already"
 else
-  >&2 echo "❌ fedimintd not built already - building..."
-  $nix_cmd develop -c cargo check
-  $nix_cmd develop -c cargo build
+  >&2 echo "✅ Use '$nix_cmd develop' to start the dev shell in another window, while the project is being pre-built below..."
+  $nix_cmd develop -c cargo check -q
+  $nix_cmd develop -c cargo build -q
 fi
 
 >&2 echo ""
