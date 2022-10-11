@@ -800,6 +800,12 @@
               ];
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
             };
+
+            bootstrap = pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                cachix
+              ];
+            };
           };
       });
 }
