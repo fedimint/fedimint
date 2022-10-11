@@ -1,5 +1,15 @@
 # Set up local dev environment
 
+## Script version
+
+This instruction is available in a script version. If you prefer it, you can run:
+
+```
+git clone -o upstream https://github.com/fedimint/fedimint && cd fedimint && ./scripts/bootstrap.sh
+```
+
+and follow the instructions instead of reading this document.
+
 ## Clone repository
 
 Clone this repository locally, with `git clone <repo-url>`, then `cd <repo-dir>`,
