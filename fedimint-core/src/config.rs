@@ -22,23 +22,6 @@ pub struct ClientConfig {
     pub ln: LightningModuleClientConfig,
 }
 
-impl ClientConfig {
-    pub fn fee_consensus(&self) -> FeeConsensus {
-        FeeConsensus {
-            wallet: self.wallet.fee_consensus.clone(),
-            mint: self.mint.fee_consensus.clone(),
-            ln: self.ln.fee_consensus.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct FeeConsensus {
-    pub wallet: fedimint_wallet::config::FeeConsensus,
-    pub mint: fedimint_mint::config::FeeConsensus,
-    pub ln: fedimint_ln::config::FeeConsensus,
-}
-
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
     let file = std::fs::File::open(path).expect("Can't read cfg file.");
     serde_json::from_reader(file).expect("Could not parse cfg file.")

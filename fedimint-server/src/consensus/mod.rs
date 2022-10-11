@@ -12,7 +12,8 @@ use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::Database;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
-use fedimint_api::{FederationModule, OutPoint, PeerId, TransactionId};
+use fedimint_api::module::TransactionItemAmount;
+use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 use fedimint_core::epoch::*;
 use fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 use fedimint_core::modules::mint::{Mint, MintError};
@@ -103,6 +104,12 @@ struct VerificationCaches {
     ln: <LightningModule as FederationModule>::VerificationCache,
 }
 
+struct FundingVerifier {
+    input_amount: Amount,
+    output_amount: Amount,
+    fee_amount: Amount,
+}
+
 impl FedimintConsensus {
     pub fn new(
         cfg: ServerConfig,
@@ -144,7 +151,7 @@ impl FedimintConsensus {
         let tx_hash = transaction.tx_hash();
         debug!(%tx_hash, "Received mint transaction");
 
-        transaction.validate_funding(&self.cfg.fee_consensus())?;
+        let mut funding_verifier = FundingVerifier::default();
 
         let mut pub_keys = Vec::new();
         for input in &transaction.inputs {
@@ -171,28 +178,29 @@ impl FedimintConsensus {
                 }
             };
             pub_keys.push(meta.puk_keys);
+            funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
         for output in &transaction.outputs {
-            match output {
-                Output::Mint(coins) => {
-                    self.mint
-                        .validate_output(coins)
-                        .map_err(TransactionSubmissionError::OutputCoinError)?;
-                }
-                Output::Wallet(peg_out) => {
-                    self.wallet
-                        .validate_output(peg_out)
-                        .map_err(TransactionSubmissionError::OutputPegOut)?;
-                }
-                Output::LN(output) => {
-                    self.ln
-                        .validate_output(output)
-                        .map_err(TransactionSubmissionError::ContractOutputError)?;
-                }
-            }
+            let amount = match output {
+                Output::Mint(coins) => self
+                    .mint
+                    .validate_output(coins)
+                    .map_err(TransactionSubmissionError::OutputCoinError)?,
+                Output::Wallet(peg_out) => self
+                    .wallet
+                    .validate_output(peg_out)
+                    .map_err(TransactionSubmissionError::OutputPegOut)?,
+                Output::LN(output) => self
+                    .ln
+                    .validate_output(output)
+                    .map_err(TransactionSubmissionError::ContractOutputError)?,
+            };
+            funding_verifier.add_output(amount);
         }
+
+        funding_verifier.verify_funding()?;
 
         let new = self
             .db
@@ -455,7 +463,7 @@ impl FedimintConsensus {
         transaction: Transaction,
         caches: &VerificationCaches,
     ) -> Result<(), TransactionSubmissionError> {
-        transaction.validate_funding(&self.cfg.fee_consensus())?;
+        let mut funding_verifier = FundingVerifier::default();
 
         let tx_hash = transaction.tx_hash();
 
@@ -491,6 +499,7 @@ impl FedimintConsensus {
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
+            funding_verifier.add_input(meta.amount);
         }
         transaction.validate_signature(pub_keys.into_iter().flatten())?;
 
@@ -499,24 +508,24 @@ impl FedimintConsensus {
                 txid: tx_hash,
                 out_idx: idx as u64,
             };
-            match output {
-                Output::Mint(new_tokens) => {
-                    self.mint
-                        .apply_output(batch.subtransaction(), &new_tokens, out_point)
-                        .map_err(TransactionSubmissionError::OutputCoinError)?;
-                }
-                Output::Wallet(peg_out) => {
-                    self.wallet
-                        .apply_output(batch.subtransaction(), &peg_out, out_point)
-                        .map_err(TransactionSubmissionError::OutputPegOut)?;
-                }
-                Output::LN(output) => {
-                    self.ln
-                        .apply_output(batch.subtransaction(), &output, out_point)
-                        .map_err(TransactionSubmissionError::ContractOutputError)?;
-                }
-            }
+            let amount = match output {
+                Output::Mint(new_tokens) => self
+                    .mint
+                    .apply_output(batch.subtransaction(), &new_tokens, out_point)
+                    .map_err(TransactionSubmissionError::OutputCoinError)?,
+                Output::Wallet(peg_out) => self
+                    .wallet
+                    .apply_output(batch.subtransaction(), &peg_out, out_point)
+                    .map_err(TransactionSubmissionError::OutputPegOut)?,
+                Output::LN(output) => self
+                    .ln
+                    .apply_output(batch.subtransaction(), &output, out_point)
+                    .map_err(TransactionSubmissionError::ContractOutputError)?,
+            };
+            funding_verifier.add_output(amount);
         }
+
+        funding_verifier.verify_funding()?;
 
         batch.commit();
         Ok(())
@@ -636,6 +645,40 @@ impl FedimintConsensus {
 
     fn build_interconnect(&self) -> FedimintInterconnect {
         FedimintInterconnect { fedimint: self }
+    }
+}
+
+impl FundingVerifier {
+    fn add_input(&mut self, input_amount: TransactionItemAmount) {
+        self.input_amount += input_amount.amount;
+        self.fee_amount += input_amount.fee;
+    }
+
+    fn add_output(&mut self, output_amount: TransactionItemAmount) {
+        self.output_amount += output_amount.amount;
+        self.fee_amount += output_amount.fee;
+    }
+
+    fn verify_funding(self) -> Result<(), TransactionError> {
+        if self.input_amount == (self.output_amount + self.fee_amount) {
+            Ok(())
+        } else {
+            Err(TransactionError::UnbalancedTransaction {
+                inputs: self.input_amount,
+                outputs: self.output_amount,
+                fee: self.fee_amount,
+            })
+        }
+    }
+}
+
+impl Default for FundingVerifier {
+    fn default() -> Self {
+        FundingVerifier {
+            input_amount: Amount::ZERO,
+            output_amount: Amount::ZERO,
+            fee_amount: Amount::ZERO,
+        }
     }
 }
 

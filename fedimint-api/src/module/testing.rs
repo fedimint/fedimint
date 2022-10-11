@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use fedimint_api::module::TransactionItemAmount;
 
 use super::ApiError;
 use crate::config::GenerateConfig;
@@ -12,7 +13,7 @@ use crate::db::batch::DbBatch;
 use crate::db::mem_impl::MemDatabase;
 use crate::db::Database;
 use crate::module::interconnect::ModuleInterconect;
-use crate::{Amount, FederationModule, InputMeta, OutPoint, PeerId};
+use crate::{FederationModule, InputMeta, OutPoint, PeerId};
 
 pub struct FakeFed<M, CC> {
     members: Vec<(PeerId, M, Database)>,
@@ -22,7 +23,7 @@ pub struct FakeFed<M, CC> {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TestInputMeta {
-    pub amount: Amount,
+    pub amount: TransactionItemAmount,
     pub keys: Vec<secp256k1_zkp::XOnlyPublicKey>,
 }
 

@@ -9,7 +9,7 @@ use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::ApiEndpoint;
+use fedimint_api::module::{ApiEndpoint, TransactionItemAmount};
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::{
     Amount, FederationModule, InputMeta, OutPoint, PeerId, Tiered, TieredMulti, TieredMultiZip,
@@ -203,7 +203,10 @@ impl FederationModule for Mint {
         })?;
 
         Ok(InputMeta {
-            amount: input.total_amount(),
+            amount: TransactionItemAmount {
+                amount: input.total_amount(),
+                fee: self.cfg.fee_consensus.coin_spend_abs * (input.item_count() as u64),
+            },
             puk_keys: Box::new(input.iter_items().map(|(_, coin)| *coin.spend_key())),
         })
     }
@@ -229,7 +232,10 @@ impl FederationModule for Mint {
         Ok(meta)
     }
 
-    fn validate_output(&self, output: &Self::TxOutput) -> Result<Amount, Self::Error> {
+    fn validate_output(
+        &self,
+        output: &Self::TxOutput,
+    ) -> Result<TransactionItemAmount, Self::Error> {
         if let Some(amount) = output.iter_items().find_map(|(amount, _)| {
             if self.pub_key.get(&amount).is_none() {
                 Some(amount)
@@ -239,7 +245,10 @@ impl FederationModule for Mint {
         }) {
             Err(MintError::InvalidAmountTier(amount))
         } else {
-            Ok(output.total_amount())
+            Ok(TransactionItemAmount {
+                amount: output.total_amount(),
+                fee: self.cfg.fee_consensus.coin_issuance_abs * (output.item_count() as u64),
+            })
         }
     }
 
@@ -248,7 +257,9 @@ impl FederationModule for Mint {
         mut batch: BatchTx<'a>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
-    ) -> Result<Amount, Self::Error> {
+    ) -> Result<TransactionItemAmount, Self::Error> {
+        let amount = self.validate_output(output)?;
+
         // TODO: move actual signing to worker thread
         // TODO: get rid of clone
         let partial_sig = self.blind_sign(output.clone())?;
@@ -261,7 +272,8 @@ impl FederationModule for Mint {
         );
         batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.total_amount());
         batch.commit();
-        Ok(output.total_amount())
+
+        Ok(amount)
     }
 
     async fn end_consensus_epoch<'a>(

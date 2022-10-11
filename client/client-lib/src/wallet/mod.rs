@@ -2,17 +2,18 @@ use bitcoin::Address;
 use bitcoin::KeyPair;
 use db::PegInKey;
 use fedimint_api::db::batch::BatchTx;
-use fedimint_api::Amount;
+use fedimint_api::module::TransactionItemAmount;
+use fedimint_api::{Amount, FederationModule};
 use fedimint_core::modules::wallet::config::WalletClientConfig;
 use fedimint_core::modules::wallet::tweakable::Tweakable;
 use fedimint_core::modules::wallet::txoproof::{PegInProof, PegInProofError, TxOutProof};
-use fedimint_core::modules::wallet::PegOutOutcome;
+use fedimint_core::modules::wallet::{PegOutOutcome, Wallet};
 use rand::{CryptoRng, RngCore};
 use thiserror::Error;
 use tracing::debug;
 
 use crate::utils::ClientContext;
-use crate::ApiError;
+use crate::{ApiError, ModuleClient};
 
 mod db;
 
@@ -21,6 +22,30 @@ mod db;
 pub struct WalletClient<'c> {
     pub config: &'c WalletClientConfig,
     pub context: &'c ClientContext,
+}
+
+impl<'a> ModuleClient for WalletClient<'a> {
+    type Module = Wallet;
+
+    fn input_amount(
+        &self,
+        input: &<Self::Module as FederationModule>::TxInput,
+    ) -> TransactionItemAmount {
+        TransactionItemAmount {
+            amount: Amount::from_sat(input.tx_output().value),
+            fee: self.config.fee_consensus.peg_in_abs,
+        }
+    }
+
+    fn output_amount(
+        &self,
+        output: &<Self::Module as FederationModule>::TxOutput,
+    ) -> TransactionItemAmount {
+        TransactionItemAmount {
+            amount: (output.amount + output.fees.amount()).into(),
+            fee: self.config.fee_consensus.peg_out_abs,
+        }
+    }
 }
 
 impl<'c> WalletClient<'c> {

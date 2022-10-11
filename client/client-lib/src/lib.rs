@@ -10,11 +10,14 @@ use std::time::Duration;
 #[cfg(not(target_family = "wasm"))]
 use std::time::SystemTime;
 
+use async_trait::async_trait;
+
 use api::FederationApi;
 use bitcoin::util::key::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction as BitcoinTransaction};
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api::db::Database;
+use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::sleep;
 use fedimint_api::tiered::InvalidAmountTierError;
 use fedimint_api::TieredMulti;
@@ -25,7 +28,7 @@ use fedimint_api::{
 use fedimint_core::epoch::EpochHistory;
 use fedimint_core::modules::wallet::PegOut;
 use fedimint_core::outcome::TransactionStatus;
-use fedimint_core::transaction::{Transaction, TransactionItem};
+use fedimint_core::transaction::Transaction;
 use fedimint_core::{
     config::ClientConfig,
     modules::{
@@ -102,6 +105,23 @@ pub struct GatewayClientConfig {
     pub timelock_delta: u64,
     pub api: Url,
     pub node_pub_key: bitcoin::secp256k1::PublicKey,
+}
+
+#[async_trait]
+pub trait ModuleClient {
+    type Module: FederationModule;
+
+    /// Returns the amount represented by the input and the fee its processing requires
+    fn input_amount(
+        &self,
+        input: &<Self::Module as FederationModule>::TxInput,
+    ) -> TransactionItemAmount;
+
+    /// Returns the amount represented by the output and the fee its processing requires
+    fn output_amount(
+        &self,
+        output: &<Self::Module as FederationModule>::TxOutput,
+    ) -> TransactionItemAmount;
 }
 
 impl From<GatewayClientConfig> for LightningGateway {
@@ -220,7 +240,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ) -> Result<TransactionId> {
         Ok(self
             .mint_client()
-            .submit_tx_with_change(&self.config.as_ref().fee_consensus(), tx, batch, rng)
+            .submit_tx_with_change(self, tx, batch, rng)
             .await?)
     }
 
@@ -553,17 +573,20 @@ impl Client<UserClientConfig> {
             &mut rng,
         )?;
 
-        let contract_id = match &contract {
-            ContractOrOfferOutput::Contract(c) => c.contract.contract_id(),
+        let (contract_id, amount) = match &contract {
+            ContractOrOfferOutput::Contract(c) => {
+                let contract_id = c.contract.contract_id();
+                let amount = c.amount;
+                (contract_id, amount)
+            }
             ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
                 panic!()
             } // FIXME: impl TryFrom
         };
-        let ln_output = Output::LN(contract);
 
-        let coins = self.mint_client().select_coins(ln_output.amount())?;
+        let coins = self.mint_client().select_coins(amount)?;
         tx.input_coins(coins, &self.context.secp)?;
-        tx.output(ln_output);
+        tx.output(Output::LN(contract));
         let txid = self.submit_tx_with_change(tx, batch, &mut rng).await?;
         let outpoint = OutPoint { txid, out_idx: 0 };
 
@@ -594,7 +617,7 @@ impl Client<UserClientConfig> {
         tx.input(&mut vec![*refund_key], Input::LN(refund_input));
         let txid = self
             .mint_client()
-            .submit_tx_with_change(&self.config.0.fee_consensus(), tx, DbBatch::new(), rng)
+            .submit_tx_with_change(self, tx, DbBatch::new(), rng)
             .await?;
 
         self.context

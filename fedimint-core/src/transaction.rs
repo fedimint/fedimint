@@ -7,8 +7,6 @@ use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::config::FeeConsensus;
-
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
 /// The mint enforces that the total value of the outputs equals the total value of the inputs, to prevent creating funds out of thin air. In some cases, the value of the inputs and outputs can both be 0 e.g. when creating an offer to a Lightning Gateway.
@@ -45,109 +43,7 @@ pub enum Output {
     LN(<fedimint_ln::LightningModule as FederationModule>::TxOutput),
 }
 
-/// Common properties of value transfer for inputs and outputs.
-///
-/// Input and output both define amount transferred and fee. The fee is paid to the federation.
-pub trait TransactionItem {
-    /// The amount before fees represented by the in/output
-    fn amount(&self) -> fedimint_api::Amount;
-
-    /// The fee that will be charged for this in/output
-    fn fee(&self, fee_consensus: &FeeConsensus) -> fedimint_api::Amount;
-}
-
-impl TransactionItem for Input {
-    fn amount(&self) -> Amount {
-        match self {
-            Input::Mint(coins) => coins.total_amount(),
-            Input::Wallet(peg_in) => Amount::from_sat(peg_in.tx_output().value),
-            Input::LN(input) => input.amount,
-        }
-    }
-
-    fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
-        match self {
-            Input::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.tier_count() as u64),
-            Input::Wallet(_) => fee_consensus.wallet.peg_in_abs,
-            Input::LN(_) => fee_consensus.ln.contract_input,
-        }
-    }
-}
-
-impl TransactionItem for Output {
-    fn amount(&self) -> Amount {
-        match self {
-            Output::Mint(coins) => coins.total_amount(),
-            Output::Wallet(peg_out) => (peg_out.amount + peg_out.fees.amount()).into(),
-            Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(output)) => output.amount,
-            Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
-            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) => Amount::ZERO,
-        }
-    }
-
-    fn fee(&self, fee_consensus: &FeeConsensus) -> Amount {
-        match self {
-            Output::Mint(coins) => fee_consensus.mint.coin_spend_abs * (coins.tier_count() as u64),
-            Output::Wallet(_) => fee_consensus.wallet.peg_out_abs,
-            Output::LN(fedimint_ln::ContractOrOfferOutput::Contract(_)) => {
-                fee_consensus.ln.contract_output
-            }
-            // TODO: maybe not hard code this? otoh non-zero fee offers make onboarding kinda impossible
-            Output::LN(fedimint_ln::ContractOrOfferOutput::Offer(_)) => Amount::ZERO,
-            Output::LN(fedimint_ln::ContractOrOfferOutput::CancelOutgoing { .. }) => Amount::ZERO,
-        }
-    }
-}
-
 impl Transaction {
-    pub fn in_amount(&self) -> Amount {
-        self.inputs
-            .iter()
-            .map(TransactionItem::amount)
-            .sum::<Amount>()
-    }
-
-    pub fn out_amount(&self) -> Amount {
-        self.outputs
-            .iter()
-            .map(TransactionItem::amount)
-            .sum::<Amount>()
-    }
-
-    /// The sum of fees across all inputs and outputs.
-    pub fn fee_amount(&self, fee_consensus: &FeeConsensus) -> Amount {
-        self.inputs
-            .iter()
-            .map(|input| input.fee(fee_consensus))
-            .sum::<Amount>()
-            + self
-                .outputs
-                .iter()
-                .map(|output| output.fee(fee_consensus))
-                .sum::<Amount>()
-    }
-
-    /// Validate amounts balance.
-    ///
-    /// A valid transaction maintains 1:1 ratio of assets to liabilities.
-
-    // TODO: better named validate_amounts?
-    pub fn validate_funding(&self, fee_consensus: &FeeConsensus) -> Result<(), TransactionError> {
-        let in_amount = self.in_amount();
-        let out_amount = self.out_amount();
-        let fee_amount = self.fee_amount(fee_consensus);
-
-        if in_amount == (out_amount + fee_amount) {
-            Ok(())
-        } else {
-            Err(TransactionError::UnbalancedTransaction {
-                inputs: in_amount,
-                outputs: out_amount,
-                fee: fee_amount,
-            })
-        }
-    }
-
     /// Hash of the transaction (excluding the signature).
     ///
     /// Transaction signature commits to this hash.

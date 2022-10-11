@@ -7,8 +7,9 @@ use std::time::Duration;
 
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use fedimint_api::db::batch::BatchTx;
+use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::task::timeout;
-use fedimint_api::Amount;
+use fedimint_api::{Amount, FederationModule};
 use fedimint_core::modules::ln::config::LightningModuleClientConfig;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContractOffer;
 use fedimint_core::modules::ln::contracts::outgoing::OutgoingContract;
@@ -17,6 +18,7 @@ use fedimint_core::modules::ln::contracts::{
 };
 use fedimint_core::modules::ln::{
     ContractAccount, ContractInput, ContractOrOfferOutput, ContractOutput, LightningGateway,
+    LightningModule,
 };
 use lightning_invoice::Invoice;
 use rand::{CryptoRng, RngCore};
@@ -29,10 +31,43 @@ use crate::ln::db::{OutgoingPaymentKey, OutgoingPaymentKeyPrefix};
 use crate::ln::incoming::IncomingContractAccount;
 use crate::ln::outgoing::{OutgoingContractAccount, OutgoingContractData};
 use crate::utils::ClientContext;
+use crate::ModuleClient;
 
 pub struct LnClient<'c> {
     pub config: &'c LightningModuleClientConfig,
     pub context: &'c ClientContext,
+}
+
+impl<'a> ModuleClient for LnClient<'a> {
+    type Module = LightningModule;
+
+    fn input_amount(
+        &self,
+        input: &<Self::Module as FederationModule>::TxInput,
+    ) -> TransactionItemAmount {
+        TransactionItemAmount {
+            amount: input.amount,
+            fee: self.config.fee_consensus.contract_input,
+        }
+    }
+
+    fn output_amount(
+        &self,
+        output: &<Self::Module as FederationModule>::TxOutput,
+    ) -> TransactionItemAmount {
+        match output {
+            ContractOrOfferOutput::Contract(account_output) => TransactionItemAmount {
+                amount: account_output.amount,
+                fee: self.config.fee_consensus.contract_output,
+            },
+            ContractOrOfferOutput::Offer(_) | ContractOrOfferOutput::CancelOutgoing { .. } => {
+                TransactionItemAmount {
+                    amount: Amount::ZERO,
+                    fee: Amount::ZERO,
+                }
+            }
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -485,7 +520,7 @@ mod tests {
         let meta = fed.lock().await.verify_input(&refund_input).unwrap();
         let refund_pk = secp256k1_zkp::XOnlyPublicKey::from_keypair(refund_key).0;
         assert_eq!(meta.keys, vec![refund_pk]);
-        assert_eq!(meta.amount, expected_amount);
+        assert_eq!(meta.amount.amount, expected_amount);
 
         fed.lock().await.consensus_round(&[refund_input], &[]).await;
 

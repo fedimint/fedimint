@@ -1,7 +1,8 @@
 use bitcoin::KeyPair;
 use fedimint_api::db::batch::{BatchItem, BatchTx};
+use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, OutPoint, Tiered, TieredMulti};
-use fedimint_core::config::FeeConsensus;
+use fedimint_core::config::ClientConfig;
 use fedimint_core::modules::mint::{BlindNonce, Note};
 use fedimint_core::transaction::{Input, Output, Transaction};
 use rand::{CryptoRng, RngCore};
@@ -9,7 +10,7 @@ use tbs::AggregatePublicKey;
 
 use crate::mint::db::{CoinKey, OutputFinalizationKey, PendingCoinsKey};
 use crate::mint::NoteIssuanceRequests;
-use crate::{MintClientError, SpendableNote};
+use crate::{Client, MintClientError, ModuleClient, SpendableNote};
 
 pub struct TransactionBuilder {
     input_notes: TieredMulti<SpendableNote>,
@@ -79,8 +80,11 @@ impl TransactionBuilder {
         (self.tx.outputs.len() - 1) as u64
     }
 
-    pub fn change_required(&self, fees: &FeeConsensus) -> Amount {
-        self.tx.in_amount() - self.tx.out_amount() - self.tx.fee_amount(fees)
+    pub fn change_required<C>(&self, client: &Client<C>) -> Amount
+    where
+        C: AsRef<ClientConfig> + Clone,
+    {
+        self.input_amount(client) - self.output_amount(client) - self.fee_amount(client)
     }
 
     pub fn output_coins<R: RngCore + CryptoRng>(
@@ -163,5 +167,61 @@ impl TransactionBuilder {
 
         batch.commit();
         self.tx
+    }
+
+    fn input_amount_iter<'a, C>(
+        &'a self,
+        client: &'a Client<C>,
+    ) -> impl Iterator<Item = TransactionItemAmount> + 'a
+    where
+        C: AsRef<ClientConfig> + Clone,
+    {
+        self.tx.inputs.iter().map(|i| match i {
+            Input::Mint(input) => client.mint_client().input_amount(input),
+            Input::Wallet(input) => client.wallet_client().input_amount(input),
+            Input::LN(input) => client.ln_client().input_amount(input),
+        })
+    }
+
+    fn output_amount_iter<'a, C>(
+        &'a self,
+        client: &'a Client<C>,
+    ) -> impl Iterator<Item = TransactionItemAmount> + 'a
+    where
+        C: AsRef<ClientConfig> + Clone + 'a,
+    {
+        self.tx.outputs.iter().map(|o| match o {
+            Output::Mint(output) => client.mint_client().output_amount(output),
+            Output::Wallet(output) => client.wallet_client().output_amount(output),
+            Output::LN(output) => client.ln_client().output_amount(output),
+        })
+    }
+
+    fn input_amount<C>(&self, client: &Client<C>) -> Amount
+    where
+        C: AsRef<ClientConfig> + Clone,
+    {
+        self.input_amount_iter(client)
+            .map(|amount_info| amount_info.amount)
+            .sum()
+    }
+
+    fn output_amount<C>(&self, client: &Client<C>) -> Amount
+    where
+        C: AsRef<ClientConfig> + Clone,
+    {
+        self.output_amount_iter(client)
+            .map(|amount_info| amount_info.amount)
+            .sum()
+    }
+
+    fn fee_amount<C>(&self, client: &Client<C>) -> Amount
+    where
+        C: AsRef<ClientConfig> + Clone,
+    {
+        self.input_amount_iter(client)
+            .chain(self.output_amount_iter(client))
+            .map(|amount_info| amount_info.fee)
+            .sum()
     }
 }
