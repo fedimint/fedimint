@@ -40,6 +40,22 @@ repository = "https://github.com/fedimint/fedimint"
 license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
+
+# in dev mode optimize crates that are perf-critical (usually just crypto crates)
+[profile.dev.package]
+secp256k1 = { opt-level = 2 }
+secp256k1-zkp = { opt-level = 2 }
+secp256k1-sys = { opt-level = 2 }
+secp256k1-zkp-sys = { opt-level = 2 }
+ff = { opt-level = 2 }
+group = { opt-level = 2 }
+pairings = { opt-level = 2 }
+rand_core = { opt-level = 2 }
+byteorder = { opt-level = 2 }
+zeroize = { opt-level = 2 }
+bls12_381 = { opt-level = 2 }
+subtle = { opt-level = 2 }
+
 [patch.crates-io]
 secp256k1-zkp = { git = "https://github.com/dpc/rust-secp256k1-zkp/", branch = "sanket-pr" }
 cln-plugin = { git = "https://github.com/ElementsProject/lightning", rev = "42783aa" }
