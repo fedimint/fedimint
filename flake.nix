@@ -775,8 +775,18 @@
               # workaround https://github.com/rust-lang/cargo/issues/11020
               cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
               if (( ''${#cargo_cmd_bins[@]} != 0 )); then
-                echo "Warning: Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
-                echo "Warning: Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+                >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
+                >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
+              fi
+
+              # Note: the string escaping necessary here (Nix's multi-line string and shell's) is mind-twisting.
+              if [ -n "$TMUX" ]; then
+                # if [ "$(tmux show-options -A default-command)" == 'default-command* \'\''' ]; then
+                if [ "$(tmux show-options -A default-command)" == 'bla' ]; then
+                  echo
+                  >&2 echo "⚠️  tmux's 'default-command' not set"
+                  >&2 echo " ️  Please add 'set -g default-command \"\''${SHELL}\"' to your '$HOME/.tmux.conf' for tmuxinator test setup to work correctly"
+                fi
               fi
             '';
           };
