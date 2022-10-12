@@ -1,5 +1,6 @@
 pub mod cln;
 pub mod ln;
+pub mod rpc;
 pub mod webserver;
 
 use std::borrow::Cow;
@@ -410,6 +411,8 @@ pub enum LnGatewayError {
     CouldNotRoute(LightningError),
     #[error("Mint client error: {0:?}")]
     MintClientE(#[from] MintClientError),
+    #[error("Other: {0:?}")]
+    Other(#[from] anyhow::Error),
 }
 
 pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializer<'d>>(
