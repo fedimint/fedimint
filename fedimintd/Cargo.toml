@@ -29,7 +29,7 @@ bincode = "1.3.1"
 bitcoin = "0.29.1"
 bytes = "1.1.0"
 hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
-clap = { version = "4.0.13", features = ["derive"] }
+clap = { version = "4.0.14", features = ["derive"] }
 futures = "0.3.24"
 hex = "0.4.2"
 itertools = "0.10.5"
