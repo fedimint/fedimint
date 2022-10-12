@@ -289,7 +289,7 @@
         workspaceDeps = craneLib.buildDepsOnly (commonArgs // {
           src = filterWorkspaceDepsBuildFiles ./.;
           pname = "workspace-deps";
-          buildPhaseCargoCommand = "cargo doc && cargo check --profile release --all-targets && cargo build --profile release --all-targets";
+          buildPhaseCargoCommand = "cargo doc --profile $CARGO_PROFILE && cargo check --profile $CARGO_PROFILE --all-targets && cargo build --profile $CARGO_PROFILE --all-targets";
           doCheck = false;
         });
 
@@ -384,7 +384,7 @@
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
               pname = "pkg-${name}-deps";
-              buildPhaseCargoCommand = "cargo build --profile release --package ${name}";
+              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --package ${name}";
               doCheck = false;
             });
 
@@ -409,7 +409,7 @@
             deps = craneLib.buildDepsOnly (commonArgs // {
               src = filterWorkspaceDepsBuildFiles ./.;
               pname = "pkg-${name}-${target.attr}-deps";
-              buildPhaseCargoCommand = "cargo build --profile release --target ${target.name} --package ${name}";
+              buildPhaseCargoCommand = "cargo build --profile $CARGO_PROFILE --target ${target.name} --package ${name}";
               doCheck = false;
 
               preBuild = ''
@@ -602,17 +602,8 @@
             buildInputs = [ pkgs.bbe ];
           };
 
-      in
-      {
-        packages = {
-          default = fedimintd;
-
-          fedimintd = replace-git-hash { name = "fedimint"; package = fedimintd; };
-          fedimint-tests = fedimint-tests;
-          ln-gateway = replace-git-hash { name = "ln-gateway"; package = ln-gateway; };
-          clientd = replace-git-hash { name = "clientd"; package = clientd; };
-          fedimint-cli = replace-git-hash { name = "fedimint-cli"; package = fedimint-cli; };
-
+        # outputs that do something over the whole workspace
+        outputsWorkspace = {
           inherit workspaceDeps
             workspaceBuild
             workspaceClippy
@@ -620,12 +611,45 @@
             workspaceDoc
             workspaceCov
             workspaceAudit;
+
         };
+        # outputs that build a particular package
+        outputsPackages = {
+          default = fedimintd;
+
+          inherit fedimintd ln-gateway clientd fedimint-cli fedimint-tests;
+
+        };
+      in
+      {
+        packages = outputsWorkspace //
+          # replace git hash in the final binaries
+          (builtins.mapAttrs (name: package: replace-git-hash { inherit name package; }) outputsPackages)
+        ;
 
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
         # purposes (like `nix build`).
         legacyPackages = {
+          # Debug Builds
+          #
+          # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
+          # recursing into `cargoArtifacts` to do the same. This way a debug build depends on debug build of all dependencies.
+          # See https://github.com/ipetkov/crane/discussions/140#discussioncomment-3857137 for more info.
+          debug =
+            let overrideCargoProfileRecursively = deriv: profile: deriv.overrideAttrs (oldAttrs: {
+              CARGO_PROFILE = profile;
+              cargoArtifacts = if oldAttrs ? "cargoArtifacts" && oldAttrs.cargoArtifacts != null then overrideCargoProfileRecursively oldAttrs.cargoArtifacts profile else null;
+            });
+            in
+            (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") outputsWorkspace) //
+            (builtins.mapAttrs
+              (name: deriv: replace-git-hash {
+                inherit name; package = overrideCargoProfileRecursively deriv "dev";
+              })
+              outputsPackages)
+          ;
+
           cli-test = {
             reconnect = cliTestReconnect;
             latency = cliTestLatency;
