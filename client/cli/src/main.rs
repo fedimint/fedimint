@@ -303,7 +303,8 @@ struct PayRequest {
 async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("error,mint_client=info,fedimint_cli=info")),
         )
         .with_writer(std::io::stderr)
         .init();

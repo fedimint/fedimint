@@ -534,6 +534,7 @@ impl Client<UserClientConfig> {
     ) -> Result<LightningGateway> {
         let gateways = self.fetch_registered_gateways().await?;
         if gateways.is_empty() {
+            debug!("Could not find any gateways");
             return Err(ClientError::NoGateways);
         };
         let gateway = match node_pub_key {
@@ -541,9 +542,15 @@ impl Client<UserClientConfig> {
             Some(pub_key) => gateways
                 .into_iter()
                 .find(|g| g.node_pub_key == pub_key)
-                .ok_or(ClientError::GatewayNotFound)?,
+                .ok_or_else(|| {
+                    debug!("Could not find gateway with public key {:?}", pub_key);
+                    ClientError::GatewayNotFound
+                })?,
             // Otherwise (no pubkey provided), select and activate the first registered gateway.
-            None => gateways[0].clone(),
+            None => {
+                debug!("No public key for gateway supplied, using first registered one");
+                gateways[0].clone()
+            }
         };
         self.context
             .db

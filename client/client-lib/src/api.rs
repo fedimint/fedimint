@@ -29,7 +29,7 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, instrument, trace, warn};
 use url::Url;
 
 use crate::query::{
@@ -112,8 +112,14 @@ impl FederationApi {
             loop {
                 match self.fetch_output_outcome(outpoint).await {
                     Ok(t) => return Ok(t),
-                    Err(e) if e.is_retryable() => fedimint_api::task::sleep(interval).await,
-                    Err(e) => return Err(e),
+                    Err(e) if e.is_retryable() => {
+                        trace!("Federation api returned retryable error: {:?}", e);
+                        fedimint_api::task::sleep(interval).await
+                    }
+                    Err(e) => {
+                        warn!("Federation api returned error: {:?}", e);
+                        return Err(e);
+                    }
                 }
             }
         };
@@ -383,7 +389,7 @@ impl<C: JsonRpcClient> FederationMember<C> {
             _ => {}
         };
 
-        info!("web socket not connected, reconnecting");
+        debug!("web socket not connected, reconnecting");
 
         drop(rclient);
         let mut wclient = self.client.write().await;
