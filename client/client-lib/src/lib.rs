@@ -289,7 +289,7 @@ impl<T: AsRef<ClientConfig> + Clone> Client<T> {
     ///
     /// Returns a `OutPoint` of a fedimint transaction created and submitted as a payment.
     ///
-    /// The name is derived from Bitcoin's terminology of "pay to <address-type>".
+    /// The name is derived from Bitcoin's terminology of "pay to `<address-type>`".
     pub async fn pay_to_blind_nonces<R: RngCore + CryptoRng>(
         &self,
         blind_nonces: TieredMulti<BlindNonce>,
