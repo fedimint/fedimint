@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 bitcoin = "0.29.1"
 bitcoin_hashes = "0.11.0"
-clap = { version = "4.0.13", features = ["derive"] }
+clap = { version = "4.0.14", features = ["derive"] }
 lightning-invoice = "0.19.0"
 mint-client = { path = "../client-lib" }
 fedimint-api = { path = "../../fedimint-api" }
