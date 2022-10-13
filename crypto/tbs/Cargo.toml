@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [dependencies]
 bls12_381 = { version = "0.7.0", features = [ "zeroize", "groups" ] }
 ff = "0.12.0"
-group = "0.12.0"
+group = "0.12.1"
 hex = "0.4.2"
 rand = "0.8"
 rand_chacha = "0.3.1"
