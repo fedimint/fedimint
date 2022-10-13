@@ -17,7 +17,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::CoreError;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-#[cfg(target_os = "android")]
+#[cfg(not(target_family = "wasm"))]
 use jsonrpsee_core::client::CertificateStore;
 use jsonrpsee_core::client::ClientT;
 use jsonrpsee_core::Error as JsonRpcError;
@@ -308,14 +308,13 @@ pub trait JsonRpcClient: ClientT + Sized {
 #[async_trait]
 impl JsonRpcClient for WsClient {
     async fn connect(url: &Url) -> std::result::Result<Self, JsonRpcError> {
-        // rustls-native-certs doesn't support android
-        #[cfg(target_os = "android")]
+        #[cfg(not(target_family = "wasm"))]
         return WsClientBuilder::default()
             .certificate_store(CertificateStore::WebPki)
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await;
 
-        #[cfg(not(target_os = "android"))]
+        #[cfg(target_family = "wasm")]
         WsClientBuilder::default()
             .build(url_to_string_with_default_port(url)) // Hack for default ports, see fn docs
             .await
