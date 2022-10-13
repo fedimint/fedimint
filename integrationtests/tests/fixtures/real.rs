@@ -49,8 +49,7 @@ impl LightningTest for RealLightningTest {
         {
             data
         } else {
-            // TODO: better way?
-            panic!("called Invoice but got something else")
+            panic!("cln-rpc response did not match expected InvoiceResponse")
         };
 
         Invoice::from_str(&invoice_resp.bolt11).unwrap()
@@ -76,8 +75,7 @@ impl RealLightningTest {
         {
             data
         } else {
-            // TODO: better way?
-            panic!("called Getinfo but got something else")
+            panic!("cln-rpc response did not match expected GetinfoResponse")
         };
 
         let gateway_node_pub_key =
@@ -100,8 +98,7 @@ impl RealLightningTest {
         {
             data
         } else {
-            // TODO: better way?
-            panic!("called ListFunds but got something else")
+            panic!("cln-rpc response did not match expected ListFundsResponse")
         };
 
         let funds: u64 = listfunds_resp
