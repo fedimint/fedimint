@@ -1,6 +1,4 @@
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{fs::File, net::SocketAddr, path::Path, path::PathBuf, sync::Arc};
 
 use cln_plugin::Error;
 use fedimint_server::config::{load_from_file, ClientConfig};
@@ -11,6 +9,7 @@ use mint_client::{Client, GatewayClientConfig};
 use rand::thread_rng;
 use secp256k1::{KeyPair, PublicKey};
 use tokio::sync::mpsc;
+use tracing::debug;
 use url::Url;
 
 #[tokio::main]
@@ -64,6 +63,10 @@ fn build_federation_client(
             .expect("Could not parse URL to generate GatewayClientConfig API endpoint"),
     };
 
+    // TODO: With support for multiple federations and federation registration through config code
+    // the gateway should be able back-up all registered federations in a snapshot or db.
+    save_federation_client_cfg(work_dir.clone(), &client_cfg);
+
     // Create a database
     let db_path = work_dir.join("gateway.db");
     let db = fedimint_rocksdb::RocksDb::open(db_path)
@@ -74,4 +77,18 @@ fn build_federation_client(
     let ctx = secp256k1::Secp256k1::new();
 
     Ok(Client::new(client_cfg, db, ctx))
+}
+
+/// Persist federation client cfg to [`gateway.json`] file
+fn save_federation_client_cfg(work_dir: PathBuf, client_cfg: &GatewayClientConfig) {
+    let path: PathBuf = work_dir.join("gateway.json");
+    if !Path::new(&path).is_file() {
+        debug!("Creating new gateway cfg file at {}", path.display());
+        let file = File::create(path).expect("Could not create gateway cfg file");
+        serde_json::to_writer_pretty(file, &client_cfg).expect("Could not write gateway cfg");
+    } else {
+        debug!("Gateway cfg file already exists at {}", path.display());
+        let file = File::open(path).expect("Could not load gateway cfg file");
+        serde_json::to_writer_pretty(file, &client_cfg).expect("Could not write gateway cfg");
+    }
 }
