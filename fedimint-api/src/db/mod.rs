@@ -168,6 +168,10 @@ pub trait IDatabaseTransaction<'a>: 'a {
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_>;
 
     fn commit_tx(self: Box<Self>) -> Result<()>;
+
+    fn rollback(&mut self);
+
+    fn set_tx_savepoint(&mut self);
 }
 
 dyn_newtype_define! {
@@ -538,5 +542,36 @@ mod tests {
         assert_eq!(dbtx3.get_value(&TestKey(42)).unwrap(), Some(TestVal(0)));
         assert_eq!(dbtx3.get_value(&TestKey(55)).unwrap(), Some(TestVal(9999)));
         assert_eq!(dbtx3.get_value(&TestKey(54)).unwrap(), Some(TestVal(8888)));
+
+        // Verify that setting a savepoint and rolling back a transaction erases a write
+        let mut dbtx_rollback = db.begin_transaction();
+
+        assert!(dbtx_rollback
+            .insert_entry(&TestKey(20), &TestVal(2000))
+            .is_ok());
+
+        dbtx_rollback.set_tx_savepoint();
+
+        assert!(dbtx_rollback
+            .insert_entry(&TestKey(21), &TestVal(2001))
+            .is_ok());
+
+        assert_eq!(
+            dbtx_rollback.get_value(&TestKey(20)).unwrap(),
+            Some(TestVal(2000))
+        );
+        assert_eq!(
+            dbtx_rollback.get_value(&TestKey(21)).unwrap(),
+            Some(TestVal(2001))
+        );
+
+        dbtx_rollback.rollback();
+
+        assert_eq!(
+            dbtx_rollback.get_value(&TestKey(20)).unwrap(),
+            Some(TestVal(2000))
+        );
+
+        assert_eq!(dbtx_rollback.get_value(&TestKey(21)).unwrap(), None);
     }
 }

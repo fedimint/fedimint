@@ -22,6 +22,8 @@ pub struct SledDb(sled::Tree);
 pub struct SledTransaction<'a> {
     operations: Vec<DatabaseOperation>,
     db: &'a SledDb,
+    num_pending_operations: usize,
+    num_savepoint_operations: usize,
 }
 
 impl SledDb {
@@ -120,6 +122,8 @@ impl IDatabase for SledDb {
         SledTransaction {
             operations: Vec::new(),
             db: self,
+            num_pending_operations: 0,
+            num_savepoint_operations: 0,
         }
         .into()
     }
@@ -133,6 +137,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
                 key: key.to_vec(),
                 value,
             }));
+        self.num_pending_operations += 1;
         val
     }
 
@@ -174,6 +179,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
             }));
+        self.num_pending_operations += 1;
         Ok(())
     }
 
@@ -234,6 +240,18 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 
         self.db.inner().flush().expect("DB failure");
         ret
+    }
+
+    fn rollback(&mut self) {
+        // Remove any pending operations beyond the savepoint
+        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
+        for _i in 0..removed_ops {
+            self.operations.pop();
+        }
+    }
+
+    fn set_tx_savepoint(&mut self) {
+        self.num_savepoint_operations = self.num_pending_operations;
     }
 }
 

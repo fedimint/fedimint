@@ -16,7 +16,6 @@ use bitcoin::{secp256k1, Address, Transaction};
 use cln_rpc::ClnRpc;
 use fake::{FakeBitcoinTest, FakeLightningTest};
 use fedimint_api::config::GenerateConfig;
-use fedimint_api::db::batch::DbBatch;
 use fedimint_api::db::mem_impl::MemDatabase;
 use fedimint_api::db::Database;
 use fedimint_api::task::spawn;
@@ -541,19 +540,19 @@ impl FederationTest {
             .unwrap();
 
         for server in &self.servers {
-            let mut batch = DbBatch::new();
-            let mut batch_tx = batch.transaction();
+            let svr = server.borrow_mut();
+            let mut dbtx = svr.database.begin_transaction();
 
-            batch_tx.append_insert_new(
-                UTXOKey(input.outpoint()),
-                SpendableUTXO {
+            dbtx.insert_new_entry(
+                &UTXOKey(input.outpoint()),
+                &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
                     amount: bitcoin::Amount::from_sat(input.tx_output().value),
                 },
-            );
-            batch_tx.commit();
+            )
+            .expect("DB Error");
 
-            server.borrow_mut().database.apply_batch(batch).unwrap();
+            dbtx.commit_tx().expect("DB Error");
         }
     }
 
@@ -586,31 +585,29 @@ impl FederationTest {
 
         user.client.receive_coins(amount, OsRng, |tokens| {
             for server in &self.servers {
-                let mut batch = DbBatch::new();
-                let mut batch_tx = batch.transaction();
+                let svr = server.borrow_mut();
+                let mut dbtx = svr.database.begin_transaction();
                 let transaction = fedimint_server::transaction::Transaction {
                     inputs: vec![],
                     outputs: vec![Output::Mint(tokens.clone())],
                     signature: None,
                 };
 
-                batch_tx.append_insert(
-                    fedimint_server::db::AcceptedTransactionKey(out_point.txid),
-                    fedimint_server::consensus::AcceptedTransaction {
+                dbtx.insert_entry(
+                    &fedimint_server::db::AcceptedTransactionKey(out_point.txid),
+                    &fedimint_server::consensus::AcceptedTransaction {
                         epoch: 0,
                         transaction,
                     },
-                );
+                )
+                .expect("DB Error");
 
-                batch_tx.commit();
-                server
-                    .borrow_mut()
-                    .fedimint
+                svr.fedimint
                     .consensus
                     .mint
-                    .apply_output(batch.transaction(), &tokens, out_point)
+                    .apply_output(&mut dbtx, &tokens, out_point)
                     .unwrap();
-                server.borrow_mut().database.apply_batch(batch).unwrap();
+                dbtx.commit_tx().expect("DB Error");
             }
             out_point
         });

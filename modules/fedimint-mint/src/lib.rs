@@ -4,7 +4,6 @@ use std::iter::FromIterator;
 use std::ops::Sub;
 
 use async_trait::async_trait;
-use fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -211,23 +210,21 @@ impl FederationModule for Mint {
         })
     }
 
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
-        batch.append_from_iter(input.iter_items().flat_map(|(amount, coin)| {
+        input.iter_items().for_each(|(amount, coin)| {
             let key = NonceKey(coin.0.clone());
-            vec![
-                BatchItem::insert_new(key.clone(), ()),
-                BatchItem::insert_new(MintAuditItemKey::Redemption(key), amount),
-            ]
-        }));
-        batch.commit();
+            dbtx.insert_new_entry(&key, &()).expect("DB Error");
+            dbtx.insert_new_entry(&MintAuditItemKey::Redemption(key), &amount)
+                .expect("DB Error");
+        });
 
         Ok(meta)
     }
@@ -252,9 +249,9 @@ impl FederationModule for Mint {
         }
     }
 
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, Self::Error> {
@@ -264,14 +261,18 @@ impl FederationModule for Mint {
         // TODO: get rid of clone
         let partial_sig = self.blind_sign(output.clone())?;
 
-        batch.append_insert_new(
-            ProposedPartialSignatureKey {
+        dbtx.insert_new_entry(
+            &ProposedPartialSignatureKey {
                 request_id: out_point,
             },
-            partial_sig,
-        );
-        batch.append_insert_new(MintAuditItemKey::Issuance(out_point), output.total_amount());
-        batch.commit();
+            &partial_sig,
+        )
+        .expect("DB Error");
+        dbtx.insert_new_entry(
+            &MintAuditItemKey::Issuance(out_point),
+            &output.total_amount(),
+        )
+        .expect("DB Error");
 
         Ok(amount)
     }
@@ -279,7 +280,7 @@ impl FederationModule for Mint {
     async fn end_consensus_epoch<'a>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Finalize partial signatures for which we now have enough shares
@@ -297,8 +298,7 @@ impl FederationModule for Mint {
             .into_par_iter()
             .map(|(issuance_id, shares)| {
                 let mut drop_peers = Vec::<PeerId>::new();
-                let mut batch = DbBatch::new();
-                let mut batch_tx = batch.transaction();
+                let mut dbtx = self.db.begin_transaction();
                 let proposal_key = ProposedPartialSignatureKey {
                     request_id: issuance_id,
                 };
@@ -318,15 +318,17 @@ impl FederationModule for Mint {
                             "Successfully combined signature shares",
                         );
 
-                        batch_tx.append_from_iter(shares.into_iter().map(|(peer, _)| {
-                            BatchItem::delete(ReceivedPartialSignatureKey {
+                        shares.into_iter().for_each(|(peer, _)| {
+                            dbtx.remove_entry(&ReceivedPartialSignatureKey {
                                 request_id: issuance_id,
                                 peer_id: peer,
                             })
-                        }));
-                        batch_tx.append_delete(proposal_key);
+                            .expect("DB Error");
+                        });
+                        dbtx.remove_entry(&proposal_key).expect("DB Error");
 
-                        batch_tx.append_insert(OutputOutcomeKey(issuance_id), blind_signature);
+                        dbtx.insert_entry(&OutputOutcomeKey(issuance_id), &blind_signature)
+                            .expect("DB Error");
                     }
                     Err(CombineError::TooFewShares(got, _)) => {
                         for peer in consensus_peers.sub(&HashSet::from_iter(got)) {
@@ -338,16 +340,12 @@ impl FederationModule for Mint {
                         warn!(%error, "Could not combine shares");
                     }
                 }
-                batch_tx.commit();
-                (batch, drop_peers)
+                dbtx.commit_tx().expect("DB Error");
+                drop_peers
             })
             .collect::<Vec<_>>();
 
-        let dropped_peers = par_batches
-            .iter()
-            .flat_map(|(_, peers)| peers)
-            .copied()
-            .collect();
+        let dropped_peers = par_batches.iter().flatten().copied().collect();
 
         let mut redemptions = Amount::from_sat(0);
         let mut issuances = Amount::from_sat(0);
@@ -361,13 +359,12 @@ impl FederationModule for Mint {
                     MintAuditItemKey::Redemption(_) => redemptions += amount,
                     MintAuditItemKey::RedemptionTotal => redemptions += amount,
                 }
-                batch.append_delete(key);
+                dbtx.remove_entry(&key).expect("DB Error");
             });
-        batch.append_insert(MintAuditItemKey::IssuanceTotal, issuances);
-        batch.append_insert(MintAuditItemKey::RedemptionTotal, redemptions);
-
-        batch.append_from_accumulators(par_batches.into_iter().map(|(batch, _)| batch));
-        batch.commit();
+        dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
+            .expect("DB Error");
+        dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
+            .expect("DB Error");
 
         dropped_peers
     }

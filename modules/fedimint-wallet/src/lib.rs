@@ -15,7 +15,6 @@ use bitcoin::{
     Transaction, TxIn, TxOut, Txid,
 };
 use bitcoin::{PackedLockTime, Sequence};
-use fedimint_api::db::batch::{BatchItem, BatchTx};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -324,25 +323,25 @@ impl FederationModule for Wallet {
         })
     }
 
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
         debug!(outpoint = %input.outpoint(), amount = %meta.amount.amount, "Claiming peg-in");
 
-        batch.append_insert_new(
-            UTXOKey(input.outpoint()),
-            SpendableUTXO {
+        dbtx.insert_new_entry(
+            &UTXOKey(input.outpoint()),
+            &SpendableUTXO {
                 tweak: input.tweak_contract_key().serialize(),
                 amount: bitcoin::Amount::from_sat(input.tx_output().value),
             },
-        );
+        )
+        .expect("DB Error");
 
-        batch.commit();
         Ok(meta)
     }
 
@@ -372,9 +371,9 @@ impl FederationModule for Wallet {
         })
     }
 
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: fedimint_api::OutPoint,
     ) -> Result<TransactionItemAmount, Self::Error> {
@@ -421,25 +420,24 @@ impl FederationModule for Wallet {
             .collect::<Vec<_>>();
 
         // Delete used UTXOs
-        batch.append_from_iter(
-            tx.psbt
-                .unsigned_tx
-                .input
-                .iter()
-                .map(|input| BatchItem::delete(UTXOKey(input.previous_output))),
-        );
+        tx.psbt.unsigned_tx.input.iter().for_each(|input| {
+            dbtx.remove_entry(&UTXOKey(input.previous_output))
+                .expect("DB Error");
+        });
 
-        batch.append_insert_new(UnsignedTransactionKey(txid), tx);
-        batch.append_insert_new(PegOutTxSignatureCI(txid), sigs);
-        batch.append_insert_new(PegOutBitcoinTransaction(out_point), PegOutOutcome(txid));
-        batch.commit();
+        dbtx.insert_new_entry(&UnsignedTransactionKey(txid), &tx)
+            .expect("DB Error");
+        dbtx.insert_new_entry(&PegOutTxSignatureCI(txid), &sigs)
+            .expect("DB Error");
+        dbtx.insert_new_entry(&PegOutBitcoinTransaction(out_point), &PegOutOutcome(txid))
+            .expect("DB Error");
         Ok(amount)
     }
 
     async fn end_consensus_epoch<'a>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Sign and finalize any unsigned transactions that have signatures
@@ -482,16 +480,17 @@ impl FederationModule for Wallet {
                     // We were able to finalize the transaction, so we will delete the PSBT and instead keep the
                     // extracted tx for periodic transmission and to accept the change into our wallet
                     // eventually once it confirms.
-                    batch.append_insert_new(PendingTransactionKey(key.0), pending_tx);
-                    batch.append_delete(PegOutTxSignatureCI(key.0));
-                    batch.append_delete(key);
+                    dbtx.insert_new_entry(&PendingTransactionKey(key.0), &pending_tx)
+                        .expect("DB Error");
+                    dbtx.remove_entry(&PegOutTxSignatureCI(key.0))
+                        .expect("DB Error");
+                    dbtx.remove_entry(&key).expect("DB Error");
                 }
                 Err(e) => {
                     warn!("Unable to finalize PSBT due to {:?}", e)
                 }
             }
         }
-        batch.commit();
         drop_peers
     }
 

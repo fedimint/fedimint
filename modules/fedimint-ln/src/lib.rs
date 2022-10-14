@@ -20,7 +20,6 @@ use std::ops::Sub;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash as BitcoinHash;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
-use fedimint_api::db::batch::BatchTx;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
@@ -264,10 +263,10 @@ impl FederationModule for LightningModule {
         })
     }
 
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::TxInput,
         cache: &Self::VerificationCache,
     ) -> Result<InputMeta<'b>, Self::Error> {
@@ -280,9 +279,9 @@ impl FederationModule for LightningModule {
             .expect("DB error")
             .expect("Should fail validation if contract account doesn't exist");
         contract_account.amount -= meta.amount.amount;
-        batch.append_insert(account_db_key, contract_account);
+        dbtx.insert_entry(&account_db_key, &contract_account)
+            .expect("DB Error");
 
-        batch.commit();
         Ok(meta)
     }
 
@@ -355,9 +354,9 @@ impl FederationModule for LightningModule {
         }
     }
 
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::TxOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, Self::Error> {
@@ -378,15 +377,17 @@ impl FederationModule for LightningModule {
                         amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
-                batch.append_insert(contract_db_key, updated_contract_account);
+                dbtx.insert_entry(&contract_db_key, &updated_contract_account)
+                    .expect("DB Error");
 
-                batch.append_insert_new(
-                    ContractUpdateKey(out_point),
-                    OutputOutcome::Contract {
+                dbtx.insert_new_entry(
+                    &ContractUpdateKey(out_point),
+                    &OutputOutcome::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
-                );
+                )
+                .expect("DB Error");
 
                 if let Contract::Incoming(incoming) = &contract.contract {
                     let offer = self
@@ -400,20 +401,23 @@ impl FederationModule for LightningModule {
                         .threshold_sec_key
                         .decrypt_share(&incoming.encrypted_preimage.0)
                         .expect("We checked for decryption share validity on contract creation");
-                    batch.append_insert_new(
-                        ProposeDecryptionShareKey(contract.contract.contract_id()),
-                        PreimageDecryptionShare(decryption_share),
-                    );
-                    batch.append_delete(OfferKey(offer.hash));
+                    dbtx.insert_new_entry(
+                        &ProposeDecryptionShareKey(contract.contract.contract_id()),
+                        &PreimageDecryptionShare(decryption_share),
+                    )
+                    .expect("DB Error");
+                    dbtx.remove_entry(&OfferKey(offer.hash)).expect("DB Error");
                 }
             }
             ContractOrOfferOutput::Offer(offer) => {
-                batch.append_insert_new(
-                    ContractUpdateKey(out_point),
-                    OutputOutcome::Offer { id: offer.id() },
-                );
+                dbtx.insert_new_entry(
+                    &ContractUpdateKey(out_point),
+                    &OutputOutcome::Offer { id: offer.id() },
+                )
+                .expect("DB Error");
                 // TODO: sanity-check encrypted preimage size
-                batch.append_insert_new(OfferKey(offer.hash), (*offer).clone());
+                dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
+                    .expect("DB Error");
             }
             ContractOrOfferOutput::CancelOutgoing { contract, .. } => {
                 let updated_contract_account = {
@@ -435,11 +439,11 @@ impl FederationModule for LightningModule {
                     contract_account
                 };
 
-                batch.append_insert(ContractKey(*contract), updated_contract_account);
+                dbtx.insert_entry(&ContractKey(*contract), &updated_contract_account)
+                    .expect("DB Error");
             }
         }
 
-        batch.commit();
         Ok(amount)
     }
 
@@ -447,7 +451,7 @@ impl FederationModule for LightningModule {
     async fn end_consensus_epoch<'a>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        mut batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'a>,
         _rng: impl RngCore + CryptoRng + 'a,
     ) -> Vec<PeerId> {
         // Decrypt preimages
@@ -474,7 +478,8 @@ impl FederationModule for LightningModule {
                 _ => {
                     warn!("Received decryption share for non-existent incoming contract");
                     for peer in peers {
-                        batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                        dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
+                            .expect("DB Error");
                     }
                     continue;
                 }
@@ -540,9 +545,11 @@ impl FederationModule for LightningModule {
             };
 
             // Delete decryption shares once we've decrypted the preimage
-            batch.append_delete(ProposeDecryptionShareKey(contract_id));
+            dbtx.remove_entry(&ProposeDecryptionShareKey(contract_id))
+                .expect("DB Error");
             for peer in peers {
-                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                dbtx.remove_entry(&AgreedDecryptionShareKey(contract_id, peer))
+                    .expect("DB Error");
             }
 
             let decrypted_preimage = if preimage_vec.len() == 32
@@ -578,7 +585,8 @@ impl FederationModule for LightningModule {
             };
             incoming.contract.decrypted_preimage = decrypted_preimage.clone();
             trace!(?contract_account, "Updating contract account");
-            batch.append_insert(contract_db_key, contract_account);
+            dbtx.insert_entry(&contract_db_key, &contract_account)
+                .expect("DB Error");
 
             // Update output outcome
             let outcome_db_key = ContractUpdateKey(out_point);
@@ -595,9 +603,9 @@ impl FederationModule for LightningModule {
                 _ => panic!("We are expeccting an incoming contract"),
             };
             *incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            batch.append_insert(outcome_db_key, outcome);
+            dbtx.insert_entry(&outcome_db_key, &outcome)
+                .expect("DB Error");
         }
-        batch.commit();
 
         bad_peers
     }
