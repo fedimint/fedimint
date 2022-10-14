@@ -119,13 +119,15 @@ impl IDatabase for SledDb {
     }
 
     fn begin_transaction(&self) -> DatabaseTransaction {
-        SledTransaction {
+        let mut tx: DatabaseTransaction = SledTransaction {
             operations: Vec::new(),
             db: self,
             num_pending_operations: 0,
             num_savepoint_operations: 0,
         }
-        .into()
+        .into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
@@ -242,7 +244,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
         ret
     }
 
-    fn rollback(&mut self) {
+    fn rollback_tx_to_savepoint(&mut self) {
         // Remove any pending operations beyond the savepoint
         let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
         for _i in 0..removed_ops {

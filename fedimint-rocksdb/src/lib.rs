@@ -110,7 +110,9 @@ impl IDatabase for RocksDb {
     }
 
     fn begin_transaction(&self) -> DatabaseTransaction {
-        RocksDbTransaction(self.0.transaction()).into()
+        let mut tx: DatabaseTransaction = RocksDbTransaction(self.0.transaction()).into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
@@ -151,7 +153,7 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         Ok(())
     }
 
-    fn rollback(&mut self) {
+    fn rollback_tx_to_savepoint(&mut self) {
         match self.0.rollback_to_savepoint() {
             Ok(()) => {}
             _ => {

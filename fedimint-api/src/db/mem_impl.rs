@@ -103,7 +103,7 @@ impl IDatabase for MemDatabase {
 
     fn begin_transaction(&self) -> DatabaseTransaction {
         let db_copy = self.data.lock().unwrap().clone();
-        MemTransaction {
+        let mut tx: DatabaseTransaction = MemTransaction {
             operations: Vec::new(),
             tx_data: db_copy.clone(),
             db: self,
@@ -111,7 +111,9 @@ impl IDatabase for MemDatabase {
             num_pending_operations: 0,
             num_savepoint_operations: 0,
         }
-        .into()
+        .into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
@@ -175,7 +177,7 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         Ok(())
     }
 
-    fn rollback(&mut self) {
+    fn rollback_tx_to_savepoint(&mut self) {
         self.tx_data = self.savepoint.clone();
 
         // Remove any pending operations beyond the savepoint

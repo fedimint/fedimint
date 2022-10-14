@@ -169,7 +169,7 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
     fn commit_tx(self: Box<Self>) -> Result<()>;
 
-    fn rollback(&mut self);
+    fn rollback_tx_to_savepoint(&mut self);
 
     fn set_tx_savepoint(&mut self);
 }
@@ -565,7 +565,7 @@ mod tests {
             Some(TestVal(2001))
         );
 
-        dbtx_rollback.rollback();
+        dbtx_rollback.rollback_tx_to_savepoint();
 
         assert_eq!(
             dbtx_rollback.get_value(&TestKey(20)).unwrap(),

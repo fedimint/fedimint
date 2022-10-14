@@ -264,7 +264,6 @@ impl FedimintConsensus {
                 .partitioned();
 
             let mut dbtx = self.db.begin_transaction();
-            dbtx.set_tx_savepoint();
 
             for transaction in err_tx {
                 dbtx.insert_entry(
@@ -293,7 +292,7 @@ impl FedimintConsensus {
                             .expect("DB Error");
                         }
                         Err(error) => {
-                            dbtx.rollback();
+                            dbtx.rollback_tx_to_savepoint();
                             warn!(%error, "Transaction failed");
                             dbtx.insert_entry(
                                 &RejectedTransactionKey(transaction.tx_hash()),
