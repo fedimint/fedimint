@@ -13,7 +13,6 @@ use fedimint_api::encoding::Decodable;
 use fedimint_api::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
 use lightning_invoice::Invoice;
-use serde::Serialize;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
@@ -70,13 +69,6 @@ impl RealLightningTest {
             .sum();
         Amount::from_msat(funds)
     }
-}
-
-// FIXME workaround for bad RPC API, should replace when cln_rpc gets updated
-#[derive(Debug, Clone, Serialize)]
-struct FundChannelFixed<'a> {
-    pub id: &'a str,
-    pub amount: u64,
 }
 
 pub struct RealBitcoinTest {
