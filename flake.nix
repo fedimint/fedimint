@@ -768,8 +768,9 @@
 
             shellHook = ''
               # auto-install git hooks
-              if [[ ! -d .git/hooks ]]; then mkdir .git/hooks; fi
-              for hook in misc/git-hooks/* ; do ln -sf "../../$hook" "./.git/hooks/" ; done
+              dot_git="$(git rev-parse --git-common-dir)"
+              if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
+              for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
               ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
 
               # workaround https://github.com/rust-lang/cargo/issues/11020
