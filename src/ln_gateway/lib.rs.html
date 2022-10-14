@@ -434,8 +434,12 @@
 <span id="434">434</span>
 <span id="435">435</span>
 <span id="436">436</span>
+<span id="437">437</span>
+<span id="438">438</span>
+<span id="439">439</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
+<span class="kw">pub mod </span>rpc;
 <span class="kw">pub mod </span>webserver;
 
 <span class="kw">use </span>std::borrow::Cow;
@@ -846,6 +850,8 @@
     </span>CouldNotRoute(LightningError),
     <span class="attribute">#[error(<span class="string">&quot;Mint client error: {0:?}&quot;</span>)]
     </span>MintClientE(<span class="attribute">#[from] </span>MintClientError),
+    <span class="attribute">#[error(<span class="string">&quot;Other: {0:?}&quot;</span>)]
+    </span>Other(<span class="attribute">#[from] </span>anyhow::Error),
 }
 
 <span class="kw">pub fn </span>serde_hex_deserialize&lt;<span class="lifetime">&#39;d</span>, T: bitcoin::consensus::Decodable, D: Deserializer&lt;<span class="lifetime">&#39;d</span>&gt;&gt;(
@@ -871,4 +877,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a6b7274a4 2022-10-10)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>

@@ -38,47 +38,26 @@
 <span id="38">38</span>
 <span id="39">39</span>
 <span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
-<span id="47">47</span>
-<span id="48">48</span>
-<span id="49">49</span>
-<span id="50">50</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::{routing::post, Extension, Json, Router};
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::ContractId;
 <span class="kw">use </span>tokio::sync::mpsc;
-<span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tower_http::cors::CorsLayer;
 <span class="kw">use </span>tracing::{debug, instrument};
 
-<span class="kw">use </span><span class="kw">crate</span>::GatewayRequestInner;
-<span class="kw">use crate</span>::{GatewayRequest, LnGatewayError};
+<span class="kw">use crate</span>::{rpc::GatewayRpcSender, GatewayRequest, LnGatewayError};
 
 <span class="attribute">#[instrument(skip_all, err)]
 </span><span class="kw">pub async fn </span>pay_invoice(
-    Extension(gw_sender): Extension&lt;mpsc::Sender&lt;GatewayRequest&gt;&gt;,
+    Extension(messenger): Extension&lt;GatewayRpcSender&gt;,
     Json(contract_id): Json&lt;ContractId&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), LnGatewayError&gt; {
     <span class="macro">debug!</span>(%contract_id, <span class="string">&quot;Received request to pay invoice&quot;</span>);
-
-    <span class="kw">let </span>(sender, receiver) = oneshot::channel::&lt;<span class="prelude-ty">Result</span>&lt;(), LnGatewayError&gt;&gt;();
-
-    <span class="kw">let </span>msg = GatewayRequest::PayInvoice(GatewayRequestInner {
-        request: contract_id,
-        sender,
-    });
-    gw_sender
-        .send(msg)
+    messenger
+        .send(contract_id)
         .<span class="kw">await
-        </span>.expect(<span class="string">&quot;failed to send over channel&quot;</span>);
-    receiver.<span class="kw">await</span>.unwrap()<span class="question-mark">?</span>;
-
+        </span>.map_err(LnGatewayError::Other)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -86,9 +65,10 @@
     bind_addr: SocketAddr,
     sender: mpsc::Sender&lt;GatewayRequest&gt;,
 ) -&gt; axum::response::Result&lt;()&gt; {
+    <span class="kw">let </span>messenger = GatewayRpcSender::new(sender.clone());
     <span class="kw">let </span>app = Router::new()
         .route(<span class="string">&quot;/pay_invoice&quot;</span>, post(pay_invoice))
-        .layer(Extension(sender))
+        .layer(Extension(messenger))
         .layer(CorsLayer::permissive());
 
     axum::Server::bind(<span class="kw-2">&amp;</span>bind_addr)
@@ -99,4 +79,4 @@
     <span class="prelude-val">Ok</span>(())
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (a6b7274a4 2022-10-10)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
