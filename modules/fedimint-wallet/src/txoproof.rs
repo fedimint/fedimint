@@ -1,11 +1,12 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::hash::Hash;
 use std::io::Cursor;
 
 use bitcoin::util::merkleblock::PartialMerkleTree;
 use bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 use miniscript::{Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Verification};
 use serde::de::Error;
@@ -55,10 +56,13 @@ impl TxOutProof {
     }
 }
 
-impl Decodable for TxOutProof {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        let block_header = BlockHeader::consensus_decode(d)?;
-        let merkle_proof = PartialMerkleTree::consensus_decode(d)?;
+impl<M> Decodable<M> for TxOutProof {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        let block_header = BlockHeader::consensus_decode(d, modules)?;
+        let merkle_proof = PartialMerkleTree::consensus_decode(d, modules)?;
 
         let mut transactions = Vec::new();
         let mut indices = Vec::new();
@@ -222,17 +226,22 @@ impl<'de> Deserialize<'de> for TxOutProof {
     where
         D: Deserializer<'de>,
     {
+        let empty_module_registry = BTreeMap::<_, ()>::new();
         if deserializer.is_human_readable() {
             // TODO: Try Cow
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
             let bytes =
                 hex::decode(hex_str.as_ref()).map_err(<D as Deserializer<'de>>::Error::custom)?;
-            Ok(TxOutProof::consensus_decode(&mut Cursor::new(bytes))
-                .map_err(<D as Deserializer<'de>>::Error::custom)?)
+            Ok(
+                TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                    .map_err(<D as Deserializer<'de>>::Error::custom)?,
+            )
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
-            Ok(TxOutProof::consensus_decode(&mut Cursor::new(bytes))
-                .map_err(<D as Deserializer<'de>>::Error::custom)?)
+            Ok(
+                TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                    .map_err(<D as Deserializer<'de>>::Error::custom)?,
+            )
         }
     }
 }
@@ -281,13 +290,16 @@ impl PartialEq for TxOutProof {
 
 impl Eq for TxOutProof {}
 
-impl Decodable for PegInProof {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for PegInProof {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         let slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(d)?,
-            transaction: Transaction::consensus_decode(d)?,
-            output_idx: u32::consensus_decode(d)?,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d)?,
+            txout_proof: TxOutProof::consensus_decode(d, modules)?,
+            transaction: Transaction::consensus_decode(d, modules)?,
+            output_idx: u32::consensus_decode(d, modules)?,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d, modules)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
@@ -309,7 +321,7 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::{collections::BTreeMap, io::Cursor};
 
     use fedimint_api::encoding::Decodable;
 
@@ -330,9 +342,12 @@ mod tests {
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000";
 
-        let txoutproof =
-            TxOutProof::consensus_decode(&mut Cursor::new(hex::decode(txoutproof_hex).unwrap()))
-                .unwrap();
+        let empty_module_registry = BTreeMap::<_, ()>::new();
+        let txoutproof = TxOutProof::consensus_decode(
+            &mut Cursor::new(hex::decode(txoutproof_hex).unwrap()),
+            &empty_module_registry,
+        )
+        .unwrap();
 
         assert_eq!(
             txoutproof.block(),

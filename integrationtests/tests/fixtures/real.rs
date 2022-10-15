@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
@@ -111,11 +112,14 @@ impl BitcoinTest for RealBitcoinTest {
             .client
             .get_raw_transaction(&id, None)
             .expect(Self::ERROR);
-        let proof = TxOutProof::consensus_decode(&mut Cursor::new(
-            self.client
-                .get_tx_out_proof(&[id], None)
-                .expect(Self::ERROR),
-        ))
+        let proof = TxOutProof::consensus_decode(
+            &mut Cursor::new(
+                self.client
+                    .get_tx_out_proof(&[id], None)
+                    .expect(Self::ERROR),
+            ),
+            &BTreeMap::<_, ()>::new(),
+        )
         .expect(Self::ERROR);
 
         (proof, tx)

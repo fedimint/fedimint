@@ -10,11 +10,10 @@ use std::{any::Any, collections::BTreeMap};
 pub use bitcoin::KeyPair;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
-    encoding::{Decodable, DecodeError, DynEncodable, Encodable},
+    encoding::{Decodable, DecodeError, DynEncodable, Encodable, ModuleRegistry},
     Amount,
 };
 
-use crate::encode::ModuleDecodable;
 pub mod encode;
 
 pub mod client;
@@ -45,7 +44,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             }
         }
 
-        impl ModuleDecodable<$crate::server::ServerModule> for $name {
+        impl Decodable<$crate::server::ServerModule> for $name {
             fn consensus_decode<R: std::io::Read>(
                 r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::server::ServerModule>,
@@ -56,7 +55,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
             }
         }
 
-        impl ModuleDecodable<$crate::client::ClientModule> for $name {
+        impl Decodable<$crate::client::ClientModule> for $name {
             fn consensus_decode<R: std::io::Read>(
                 r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::client::ClientModule>,
@@ -85,7 +84,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* }
     ) => {
         pub trait $plugin_ty:
-            DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static
+            DynEncodable + Decodable<()> + Encodable + Clone + Send + Sync + 'static
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -310,19 +309,19 @@ pub struct Transaction {
     signature: Signature,
 }
 
-impl<M> ModuleDecodable<M> for Transaction
+impl<M> Decodable<M> for Transaction
 where
-    Input: ModuleDecodable<M>,
-    Output: ModuleDecodable<M>,
+    Input: Decodable<M>,
+    Output: Decodable<M>,
 {
     fn consensus_decode<R: std::io::Read>(
         r: &mut R,
         modules: &BTreeMap<ModuleKey, M>,
     ) -> Result<Self, DecodeError> {
         Ok(Self {
-            inputs: ModuleDecodable::consensus_decode(r, modules)?,
-            outputs: ModuleDecodable::consensus_decode(r, modules)?,
-            signature: Decodable::consensus_decode(r)?,
+            inputs: Decodable::consensus_decode(r, modules)?,
+            outputs: Decodable::consensus_decode(r, modules)?,
+            signature: Decodable::consensus_decode(r, modules)?,
         })
     }
 }

@@ -1,5 +1,5 @@
 use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use serde::{Deserialize, Serialize};
 
 use crate::contracts::{ContractId, IdentifyableContract};

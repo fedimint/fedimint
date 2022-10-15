@@ -1,5 +1,5 @@
 use bitcoin::secp256k1::KeyPair;
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::incoming::IncomingContract;
 use fedimint_core::modules::ln::contracts::{ContractId, IdentifyableContract};

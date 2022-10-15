@@ -22,7 +22,7 @@ use bitcoin_hashes::Hash as BitcoinHash;
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::db::batch::BatchTx;
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
