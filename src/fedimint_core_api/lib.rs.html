@@ -325,7 +325,6 @@
 <span id="325">325</span>
 <span id="326">326</span>
 <span id="327">327</span>
-<span id="328">328</span>
 </pre><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -338,11 +337,10 @@
 <span class="kw">pub use </span>bitcoin::KeyPair;
 <span class="kw">use </span>fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
-    encoding::{Decodable, DecodeError, DynEncodable, Encodable},
+    encoding::{Decodable, DecodeError, DynEncodable, Encodable, ModuleRegistry},
     Amount,
 };
 
-<span class="kw">use </span><span class="kw">crate</span>::encode::ModuleDecodable;
 <span class="kw">pub mod </span>encode;
 
 <span class="kw">pub mod </span>client;
@@ -373,7 +371,7 @@
             }
         }
 
-        <span class="kw">impl </span>ModuleDecodable&lt;<span class="macro-nonterminal">$crate::server::ServerModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+        <span class="kw">impl </span>Decodable&lt;<span class="macro-nonterminal">$crate::server::ServerModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
                 r: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::server::ServerModule</span>&gt;,
@@ -384,7 +382,7 @@
             }
         }
 
-        <span class="kw">impl </span>ModuleDecodable&lt;<span class="macro-nonterminal">$crate::client::ClientModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
+        <span class="kw">impl </span>Decodable&lt;<span class="macro-nonterminal">$crate::client::ClientModule</span>&gt; <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
                 r: <span class="kw-2">&amp;mut </span>R,
                 modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, <span class="macro-nonterminal">$crate::client::ClientModule</span>&gt;,
@@ -413,7 +411,7 @@
         <span class="macro-nonterminal">$newtype_ty</span>:ident, <span class="macro-nonterminal">$plugin_ty</span>:ident, <span class="macro-nonterminal">$module_ty</span>:ident, { $(<span class="macro-nonterminal">$extra_methods</span>:tt)*  } { $(<span class="macro-nonterminal">$extra_impls</span>:tt)* }
     ) =&gt; {
         <span class="kw">pub trait </span><span class="macro-nonterminal">$plugin_ty</span>:
-            DynEncodable + Decodable + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
+            DynEncodable + Decodable&lt;()&gt; + Encodable + Clone + Send + Sync + <span class="lifetime">&#39;static
         </span>{
             <span class="kw">fn </span>module_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKey;
 
@@ -638,21 +636,21 @@
     signature: Signature,
 }
 
-<span class="kw">impl</span>&lt;M&gt; ModuleDecodable&lt;M&gt; <span class="kw">for </span>Transaction
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>Transaction
 <span class="kw">where
-    </span>Input: ModuleDecodable&lt;M&gt;,
-    Output: ModuleDecodable&lt;M&gt;,
+    </span>Input: Decodable&lt;M&gt;,
+    Output: Decodable&lt;M&gt;,
 {
     <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            inputs: ModuleDecodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
-            outputs: ModuleDecodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
-            signature: Decodable::consensus_decode(r)<span class="question-mark">?</span>,
+            inputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
+            outputs: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
+            signature: Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>,
         })
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

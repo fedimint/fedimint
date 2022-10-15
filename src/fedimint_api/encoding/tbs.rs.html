@@ -73,7 +73,15 @@
 <span id="73">73</span>
 <span id="74">74</span>
 <span id="75">75</span>
-</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
+<span id="76">76</span>
+<span id="77">77</span>
+<span id="78">78</span>
+<span id="79">79</span>
+<span id="80">80</span>
+<span id="81">81</span>
+<span id="82">82</span>
+</pre><pre class="rust"><code><span class="kw">use </span><span class="kw">super</span>::ModuleRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 
 <span class="macro">macro_rules! </span>impl_external_encode_bls {
     (<span class="macro-nonterminal">$ext</span>:ident $(:: <span class="macro-nonterminal">$ext_path</span>:ident)<span class="kw-2">*</span>, <span class="macro-nonterminal">$group</span>:ty, <span class="macro-nonterminal">$byte_len</span>:expr) =&gt; {
@@ -85,8 +93,11 @@
             }
         }
 
-        <span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span><span class="macro-nonterminal">$ext </span>$(:: <span class="macro-nonterminal">$ext_path</span>)* {
-            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+        <span class="kw">impl</span>&lt;M&gt; <span class="kw">crate</span>::encoding::Decodable&lt;M&gt; <span class="kw">for </span><span class="macro-nonterminal">$ext </span>$(:: <span class="macro-nonterminal">$ext_path</span>)* {
+            <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+                d: <span class="kw-2">&amp;mut </span>D,
+                _modules: <span class="kw-2">&amp;</span><span class="kw">crate</span>::encoding::ModuleRegistry&lt;M&gt;,
+            ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="macro-nonterminal">$byte_len</span>];
                 d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>;
                 <span class="kw">let </span>msg = &lt;<span class="macro-nonterminal">$group</span>&gt;::from_compressed(<span class="kw-2">&amp;</span>bytes);
@@ -114,8 +125,11 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>tbs::BlindingKey {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>tbs::BlindingKey {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        _modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0u8</span>; <span class="number">32</span>];
         d.read_exact(<span class="kw-2">&amp;mut </span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
         <span class="kw">let </span>key = tbs::Scalar::from_bytes(<span class="kw-2">&amp;</span>bytes);
@@ -149,4 +163,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

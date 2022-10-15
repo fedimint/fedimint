@@ -348,14 +348,30 @@
 <span id="348">348</span>
 <span id="349">349</span>
 <span id="350">350</span>
+<span id="351">351</span>
+<span id="352">352</span>
+<span id="353">353</span>
+<span id="354">354</span>
+<span id="355">355</span>
+<span id="356">356</span>
+<span id="357">357</span>
+<span id="358">358</span>
+<span id="359">359</span>
+<span id="360">360</span>
+<span id="361">361</span>
+<span id="362">362</span>
+<span id="363">363</span>
+<span id="364">364</span>
+<span id="365">365</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
 <span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
 <span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, OutPoint, Transaction, Txid};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>secp256k1::{Secp256k1, Verification};
 <span class="kw">use </span>serde::de::Error;
@@ -405,10 +421,13 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>TxOutProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d)<span class="question-mark">?</span>;
-        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d)<span class="question-mark">?</span>;
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>TxOutProof {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>block_header = BlockHeader::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>merkle_proof = PartialMerkleTree::consensus_decode(d, modules)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>transactions = Vec::new();
         <span class="kw">let </span><span class="kw-2">mut </span>indices = Vec::new();
@@ -572,17 +591,22 @@
     <span class="kw">where
         </span>D: Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;,
     {
+        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new();
         <span class="kw">if </span>deserializer.is_human_readable() {
             <span class="comment">// TODO: Try Cow
             </span><span class="kw">let </span>hex_str: Cow&lt;str&gt; = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
             <span class="kw">let </span>bytes =
                 hex::decode(hex_str.as_ref()).map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes))
-                .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(
+                TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
+                    .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>,
+            )
         } <span class="kw">else </span>{
             <span class="kw">let </span>bytes: <span class="kw-2">&amp;</span>[u8] = Deserialize::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes))
-                .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>)
+            <span class="prelude-val">Ok</span>(
+                TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>empty_module_registry)
+                    .map_err(&lt;D <span class="kw">as </span>Deserializer&lt;<span class="lifetime">&#39;de</span>&gt;&gt;::Error::custom)<span class="question-mark">?</span>,
+            )
         }
     }
 }
@@ -631,13 +655,16 @@
 
 <span class="kw">impl </span>Eq <span class="kw">for </span>TxOutProof {}
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>PegInProof {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>PegInProof {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>slf = PegInProof {
-            txout_proof: TxOutProof::consensus_decode(d)<span class="question-mark">?</span>,
-            transaction: Transaction::consensus_decode(d)<span class="question-mark">?</span>,
-            output_idx: u32::consensus_decode(d)<span class="question-mark">?</span>,
-            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d)<span class="question-mark">?</span>,
+            txout_proof: TxOutProof::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            transaction: Transaction::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            output_idx: u32::consensus_decode(d, modules)<span class="question-mark">?</span>,
+            tweak_contract_key: secp256k1::XOnlyPublicKey::consensus_decode(d, modules)<span class="question-mark">?</span>,
         };
 
         validate_peg_in_proof(<span class="kw-2">&amp;</span>slf).map_err(DecodeError::from_err)<span class="question-mark">?</span>;
@@ -659,7 +686,7 @@
 
 <span class="attribute">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
-    <span class="kw">use </span>std::io::Cursor;
+    <span class="kw">use </span>std::{collections::BTreeMap, io::Cursor};
 
     <span class="kw">use </span>fedimint_api::encoding::Decodable;
 
@@ -680,9 +707,12 @@
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000&quot;</span>;
 
-        <span class="kw">let </span>txoutproof =
-            TxOutProof::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(hex::decode(txoutproof_hex).unwrap()))
-                .unwrap();
+        <span class="kw">let </span>empty_module_registry = BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new();
+        <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode(
+            <span class="kw-2">&amp;mut </span>Cursor::new(hex::decode(txoutproof_hex).unwrap()),
+            <span class="kw-2">&amp;</span>empty_module_registry,
+        )
+        .unwrap();
 
         <span class="macro">assert_eq!</span>(
             txoutproof.block(),
@@ -699,4 +729,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

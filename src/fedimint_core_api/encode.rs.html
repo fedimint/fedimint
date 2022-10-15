@@ -23,55 +23,11 @@
 <span id="23">23</span>
 <span id="24">24</span>
 <span id="25">25</span>
-<span id="26">26</span>
-<span id="27">27</span>
-<span id="28">28</span>
-<span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
-<span id="47">47</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, io};
 
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError};
 
-<span class="kw">use </span><span class="kw">super</span>::ModuleKey;
-
-<span class="doccomment">/// Value that can be decoded, but only using the required supported modules of type `M`
-</span><span class="kw">pub trait </span>ModuleDecodable&lt;M&gt;: Sized {
-    <span class="doccomment">/// Decode an object with a well-defined format
-    </span><span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-        r: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;;
-}
-
-<span class="kw">impl</span>&lt;T, M&gt; ModuleDecodable&lt;M&gt; <span class="kw">for </span>Vec&lt;T&gt;
-<span class="kw">where
-    </span>T: ModuleDecodable&lt;M&gt;,
-{
-    <span class="kw">fn </span>consensus_decode&lt;R: std::io::Read&gt;(
-        <span class="kw-2">mut </span>r: <span class="kw-2">&amp;mut </span>R,
-        modules: <span class="kw-2">&amp;</span>BTreeMap&lt;ModuleKey, M&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>len = u64::consensus_decode(<span class="kw-2">&amp;mut </span>r)<span class="question-mark">?</span>;
-        (<span class="number">0</span>..len).map(|<span class="kw">_</span>| T::consensus_decode(r, modules)).collect()
-    }
-}
+<span class="kw">use </span><span class="kw">crate</span>::ModuleKey;
 
 <span class="kw">pub fn </span>module_decode_key_prefixed_decodable&lt;T, F, R, M&gt;(
     <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>R,
@@ -82,7 +38,7 @@
     </span>R: io::Read,
     F: FnOnce(<span class="kw-2">&amp;mut </span>R, <span class="kw-2">&amp;</span>M) -&gt; <span class="prelude-ty">Result</span>&lt;T, DecodeError&gt;,
 {
-    <span class="kw">let </span>key = ModuleKey::consensus_decode(<span class="kw-2">&amp;mut </span>d)<span class="question-mark">?</span>;
+    <span class="kw">let </span>key = ModuleKey::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
     <span class="kw">match </span>modules.get(<span class="kw-2">&amp;</span>key) {
         <span class="prelude-val">Some</span>(module) =&gt; decode_fn(d, module),
@@ -93,4 +49,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_core_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

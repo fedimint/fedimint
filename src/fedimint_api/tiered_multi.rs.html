@@ -325,6 +325,10 @@
 <span id="325">325</span>
 <span id="326">326</span>
 <span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -332,6 +336,7 @@
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
+<span class="kw">use </span><span class="kw">crate</span>::encoding::ModuleRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::tiered::InvalidAmountTierError;
 <span class="kw">use crate</span>::{Amount, Tiered};
 
@@ -534,16 +539,19 @@
     }
 }
 
-<span class="kw">impl</span>&lt;C&gt; Decodable <span class="kw">for </span>TieredMulti&lt;C&gt;
+<span class="kw">impl</span>&lt;M, C&gt; Decodable&lt;M&gt; <span class="kw">for </span>TieredMulti&lt;C&gt;
 <span class="kw">where
-    </span>C: Decodable,
+    </span>C: Decodable&lt;M&gt;,
 {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>res = BTreeMap::new();
-        <span class="kw">let </span>len = u64::consensus_decode(d)<span class="question-mark">?</span>;
+        <span class="kw">let </span>len = u64::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
-            <span class="kw">let </span>amt = Amount::consensus_decode(d)<span class="question-mark">?</span>;
-            <span class="kw">let </span>v = C::consensus_decode(d)<span class="question-mark">?</span>;
+            <span class="kw">let </span>amt = Amount::consensus_decode(d, modules)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v = C::consensus_decode(d, modules)<span class="question-mark">?</span>;
             res.entry(amt).or_insert_with(Vec::new).push(v);
         }
         <span class="prelude-val">Ok</span>(TieredMulti(res))
@@ -653,4 +661,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

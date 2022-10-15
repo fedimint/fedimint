@@ -540,7 +540,18 @@
 <span id="540">540</span>
 <span id="541">541</span>
 <span id="542">542</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::error::Error;
+<span id="543">543</span>
+<span id="544">544</span>
+<span id="545">545</span>
+<span id="546">546</span>
+<span id="547">547</span>
+<span id="548">548</span>
+<span id="549">549</span>
+<span id="550">550</span>
+<span id="551">551</span>
+<span id="552">552</span>
+</pre><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::error::Error;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -550,7 +561,7 @@
 <span class="kw">use </span>tracing::{trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::dyn_newtype_define;
-<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable, ModuleRegistry};
 
 <span class="kw">pub mod </span>batch;
 <span class="kw">pub mod </span>mem_impl;
@@ -578,7 +589,7 @@
 <span class="kw">pub trait </span>DatabaseKeyPrefixConst {
     <span class="kw">const </span>DB_PREFIX: u8;
     <span class="kw">type </span>Key: DatabaseKey;
-    <span class="kw">type </span>Value: DatabaseValue;
+    <span class="kw">type </span>Value: DatabaseValue&lt;()&gt;;
 }
 
 <span class="kw">pub trait </span>DatabaseKeyPrefix: Debug {
@@ -593,8 +604,8 @@
     <span class="kw">fn </span>to_bytes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;u8&gt;;
 }
 
-<span class="kw">pub trait </span>DatabaseValue: Sized + SerializableDatabaseValue {
-    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
+<span class="kw">pub trait </span>DatabaseValue&lt;M&gt;: Sized + SerializableDatabaseValue {
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt;;
 }
 
 <span class="kw">pub type </span>PrefixIter&lt;<span class="lifetime">&#39;a</span>&gt; = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;)&gt;&gt; + Send + <span class="lifetime">&#39;a</span>&gt;;
@@ -631,7 +642,10 @@
                     std::any::type_name::&lt;K::Value&gt;(),
                     old_val_bytes
                 );
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>old_val_bytes)<span class="question-mark">?</span>))
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(
+                    <span class="kw-2">&amp;</span>old_val_bytes,
+                    <span class="kw-2">&amp;</span>BTreeMap::new(),
+                )<span class="question-mark">?</span>))
             }
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         }
@@ -652,7 +666,7 @@
             std::any::type_name::&lt;K::Value&gt;(),
             value_bytes
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>BTreeMap::new())<span class="question-mark">?</span>))
     }
 
     <span class="kw">pub fn </span>remove_entry&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;K::Value&gt;&gt;
@@ -670,7 +684,7 @@
             std::any::type_name::&lt;K::Value&gt;(),
             value_bytes
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>BTreeMap::new())<span class="question-mark">?</span>))
     }
 
     <span class="kw">pub fn </span>find_by_prefix&lt;KP&gt;(
@@ -689,7 +703,7 @@
                     std::any::type_name::&lt;KP::Value&gt;(),
                     value_bytes
                 );
-                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>;
+                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>BTreeMap::new())<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((key, value))
             })
         })
@@ -735,7 +749,10 @@
                     std::any::type_name::&lt;K::Value&gt;(),
                     old_val_bytes
                 );
-                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>old_val_bytes)<span class="question-mark">?</span>))
+                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(
+                    <span class="kw-2">&amp;</span>old_val_bytes,
+                    <span class="kw-2">&amp;</span>BTreeMap::new(),
+                )<span class="question-mark">?</span>))
             }
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
         }
@@ -772,7 +789,7 @@
             std::any::type_name::&lt;K::Value&gt;(),
             value_bytes
         );
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(K::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>BTreeMap::new())<span class="question-mark">?</span>))
     }
 
     <span class="kw">pub fn </span>remove_entry&lt;K&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>K) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;
@@ -817,7 +834,7 @@
                     std::any::type_name::&lt;KP::Value&gt;(),
                     value_bytes
                 );
-                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes)<span class="question-mark">?</span>;
+                <span class="kw">let </span>value = KP::Value::from_bytes(<span class="kw-2">&amp;</span>value_bytes, <span class="kw-2">&amp;</span>BTreeMap::new())<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>((key, value))
             })
         })
@@ -838,7 +855,8 @@
 
 <span class="kw">impl</span>&lt;T&gt; DatabaseKey <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Decodable + Sized,
+    </span><span class="comment">// Note: key can only be `T` that can be decoded without modules (even if module type is `()`)
+    </span>T: DatabaseKeyPrefix + DatabaseKeyPrefixConst + <span class="kw">crate</span>::encoding::Decodable&lt;()&gt; + Sized,
 {
     <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
         <span class="kw">if </span>data.is_empty() {
@@ -850,9 +868,10 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodingError::wrong_prefix(<span class="self">Self</span>::DB_PREFIX, data[<span class="number">0</span>]));
         }
 
-        &lt;<span class="self">Self </span><span class="kw">as </span><span class="kw">crate</span>::encoding::Decodable&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(
-            <span class="kw-2">&amp;</span>data[<span class="number">1</span>..],
-        ))
+        &lt;<span class="self">Self </span><span class="kw">as </span><span class="kw">crate</span>::encoding::Decodable&lt;()&gt;&gt;::consensus_decode(
+            <span class="kw-2">&amp;mut </span>std::io::Cursor::new(<span class="kw-2">&amp;</span>data[<span class="number">1</span>..]),
+            <span class="kw-2">&amp;</span>BTreeMap::&lt;<span class="kw">_</span>, ()&gt;::new(),
+        )
         .map_err(|decode_error| DecodingError::Other(decode_error.<span class="number">0</span>))
     }
 }
@@ -869,12 +888,13 @@
     }
 }
 
-<span class="kw">impl</span>&lt;T&gt; DatabaseValue <span class="kw">for </span>T
+<span class="kw">impl</span>&lt;M, T&gt; DatabaseValue&lt;M&gt; <span class="kw">for </span>T
 <span class="kw">where
-    </span>T: SerializableDatabaseValue + Decodable,
+    </span>T: SerializableDatabaseValue + Decodable&lt;M&gt;,
 {
-    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
-        T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data)).map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
+    <span class="kw">fn </span>from_bytes(data: <span class="kw-2">&amp;</span>[u8], modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodingError&gt; {
+        T::consensus_decode(<span class="kw-2">&amp;mut </span>std::io::Cursor::new(data), modules)
+            .map_err(|e| DecodingError::Other(e.<span class="number">0</span>))
     }
 }
 
@@ -905,7 +925,7 @@
 <span class="kw">mod </span>tests {
     <span class="kw">use </span><span class="kw">super</span>::Database;
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseKeyPrefixConst;
-    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable, ModuleRegistry};
 
     <span class="kw">const </span>DB_PREFIX_TEST: u8 = <span class="number">0x42</span>;
     <span class="kw">const </span>ALT_DB_PREFIX_TEST: u8 = <span class="number">0x43</span>;
@@ -1083,4 +1103,4 @@
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_api" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>

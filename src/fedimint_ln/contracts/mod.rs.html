@@ -187,6 +187,17 @@
 <span id="187">187</span>
 <span id="188">188</span>
 <span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>account;
 <span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
@@ -196,7 +207,7 @@
 <span class="kw">use </span>bitcoin_hashes::hash_newtype;
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 <span class="kw">use </span>fedimint_api::OutPoint;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -298,9 +309,14 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>ContractId {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ContractId::from_inner(Decodable::consensus_decode(d)<span class="question-mark">?</span>))
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>ContractId {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(ContractId::from_inner(Decodable::consensus_decode(
+            d, modules,
+        )<span class="question-mark">?</span>))
     }
 }
 
@@ -351,9 +367,12 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>EncryptedPreimage {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>EncryptedPreimage {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(EncryptedPreimage(
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
         ))
@@ -368,13 +387,16 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>PreimageDecryptionShare {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(d: <span class="kw-2">&amp;mut </span>D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d)<span class="question-mark">?</span>;
+<span class="kw">impl</span>&lt;M&gt; Decodable&lt;M&gt; <span class="kw">for </span>PreimageDecryptionShare {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleRegistry&lt;M&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(PreimageDecryptionShare(
             bincode::deserialize(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)<span class="question-mark">?</span>,
         ))
     }
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (6b3ede3f7 2022-10-13)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (bf15a9e52 2022-10-14)" ></div></body></html>
