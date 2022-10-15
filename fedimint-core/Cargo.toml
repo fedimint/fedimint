@@ -20,7 +20,6 @@ bitcoin = "0.29.1"
 hex = "0.4.2"
 itertools = "0.10.5"
 fedimint-api = { path = "../fedimint-api" }
-fedimint-derive = { path = "../fedimint-derive" }
 fedimint-ln = { path = "../modules/fedimint-ln" }
 fedimint-mint = { path = "../modules/fedimint-mint" }
 fedimint-wallet = { path = "../modules/fedimint-wallet", default-features = false }

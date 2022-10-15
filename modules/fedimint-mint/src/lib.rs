@@ -6,7 +6,7 @@ use std::ops::Sub;
 use async_trait::async_trait;
 use fedimint_api::db::batch::{BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::{ApiEndpoint, TransactionItemAmount};

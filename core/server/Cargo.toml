@@ -16,7 +16,6 @@ path = "src/lib.rs"
 async-trait = "0.1.57"
 bitcoin = "0.29.0"
 fedimint-api = { path = "../../fedimint-api" }
-fedimint-derive = { path = "../../fedimint-derive" }
 fedimint-core-api = { path = "../api" }
 rand = "0.8"
 thiserror = "1.0.23"

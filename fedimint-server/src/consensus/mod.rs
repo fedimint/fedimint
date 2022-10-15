@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
 use fedimint_api::db::Database;
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};

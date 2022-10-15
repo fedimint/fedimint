@@ -373,7 +373,7 @@ impl DecodingError {
 mod tests {
     use super::Database;
     use crate::db::DatabaseKeyPrefixConst;
-    use crate::encoding::{Decodable, Encodable, ModuleRegistry};
+    use crate::encoding::{Decodable, Encodable};
 
     const DB_PREFIX_TEST: u8 = 0x42;
     const ALT_DB_PREFIX_TEST: u8 = 0x43;
