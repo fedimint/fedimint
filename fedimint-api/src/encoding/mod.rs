@@ -381,7 +381,7 @@ mod tests {
     use std::io::Cursor;
     use std::{collections::BTreeMap, fmt::Debug};
 
-    use crate::encoding::{Decodable, Encodable, ModuleRegistry};
+    use crate::encoding::{Decodable, Encodable};
 
     pub(crate) fn test_roundtrip<T>(value: T)
     where

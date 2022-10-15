@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, io};
 
 use fedimint_api::{
-    encoding::{Decodable, DecodeError, Encodable, ModuleRegistry},
+    encoding::{Decodable, DecodeError, Encodable},
     Amount,
 };
 use fedimint_core_api::{

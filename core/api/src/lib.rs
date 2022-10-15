@@ -10,7 +10,7 @@ use std::{any::Any, collections::BTreeMap};
 pub use bitcoin::KeyPair;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
-    encoding::{Decodable, DecodeError, DynEncodable, Encodable, ModuleRegistry},
+    encoding::{Decodable, DecodeError, DynEncodable, Encodable},
     Amount,
 };
 

@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use fedimint_api::db::DatabaseKeyPrefixConst;
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{PeerId, TransactionId};
 use fedimint_core::epoch::EpochHistory;
 

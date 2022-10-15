@@ -9,13 +9,12 @@ use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
+pub use fedimint_derive::{Decodable, Encodable};
 pub use module::{FederationModule, InputMeta};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
-
-use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
 pub mod config;
 pub mod db;
@@ -285,7 +284,7 @@ impl From<bitcoin::Amount> for Amount {
     }
 }
 
-impl Encodable for TransactionId {
+impl crate::encoding::Encodable for TransactionId {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let bytes = &self[..];
         writer.write_all(bytes)?;
@@ -293,13 +292,14 @@ impl Encodable for TransactionId {
     }
 }
 
-impl<M> Decodable<M> for TransactionId {
+impl<M> crate::encoding::Decodable<M> for TransactionId {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
-        _modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+        _modules: &crate::encoding::ModuleRegistry<M>,
+    ) -> Result<Self, crate::encoding::DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bytes)
+            .map_err(crate::encoding::DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))
     }
 }

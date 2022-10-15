@@ -1,5 +1,5 @@
 use fedimint_api::db::DatabaseKeyPrefixConst;
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_core::modules::ln::contracts::ContractId;
 use fedimint_core::modules::ln::LightningGateway;
 

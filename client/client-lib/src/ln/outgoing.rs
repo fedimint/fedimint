@@ -1,4 +1,4 @@
-use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::Amount;
 use fedimint_core::modules::ln::contracts::{
     outgoing::OutgoingContract, IdentifyableContract, Preimage,
