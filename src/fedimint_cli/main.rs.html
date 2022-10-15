@@ -622,6 +622,8 @@
 <span id="622">622</span>
 <span id="623">623</span>
 <span id="624">624</span>
+<span id="625">625</span>
+<span id="626">626</span>
 </pre><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::error::Error;
@@ -1007,7 +1009,9 @@
     <span class="kw-2">mut </span>rng: rand::rngs::OsRng,
 ) -&gt; CliResult {
     <span class="kw">match </span>cli.command {
-        Command::VersionHash =&gt; <span class="macro">unreachable!</span>(),
+        Command::VersionHash =&gt; <span class="prelude-val">Ok</span>(CliOutput::VersionHash {
+            hash: <span class="macro">env!</span>(<span class="string">&quot;GIT_HASH&quot;</span>).to_string(),
+        }),
         Command::PegInAddress =&gt; {
             <span class="kw">let </span>peg_in_address = client.get_new_pegin_address(<span class="kw-2">&amp;mut </span>rng);
             <span class="prelude-val">Ok</span>(CliOutput::PegInAddress {
