@@ -2,9 +2,8 @@ use std::collections::{BTreeMap, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
 use fedimint_api::{BitcoinHash, FederationModule, PeerId};
-use fedimint_derive::UnzipConsensus;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};

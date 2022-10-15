@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 
-pub use fedimint_derive::{Decodable, Encodable};
+pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
 
