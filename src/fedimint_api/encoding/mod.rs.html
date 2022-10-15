@@ -496,7 +496,7 @@
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
 
-<span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable};
+<span class="kw">pub use </span>fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>url::Url;
 
@@ -867,7 +867,7 @@
     <span class="kw">use </span>std::io::Cursor;
     <span class="kw">use </span>std::{collections::BTreeMap, fmt::Debug};
 
-    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable, ModuleRegistry};
+    <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip&lt;T&gt;(value: T)
     <span class="kw">where

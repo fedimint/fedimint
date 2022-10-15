@@ -1292,7 +1292,6 @@
 <span id="1292">1292</span>
 <span id="1293">1293</span>
 <span id="1294">1294</span>
-<span id="1295">1295</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
 <span class="kw">use </span>std::convert::{Infallible, TryInto};
 <span class="kw">use </span>std::hash::Hasher;
@@ -1312,14 +1311,13 @@
 <span class="kw">use </span>bitcoin::{PackedLockTime, Sequence};
 <span class="kw">use </span>fedimint_api::db::batch::{BatchItem, BatchTx};
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
-<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
+<span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::interconnect::ModuleInterconect;
 <span class="kw">use </span>fedimint_api::module::ApiEndpoint;
 <span class="kw">use </span>fedimint_api::module::{api_endpoint, TransactionItemAmount};
 <span class="kw">use </span>fedimint_api::task::sleep;
 <span class="kw">use </span>fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
-<span class="kw">use </span>fedimint_derive::UnzipConsensus;
 <span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{Descriptor, TranslatePk};
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
