@@ -1,6 +1,6 @@
 use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, ModuleRegistry};
 use fedimint_api::{Amount, FederationModule, TransactionId};
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};

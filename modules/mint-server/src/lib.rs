@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use async_trait::async_trait;
 use fedimint_api::{
     db::batch::BatchTx,
-    encoding::{Decodable, Encodable},
+    encoding::{Decodable, Encodable, ModuleRegistry},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
 };

@@ -15,7 +15,7 @@ use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
 
-use crate::encoding::{Decodable, DecodeError, Encodable};
+use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
 pub mod config;
 pub mod db;
@@ -293,8 +293,11 @@ impl Encodable for TransactionId {
     }
 }
 
-impl Decodable for TransactionId {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for TransactionId {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(TransactionId::from_inner(bytes))
