@@ -630,7 +630,7 @@
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
         # purposes (like `nix build`).
-        legacyPackages = {
+        legacyPackages = rec {
           # Debug Builds
           #
           # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
@@ -647,7 +647,7 @@
               (name: deriv: replace-git-hash {
                 inherit name; package = overrideCargoProfileRecursively deriv "dev";
               })
-              outputsPackages)
+              outputsPackages) // { cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test); }
           ;
 
           cli-test = {
