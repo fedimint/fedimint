@@ -20,8 +20,11 @@ pub struct MemDatabase {
 #[derive(Debug)]
 pub struct MemTransaction<'a> {
     operations: Vec<DatabaseOperation>,
-    tx_data: Mutex<BTreeMap<Vec<u8>, Vec<u8>>>,
+    tx_data: BTreeMap<Vec<u8>, Vec<u8>>,
     db: &'a MemDatabase,
+    savepoint: BTreeMap<Vec<u8>, Vec<u8>>,
+    num_pending_operations: usize,
+    num_savepoint_operations: usize,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -99,50 +102,55 @@ impl IDatabase for MemDatabase {
     }
 
     fn begin_transaction(&self) -> DatabaseTransaction {
-        MemTransaction {
+        let db_copy = self.data.lock().unwrap().clone();
+        let mut tx: DatabaseTransaction = MemTransaction {
             operations: Vec::new(),
-            tx_data: Mutex::new(self.data.lock().unwrap().clone()),
+            tx_data: db_copy.clone(),
             db: self,
+            savepoint: db_copy,
+            num_pending_operations: 0,
+            num_savepoint_operations: 0,
         }
-        .into()
+        .into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
+// In-memory database transaction should only be used for test code and never for production
+// as it doesn't properly implement MVCC
 impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
         // Insert data from copy so we can read our own writes
-        self.tx_data
-            .lock()
-            .unwrap()
-            .insert(key.to_vec(), value.clone());
+        self.tx_data.insert(key.to_vec(), value.clone());
         self.operations
             .push(DatabaseOperation::Insert(DatabaseInsertOperation {
                 key: key.to_vec(),
                 value,
             }));
+        self.num_pending_operations += 1;
         val
     }
 
     fn raw_get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        Ok(self.tx_data.lock().unwrap().get(key).cloned())
+        Ok(self.tx_data.get(key).cloned())
     }
 
     fn raw_remove_entry(&mut self, key: &[u8]) -> Result<()> {
         // Remove data from copy so we can read our own writes
-        self.tx_data.lock().unwrap().remove(&key.to_vec());
+        self.tx_data.remove(&key.to_vec());
         self.operations
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
             }));
+        self.num_pending_operations += 1;
         Ok(())
     }
 
     fn raw_find_by_prefix(&self, key_prefix: &[u8]) -> PrefixIter<'_> {
         let mut data = self
             .tx_data
-            .lock()
-            .unwrap()
             .range::<Vec<u8>, _>((key_prefix.to_vec())..)
             .take_while(|(key, _)| key.starts_with(key_prefix))
             .map(|(key, value)| (key.clone(), value.clone()))
@@ -169,6 +177,21 @@ impl<'a> IDatabaseTransaction<'a> for MemTransaction<'a> {
         }
 
         Ok(())
+    }
+
+    fn rollback_tx_to_savepoint(&mut self) {
+        self.tx_data = self.savepoint.clone();
+
+        // Remove any pending operations beyond the savepoint
+        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
+        for _i in 0..removed_ops {
+            self.operations.pop();
+        }
+    }
+
+    fn set_tx_savepoint(&mut self) {
+        self.savepoint = self.tx_data.clone();
+        self.num_savepoint_operations = self.num_pending_operations;
     }
 }
 

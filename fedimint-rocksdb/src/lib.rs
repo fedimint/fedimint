@@ -6,7 +6,7 @@ use fedimint_api::db::{DatabaseTransaction, PrefixIter};
 use fedimint_api::db::{IDatabase, IDatabaseTransaction};
 pub use rocksdb;
 use rocksdb::OptimisticTransactionDB;
-use tracing::{error, trace};
+use tracing::{error, trace, warn};
 
 #[derive(Debug)]
 pub struct RocksDb(rocksdb::OptimisticTransactionDB);
@@ -110,7 +110,9 @@ impl IDatabase for RocksDb {
     }
 
     fn begin_transaction(&self) -> DatabaseTransaction {
-        RocksDbTransaction(self.0.transaction()).into()
+        let mut tx: DatabaseTransaction = RocksDbTransaction(self.0.transaction()).into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
@@ -150,6 +152,19 @@ impl<'a> IDatabaseTransaction<'a> for RocksDbTransaction<'a> {
         self.0.commit()?;
         Ok(())
     }
+
+    fn rollback_tx_to_savepoint(&mut self) {
+        match self.0.rollback_to_savepoint() {
+            Ok(()) => {}
+            _ => {
+                warn!("Rolling back database transaction without a set savepoint");
+            }
+        }
+    }
+
+    fn set_tx_savepoint(&mut self) {
+        self.0.set_savepoint();
+    }
 }
 
 #[cfg(test)]
@@ -176,7 +191,6 @@ mod tests {
             .unwrap();
 
         let db = RocksDb::open(path).unwrap();
-
         fedimint_api::db::test_dbtx_impl(db.into());
     }
 }

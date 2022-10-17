@@ -8,8 +8,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 
-use fedimint_api::db::batch::{AccumulatorTx, BatchItem, BatchTx, DbBatch};
-use fedimint_api::db::Database;
+use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::TransactionItemAmount;
@@ -237,23 +236,17 @@ impl FedimintConsensus {
 
         // Begin consensus epoch
         {
-            let mut db_vec = vec![
-                self.db.begin_transaction(),
-                self.db.begin_transaction(),
-                self.db.begin_transaction(),
-            ];
+            let mut dbtx = self.db.begin_transaction();
             self.wallet
-                .begin_consensus_epoch(&mut db_vec[0], wallet_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut dbtx, wallet_cis, self.rng_gen.get_rng())
                 .await;
             self.mint
-                .begin_consensus_epoch(&mut db_vec[1], mint_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut dbtx, mint_cis, self.rng_gen.get_rng())
                 .await;
             self.ln
-                .begin_consensus_epoch(&mut db_vec[2], ln_cis, self.rng_gen.get_rng())
+                .begin_consensus_epoch(&mut dbtx, ln_cis, self.rng_gen.get_rng())
                 .await;
-            db_vec
-                .into_iter()
-                .for_each(|tx| tx.commit_tx().expect("DB Error"));
+            dbtx.commit_tx().expect("DB Error");
         }
 
         // Process transactions
@@ -270,14 +263,14 @@ impl FedimintConsensus {
                 .filter_conflicts(|(_, tx)| tx)
                 .partitioned();
 
-            let mut db_batch = DbBatch::new();
-            let mut batch_tx = db_batch.transaction();
+            let mut dbtx = self.db.begin_transaction();
 
             for transaction in err_tx {
-                batch_tx.append_insert(
-                    RejectedTransactionKey(transaction.tx_hash()),
-                    format!("{:?}", TransactionSubmissionError::TransactionConflictError),
-                );
+                dbtx.insert_entry(
+                    &RejectedTransactionKey(transaction.tx_hash()),
+                    &format!("{:?}", TransactionSubmissionError::TransactionConflictError),
+                )
+                .expect("DB Error");
             }
 
             let caches = self.build_verification_caches(ok_tx.iter());
@@ -286,67 +279,65 @@ impl FedimintConsensus {
                 // in_scope to make sure that no await is in the middle of the span
                 let _enter = span.in_scope(|| {
                     trace!(?transaction);
-                    batch_tx.append_maybe_delete(ProposedTransactionKey(transaction.tx_hash()));
+                    dbtx.maybe_remove_entry(&ProposedTransactionKey(transaction.tx_hash()))
+                        .expect("DB Error");
 
                     // TODO: use borrowed transaction
-                    match self.process_transaction(
-                        batch_tx.subtransaction(),
-                        transaction.clone(),
-                        &caches,
-                    ) {
+                    match self.process_transaction(&mut dbtx, transaction.clone(), &caches) {
                         Ok(()) => {
-                            batch_tx.append_insert(
-                                AcceptedTransactionKey(transaction.tx_hash()),
-                                AcceptedTransaction { epoch, transaction },
-                            );
+                            dbtx.insert_entry(
+                                &AcceptedTransactionKey(transaction.tx_hash()),
+                                &AcceptedTransaction { epoch, transaction },
+                            )
+                            .expect("DB Error");
                         }
                         Err(error) => {
+                            dbtx.rollback_tx_to_savepoint();
                             warn!(%error, "Transaction failed");
-                            batch_tx.append_insert(
-                                RejectedTransactionKey(transaction.tx_hash()),
-                                format!("{:?}", error),
-                            );
+                            dbtx.insert_entry(
+                                &RejectedTransactionKey(transaction.tx_hash()),
+                                &format!("{:?}", error),
+                            )
+                            .expect("DB Error");
                         }
                     }
                 });
             }
-            batch_tx.commit();
-            self.db.apply_batch(db_batch).expect("DB error");
+            dbtx.commit_tx().expect("DB Error");
         }
 
         // End consensus epoch
         {
-            let mut db_batch = DbBatch::new();
+            let mut dbtx = self.db.begin_transaction();
             let mut drop_peers = Vec::<PeerId>::new();
 
-            self.save_epoch_history(outcome, db_batch.transaction(), &mut drop_peers);
+            self.save_epoch_history(outcome, &mut dbtx, &mut drop_peers);
 
             let mut drop_wallet = self
                 .wallet
-                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
+                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
                 .await;
 
             let mut drop_mint = self
                 .mint
-                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
+                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
                 .await;
 
             let mut drop_ln = self
                 .ln
-                .end_consensus_epoch(&epoch_peers, db_batch.transaction(), self.rng_gen.get_rng())
+                .end_consensus_epoch(&epoch_peers, &mut dbtx, self.rng_gen.get_rng())
                 .await;
 
             drop_peers.append(&mut drop_wallet);
             drop_peers.append(&mut drop_mint);
             drop_peers.append(&mut drop_ln);
 
-            let mut batch_tx = db_batch.transaction();
             for peer in drop_peers {
-                batch_tx.append_insert(DropPeerKey(peer), ());
+                dbtx.insert_entry(&DropPeerKey(peer), &())
+                    .expect("DB Error");
             }
-            batch_tx.commit();
 
-            self.db.apply_batch(db_batch).expect("DB error");
+            dbtx.commit_tx().expect("DB Error");
         }
 
         let audit = self.audit();
@@ -362,10 +353,10 @@ impl FedimintConsensus {
         self.db.get_value(&EpochHistoryKey(epoch)).unwrap()
     }
 
-    fn save_epoch_history(
+    fn save_epoch_history<'a>(
         &self,
         outcome: ConsensusOutcome,
-        mut transaction: AccumulatorTx<BatchItem>,
+        dbtx: &mut DatabaseTransaction<'a>,
         drop_peers: &mut Vec<PeerId>,
     ) {
         let prev_epoch_key = EpochHistoryKey(outcome.epoch.saturating_sub(1));
@@ -379,7 +370,10 @@ impl FedimintConsensus {
             let pks = &self.cfg.epoch_pk_set;
 
             match current.add_sig_to_prev(pks, prev_epoch) {
-                Ok(prev_epoch) => transaction.append_insert(prev_epoch_key, prev_epoch),
+                Ok(prev_epoch) => {
+                    dbtx.insert_entry(&prev_epoch_key, &prev_epoch)
+                        .expect("DB Error");
+                }
                 Err(EpochVerifyError::NotEnoughValidSigShares(contributing_peers)) => {
                     warn!("Unable to sign epoch {}", prev_epoch_key.0);
                     for peer in peers {
@@ -393,9 +387,10 @@ impl FedimintConsensus {
             }
         }
 
-        transaction.append_insert(LastEpochKey, EpochHistoryKey(current.outcome.epoch));
-        transaction.append_insert(EpochHistoryKey(current.outcome.epoch), current);
-        transaction.commit();
+        dbtx.insert_entry(&LastEpochKey, &EpochHistoryKey(current.outcome.epoch))
+            .expect("DB Error");
+        dbtx.insert_entry(&EpochHistoryKey(current.outcome.epoch), &current)
+            .expect("DB Error");
     }
 
     pub async fn await_consensus_proposal(&self) {
@@ -457,9 +452,9 @@ impl FedimintConsensus {
         ConsensusProposal { items, drop_peers }
     }
 
-    fn process_transaction(
+    fn process_transaction<'a>(
         &self,
-        mut batch: BatchTx,
+        dbtx: &mut DatabaseTransaction<'a>,
         transaction: Transaction,
         caches: &VerificationCaches,
     ) -> Result<(), TransactionSubmissionError> {
@@ -472,30 +467,15 @@ impl FedimintConsensus {
             let meta = match input {
                 Input::Mint(coins) => self
                     .mint
-                    .apply_input(
-                        &self.build_interconnect(),
-                        batch.subtransaction(),
-                        coins,
-                        &caches.mint,
-                    )
+                    .apply_input(&self.build_interconnect(), dbtx, coins, &caches.mint)
                     .map_err(TransactionSubmissionError::InputCoinError)?,
                 Input::Wallet(peg_in) => self
                     .wallet
-                    .apply_input(
-                        &self.build_interconnect(),
-                        batch.subtransaction(),
-                        peg_in,
-                        &caches.wallet,
-                    )
+                    .apply_input(&self.build_interconnect(), dbtx, peg_in, &caches.wallet)
                     .map_err(TransactionSubmissionError::InputPegIn)?,
                 Input::LN(input) => self
                     .ln
-                    .apply_input(
-                        &self.build_interconnect(),
-                        batch.subtransaction(),
-                        input,
-                        &caches.ln,
-                    )
+                    .apply_input(&self.build_interconnect(), dbtx, input, &caches.ln)
                     .map_err(TransactionSubmissionError::ContractInputError)?,
             };
             pub_keys.push(meta.puk_keys);
@@ -511,15 +491,15 @@ impl FedimintConsensus {
             let amount = match output {
                 Output::Mint(new_tokens) => self
                     .mint
-                    .apply_output(batch.subtransaction(), &new_tokens, out_point)
+                    .apply_output(dbtx, &new_tokens, out_point)
                     .map_err(TransactionSubmissionError::OutputCoinError)?,
                 Output::Wallet(peg_out) => self
                     .wallet
-                    .apply_output(batch.subtransaction(), &peg_out, out_point)
+                    .apply_output(dbtx, &peg_out, out_point)
                     .map_err(TransactionSubmissionError::OutputPegOut)?,
                 Output::LN(output) => self
                     .ln
-                    .apply_output(batch.subtransaction(), &output, out_point)
+                    .apply_output(dbtx, &output, out_point)
                     .map_err(TransactionSubmissionError::ContractOutputError)?,
             };
             funding_verifier.add_output(amount);
@@ -527,7 +507,6 @@ impl FedimintConsensus {
 
         funding_verifier.verify_funding()?;
 
-        batch.commit();
         Ok(())
     }
 

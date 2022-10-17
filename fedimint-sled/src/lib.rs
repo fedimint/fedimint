@@ -22,6 +22,8 @@ pub struct SledDb(sled::Tree);
 pub struct SledTransaction<'a> {
     operations: Vec<DatabaseOperation>,
     db: &'a SledDb,
+    num_pending_operations: usize,
+    num_savepoint_operations: usize,
 }
 
 impl SledDb {
@@ -117,14 +119,20 @@ impl IDatabase for SledDb {
     }
 
     fn begin_transaction(&self) -> DatabaseTransaction {
-        SledTransaction {
+        let mut tx: DatabaseTransaction = SledTransaction {
             operations: Vec::new(),
             db: self,
+            num_pending_operations: 0,
+            num_savepoint_operations: 0,
         }
-        .into()
+        .into();
+        tx.set_tx_savepoint();
+        tx
     }
 }
 
+// Sled database transaction should only be used for test code and never for production
+// as it doesn't properly implement MVCC
 impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);
@@ -133,6 +141,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
                 key: key.to_vec(),
                 value,
             }));
+        self.num_pending_operations += 1;
         val
     }
 
@@ -174,6 +183,7 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
             .push(DatabaseOperation::Delete(DatabaseDeleteOperation {
                 key: key.to_vec(),
             }));
+        self.num_pending_operations += 1;
         Ok(())
     }
 
@@ -234,6 +244,18 @@ impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
 
         self.db.inner().flush().expect("DB failure");
         ret
+    }
+
+    fn rollback_tx_to_savepoint(&mut self) {
+        // Remove any pending operations beyond the savepoint
+        let removed_ops = self.num_pending_operations - self.num_savepoint_operations;
+        for _i in 0..removed_ops {
+            self.operations.pop();
+        }
+    }
+
+    fn set_tx_savepoint(&mut self) {
+        self.num_savepoint_operations = self.num_pending_operations;
     }
 }
 
