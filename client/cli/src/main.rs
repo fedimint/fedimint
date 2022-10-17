@@ -383,7 +383,9 @@ async fn handle_command(
     mut rng: rand::rngs::OsRng,
 ) -> CliResult {
     match cli.command {
-        Command::VersionHash => unreachable!(),
+        Command::VersionHash => Ok(CliOutput::VersionHash {
+            hash: env!("GIT_HASH").to_string(),
+        }),
         Command::PegInAddress => {
             let peg_in_address = client.get_new_pegin_address(&mut rng);
             Ok(CliOutput::PegInAddress {

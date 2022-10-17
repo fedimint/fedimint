@@ -17,5 +17,4 @@ async-trait = "0.1.57"
 bitcoin = "0.29.1"
 anyhow = "1.0.65"
 fedimint-api = { path = "../../fedimint-api" }
-fedimint-derive = { path = "../../fedimint-derive" }
 thiserror = "1.0.23"

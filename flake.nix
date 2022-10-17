@@ -630,7 +630,7 @@
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
         # purposes (like `nix build`).
-        legacyPackages = {
+        legacyPackages = rec {
           # Debug Builds
           #
           # This works by using `overrideAttrs` on output derivations to set `CARGO_PROFILE`, and importantly
@@ -647,7 +647,7 @@
               (name: deriv: replace-git-hash {
                 inherit name; package = overrideCargoProfileRecursively deriv "dev";
               })
-              outputsPackages)
+              outputsPackages) // { cli-test = (builtins.mapAttrs (name: deriv: overrideCargoProfileRecursively deriv "dev") cli-test); }
           ;
 
           cli-test = {
@@ -768,8 +768,9 @@
 
             shellHook = ''
               # auto-install git hooks
-              if [[ ! -d .git/hooks ]]; then mkdir .git/hooks; fi
-              for hook in misc/git-hooks/* ; do ln -sf "../../$hook" "./.git/hooks/" ; done
+              dot_git="$(git rev-parse --git-common-dir)"
+              if [[ ! -d "$dot_git/hooks" ]]; then mkdir "$dot_git/hooks"; fi
+              for hook in misc/git-hooks/* ; do ln -sf "$(pwd)/$hook" "$dot_git/hooks/" ; done
               ${pkgs.git}/bin/git config commit.template misc/git-hooks/commit-template.txt
 
               # workaround https://github.com/rust-lang/cargo/issues/11020

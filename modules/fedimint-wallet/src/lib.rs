@@ -16,14 +16,13 @@ use bitcoin::{
 };
 use bitcoin::{PackedLockTime, Sequence};
 use fedimint_api::db::{Database, DatabaseTransaction};
-use fedimint_api::encoding::{Decodable, Encodable};
+use fedimint_api::encoding::{Decodable, Encodable, UnzipConsensus};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::ApiEndpoint;
 use fedimint_api::module::{api_endpoint, TransactionItemAmount};
 use fedimint_api::task::sleep;
 use fedimint_api::{FederationModule, InputMeta, OutPoint, PeerId};
-use fedimint_derive::UnzipConsensus;
 use miniscript::psbt::PsbtExt;
 use miniscript::{Descriptor, TranslatePk};
 use rand::{CryptoRng, Rng, RngCore};

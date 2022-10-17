@@ -462,9 +462,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.14"
+version = "4.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ea54a38e4bce14ff6931c72e5b3c43da7051df056913d4e7e1fcdb1c03df69d"
+checksum = "6bf8832993da70a4c6d13c581f4463c2bdda27b9bf1c5498dc4365543abe6d6f"
 dependencies = [
  "atty",
  "bitflags",
@@ -853,7 +853,6 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "fedimint-api",
- "fedimint-derive",
  "fedimint-ln",
  "fedimint-mint",
  "fedimint-wallet",
@@ -880,7 +879,6 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "fedimint-api",
- "fedimint-derive",
  "thiserror",
 ]
 
@@ -893,7 +891,6 @@ dependencies = [
  "bitcoin_hashes",
  "fedimint-api",
  "fedimint-core-api",
- "fedimint-derive",
  "rand",
  "secp256k1-zkp",
  "serde",
@@ -913,7 +910,6 @@ dependencies = [
  "bitcoin",
  "fedimint-api",
  "fedimint-core-api",
- "fedimint-derive",
  "rand",
  "thiserror",
 ]
@@ -962,7 +958,6 @@ dependencies = [
  "bincode",
  "counter",
  "fedimint-api",
- "fedimint-derive",
  "itertools",
  "rand",
  "rayon",
@@ -1036,7 +1031,6 @@ dependencies = [
  "fedimint-build",
  "fedimint-core",
  "fedimint-core-api",
- "fedimint-derive",
  "fedimint-wallet",
  "futures",
  "hbbft",
@@ -1121,7 +1115,6 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "fedimint-api",
- "fedimint-derive",
  "hex",
  "miniscript",
  "rand",
@@ -1148,7 +1141,6 @@ dependencies = [
  "fedimint-api",
  "fedimint-build",
  "fedimint-core",
- "fedimint-derive",
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
@@ -2150,7 +2142,6 @@ dependencies = [
  "bitcoin_hashes",
  "fedimint-api",
  "fedimint-core",
- "fedimint-derive",
  "futures",
  "hex",
  "js-sys",

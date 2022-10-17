@@ -6,10 +6,11 @@ mod btc;
 mod secp256k1;
 mod tbs;
 
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
 
-pub use fedimint_derive::{Decodable, Encodable};
+pub use fedimint_derive::{Decodable, Encodable, UnzipConsensus};
 use thiserror::Error;
 use url::Url;
 
@@ -57,10 +58,18 @@ pub trait Encodable {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error>;
 }
 
+// TODO: unify and/or make a newtype?
+pub type ModuleKey = u16;
+
+pub type ModuleRegistry<M> = BTreeMap<ModuleKey, M>;
+
 /// Data which can be encoded in a consensus-consistent way
-pub trait Decodable: Sized {
+pub trait Decodable<M>: Sized {
     /// Decode an object with a well-defined format
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError>;
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError>;
 }
 
 impl Encodable for Url {
@@ -69,9 +78,12 @@ impl Encodable for Url {
     }
 }
 
-impl Decodable for Url {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        String::consensus_decode(d)?
+impl<M> Decodable<M> for Url {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        String::consensus_decode(d, modules)?
             .parse::<Url>()
             .map_err(DecodeError::from_err)
     }
@@ -96,9 +108,10 @@ macro_rules! impl_encode_decode_num {
             }
         }
 
-        impl Decodable for $num_type {
+        impl<M> Decodable<M> for $num_type {
             fn consensus_decode<D: std::io::Read>(
                 d: &mut D,
+                _modules: &ModuleRegistry<M>,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
                 d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
@@ -126,9 +139,9 @@ macro_rules! impl_encode_decode_tuple {
         }
 
         #[allow(non_snake_case)]
-        impl<$($x: Decodable),*> Decodable for ($($x),*) {
-            fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-                Ok(($({let $x = Decodable::consensus_decode(d)?; $x }),*))
+        impl<M, $($x: Decodable<M>),*> Decodable<M> for ($($x),*) {
+            fn consensus_decode<D: std::io::Read>(d: &mut D, modules: &ModuleRegistry<M>) -> Result<Self, DecodeError> {
+                Ok(($({let $x = Decodable::consensus_decode(d, modules)?; $x }),*))
             }
         }
     );
@@ -161,13 +174,16 @@ where
     }
 }
 
-impl<T> Decodable for Vec<T>
+impl<M, T> Decodable<M> for Vec<T>
 where
-    T: Decodable,
+    T: Decodable<M>,
 {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        let len = u64::consensus_decode(d)?;
-        (0..len).map(|_| T::consensus_decode(d)).collect()
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        let len = u64::consensus_decode(d, modules)?;
+        (0..len).map(|_| T::consensus_decode(d, modules)).collect()
     }
 }
 
@@ -184,15 +200,18 @@ where
     }
 }
 
-impl<T, const SIZE: usize> Decodable for [T; SIZE]
+impl<M, T, const SIZE: usize> Decodable<M> for [T; SIZE]
 where
-    T: Decodable + Debug + Default + Copy,
+    T: Decodable<M> + Debug + Default + Copy,
 {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         // todo: impl without copy
         let mut data = [T::default(); SIZE];
         for item in data.iter_mut() {
-            *item = T::consensus_decode(d)?;
+            *item = T::consensus_decode(d, modules)?;
         }
         Ok(data)
     }
@@ -214,15 +233,18 @@ where
     }
 }
 
-impl<T> Decodable for Option<T>
+impl<M, T> Decodable<M> for Option<T>
 where
-    T: Decodable,
+    T: Decodable<M>,
 {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        let flag = u8::consensus_decode(d)?;
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        let flag = u8::consensus_decode(d, modules)?;
         match flag {
             0 => Ok(None),
-            1 => Ok(Some(T::consensus_decode(d)?)),
+            1 => Ok(Some(T::consensus_decode(d, modules)?)),
             _ => Err(DecodeError::from_str(
                 "Invalid flag for option enum, expected 0 or 1",
             )),
@@ -239,12 +261,15 @@ where
     }
 }
 
-impl<T> Decodable for Box<T>
+impl<M, T> Decodable<M> for Box<T>
 where
-    T: Decodable,
+    T: Decodable<M>,
 {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        Ok(Box::new(T::consensus_decode(d)?))
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        Ok(Box::new(T::consensus_decode(d, modules)?))
     }
 }
 
@@ -257,8 +282,11 @@ impl Encodable for () {
     }
 }
 
-impl Decodable for () {
-    fn consensus_decode<D: std::io::Read>(_d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for () {
+    fn consensus_decode<D: std::io::Read>(
+        _d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         Ok(())
     }
 }
@@ -269,9 +297,12 @@ impl Encodable for String {
     }
 }
 
-impl Decodable for String {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        String::from_utf8(Decodable::consensus_decode(d)?).map_err(DecodeError::from_err)
+impl<M> Decodable<M> for String {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        String::from_utf8(Decodable::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
     }
 }
 
@@ -281,9 +312,12 @@ impl Encodable for lightning_invoice::Invoice {
     }
 }
 
-impl Decodable for lightning_invoice::Invoice {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
-        String::consensus_decode(d)?
+impl<M> Decodable<M> for lightning_invoice::Invoice {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
+        String::consensus_decode(d, modules)?
             .parse::<lightning_invoice::Invoice>()
             .map_err(DecodeError::from_err)
     }
@@ -297,8 +331,11 @@ impl Encodable for bool {
     }
 }
 
-impl Decodable for bool {
-    fn consensus_decode<D: Read>(d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for bool {
+    fn consensus_decode<D: Read>(
+        d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         let mut bool_as_u8 = [0u8];
         d.read_exact(&mut bool_as_u8)
             .map_err(DecodeError::from_err)?;
@@ -341,28 +378,28 @@ impl std::fmt::Display for DecodeError {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Debug;
     use std::io::Cursor;
+    use std::{collections::BTreeMap, fmt::Debug};
 
     use crate::encoding::{Decodable, Encodable};
 
     pub(crate) fn test_roundtrip<T>(value: T)
     where
-        T: Encodable + Decodable + Eq + Debug,
+        T: Encodable + Decodable<()> + Eq + Debug,
     {
         let mut bytes = Vec::new();
         let len = value.consensus_encode(&mut bytes).unwrap();
         assert_eq!(len, bytes.len());
 
         let mut cursor = Cursor::new(bytes);
-        let decoded = T::consensus_decode(&mut cursor).unwrap();
+        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, ()>::new()).unwrap();
         assert_eq!(value, decoded);
         assert_eq!(cursor.position(), len as u64);
     }
 
     pub(crate) fn test_roundtrip_expected<T>(value: T, expected: &[u8])
     where
-        T: Encodable + Decodable + Eq + Debug,
+        T: Encodable + Decodable<()> + Eq + Debug,
     {
         let mut bytes = Vec::new();
         let len = value.consensus_encode(&mut bytes).unwrap();
@@ -370,7 +407,7 @@ mod tests {
         assert_eq!(&expected, &bytes);
 
         let mut cursor = Cursor::new(bytes);
-        let decoded = T::consensus_decode(&mut cursor).unwrap();
+        let decoded = T::consensus_decode(&mut cursor, &BTreeMap::<_, ()>::new()).unwrap();
         assert_eq!(value, decoded);
         assert_eq!(cursor.position(), len as u64);
     }

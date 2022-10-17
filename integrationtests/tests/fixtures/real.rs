@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
@@ -13,7 +14,6 @@ use fedimint_api::encoding::Decodable;
 use fedimint_api::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
 use lightning_invoice::Invoice;
-use serde::Serialize;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
@@ -72,13 +72,6 @@ impl RealLightningTest {
     }
 }
 
-// FIXME workaround for bad RPC API, should replace when cln_rpc gets updated
-#[derive(Debug, Clone, Serialize)]
-struct FundChannelFixed<'a> {
-    pub id: &'a str,
-    pub amount: u64,
-}
-
 pub struct RealBitcoinTest {
     client: Client,
 }
@@ -119,11 +112,14 @@ impl BitcoinTest for RealBitcoinTest {
             .client
             .get_raw_transaction(&id, None)
             .expect(Self::ERROR);
-        let proof = TxOutProof::consensus_decode(&mut Cursor::new(
-            self.client
-                .get_tx_out_proof(&[id], None)
-                .expect(Self::ERROR),
-        ))
+        let proof = TxOutProof::consensus_decode(
+            &mut Cursor::new(
+                self.client
+                    .get_tx_out_proof(&[id], None)
+                    .expect(Self::ERROR),
+            ),
+            &BTreeMap::<_, ()>::new(),
+        )
         .expect(Self::ERROR);
 
         (proof, tx)

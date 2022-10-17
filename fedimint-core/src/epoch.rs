@@ -2,9 +2,8 @@ use std::collections::{BTreeMap, HashSet};
 
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
-use fedimint_api::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
 use fedimint_api::{BitcoinHash, FederationModule, PeerId};
-use fedimint_derive::UnzipConsensus;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -158,8 +157,11 @@ impl Encodable for EpochSignature {
     }
 }
 
-impl Decodable for EpochSignature {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for EpochSignature {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignature(Signature::from_bytes(&bytes).unwrap()))
@@ -172,8 +174,11 @@ impl Encodable for EpochSignatureShare {
     }
 }
 
-impl Decodable for EpochSignatureShare {
-    fn consensus_decode<D: std::io::Read>(d: &mut D) -> Result<Self, DecodeError> {
+impl<M> Decodable<M> for EpochSignatureShare {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        _modules: &ModuleRegistry<M>,
+    ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 96];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
         Ok(EpochSignatureShare(
