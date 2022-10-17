@@ -131,6 +131,8 @@ impl IDatabase for SledDb {
     }
 }
 
+// Sled database transaction should only be used for test code and never for production
+// as it doesn't properly implement MVCC
 impl<'a> IDatabaseTransaction<'a> for SledTransaction<'a> {
     fn raw_insert_bytes(&mut self, key: &[u8], value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let val = self.raw_get_bytes(key);

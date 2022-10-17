@@ -171,6 +171,8 @@ pub trait IDatabaseTransaction<'a>: 'a {
 
     fn rollback_tx_to_savepoint(&mut self);
 
+    // Ideally, avoid using this in fedimint client code as not all database transaction
+    // implementations will support setting a savepoint during a transaction.
     fn set_tx_savepoint(&mut self);
 }
 
