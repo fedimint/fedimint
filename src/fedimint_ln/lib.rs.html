@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../fedimint_ln/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../fedimint_ln/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><button type="button">?</button></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-ln/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../fedimint_ln/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../fedimint_ln/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -756,6 +756,14 @@
 <span id="756">756</span>
 <span id="757">757</span>
 <span id="758">758</span>
+<span id="759">759</span>
+<span id="760">760</span>
+<span id="761">761</span>
+<span id="762">762</span>
+<span id="763">763</span>
+<span id="764">764</span>
+<span id="765">765</span>
+<span id="766">766</span>
 </pre><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust model) interact with
@@ -778,7 +786,6 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>db::{LightningGatewayKey, LightningGatewayKeyPrefix};
-<span class="kw">use </span>fedimint_api::db::batch::BatchTx;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
@@ -1022,10 +1029,10 @@
         })
     }
 
-    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    <span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::TxInput,
         cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta&lt;<span class="lifetime">&#39;b</span>&gt;, <span class="self">Self</span>::Error&gt; {
@@ -1038,9 +1045,9 @@
             .expect(<span class="string">&quot;DB error&quot;</span>)
             .expect(<span class="string">&quot;Should fail validation if contract account doesn&#39;t exist&quot;</span>);
         contract_account.amount -= meta.amount.amount;
-        batch.append_insert(account_db_key, contract_account);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>account_db_key, <span class="kw-2">&amp;</span>contract_account)
+            .expect(<span class="string">&quot;DB Error&quot;</span>);
 
-        batch.commit();
         <span class="prelude-val">Ok</span>(meta)
     }
 
@@ -1113,9 +1120,9 @@
         }
     }
 
-    <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    <span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::TxOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, <span class="self">Self</span>::Error&gt; {
@@ -1136,15 +1143,17 @@
                         amount: amount.amount,
                         contract: contract.contract.clone().to_funded(out_point),
                     });
-                batch.append_insert(contract_db_key, updated_contract_account);
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>updated_contract_account)
+                    .expect(<span class="string">&quot;DB Error&quot;</span>);
 
-                batch.append_insert_new(
-                    ContractUpdateKey(out_point),
-                    OutputOutcome::Contract {
+                dbtx.insert_new_entry(
+                    <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
+                    <span class="kw-2">&amp;</span>OutputOutcome::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
-                );
+                )
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
 
                 <span class="kw">if let </span>Contract::Incoming(incoming) = <span class="kw-2">&amp;</span>contract.contract {
                     <span class="kw">let </span>offer = <span class="self">self
@@ -1158,20 +1167,23 @@
                         .threshold_sec_key
                         .decrypt_share(<span class="kw-2">&amp;</span>incoming.encrypted_preimage.<span class="number">0</span>)
                         .expect(<span class="string">&quot;We checked for decryption share validity on contract creation&quot;</span>);
-                    batch.append_insert_new(
-                        ProposeDecryptionShareKey(contract.contract.contract_id()),
-                        PreimageDecryptionShare(decryption_share),
-                    );
-                    batch.append_delete(OfferKey(offer.hash));
+                    dbtx.insert_new_entry(
+                        <span class="kw-2">&amp;</span>ProposeDecryptionShareKey(contract.contract.contract_id()),
+                        <span class="kw-2">&amp;</span>PreimageDecryptionShare(decryption_share),
+                    )
+                    .expect(<span class="string">&quot;DB Error&quot;</span>);
+                    dbtx.remove_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash)).expect(<span class="string">&quot;DB Error&quot;</span>);
                 }
             }
             ContractOrOfferOutput::Offer(offer) =&gt; {
-                batch.append_insert_new(
-                    ContractUpdateKey(out_point),
-                    OutputOutcome::Offer { id: offer.id() },
-                );
+                dbtx.insert_new_entry(
+                    <span class="kw-2">&amp;</span>ContractUpdateKey(out_point),
+                    <span class="kw-2">&amp;</span>OutputOutcome::Offer { id: offer.id() },
+                )
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
                 <span class="comment">// TODO: sanity-check encrypted preimage size
-                </span>batch.append_insert_new(OfferKey(offer.hash), (<span class="kw-2">*</span>offer).clone());
+                </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash), <span class="kw-2">&amp;</span>(<span class="kw-2">*</span>offer).clone())
+                    .expect(<span class="string">&quot;DB Error&quot;</span>);
             }
             ContractOrOfferOutput::CancelOutgoing { contract, .. } =&gt; {
                 <span class="kw">let </span>updated_contract_account = {
@@ -1193,11 +1205,11 @@
                     contract_account
                 };
 
-                batch.append_insert(ContractKey(<span class="kw-2">*</span>contract), updated_contract_account);
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>ContractKey(<span class="kw-2">*</span>contract), <span class="kw-2">&amp;</span>updated_contract_account)
+                    .expect(<span class="string">&quot;DB Error&quot;</span>);
             }
         }
 
-        batch.commit();
         <span class="prelude-val">Ok</span>(amount)
     }
 
@@ -1205,7 +1217,7 @@
     </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        <span class="kw-2">mut </span>batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
         _rng: <span class="kw">impl </span>RngCore + CryptoRng + <span class="lifetime">&#39;a</span>,
     ) -&gt; Vec&lt;PeerId&gt; {
         <span class="comment">// Decrypt preimages
@@ -1232,7 +1244,8 @@
                 <span class="kw">_ </span>=&gt; {
                     <span class="macro">warn!</span>(<span class="string">&quot;Received decryption share for non-existent incoming contract&quot;</span>);
                     <span class="kw">for </span>peer <span class="kw">in </span>peers {
-                        batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                        dbtx.remove_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer))
+                            .expect(<span class="string">&quot;DB Error&quot;</span>);
                     }
                     <span class="kw">continue</span>;
                 }
@@ -1298,9 +1311,11 @@
             };
 
             <span class="comment">// Delete decryption shares once we&#39;ve decrypted the preimage
-            </span>batch.append_delete(ProposeDecryptionShareKey(contract_id));
+            </span>dbtx.remove_entry(<span class="kw-2">&amp;</span>ProposeDecryptionShareKey(contract_id))
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
             <span class="kw">for </span>peer <span class="kw">in </span>peers {
-                batch.append_delete(AgreedDecryptionShareKey(contract_id, peer));
+                dbtx.remove_entry(<span class="kw-2">&amp;</span>AgreedDecryptionShareKey(contract_id, peer))
+                    .expect(<span class="string">&quot;DB Error&quot;</span>);
             }
 
             <span class="kw">let </span>decrypted_preimage = <span class="kw">if </span>preimage_vec.len() == <span class="number">32
@@ -1336,7 +1351,8 @@
             };
             incoming.contract.decrypted_preimage = decrypted_preimage.clone();
             <span class="macro">trace!</span>(<span class="question-mark">?</span>contract_account, <span class="string">&quot;Updating contract account&quot;</span>);
-            batch.append_insert(contract_db_key, contract_account);
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>contract_db_key, <span class="kw-2">&amp;</span>contract_account)
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
 
             <span class="comment">// Update output outcome
             </span><span class="kw">let </span>outcome_db_key = ContractUpdateKey(out_point);
@@ -1353,9 +1369,9 @@
                 <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">&quot;We are expeccting an incoming contract&quot;</span>),
             };
             <span class="kw-2">*</span>incoming_contract_outcome_preimage = decrypted_preimage.clone();
-            batch.append_insert(outcome_db_key, outcome);
+            dbtx.insert_entry(<span class="kw-2">&amp;</span>outcome_db_key, <span class="kw-2">&amp;</span>outcome)
+                .expect(<span class="string">&quot;DB Error&quot;</span>);
         }
-        batch.commit();
 
         bad_peers
     }
@@ -1515,4 +1531,4 @@
     </span>InvalidCancellationSignature,
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (b8c35ca26 2022-10-15)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (b8b5caee0 2022-10-16)" ></div></body></html>
