@@ -27,10 +27,10 @@ cln-plugin = "0.1"
 futures = "0.3.24"
 hex = "0.4.3"
 lightning-invoice = "0.19.0"
-fedimint-server = { path = "../fedimint-server/" }
-fedimint-api = { path = "../fedimint-api" }
-fedimint-rocksdb = { path = "../fedimint-rocksdb" }
-mint-client = { path = "../client/client-lib" }
+fedimint-server = { path = "../../fedimint-server/" }
+fedimint-api = { path = "../../fedimint-api" }
+fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
+mint-client = { path = "../../client/client-lib" }
 rand = "0.8"
 secp256k1 = "0.24.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -42,5 +42,5 @@ tower-http = { version = "0.3.4", features = ["cors"] }
 url = { version = "2.3.1", features = ["serde"] }
 
 [build-dependencies]
-fedimint-build = { path = "../fedimint-build" }
+fedimint-build = { path = "../../fedimint-build" }
 
