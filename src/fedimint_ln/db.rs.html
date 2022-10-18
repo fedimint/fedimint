@@ -115,6 +115,10 @@
 <span id="115">115</span>
 <span id="116">116</span>
 <span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::{OutPoint, PeerId};
@@ -123,18 +127,22 @@
 <span class="kw">use </span><span class="kw">crate</span>::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
 <span class="kw">use crate</span>::{ContractAccount, LightningGateway, OutputOutcome};
 
-<span class="kw">const </span>DB_PREFIX_CONTRACT: u8 = <span class="number">0x40</span>;
-<span class="kw">const </span>DB_PREFIX_OFFER: u8 = <span class="number">0x41</span>;
-<span class="kw">const </span>DB_PREFIX_PROPOSE_DECRYPTION_SHARE: u8 = <span class="number">0x42</span>;
-<span class="kw">const </span>DB_PREFIX_AGREED_DECRYPTION_SHARE: u8 = <span class="number">0x43</span>;
-<span class="kw">const </span>DB_PREFIX_CONTRACT_UPDATE: u8 = <span class="number">0x44</span>;
-<span class="kw">const </span>DB_PREFIX_LIGHTNING_GATEWAY: u8 = <span class="number">0x45</span>;
+<span class="attribute">#[repr(u8)]
+#[derive(Clone)]
+</span><span class="kw">pub enum </span>DbKeyPrefix {
+    Contract = <span class="number">0x40</span>,
+    Offer = <span class="number">0x41</span>,
+    ProposeDecryptionShare = <span class="number">0x42</span>,
+    AgreedDecryptionShare = <span class="number">0x43</span>,
+    ContractUpdate = <span class="number">0x44</span>,
+    LightningGateway = <span class="number">0x45</span>,
+}
 
 <span class="attribute">#[derive(Debug, Clone, Copy, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Contract <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ContractAccount;
 }
@@ -143,7 +151,7 @@
 </span><span class="kw">pub struct </span>ContractKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONTRACT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Contract <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ContractKey;
     <span class="kw">type </span>Value = ContractAccount;
 }
@@ -152,7 +160,7 @@
 </span><span class="kw">pub struct </span>ContractUpdateKey(<span class="kw">pub </span>OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ContractUpdateKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONTRACT_UPDATE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ContractUpdate <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = OutputOutcome;
 }
@@ -161,7 +169,7 @@
 </span><span class="kw">pub struct </span>OfferKey(<span class="kw">pub </span>bitcoin_hashes::sha256::Hash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OfferKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OFFER;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Offer <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = IncomingContractOffer;
 }
@@ -170,7 +178,7 @@
 </span><span class="kw">pub struct </span>OfferKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OfferKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OFFER;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Offer <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = OfferKey;
     <span class="kw">type </span>Value = IncomingContractOffer;
 }
@@ -180,7 +188,7 @@
 </span><span class="kw">pub struct </span>ProposeDecryptionShareKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposeDecryptionShareKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSE_DECRYPTION_SHARE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
@@ -190,7 +198,7 @@
 </span><span class="kw">pub struct </span>ProposeDecryptionShareKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ProposeDecryptionShareKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PROPOSE_DECRYPTION_SHARE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ProposeDecryptionShare <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ProposeDecryptionShareKey;
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
@@ -200,7 +208,7 @@
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKey(<span class="kw">pub </span>ContractId, <span class="kw">pub </span>PeerId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AgreedDecryptionShareKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_AGREED_DECRYPTION_SHARE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
@@ -210,7 +218,7 @@
 </span><span class="kw">pub struct </span>AgreedDecryptionShareKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>AgreedDecryptionShareKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_AGREED_DECRYPTION_SHARE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::AgreedDecryptionShare <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = AgreedDecryptionShareKey;
     <span class="kw">type </span>Value = PreimageDecryptionShare;
 }
@@ -219,7 +227,7 @@
 </span><span class="kw">pub struct </span>LightningGatewayKey(<span class="kw">pub </span>PublicKey);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LightningGateway <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = LightningGateway;
 }
@@ -228,9 +236,9 @@
 </span><span class="kw">pub struct </span>LightningGatewayKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LightningGateway <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = LightningGatewayKey;
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (b8b5caee0 2022-10-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_ln" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (06f049a35 2022-10-17)" ></div></body></html>

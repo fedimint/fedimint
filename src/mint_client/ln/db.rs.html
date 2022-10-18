@@ -93,6 +93,10 @@
 <span id="93">93</span>
 <span id="94">94</span>
 <span id="95">95</span>
+<span id="96">96</span>
+<span id="97">97</span>
+<span id="98">98</span>
+<span id="99">99</span>
 </pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::modules::ln::contracts::ContractId;
@@ -102,17 +106,21 @@
 <span class="kw">use </span><span class="kw">super</span>::outgoing::OutgoingContractAccount;
 <span class="kw">use </span><span class="kw">crate</span>::ln::outgoing::OutgoingContractData;
 
-<span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT: u8 = <span class="number">0x23</span>;
-<span class="kw">const </span>DB_PREFIX_OUTGOING_PAYMENT_CLAIM: u8 = <span class="number">0x24</span>;
-<span class="kw">const </span>DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT: u8 = <span class="number">0x25</span>;
-<span class="kw">const </span>DB_PREFIX_CONFIRMED_INVOICE: u8 = <span class="number">0x26</span>;
-<span class="kw">const </span>DB_PREFIX_LIGHTNING_GATEWAY: u8 = <span class="number">0x28</span>;
+<span class="attribute">#[repr(u8)]
+#[derive(Clone)]
+</span><span class="kw">pub enum </span>DbKeyPrefix {
+    OutgoingPayment = <span class="number">0x23</span>,
+    OutgoingPaymentClaim = <span class="number">0x24</span>,
+    OutgoingContractAccount = <span class="number">0x25</span>,
+    ConfirmedInvoice = <span class="number">0x26</span>,
+    LightningGateway = <span class="number">0x28</span>,
+}
 
 <span class="attribute">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingPaymentKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = OutgoingContractData;
 }
@@ -121,7 +129,7 @@
 </span><span class="kw">pub struct </span>OutgoingPaymentKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingPayment <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = OutgoingPaymentKey;
     <span class="kw">type </span>Value = OutgoingContractData;
 }
@@ -130,7 +138,7 @@
 </span><span class="kw">pub struct </span>OutgoingPaymentClaimKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ();
 }
@@ -139,7 +147,7 @@
 </span><span class="kw">pub struct </span>OutgoingPaymentClaimKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingPaymentClaimKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_PAYMENT_CLAIM;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingPaymentClaim <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = OutgoingPaymentClaimKey;
     <span class="kw">type </span>Value = ();
 }
@@ -148,7 +156,7 @@
 </span><span class="kw">pub struct </span>OutgoingContractAccountKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
@@ -157,7 +165,7 @@
 </span><span class="kw">pub struct </span>OutgoingContractAccountKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>OutgoingContractAccountKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_OUTGOING_CONTRACT_ACCOUNT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::OutgoingContractAccount <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = OutgoingContractAccountKey;
     <span class="kw">type </span>Value = OutgoingContractAccount;
 }
@@ -166,7 +174,7 @@
 </span><span class="kw">pub struct </span>ConfirmedInvoiceKey(<span class="kw">pub </span>ContractId);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
@@ -175,7 +183,7 @@
 </span><span class="kw">pub struct </span>ConfirmedInvoiceKeyPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>ConfirmedInvoiceKeyPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_CONFIRMED_INVOICE;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::ConfirmedInvoice <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = ConfirmedInvoiceKey;
     <span class="kw">type </span>Value = ConfirmedInvoice;
 }
@@ -184,9 +192,9 @@
 </span><span class="kw">pub struct </span>LightningGatewayKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>LightningGatewayKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_LIGHTNING_GATEWAY;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::LightningGateway <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = LightningGateway;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (b8b5caee0 2022-10-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="mint_client" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (06f049a35 2022-10-17)" ></div></body></html>

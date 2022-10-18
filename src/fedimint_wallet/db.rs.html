@@ -113,6 +113,10 @@
 <span id="113">113</span>
 <span id="114">114</span>
 <span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span>bitcoin::{BlockHash, Txid};
 <span class="kw">use </span>fedimint_api::db::DatabaseKeyPrefixConst;
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
@@ -122,19 +126,23 @@
     PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
 };
 
-<span class="kw">const </span>DB_PREFIX_BLOCK_HASH: u8 = <span class="number">0x30</span>;
-<span class="kw">const </span>DB_PREFIX_UTXO: u8 = <span class="number">0x31</span>;
-<span class="kw">const </span>DB_PREFIX_ROUND_CONSENSUS: u8 = <span class="number">0x32</span>;
-<span class="kw">const </span>DB_PREFIX_UNSIGNED_TRANSACTION: u8 = <span class="number">0x34</span>;
-<span class="kw">const </span>DB_PREFIX_PENDING_TRANSACTION: u8 = <span class="number">0x35</span>;
-<span class="kw">const </span>DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = <span class="number">0x36</span>;
-<span class="kw">const </span>DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT: u8 = <span class="number">0x37</span>;
+<span class="attribute">#[repr(u8)]
+#[derive(Clone)]
+</span><span class="kw">pub enum </span>DbKeyPrefix {
+    BlockHash = <span class="number">0x30</span>,
+    Utxo = <span class="number">0x31</span>,
+    RoundConsensus = <span class="number">0x32</span>,
+    UnsignedTransaction = <span class="number">0x34</span>,
+    PendingTransaction = <span class="number">0x35</span>,
+    PegOutTxSigCi = <span class="number">0x36</span>,
+    PegOutBitcoinOutPoint = <span class="number">0x37</span>,
+}
 
 <span class="attribute">#[derive(Clone, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>BlockHashKey(<span class="kw">pub </span>BlockHash);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>BlockHashKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_BLOCK_HASH;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::BlockHash <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = ();
 }
@@ -143,7 +151,7 @@
 </span><span class="kw">pub struct </span>UTXOKey(<span class="kw">pub </span>bitcoin::OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Utxo <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = SpendableUTXO;
 }
@@ -152,7 +160,7 @@
 </span><span class="kw">pub struct </span>UTXOPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UTXOPrefixKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::Utxo <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = UTXOKey;
     <span class="kw">type </span>Value = SpendableUTXO;
 }
@@ -161,7 +169,7 @@
 </span><span class="kw">pub struct </span>RoundConsensusKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>RoundConsensusKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::RoundConsensus <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = RoundConsensus;
 }
@@ -170,7 +178,7 @@
 </span><span class="kw">pub struct </span>UnsignedTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
@@ -179,7 +187,7 @@
 </span><span class="kw">pub struct </span>UnsignedTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>UnsignedTransactionPrefixKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = UnsignedTransactionKey;
     <span class="kw">type </span>Value = UnsignedTransaction;
 }
@@ -188,7 +196,7 @@
 </span><span class="kw">pub struct </span>PendingTransactionKey(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = PendingTransaction;
 }
@@ -197,7 +205,7 @@
 </span><span class="kw">pub struct </span>PendingTransactionPrefixKey;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PendingTransactionPrefixKey {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = PendingTransactionKey;
     <span class="kw">type </span>Value = PendingTransaction;
 }
@@ -206,7 +214,7 @@
 </span><span class="kw">pub struct </span>PegOutTxSignatureCI(<span class="kw">pub </span>Txid);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCI {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;; <span class="comment">// TODO: define newtype
 </span>}
@@ -215,7 +223,7 @@
 </span><span class="kw">pub struct </span>PegOutTxSignatureCIPrefix;
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutTxSignatureCIPrefix {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = PegOutTxSignatureCI;
     <span class="kw">type </span>Value = Vec&lt;Signature&gt;;
 }
@@ -224,9 +232,9 @@
 </span><span class="kw">pub struct </span>PegOutBitcoinTransaction(<span class="kw">pub </span>fedimint_api::OutPoint);
 
 <span class="kw">impl </span>DatabaseKeyPrefixConst <span class="kw">for </span>PegOutBitcoinTransaction {
-    <span class="kw">const </span>DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT;
+    <span class="kw">const </span>DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint <span class="kw">as </span>u8;
     <span class="kw">type </span>Key = <span class="self">Self</span>;
     <span class="kw">type </span>Value = PegOutOutcome;
 }
 </code></pre></div>
-</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (b8b5caee0 2022-10-16)" ></div></body></html>
+</section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="fedimint_wallet" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (06f049a35 2022-10-17)" ></div></body></html>
