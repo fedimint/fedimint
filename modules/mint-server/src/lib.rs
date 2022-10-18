@@ -2,19 +2,19 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_trait::async_trait;
 use config::MintConfig;
-use fedimint_api::db::batch::{BatchItem, DbBatch};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
 use fedimint_api::module::server::{
-    Error, InitHandle, InputValidationError, OutputValidationError, PluginConsensusItem,
-    PluginVerificationCache, ServerModulePlugin,
+    Error, InitHandle, InputValidationError, OutputValidationError, PluginVerificationCache,
+    ServerModulePlugin,
 };
-use fedimint_api::module::{setup, ConfigValidationError, InputMeta};
+use fedimint_api::module::{setup, ConfigValidationError, InputMeta, PluginConsensusItem};
 use fedimint_api::module::{ModuleKey, TransactionItemAmount};
 use fedimint_api::net::peers::AnyPeerConnections;
 use fedimint_api::tiered::InvalidAmountTierError;
+use fedimint_api::TieredMultiZip;
 use fedimint_api::{Amount, OutPoint, PeerId, Tiered, TieredMulti};
 use fedimint_mint_common::{
     FeeConsensus, MintClientConfig, MintInput, MintModuleCommon, MintOutput, MintOutputOutcome,
@@ -101,7 +101,7 @@ pub struct Nonce(pub secp256k1_zkp::XOnlyPublicKey);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct BlindNonce(pub tbs::BlindedMessage);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Encodable)]
 pub struct MintVerificationCache {
     valid_coins: HashMap<Note, Amount>,
 }
