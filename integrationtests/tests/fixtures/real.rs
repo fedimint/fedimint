@@ -1,10 +1,11 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::str::FromStr;
 
-use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Transaction};
 use bitcoincore_rpc::{Auth, Client, RpcApi};
 use cln_rpc::model::requests;
@@ -19,15 +20,14 @@ use lightning_invoice::Invoice;
 use crate::fixtures::{BitcoinTest, LightningTest};
 
 pub struct RealLightningTest {
-    rpc_gateway: ClnRpc,
-    rpc_other: ClnRpc,
+    rpc_gateway: Rc<RefCell<ClnRpc>>,
+    rpc_other: Rc<RefCell<ClnRpc>>,
     initial_balance: Amount,
     pub gateway_node_pub_key: secp256k1::PublicKey,
 }
 
-#[async_trait]
 impl LightningTest for RealLightningTest {
-    async fn invoice(&mut self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice_req = requests::InvoiceRequest {
             msatoshi: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.milli_sat)),
@@ -41,11 +41,12 @@ impl LightningTest for RealLightningTest {
             deschashonly: None,
         };
 
-        let invoice_resp = if let Response::Invoice(data) = self
-            .rpc_other
-            .call(Request::Invoice(invoice_req))
-            .await
-            .unwrap()
+        let invoice_resp = if let Response::Invoice(data) = futures::executor::block_on(
+            self.rpc_other
+                .borrow_mut()
+                .call(Request::Invoice(invoice_req)),
+        )
+        .unwrap()
         {
             data
         } else {
@@ -55,20 +56,20 @@ impl LightningTest for RealLightningTest {
         Invoice::from_str(&invoice_resp.bolt11).unwrap()
     }
 
-    async fn amount_sent(&mut self) -> Amount {
-        self.initial_balance
-            .sub(Self::channel_balance(&mut self.rpc_gateway).await)
+    fn amount_sent(&self) -> Amount {
+        let balance = futures::executor::block_on(Self::channel_balance(self.rpc_gateway.clone()));
+        self.initial_balance.sub(balance)
     }
 }
 
 impl RealLightningTest {
     pub async fn new(socket_gateway: PathBuf, socket_other: PathBuf) -> Self {
-        let rpc_other = ClnRpc::new(socket_other).await.unwrap();
-        let mut rpc_gateway = ClnRpc::new(socket_gateway).await.unwrap();
+        let rpc_other = Rc::new(RefCell::new(ClnRpc::new(socket_other).await.unwrap()));
+        let rpc_gateway = Rc::new(RefCell::new(ClnRpc::new(socket_gateway).await.unwrap()));
 
-        let initial_balance = Self::channel_balance(&mut rpc_gateway).await;
-
+        let initial_balance = Self::channel_balance(rpc_gateway.clone()).await;
         let getinfo_resp = if let Response::Getinfo(data) = rpc_gateway
+            .borrow_mut()
             .call(Request::Getinfo(requests::GetinfoRequest {}))
             .await
             .unwrap()
@@ -91,10 +92,11 @@ impl RealLightningTest {
 }
 
 impl RealLightningTest {
-    async fn channel_balance(rpc: &mut ClnRpc) -> Amount {
+    async fn channel_balance(rpc: Rc<RefCell<ClnRpc>>) -> Amount {
         let listfunds_req = requests::ListfundsRequest { spent: Some(false) };
         let listfunds_resp = if let Response::ListFunds(data) =
-            rpc.call(Request::ListFunds(listfunds_req)).await.unwrap()
+            futures::executor::block_on(rpc.borrow_mut().call(Request::ListFunds(listfunds_req)))
+                .unwrap()
         {
             data
         } else {

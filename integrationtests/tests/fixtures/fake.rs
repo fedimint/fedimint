@@ -46,9 +46,8 @@ impl FakeLightningTest {
     }
 }
 
-#[async_trait]
 impl LightningTest for FakeLightningTest {
-    async fn invoice(&mut self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         InvoiceBuilder::new(Currency::Regtest)
@@ -65,7 +64,7 @@ impl LightningTest for FakeLightningTest {
             .unwrap()
     }
 
-    async fn amount_sent(&mut self) -> Amount {
+    fn amount_sent(&self) -> Amount {
         Amount::from_msat(*self.amount_sent.lock().unwrap())
     }
 }

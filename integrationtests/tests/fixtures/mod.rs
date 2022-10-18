@@ -10,7 +10,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use bitcoin::{secp256k1, Address, Transaction};
@@ -256,13 +255,12 @@ pub trait BitcoinTest {
     fn mine_block_and_get_received(&self, address: &Address) -> Amount;
 }
 
-#[async_trait]
 pub trait LightningTest {
     /// Creates invoice from a non-gateway LN node
-    async fn invoice(&mut self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
+    fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
 
     /// Returns the amount that the gateway LN node has sent
-    async fn amount_sent(&mut self) -> Amount;
+    fn amount_sent(&self) -> Amount;
 }
 
 pub struct GatewayTest {
