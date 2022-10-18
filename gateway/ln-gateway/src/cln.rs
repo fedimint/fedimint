@@ -15,7 +15,6 @@ use tracing::{debug, error, instrument};
 use crate::{
     ln::{LightningError, LnRpc, LnRpcRef},
     rpc::GatewayRpcSender,
-    BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload,
 };
 
 /// The core-lightning `htlc_accepted` event's `amount` field has a "msat" suffix
@@ -122,40 +121,6 @@ async fn htlc_accepted_hook(
     }))
 }
 
-async fn balance_rpc(
-    plugin: Plugin<GatewayRpcSender>,
-    _: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
-    let amount = plugin.state().send(BalancePayload {}).await?;
-    Ok(json!({ "balance_msat": amount.milli_sat }))
-}
-
-async fn address(
-    plugin: Plugin<GatewayRpcSender>,
-    _: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
-    let address = plugin.state().send(DepositAddressPayload {}).await?;
-    Ok(json!({ "address": address }))
-}
-
-async fn deposit_rpc(
-    plugin: Plugin<GatewayRpcSender>,
-    value: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
-    let deposit: DepositPayload = serde_json::from_value(value)?;
-    let txid = plugin.state().send(deposit).await?;
-    Ok(json!({ "fedimint_txid": txid.to_string() }))
-}
-
-async fn withdraw_rpc(
-    plugin: Plugin<GatewayRpcSender>,
-    value: serde_json::Value,
-) -> Result<serde_json::Value, Error> {
-    let withdraw: WithdrawPayload = serde_json::from_value(value)?;
-    let txid = plugin.state().send(withdraw).await?;
-    Ok(json!({ "fedimint_txid": txid.to_string() }))
-}
-
 pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<LnRpcRef, Error> {
     if let Some(plugin) = Builder::new(sender, stdin(), stdout())
         .option(options::ConfigOption::new(
@@ -174,18 +139,6 @@ pub async fn build_cln_rpc(sender: GatewayRpcSender) -> Result<LnRpcRef, Error> 
             options::Value::String("8080".into()),
             "gateway port",
         ))
-        .rpcmethod("gw-balance", "Display ecash token balance", balance_rpc)
-        .rpcmethod(
-            "gw-deposit",
-            "Deposit into federation. Args: <txoutproof> <bitcoin-transaction>",
-            deposit_rpc,
-        )
-        .rpcmethod(
-            "gw-withdraw",
-            "Withdraw from federation. Args: <address> <sats>",
-            withdraw_rpc,
-        )
-        .rpcmethod("gw-address", "Generate deposit address", address)
         .hook("htlc_accepted", |plugin, value| async move {
             // This callback needs to be `Sync`, so we use tokio::spawn
             let handle = tokio::spawn(async move {

@@ -1390,6 +1390,7 @@ dependencies = [
  "clap",
  "fedimint-build",
  "fedimint-server",
+ "ln-gateway",
  "mint-client",
  "reqwest",
  "serde",

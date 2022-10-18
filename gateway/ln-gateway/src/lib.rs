@@ -23,7 +23,7 @@ use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
@@ -33,23 +33,25 @@ use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BalancePayload;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DepositAddressPayload;
 
-#[derive(Debug, Deserialize)]
-pub struct DepositPayload(
-    TxOutProof,
-    #[serde(deserialize_with = "serde_hex_deserialize")] Transaction,
-);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DepositPayload {
+    pub txout_proof: TxOutProof,
+    #[serde(deserialize_with = "serde_hex_deserialize")]
+    pub transaction: Transaction,
+}
 
-#[derive(Debug, Deserialize)]
-pub struct WithdrawPayload(
-    Address,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")] bitcoin::Amount,
-);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WithdrawPayload {
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub amount: bitcoin::Amount,
+    pub address: Address,
+}
 
 #[derive(Debug)]
 pub enum GatewayRequest {
@@ -323,7 +325,7 @@ impl LnGateway {
     async fn handle_deposit_msg(&self, deposit: DepositPayload) -> Result<TransactionId> {
         let rng = rand::rngs::OsRng;
         self.federation_client
-            .peg_in(deposit.0, deposit.1, rng)
+            .peg_in(deposit.txout_proof, deposit.transaction, rng)
             .await
             .map_err(LnGatewayError::ClientError)
     }
@@ -332,7 +334,7 @@ impl LnGateway {
         let rng = rand::rngs::OsRng;
         let peg_out = self
             .federation_client
-            .new_peg_out_with_fees(withdraw.1, withdraw.0)
+            .new_peg_out_with_fees(withdraw.amount, withdraw.address)
             .await
             .unwrap();
         self.federation_client

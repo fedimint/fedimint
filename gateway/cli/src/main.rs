@@ -1,6 +1,7 @@
 use bitcoin::{Address, Amount, Transaction};
 use clap::{Parser, Subcommand};
 use fedimint_server::modules::wallet::txoproof::TxOutProof;
+use ln_gateway::{BalancePayload, DepositAddressPayload, DepositPayload, WithdrawPayload};
 use mint_client::utils::from_hex;
 use serde::Serialize;
 
