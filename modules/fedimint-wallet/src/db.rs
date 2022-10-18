@@ -7,19 +7,23 @@ use crate::{
     PegOutOutcome, PendingTransaction, RoundConsensus, SpendableUTXO, UnsignedTransaction,
 };
 
-const DB_PREFIX_BLOCK_HASH: u8 = 0x30;
-const DB_PREFIX_UTXO: u8 = 0x31;
-const DB_PREFIX_ROUND_CONSENSUS: u8 = 0x32;
-const DB_PREFIX_UNSIGNED_TRANSACTION: u8 = 0x34;
-const DB_PREFIX_PENDING_TRANSACTION: u8 = 0x35;
-const DB_PREFIX_PEG_OUT_TX_SIG_CI: u8 = 0x36;
-const DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT: u8 = 0x37;
+#[repr(u8)]
+#[derive(Clone)]
+pub enum DbKeyPrefix {
+    BlockHash = 0x30,
+    Utxo = 0x31,
+    RoundConsensus = 0x32,
+    UnsignedTransaction = 0x34,
+    PendingTransaction = 0x35,
+    PegOutTxSigCi = 0x36,
+    PegOutBitcoinOutPoint = 0x37,
+}
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct BlockHashKey(pub BlockHash);
 
 impl DatabaseKeyPrefixConst for BlockHashKey {
-    const DB_PREFIX: u8 = DB_PREFIX_BLOCK_HASH;
+    const DB_PREFIX: u8 = DbKeyPrefix::BlockHash as u8;
     type Key = Self;
     type Value = ();
 }
@@ -28,7 +32,7 @@ impl DatabaseKeyPrefixConst for BlockHashKey {
 pub struct UTXOKey(pub bitcoin::OutPoint);
 
 impl DatabaseKeyPrefixConst for UTXOKey {
-    const DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    const DB_PREFIX: u8 = DbKeyPrefix::Utxo as u8;
     type Key = Self;
     type Value = SpendableUTXO;
 }
@@ -37,7 +41,7 @@ impl DatabaseKeyPrefixConst for UTXOKey {
 pub struct UTXOPrefixKey;
 
 impl DatabaseKeyPrefixConst for UTXOPrefixKey {
-    const DB_PREFIX: u8 = DB_PREFIX_UTXO;
+    const DB_PREFIX: u8 = DbKeyPrefix::Utxo as u8;
     type Key = UTXOKey;
     type Value = SpendableUTXO;
 }
@@ -46,7 +50,7 @@ impl DatabaseKeyPrefixConst for UTXOPrefixKey {
 pub struct RoundConsensusKey;
 
 impl DatabaseKeyPrefixConst for RoundConsensusKey {
-    const DB_PREFIX: u8 = DB_PREFIX_ROUND_CONSENSUS;
+    const DB_PREFIX: u8 = DbKeyPrefix::RoundConsensus as u8;
     type Key = Self;
     type Value = RoundConsensus;
 }
@@ -55,7 +59,7 @@ impl DatabaseKeyPrefixConst for RoundConsensusKey {
 pub struct UnsignedTransactionKey(pub Txid);
 
 impl DatabaseKeyPrefixConst for UnsignedTransactionKey {
-    const DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction as u8;
     type Key = Self;
     type Value = UnsignedTransaction;
 }
@@ -64,7 +68,7 @@ impl DatabaseKeyPrefixConst for UnsignedTransactionKey {
 pub struct UnsignedTransactionPrefixKey;
 
 impl DatabaseKeyPrefixConst for UnsignedTransactionPrefixKey {
-    const DB_PREFIX: u8 = DB_PREFIX_UNSIGNED_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::UnsignedTransaction as u8;
     type Key = UnsignedTransactionKey;
     type Value = UnsignedTransaction;
 }
@@ -73,7 +77,7 @@ impl DatabaseKeyPrefixConst for UnsignedTransactionPrefixKey {
 pub struct PendingTransactionKey(pub Txid);
 
 impl DatabaseKeyPrefixConst for PendingTransactionKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction as u8;
     type Key = Self;
     type Value = PendingTransaction;
 }
@@ -82,7 +86,7 @@ impl DatabaseKeyPrefixConst for PendingTransactionKey {
 pub struct PendingTransactionPrefixKey;
 
 impl DatabaseKeyPrefixConst for PendingTransactionPrefixKey {
-    const DB_PREFIX: u8 = DB_PREFIX_PENDING_TRANSACTION;
+    const DB_PREFIX: u8 = DbKeyPrefix::PendingTransaction as u8;
     type Key = PendingTransactionKey;
     type Value = PendingTransaction;
 }
@@ -91,7 +95,7 @@ impl DatabaseKeyPrefixConst for PendingTransactionPrefixKey {
 pub struct PegOutTxSignatureCI(pub Txid);
 
 impl DatabaseKeyPrefixConst for PegOutTxSignatureCI {
-    const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    const DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi as u8;
     type Key = Self;
     type Value = Vec<Signature>; // TODO: define newtype
 }
@@ -100,7 +104,7 @@ impl DatabaseKeyPrefixConst for PegOutTxSignatureCI {
 pub struct PegOutTxSignatureCIPrefix;
 
 impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
-    const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_TX_SIG_CI;
+    const DB_PREFIX: u8 = DbKeyPrefix::PegOutTxSigCi as u8;
     type Key = PegOutTxSignatureCI;
     type Value = Vec<Signature>;
 }
@@ -109,7 +113,7 @@ impl DatabaseKeyPrefixConst for PegOutTxSignatureCIPrefix {
 pub struct PegOutBitcoinTransaction(pub fedimint_api::OutPoint);
 
 impl DatabaseKeyPrefixConst for PegOutBitcoinTransaction {
-    const DB_PREFIX: u8 = DB_PREFIX_PEG_OUT_BITCOIN_OUT_POINT;
+    const DB_PREFIX: u8 = DbKeyPrefix::PegOutBitcoinOutPoint as u8;
     type Key = Self;
     type Value = PegOutOutcome;
 }
