@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":[["LightningError",""]],"trait":[["LnRpc",""]]};
+window.SIDEBAR_ITEMS = {"struct":[["LightningError",""],["LnRpcRef",""]],"trait":[["LnRpc",""]]};

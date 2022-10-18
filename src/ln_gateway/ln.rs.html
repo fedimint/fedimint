@@ -25,56 +25,11 @@
 <span id="25">25</span>
 <span id="26">26</span>
 <span id="27">27</span>
-<span id="28">28</span>
-<span id="29">29</span>
-<span id="30">30</span>
-<span id="31">31</span>
-<span id="32">32</span>
-<span id="33">33</span>
-<span id="34">34</span>
-<span id="35">35</span>
-<span id="36">36</span>
-<span id="37">37</span>
-<span id="38">38</span>
-<span id="39">39</span>
-<span id="40">40</span>
-<span id="41">41</span>
-<span id="42">42</span>
-<span id="43">43</span>
-<span id="44">44</span>
-<span id="45">45</span>
-<span id="46">46</span>
-<span id="47">47</span>
-<span id="48">48</span>
-<span id="49">49</span>
-<span id="50">50</span>
-<span id="51">51</span>
-<span id="52">52</span>
-<span id="53">53</span>
-<span id="54">54</span>
-<span id="55">55</span>
-<span id="56">56</span>
-<span id="57">57</span>
-<span id="58">58</span>
-<span id="59">59</span>
-<span id="60">60</span>
-<span id="61">61</span>
-<span id="62">62</span>
-<span id="63">63</span>
-<span id="64">64</span>
-<span id="65">65</span>
-<span id="66">66</span>
-<span id="67">67</span>
-<span id="68">68</span>
-<span id="69">69</span>
-<span id="70">70</span>
-</pre><pre class="rust"><code><span class="kw">use </span>std::convert::TryInto;
+</pre><pre class="rust"><code><span class="kw">use </span>std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>cln_rpc::model::requests::PayRequest;
 <span class="kw">use </span>fedimint_server::modules::ln::contracts::Preimage;
-<span class="kw">use </span>tokio::sync::Mutex;
-<span class="kw">use </span>tracing::{debug, instrument};
+<span class="kw">use </span>secp256k1::PublicKey;
 
 <span class="attribute">#[async_trait]
 </span><span class="kw">pub trait </span>LnRpc: Send + Sync + <span class="lifetime">&#39;static </span>{
@@ -87,56 +42,15 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt;;
 }
 
+<span class="attribute">#[derive(Clone)]
+</span><span class="kw">pub struct </span>LnRpcRef {
+    <span class="kw">pub </span>ln_rpc: Arc&lt;<span class="kw">dyn </span>LnRpc&gt;,
+    <span class="kw">pub </span>bind_addr: SocketAddr,
+    <span class="kw">pub </span>pub_key: PublicKey,
+    <span class="kw">pub </span>work_dir: PathBuf,
+}
+
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub struct </span>LightningError(<span class="kw">pub </span><span class="prelude-ty">Option</span>&lt;i32&gt;);
-
-<span class="attribute">#[async_trait]
-</span><span class="kw">impl </span>LnRpc <span class="kw">for </span>Mutex&lt;cln_rpc::ClnRpc&gt; {
-    <span class="attribute">#[instrument(name = <span class="string">&quot;LnRpc::pay&quot;</span>, skip(<span class="self">self</span>))]
-    </span><span class="kw">async fn </span>pay(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        invoice: <span class="kw-2">&amp;</span>str,
-        max_delay: u64,
-        max_fee_percent: f64,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningError&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;Attempting to pay invoice&quot;</span>);
-
-        <span class="kw">let </span>pay_result = <span class="self">self
-            </span>.lock()
-            .<span class="kw">await
-            </span>.call(cln_rpc::Request::Pay(PayRequest {
-                bolt11: invoice.to_string(),
-                amount_msat: <span class="prelude-val">None</span>,
-                label: <span class="prelude-val">None</span>,
-                riskfactor: <span class="prelude-val">None</span>,
-                maxfeepercent: <span class="prelude-val">Some</span>(max_fee_percent),
-                retry_for: <span class="prelude-val">None</span>,
-                maxdelay: <span class="prelude-val">Some</span>(max_delay <span class="kw">as </span>u16),
-                exemptfee: <span class="prelude-val">None</span>,
-                localofferid: <span class="prelude-val">None</span>,
-                exclude: <span class="prelude-val">None</span>,
-                maxfee: <span class="prelude-val">None</span>,
-                description: <span class="prelude-val">None</span>,
-            }))
-            .<span class="kw">await</span>;
-
-        <span class="kw">match </span>pay_result {
-            <span class="prelude-val">Ok</span>(cln_rpc::Response::Pay(pay_success)) =&gt; {
-                <span class="macro">debug!</span>(<span class="string">&quot;Successfully paid invoice&quot;</span>);
-                <span class="kw">let </span>slice: [u8; <span class="number">32</span>] = pay_success.payment_preimage.to_vec().try_into().unwrap();
-                <span class="prelude-val">Ok</span>(Preimage(slice))
-            }
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">&quot;unexpected response from C-lightning&quot;</span>),
-            <span class="prelude-val">Err</span>(cln_rpc::RpcError { code, message }) =&gt; {
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(code) = code {
-                    <span class="macro">debug!</span>(%code, %message, <span class="string">&quot;c-lightning pay returned error&quot;</span>);
-                } <span class="kw">else </span>{
-                    <span class="macro">debug!</span>(%message, <span class="string">&quot;c-lightning pay returned error&quot;</span>);
-                }
-                <span class="prelude-val">Err</span>(LightningError(code))
-            }
-        }
-    }
-}
 </code></pre></div>
 </section></div></main><div id="rustdoc-vars" data-root-path="../../" data-current-crate="ln_gateway" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.66.0-nightly (06f049a35 2022-10-17)" ></div></body></html>
