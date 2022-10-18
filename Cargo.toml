@@ -5,6 +5,7 @@ members = [
     "core/server",
     "crypto/tbs",
     "gateway/ln-gateway",
+    "gateway/cli",
     "fedimintd",
     "fedimint-core",
     "fedimint-client",

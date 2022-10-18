@@ -545,6 +545,30 @@
           ];
         };
 
+        gateway-cli = pkg {
+          name = "gateway-cli";
+          bin = "gateway-cli";
+          dirs = [
+            "core"
+            "crypto/tbs"
+            "client/client-lib"
+            "modules/fedimint-ln"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "fedimint-rocksdb"
+            "fedimint-server"
+            "fedimint-build"
+            "gateway/cli"
+            "gateway/ln_gateway"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
+            "modules/mint-server"
+          ];
+        };
+
         fedimint-cli = pkg {
           name = "fedimint-cli";
           bin = "fedimint-cli";
@@ -676,7 +700,7 @@
         outputsPackages = {
           default = fedimintd;
 
-          inherit fedimintd ln-gateway clientd fedimint-cli fedimint-tests;
+          inherit fedimintd ln-gateway gateway-cli clientd fedimint-cli fedimint-tests;
 
         };
       in
