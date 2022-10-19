@@ -23,7 +23,7 @@ use futures::Future;
 use mint_client::mint::MintClientError;
 use mint_client::{ClientError, GatewayClient, PaymentParameters};
 use rand::{CryptoRng, RngCore};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, instrument, warn};
@@ -42,7 +42,10 @@ pub struct DepositAddressPayload;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepositPayload {
     pub txout_proof: TxOutProof,
-    #[serde(deserialize_with = "serde_hex_deserialize")]
+    #[serde(
+        deserialize_with = "serde_hex_deserialize",
+        serialize_with = "serde_hex_serialize"
+    )]
     pub transaction: Transaction,
 }
 
@@ -429,6 +432,20 @@ pub fn serde_hex_deserialize<'d, T: bitcoin::consensus::Decodable, D: Deserializ
         let bytes: Vec<u8> = Deserialize::deserialize(d)?;
         T::consensus_decode(&mut Cursor::new(&bytes))
             .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))
+    }
+}
+
+pub fn serde_hex_serialize<T: bitcoin::consensus::Encodable, S: Serializer>(
+    t: &T,
+    s: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    let mut bytes = vec![];
+    T::consensus_encode(t, &mut bytes).map_err(serde::ser::Error::custom)?;
+
+    if s.is_human_readable() {
+        s.serialize_str(&hex::encode(bytes))
+    } else {
+        s.serialize_bytes(&bytes)
     }
 }
 
