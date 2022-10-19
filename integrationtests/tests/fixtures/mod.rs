@@ -259,10 +259,10 @@ pub trait BitcoinTest {
 #[async_trait]
 pub trait LightningTest {
     /// Creates invoice from a non-gateway LN node
-    async fn invoice(&mut self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
+    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice;
 
     /// Returns the amount that the gateway LN node has sent
-    async fn amount_sent(&mut self) -> Amount;
+    async fn amount_sent(&self) -> Amount;
 }
 
 pub struct GatewayTest {

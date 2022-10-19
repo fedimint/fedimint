@@ -318,7 +318,7 @@ async fn drop_peers_who_contribute_bad_sigs() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_internal_invoice() {
-    let (fed, sending_user, bitcoin, gateway, mut lightning) =
+    let (fed, sending_user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
 
     // Fund the gateway so it can route internal payments
@@ -406,7 +406,7 @@ async fn lightning_gateway_pays_internal_invoice() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_pays_outgoing_invoice() {
-    let (fed, user, bitcoin, gateway, mut lightning) =
+    let (fed, user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000), None).await;
 
@@ -451,7 +451,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_claims_refund_for_internal_invoice() {
-    let (fed, sending_user, bitcoin, gateway, mut lightning) =
+    let (fed, sending_user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
 
     // Fund the gateway so it can route internal payments
@@ -516,7 +516,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn set_lightning_invoice_expiry() {
-    let (_, _, _, _, mut lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (_, _, _, _, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000), 600.into());
     assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
 }
@@ -658,7 +658,7 @@ async fn receive_lightning_payment_invalid_preimage() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_cannot_claim_invalid_preimage() {
-    let (fed, user, bitcoin, gateway, mut lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -692,7 +692,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
-    let (fed, user, bitcoin, gateway, mut lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
+    let (fed, user, bitcoin, gateway, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
@@ -788,7 +788,7 @@ async fn audit_negative_balance_sheet_panics() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn unbalanced_transactions_get_rejected() {
-    let (fed, user, bitcoin, _, mut lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
+    let (fed, user, bitcoin, _, lightning) = fixtures(2, &[sats(100), sats(1000)]).await;
     // cannot make change for this invoice (results in unbalanced tx)
     let invoice = lightning.invoice(sats(777), None);
 

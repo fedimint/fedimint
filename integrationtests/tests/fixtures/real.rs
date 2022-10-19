@@ -3,6 +3,7 @@ use std::io::Cursor;
 use std::ops::Sub;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use bitcoin::{secp256k1, Address, Transaction};
@@ -14,20 +15,21 @@ use fedimint_api::config::BitcoindRpcCfg;
 use fedimint_api::encoding::Decodable;
 use fedimint_api::Amount;
 use fedimint_wallet::txoproof::TxOutProof;
+use futures::lock::Mutex;
 use lightning_invoice::Invoice;
 
 use crate::fixtures::{BitcoinTest, LightningTest};
 
 pub struct RealLightningTest {
-    rpc_gateway: ClnRpc,
-    rpc_other: ClnRpc,
+    rpc_gateway: Arc<Mutex<ClnRpc>>,
+    rpc_other: Arc<Mutex<ClnRpc>>,
     initial_balance: Amount,
     pub gateway_node_pub_key: secp256k1::PublicKey,
 }
 
 #[async_trait]
 impl LightningTest for RealLightningTest {
-    async fn invoice(&mut self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
+    async fn invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Invoice {
         let random: u64 = rand::random();
         let invoice_req = requests::InvoiceRequest {
             msatoshi: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount.milli_sat)),
@@ -43,6 +45,8 @@ impl LightningTest for RealLightningTest {
 
         let invoice_resp = if let Response::Invoice(data) = self
             .rpc_other
+            .lock()
+            .await
             .call(Request::Invoice(invoice_req))
             .await
             .unwrap()
@@ -55,20 +59,22 @@ impl LightningTest for RealLightningTest {
         Invoice::from_str(&invoice_resp.bolt11).unwrap()
     }
 
-    async fn amount_sent(&mut self) -> Amount {
+    async fn amount_sent(&self) -> Amount {
         self.initial_balance
-            .sub(Self::channel_balance(&mut self.rpc_gateway).await)
+            .sub(Self::channel_balance(self.rpc_gateway.clone()).await)
     }
 }
 
 impl RealLightningTest {
     pub async fn new(socket_gateway: PathBuf, socket_other: PathBuf) -> Self {
-        let rpc_other = ClnRpc::new(socket_other).await.unwrap();
-        let mut rpc_gateway = ClnRpc::new(socket_gateway).await.unwrap();
+        let rpc_other = Arc::new(Mutex::new(ClnRpc::new(socket_other).await.unwrap()));
+        let rpc_gateway = Arc::new(Mutex::new(ClnRpc::new(socket_gateway).await.unwrap()));
 
-        let initial_balance = Self::channel_balance(&mut rpc_gateway).await;
+        let initial_balance = Self::channel_balance(rpc_gateway.clone()).await;
 
         let getinfo_resp = if let Response::Getinfo(data) = rpc_gateway
+            .lock()
+            .await
             .call(Request::Getinfo(requests::GetinfoRequest {}))
             .await
             .unwrap()
@@ -91,10 +97,14 @@ impl RealLightningTest {
 }
 
 impl RealLightningTest {
-    async fn channel_balance(rpc: &mut ClnRpc) -> Amount {
+    async fn channel_balance(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
         let listfunds_req = requests::ListfundsRequest { spent: Some(false) };
-        let listfunds_resp = if let Response::ListFunds(data) =
-            rpc.call(Request::ListFunds(listfunds_req)).await.unwrap()
+        let listfunds_resp = if let Response::ListFunds(data) = rpc
+            .lock()
+            .await
+            .call(Request::ListFunds(listfunds_req))
+            .await
+            .unwrap()
         {
             data
         } else {
