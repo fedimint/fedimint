@@ -159,7 +159,7 @@ impl PluginInput for MintInput {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct MintConsensusItem;
 
 impl PluginConsensusItem for MintConsensusItem {

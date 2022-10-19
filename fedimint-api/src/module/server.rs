@@ -9,7 +9,6 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use fedimint_api::{
     db::DatabaseTransaction,
-    encoding::DynEncodable,
     module::{
         audit::Audit, interconnect::ModuleInterconect, ApiError, InputMeta, TransactionItemAmount,
     },
@@ -22,7 +21,7 @@ use super::*;
 use crate::module_plugin_trait_define;
 use crate::net::peers::AnyPeerConnections;
 
-pub trait ModuleVerificationCache: DynEncodable {
+pub trait ModuleVerificationCache {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn clone(&self) -> VerificationCache;

@@ -131,7 +131,7 @@ impl PluginInput for L1Input {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct L1ConsensusItem;
 
 impl PluginConsensusItem for L1ConsensusItem {

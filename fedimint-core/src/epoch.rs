@@ -13,7 +13,7 @@ use crate::transaction::Transaction;
 
 // TODO: encoding here is a bit meh now (two level prefix). Consider custom impl
 // to flatten it?
-#[derive(Debug, Clone, Eq, PartialEq, UnzipConsensus, Encodable, Decodable)]
+#[derive(Debug, Clone, UnzipConsensus, Encodable, Decodable)]
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
@@ -26,14 +26,14 @@ pub struct EpochSignatureShare(pub SignatureShare);
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct EpochSignature(pub Signature);
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct EpochHistory {
     pub outcome: OutcomeHistory,
     pub hash: Sha256,
     pub signature: Option<EpochSignature>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct OutcomeHistory {
     pub epoch: u64,
     pub last_hash: Option<Sha256>,

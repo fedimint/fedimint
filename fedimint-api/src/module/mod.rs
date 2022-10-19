@@ -8,6 +8,7 @@
 pub mod audit;
 pub mod interconnect;
 
+use std::fmt::Debug;
 use std::io;
 use std::{any::Any, collections::BTreeMap};
 
@@ -18,6 +19,7 @@ use fedimint_api::{
     Amount,
 };
 use secp256k1_zkp::XOnlyPublicKey;
+use thiserror::Error;
 
 pub mod encode;
 
@@ -27,6 +29,8 @@ pub mod setup;
 
 pub use client::*;
 pub use server::*;
+
+use crate::TransactionId;
 
 /// A module key identifing a module
 ///
@@ -136,7 +140,7 @@ macro_rules! module_plugin_trait_define {
         $newtype_ty:ident, $plugin_ty:ident, $module_ty:ident, { $($extra_methods:tt)*  } { $($extra_impls:tt)* } { $($extra_bounds:tt)* }
     ) => {
         pub trait $plugin_ty:
-            DynEncodable + Decodable + Encodable + Clone + Send + Sync + 'static $($extra_bounds)*
+              Clone + Send + Sync + 'static $($extra_bounds)*
         {
             fn module_key(&self) -> ModuleKey;
 
@@ -145,7 +149,7 @@ macro_rules! module_plugin_trait_define {
 
         impl<T> $module_ty for T
         where
-            T: $plugin_ty + DynEncodable + 'static,
+            T: $plugin_ty $($extra_bounds)* + 'static ,
         {
             fn as_any(&self) -> &(dyn Any + 'static) {
                 self
@@ -248,7 +252,7 @@ impl ModuleDecoder for () {
 /// Something that can be an [`Input`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Input`] instead
-pub trait ModuleInput: DynEncodable {
+pub trait ModuleInput: DynEncodable + Debug {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn amount(&self) -> Amount;
@@ -265,11 +269,12 @@ module_plugin_trait_define! {
             <Self as PluginInput>::amount(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable + Debug }
 }
 
 dyn_newtype_define! {
     /// An owned, immutable input to a [`Transaction`]
+    #[derive(Debug)]
     pub Input(Box<ModuleInput>)
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
@@ -280,7 +285,7 @@ dyn_newtype_impl_dyn_clone_passhthrough!(Input);
 /// Something that can be an [`Output`] in a [`Transaction`]
 ///
 /// General purpose code should use [`Output`] instead
-pub trait ModuleOutput: DynEncodable {
+pub trait ModuleOutput: DynEncodable + Debug {
     fn as_any(&self) -> &(dyn Any + 'static);
     fn module_key(&self) -> ModuleKey;
     fn amount(&self) -> Amount;
@@ -290,6 +295,7 @@ pub trait ModuleOutput: DynEncodable {
 
 dyn_newtype_define! {
     /// An owned, immutable output of a [`Transaction`]
+    #[derive(Debug)]
     pub Output(Box<ModuleOutput>)
 }
 module_plugin_trait_define! {
@@ -302,7 +308,7 @@ module_plugin_trait_define! {
             <Self as PluginOutput>::amount(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable + Debug }
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
     Output, decode_output
@@ -345,7 +351,7 @@ module_plugin_trait_define! {
             <Self as PluginSpendableOutput>::key(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable }
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
     SpendableOutput, decode_spendable_output
@@ -384,7 +390,7 @@ module_plugin_trait_define! {
             <Self as PluginPendingOutput>::amount(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable }
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
     PendingOutput, decode_pending_output
@@ -414,14 +420,14 @@ module_plugin_trait_define! {
             <Self as PluginOutputOutcome>::is_final(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable }
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
     OutputOutcome, decode_output_outcome
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(OutputOutcome);
 
-pub trait ModuleConsensusItem: DynEncodable {
+pub trait ModuleConsensusItem: DynEncodable + Debug {
     fn as_any(&self) -> &(dyn Any + 'static);
     /// Module key
     fn module_key(&self) -> ModuleKey;
@@ -431,6 +437,7 @@ pub trait ModuleConsensusItem: DynEncodable {
 }
 
 dyn_newtype_define! {
+    #[derive(Debug)]
     pub ConsensusItem(Box<ModuleConsensusItem>)
 }
 module_plugin_trait_define! {
@@ -443,7 +450,7 @@ module_plugin_trait_define! {
             <Self as PluginConsensusItem>::is_final(self)
         }
     }
-    {}
+    { + DynEncodable + Decodable + Encodable + Debug }
 }
 module_dyn_newtype_impl_module_prefixed_encode_decode! {
     ConsensusItem, decode_consensus_item
@@ -453,12 +460,82 @@ dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
 #[derive(Encodable, Decodable)]
 pub struct Signature;
 
+#[derive(Debug, Error)]
+pub enum TransactionError {
+    #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
+    UnbalancedTransaction {
+        inputs: Amount,
+        outputs: Amount,
+        fee: Amount,
+    },
+    #[error("The transaction's signature is invalid")]
+    InvalidSignature,
+    #[error("The transaction did not have a signature although there were inputs to be signed")]
+    MissingSignature,
+}
+
 /// Transaction that was already signed
 #[derive(Encodable)]
 pub struct Transaction {
     inputs: Vec<Input>,
     outputs: Vec<Output>,
     signature: Signature,
+}
+
+impl Transaction {
+    /// Hash of the transaction (excluding the signature).
+    ///
+    /// Transaction signature commits to this hash.
+    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+    pub fn tx_hash(&self) -> TransactionId {
+        Self::tx_hash_from_parts(&self.inputs, &self.outputs)
+    }
+
+    /// Generate the transaction hash.
+    pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
+        let mut engine = TransactionId::engine();
+        inputs
+            .consensus_encode(&mut engine)
+            .expect("write to hash engine can't fail");
+        outputs
+            .consensus_encode(&mut engine)
+            .expect("write to hash engine can't fail");
+        TransactionId::from_engine(engine)
+    }
+
+    /// Validate the aggregated Schnorr Signature signed over the tx_hash
+    pub fn validate_signature(
+        &self,
+        keys: impl Iterator<Item = XOnlyPublicKey>,
+    ) -> Result<(), TransactionError> {
+        let keys = keys.collect::<Vec<_>>();
+
+        // If there are no keys from inputs there are no inputs to protect from re-binding. This
+        // behavior is useful for non-monetary transactions that just announce something, like LN
+        // incoming contract offers.
+        if keys.is_empty() {
+            return Ok(());
+        }
+
+        // Unless keys were empty we require a signature
+        let signature = self
+            .signature
+            .as_ref()
+            .ok_or(TransactionError::MissingSignature)?;
+
+        let agg_pub_key = agg_keys(&keys);
+        let msg =
+            secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
+
+        if secp256k1_zkp::global::SECP256K1
+            .verify_schnorr(signature, &msg, &agg_pub_key)
+            .is_ok()
+        {
+            Ok(())
+        } else {
+            Err(TransactionError::InvalidSignature)
+        }
+    }
 }
 
 impl Decodable for Transaction

@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use async_trait::async_trait;
 use config::MintConfig;
+use fedimint_api::config::{scalar, DkgRunner};
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
