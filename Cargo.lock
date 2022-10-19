@@ -525,30 +525,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "clightningrpc"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98ae583d1efb5a0cb21d77ef53f872f104c872b5e05cc150b277d15afe13e974"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
 name = "cln-plugin"
 version = "0.1.0"
 source = "git+https://github.com/ElementsProject/lightning?rev=42783aa#42783aaa928da79e1295dcdc53123a66cb2433cc"
 dependencies = [
  "anyhow",
  "bytes",
- "cln-rpc",
+ "cln-rpc 0.1.0 (git+https://github.com/ElementsProject/lightning?rev=42783aa)",
  "futures",
  "log",
  "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.6.10",
+]
+
+[[package]]
+name = "cln-rpc"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18fb71ceca239c83a06fb494028b4a6b7b38ad4dd9c0410b7ea6013b90e15045"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures-util",
+ "hex",
+ "log",
+ "native-tls",
+ "serde",
+ "serde_json",
+ "tokio",
  "tokio-util 0.6.10",
 ]
 
@@ -1082,8 +1089,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
- "clightningrpc",
- "cln-rpc",
+ "cln-rpc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fedimint-api",
  "fedimint-ln",
  "fedimint-mint",
@@ -1211,6 +1217,21 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
+name = "foreign-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
+dependencies = [
+ "foreign-types-shared",
+]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form_urlencoded"
@@ -2000,7 +2021,7 @@ dependencies = [
  "bitcoin",
  "bitcoin_hashes",
  "cln-plugin",
- "cln-rpc",
+ "cln-rpc 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fedimint-api",
  "fedimint-build",
  "fedimint-rocksdb",
@@ -2190,6 +2211,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-tls"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7e2f3618557f980e0b17e8856252eee3c97fa12c54dff0ca290fb6266ca4a9"
+dependencies = [
+ "lazy_static",
+ "libc",
+ "log",
+ "openssl",
+ "openssl-probe",
+ "openssl-sys",
+ "schannel",
+ "security-framework",
+ "security-framework-sys",
+ "tempfile",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2271,10 +2310,59 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
+name = "openssl"
+version = "0.10.42"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12fc0523e3bd51a692c8850d075d74dc062ccf251c0110668cbd921917118a13"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "foreign-types",
+ "libc",
+ "once_cell",
+ "openssl-macros",
+ "openssl-sys",
+]
+
+[[package]]
+name = "openssl-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b501e44f11665960c7e7fcf062c7d96a14ade4aa98116c004b2e37b5be7d736c"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.21",
+ "syn 1.0.102",
+]
+
+[[package]]
 name = "openssl-probe"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
+
+[[package]]
+name = "openssl-src"
+version = "111.22.0+1.1.1q"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f31f0d509d1c1ae9cada2f9539ff8f37933831fd5098879e482aa687d659853"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5230151e44c0f05157effb743e8d517472843121cf9243e8b81393edb5acd9ce"
+dependencies = [
+ "autocfg",
+ "cc",
+ "libc",
+ "openssl-src",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "opentelemetry"

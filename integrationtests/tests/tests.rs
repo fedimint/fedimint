@@ -400,7 +400,7 @@ async fn lightning_gateway_pays_internal_invoice() {
     gateway.user.assert_total_coins(sats(2010)).await; // gateway routed internally and earned fee
     receiving_user.assert_total_coins(sats(1000)).await; // this user received the 1000 sat invoice
 
-    assert_eq!(lightning.amount_sent(), sats(0)); // We did not route any payments over the lightning network
+    assert_eq!(lightning.amount_sent().await, sats(0)); // We did not route any payments over the lightning network
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -408,7 +408,7 @@ async fn lightning_gateway_pays_internal_invoice() {
 async fn lightning_gateway_pays_outgoing_invoice() {
     let (fed, user, bitcoin, gateway, lightning) =
         fixtures(2, &[sats(10), sats(100), sats(1000)]).await;
-    let invoice = lightning.invoice(sats(1000), None);
+    let invoice = lightning.invoice(sats(1000), None).await;
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
     let (contract_id, outpoint) = user
@@ -445,7 +445,7 @@ async fn lightning_gateway_pays_outgoing_invoice() {
     gateway.user.assert_total_coins(sats(1010)).await;
 
     tokio::time::sleep(Duration::from_millis(500)).await; // FIXME need to wait for listfunds to update
-    assert_eq!(lightning.amount_sent(), sats(1000));
+    assert_eq!(lightning.amount_sent().await, sats(1000));
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -510,7 +510,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() {
 
     // TODO: Assert that the gateway has reclaimed the funds used to buy the preimage
 
-    assert_eq!(lightning.amount_sent(), sats(0)); // We did not route any payments over the lightning network
+    assert_eq!(lightning.amount_sent().await, sats(0)); // We did not route any payments over the lightning network
     assert_eq!(fed.max_balance_sheet(), 0);
 }
 
@@ -518,7 +518,7 @@ async fn lightning_gateway_claims_refund_for_internal_invoice() {
 async fn set_lightning_invoice_expiry() {
     let (_, _, _, _, lightning) = fixtures(2, &[sats(10), sats(1000)]).await;
     let invoice = lightning.invoice(sats(1000), 600.into());
-    assert_eq!(invoice.expiry_time(), Duration::from_secs(600));
+    assert_eq!(invoice.await.expiry_time(), Duration::from_secs(600));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -664,7 +664,7 @@ async fn lightning_gateway_cannot_claim_invalid_preimage() {
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
         .client
-        .fund_outgoing_ln_contract(invoice, rng())
+        .fund_outgoing_ln_contract(invoice.await, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
@@ -698,7 +698,7 @@ async fn lightning_gateway_can_abort_payment_to_return_user_funds() {
     fed.mine_and_mint(&user, &*bitcoin, sats(1010)).await; // 1% LN fee
     let (contract_id, _) = user
         .client
-        .fund_outgoing_ln_contract(invoice, rng())
+        .fund_outgoing_ln_contract(invoice.await, rng())
         .await
         .unwrap();
     fed.run_consensus_epochs(1).await; // send coins to LN contract
@@ -793,7 +793,10 @@ async fn unbalanced_transactions_get_rejected() {
     let invoice = lightning.invoice(sats(777), None);
 
     fed.mine_and_mint(&user, &*bitcoin, sats(2000)).await;
-    let response = user.client.fund_outgoing_ln_contract(invoice, rng()).await;
+    let response = user
+        .client
+        .fund_outgoing_ln_contract(invoice.await, rng())
+        .await;
 
     // TODO return a more useful error
     assert!(response.is_err());
