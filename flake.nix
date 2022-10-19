@@ -398,7 +398,7 @@
         workspaceDepsCov = craneLib.buildDepsOnly (commonArgs // {
           pname = "workspace-deps-llvm-cov";
           src = filterWorkspaceDepsBuildFiles ./.;
-          cargoBuildCommand = "cargo llvm-cov --workspace";
+          cargoBuildCommand = "cargo llvm-cov --workspace --profile $CARGO_PROFILE";
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
           doCheck = false;
         });
@@ -407,7 +407,7 @@
           pname = "workspace-llvm-cov";
           cargoArtifacts = workspaceDepsCov;
           # TODO: as things are right now, the integration tests can't run in parallel
-          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --workspace --lcov --output-path $out/lcov.info";
+          cargoBuildCommand = "mkdir -p $out && env RUST_TEST_THREADS=1 cargo llvm-cov --profile $CARGO_PROFILE --workspace --lcov --output-path $out/lcov.info";
           doCheck = false;
           nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargo-llvm-cov ];
         });
