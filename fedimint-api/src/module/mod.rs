@@ -556,3 +556,9 @@ where
         })
     }
 }
+
+pub trait FederationModule: Sized {
+    type TxInput: Send + Sync;
+    type TxOutput;
+    type TxOutputOutcome;
+}

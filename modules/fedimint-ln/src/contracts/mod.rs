@@ -8,6 +8,7 @@ use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
+use fedimint_api::module::ModuleDecoder;
 use fedimint_api::OutPoint;
 use serde::{Deserialize, Serialize};
 
@@ -109,11 +110,14 @@ impl Encodable for ContractId {
     }
 }
 
-impl<M> Decodable<M> for ContractId {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for ContractId {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
         Ok(ContractId::from_inner(Decodable::consensus_decode(
             d, modules,
         )?))
@@ -167,11 +171,14 @@ impl Encodable for EncryptedPreimage {
     }
 }
 
-impl<M> Decodable<M> for EncryptedPreimage {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for EncryptedPreimage {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(EncryptedPreimage(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
@@ -187,11 +194,14 @@ impl Encodable for PreimageDecryptionShare {
     }
 }
 
-impl<M> Decodable<M> for PreimageDecryptionShare {
-    fn consensus_decode<D: std::io::Read>(
+impl Decodable for PreimageDecryptionShare {
+    fn consensus_decode<M, D: std::io::Read>(
         d: &mut D,
         modules: &ModuleRegistry<M>,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, DecodeError>
+    where
+        M: ModuleDecoder,
+    {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(PreimageDecryptionShare(
             bincode::deserialize(&bytes).map_err(DecodeError::from_err)?,
