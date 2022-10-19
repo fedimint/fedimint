@@ -94,9 +94,7 @@ impl RealLightningTest {
             gateway_node_pub_key,
         }
     }
-}
 
-impl RealLightningTest {
     async fn channel_balance(rpc: Arc<Mutex<ClnRpc>>) -> Amount {
         let listfunds_req = requests::ListfundsRequest { spent: Some(false) };
         let listfunds_resp = if let Response::ListFunds(data) = rpc
