@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use fedimint_api::{
-    db::batch::BatchTx,
+    db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
@@ -64,9 +64,9 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
         _consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         todo!()
@@ -88,10 +88,10 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         _interconnect: &'a dyn ModuleInterconect,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'c>,
         _input: &'b Self::Input,
         _verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, Error> {
@@ -102,19 +102,19 @@ impl ServerModulePlugin for MintServerModule {
         todo!()
     }
 
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
         _output: &'a Self::Output,
         _out_point: OutPoint,
     ) -> Result<Amount, Error> {
         todo!()
     }
 
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         _consensus_peers: &HashSet<PeerId>,
-        _batch: BatchTx<'a>,
+        _dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId> {
         todo!()
     }

@@ -9,7 +9,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_trait::async_trait;
 use bitcoin::XOnlyPublicKey;
 use fedimint_api::{
-    db::batch::BatchTx,
+    db::DatabaseTransaction,
     encoding::DynEncodable,
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
@@ -104,9 +104,9 @@ pub trait IServerModule {
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch(
+    async fn begin_consensus_epoch<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, ConsensusItem)>,
     );
 
@@ -134,10 +134,10 @@ pub trait IServerModule {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
     ) -> Result<InputMeta, Error>;
@@ -158,9 +158,9 @@ pub trait IServerModule {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output(
+    fn apply_output<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error>;
@@ -170,10 +170,10 @@ pub trait IServerModule {
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch(
+    async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -227,9 +227,9 @@ pub trait ServerModulePlugin: Sized {
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch<'a>(
+    async fn begin_consensus_epoch<'a, 'b>(
         &'a self,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     );
 
@@ -260,10 +260,10 @@ pub trait ServerModulePlugin: Sized {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Self::Input,
         verification_cache: &Self::VerificationCache,
     ) -> Result<InputMeta, Error>;
@@ -284,9 +284,9 @@ pub trait ServerModulePlugin: Sized {
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output<'a>(
+    fn apply_output<'a, 'b>(
         &'a self,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
         output: &'a Self::Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error>;
@@ -296,10 +296,10 @@ pub trait ServerModulePlugin: Sized {
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch<'a, 'b>(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'b>,
     ) -> Vec<PeerId>;
 
     /// Retrieve the current status of the output. Depending on the module this might contain data
@@ -379,14 +379,14 @@ where
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    async fn begin_consensus_epoch(
+    async fn begin_consensus_epoch<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         consensus_items: Vec<(PeerId, ConsensusItem)>,
     ) {
         <Self as ServerModulePlugin>::begin_consensus_epoch(
             self,
-            batch,
+            dbtx,
             consensus_items
                 .into_iter()
                 .map(|(peer, item)| {
@@ -452,17 +452,17 @@ where
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    fn apply_input<'a, 'b>(
+    fn apply_input<'a, 'b, 'c>(
         &'a self,
         interconnect: &'a dyn ModuleInterconect,
-        batch: BatchTx<'a>,
+        dbtx: &mut DatabaseTransaction<'c>,
         input: &'b Input,
         verification_cache: &VerificationCache,
     ) -> Result<InputMeta, Error> {
         <Self as ServerModulePlugin>::apply_input(
             self,
             interconnect,
-            batch,
+            dbtx,
             input
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::Input>()
@@ -499,15 +499,15 @@ where
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    fn apply_output(
+    fn apply_output<'a>(
         &self,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
         output: &Output,
         out_point: OutPoint,
     ) -> Result<Amount, Error> {
         <Self as ServerModulePlugin>::apply_output(
             self,
-            batch,
+            dbtx,
             output
                 .as_any()
                 .downcast_ref::<<Self as ServerModulePlugin>::Output>()
@@ -521,12 +521,12 @@ where
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    async fn end_consensus_epoch(
+    async fn end_consensus_epoch<'a>(
         &self,
         consensus_peers: &HashSet<PeerId>,
-        batch: BatchTx<'_>,
+        dbtx: &mut DatabaseTransaction<'a>,
     ) -> Vec<PeerId> {
-        <Self as ServerModulePlugin>::end_consensus_epoch(self, consensus_peers, batch).await
+        <Self as ServerModulePlugin>::end_consensus_epoch(self, consensus_peers, dbtx).await
     }
 
     /// Retrieve the current status of the output. Depending on the module this might contain data

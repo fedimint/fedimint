@@ -3,7 +3,7 @@ pub mod db;
 use std::time::Duration;
 
 use db::{CoinKey, CoinKeyPrefix, OutputFinalizationKey, OutputFinalizationKeyPrefix};
-use fedimint_api::db::batch::{Accumulator, BatchItem, BatchTx, DbBatch};
+use fedimint_api::db::DatabaseTransaction;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::TransactionItemAmount;
 use fedimint_api::tiered::InvalidAmountTierError;
@@ -91,6 +91,7 @@ impl<'c> MintClient<'c> {
     pub fn coins(&self) -> TieredMulti<SpendableNote> {
         self.context
             .db
+            .begin_transaction()
             .find_by_prefix(&CoinKeyPrefix)
             .map(|res| {
                 let (key, spendable_coin) = res.expect("DB error");
@@ -108,21 +109,21 @@ impl<'c> MintClient<'c> {
         Ok(coins)
     }
 
-    pub async fn submit_tx_with_change<C, R>(
+    pub async fn submit_tx_with_change<'a, C, R>(
         &self,
         client: &Client<C>,
         tx: TransactionBuilder,
-        mut batch: Accumulator<BatchItem>,
         rng: R,
     ) -> Result<TransactionId>
     where
         C: AsRef<ClientConfig> + Clone,
         R: RngCore + CryptoRng,
     {
+        let mut dbtx = self.context.db.begin_transaction();
         let change_required = tx.change_required(client);
         let final_tx = tx.build(
             change_required,
-            batch.transaction(),
+            &mut dbtx,
             &self.context.secp,
             &self.config.tbs_pks,
             rng,
@@ -134,14 +135,14 @@ impl<'c> MintClient<'c> {
             "Federation is faulty, returned wrong tx id."
         );
 
-        self.context.db.apply_batch(batch).expect("DB error");
+        dbtx.commit_tx().expect("DB Error");
         Ok(txid)
     }
 
-    pub fn receive_coins<R: RngCore + CryptoRng>(
+    pub fn receive_coins<'a, R: RngCore + CryptoRng>(
         &self,
         amount: Amount,
-        mut tx: BatchTx,
+        dbtx: &mut DatabaseTransaction<'a>,
         rng: &mut R,
         mut create_tx: impl FnMut(TieredMulti<BlindNonce>) -> OutPoint,
     ) {
@@ -150,14 +151,19 @@ impl<'c> MintClient<'c> {
         let (finalization, coins) =
             builder.create_output_coins(amount, &self.context.secp, &self.config.tbs_pks, rng);
         let out_point = create_tx(coins);
-        tx.append_insert_new(OutputFinalizationKey(out_point), finalization);
-        tx.commit();
+        dbtx.insert_new_entry(&OutputFinalizationKey(out_point), &finalization)
+            .expect("DB Error");
     }
 
-    pub async fn fetch_coins(&self, mut batch: BatchTx<'_>, outpoint: OutPoint) -> Result<()> {
+    pub async fn fetch_coins<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        outpoint: OutPoint,
+    ) -> Result<()> {
         let issuance = self
             .context
             .db
+            .begin_transaction()
             .get_value(&OutputFinalizationKey(outpoint))
             .expect("DB error")
             .ok_or(MintClientError::FinalizationError(
@@ -173,20 +179,18 @@ impl<'c> MintClient<'c> {
 
         let coins = issuance.finalize(bsig, &self.config.tbs_pks)?;
 
-        batch.append_from_iter(
-            coins
-                .into_iter()
-                .map(|(amount, coin): (Amount, SpendableNote)| {
-                    let key = CoinKey {
-                        amount,
-                        nonce: coin.note.0.clone(),
-                    };
-                    let value = coin;
-                    BatchItem::insert_new(key, value)
-                }),
-        );
-        batch.append_delete(OutputFinalizationKey(outpoint));
-        batch.commit();
+        coins
+            .into_iter()
+            .for_each(|(amount, coin): (Amount, SpendableNote)| {
+                let key = CoinKey {
+                    amount,
+                    nonce: coin.note.0.clone(),
+                };
+                let value = coin;
+                dbtx.insert_new_entry(&key, &value).expect("DB Error");
+            });
+        dbtx.remove_entry(&OutputFinalizationKey(outpoint))
+            .expect("DB Error");
 
         Ok(())
     }
@@ -194,6 +198,7 @@ impl<'c> MintClient<'c> {
     pub fn list_active_issuances(&self) -> Vec<(OutPoint, NoteIssuanceRequests)> {
         self.context
             .db
+            .begin_transaction()
             .find_by_prefix(&OutputFinalizationKeyPrefix)
             .map(|res| {
                 let (OutputFinalizationKey(outpoint), cfd) = res.expect("DB error");
@@ -211,11 +216,11 @@ impl<'c> MintClient<'c> {
         let stream = active_issuances
             .into_iter()
             .map(|(out_point, _)| async move {
-                let mut batch = DbBatch::new();
+                let mut dbtx = self.context.db.begin_transaction();
                 loop {
-                    match self.fetch_coins(batch.transaction(), out_point).await {
+                    match self.fetch_coins(&mut dbtx, out_point).await {
                         Ok(_) => {
-                            self.context.db.apply_batch(batch).expect("DB error");
+                            dbtx.commit_tx().expect("DB Error");
                             return Ok(out_point);
                         }
                         // TODO: make mint error more expressive (currently any HTTP error) and maybe use custom return type instead of error for retrying
@@ -392,7 +397,6 @@ mod tests {
     use async_trait::async_trait;
     use bitcoin::hashes::Hash;
     use bitcoin::Address;
-    use fedimint_api::db::batch::DbBatch;
     use fedimint_api::db::mem_impl::MemDatabase;
     use fedimint_api::db::Database;
     use fedimint_api::module::testing::FakeFed;
@@ -528,8 +532,8 @@ mod tests {
         let txid = TransactionId::from_inner([0x42; 32]);
         let out_point = OutPoint { txid, out_idx: 0 };
 
-        let mut batch = DbBatch::new();
-        client.receive_coins(amt, batch.transaction(), rng, |output| {
+        let mut dbtx = client_db.begin_transaction();
+        client.receive_coins(amt, &mut dbtx, rng, |output| {
             // Agree on output
             let mut fed = block_on(fed.lock());
             block_on(fed.consensus_round(&[], &[(out_point, output)]));
@@ -538,7 +542,7 @@ mod tests {
 
             out_point
         });
-        client_db.apply_batch(batch).unwrap();
+        dbtx.commit_tx().expect("DB Error");
 
         client.fetch_all_coins().await;
     }
@@ -581,7 +585,7 @@ mod tests {
         .await;
 
         // Spending works
-        let mut batch = DbBatch::new();
+        let mut dbtx = client.context.db.begin_transaction();
         let mut builder = TransactionBuilder::default();
         let secp = &client.context.secp;
         let tbs_pks = &client.config.tbs_pks;
@@ -591,8 +595,8 @@ mod tests {
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
         builder.input_coins(coins, secp).unwrap();
-        builder.build(Amount::from_sat(0), batch.transaction(), secp, tbs_pks, rng);
-        client_context.db.apply_batch(batch).unwrap();
+        builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
+        dbtx.commit_tx().expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);
@@ -616,7 +620,7 @@ mod tests {
         assert!(fed.lock().await.verify_input(&input).is_err());
 
         // We can exactly spend the remainder
-        let mut batch = DbBatch::new();
+        let mut dbtx = client.context.db.begin_transaction();
         let mut builder = TransactionBuilder::default();
         let coins = client.select_coins(SPEND_AMOUNT).unwrap();
         let rng = rand::rngs::OsRng;
@@ -624,8 +628,8 @@ mod tests {
             .create_input_from_coins(coins.clone(), secp)
             .unwrap();
         builder.input_coins(coins, secp).unwrap();
-        builder.build(Amount::from_sat(0), batch.transaction(), secp, tbs_pks, rng);
-        client_context.db.apply_batch(batch).unwrap();
+        builder.build(Amount::from_sat(0), &mut dbtx, secp, tbs_pks, rng);
+        dbtx.commit_tx().expect("DB Error");
 
         let meta = fed.lock().await.verify_input(&input).unwrap();
         assert_eq!(meta.amount.amount, SPEND_AMOUNT);

@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use assert_matches::assert_matches;
 use bitcoin::{Amount, KeyPair};
-use fedimint_api::db::batch::DbBatch;
 use fedimint_api::TieredMulti;
 use fedimint_ln::contracts::{Preimage, PreimageDecryptionShare};
 use fedimint_ln::DecryptionShareCI;
@@ -610,13 +609,8 @@ async fn receive_lightning_payment_invalid_preimage() {
     let mut builder = TransactionBuilder::default();
     builder.output(Output::LN(offer_output));
     let tbs_pks = &user.config.0.mint.tbs_pks;
-    let tx = builder.build(
-        sats(0),
-        DbBatch::new().transaction(),
-        &secp(),
-        tbs_pks,
-        &mut rng(),
-    );
+    let mut dbtx = user.client.mint_client().context.db.begin_transaction();
+    let tx = builder.build(sats(0), &mut dbtx, &secp(), tbs_pks, &mut rng());
     fed.submit_transaction(tx);
     fed.run_consensus_epochs(1).await; // process offer
 
