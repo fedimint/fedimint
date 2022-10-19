@@ -25,7 +25,6 @@ itertools = "0.10.5"
 jsonrpsee = { version = "0.15.1", features = ["ws-server"] }
 mint-client = { path = "../client/client-lib" }
 fedimint-api = { path = "../fedimint-api" }
-fedimint-core = { path = "../fedimint-core" }
 rand = "0.8"
 rayon = "1.5.0"
 rcgen = "=0.10.0"

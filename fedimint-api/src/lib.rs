@@ -28,6 +28,7 @@ pub mod net;
 pub mod task;
 pub mod tiered;
 pub mod tiered_multi;
+pub mod transaction;
 
 pub use serde_json;
 

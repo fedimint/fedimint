@@ -62,7 +62,7 @@ impl PluginDecoder for L1ModuleCommon {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct L1Output;
 
 impl PluginOutput for L1Output {
@@ -118,7 +118,7 @@ impl PluginSpendableOutput for L1SpendableOutput {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct L1Input;
 
 impl PluginInput for L1Input {

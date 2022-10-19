@@ -86,7 +86,7 @@ impl PluginDecoder for MintModuleCommon {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct MintOutput;
 
 impl PluginOutput for MintOutput {
@@ -146,7 +146,7 @@ impl PluginSpendableOutput for MintSpendableOutput {
     }
 }
 
-#[derive(Encodable, Decodable, Clone)]
+#[derive(Encodable, Decodable, Clone, Debug)]
 pub struct MintInput;
 
 impl PluginInput for MintInput {

@@ -13,6 +13,7 @@ use std::io;
 use std::{any::Any, collections::BTreeMap};
 
 pub use bitcoin::KeyPair;
+use bitcoin_hashes::Hash;
 use fedimint_api::{
     dyn_newtype_define, dyn_newtype_impl_dyn_clone_passhthrough,
     encoding::{Decodable, DecodeError, DynEncodable, Encodable},
@@ -30,6 +31,7 @@ pub mod setup;
 pub use client::*;
 pub use server::*;
 
+use crate::transaction::agg_keys;
 use crate::TransactionId;
 
 /// A module key identifing a module
@@ -457,9 +459,6 @@ module_dyn_newtype_impl_module_prefixed_encode_decode! {
 }
 dyn_newtype_impl_dyn_clone_passhthrough!(ConsensusItem);
 
-#[derive(Encodable, Decodable)]
-pub struct Signature;
-
 #[derive(Debug, Error)]
 pub enum TransactionError {
     #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
@@ -475,11 +474,11 @@ pub enum TransactionError {
 }
 
 /// Transaction that was already signed
-#[derive(Encodable)]
+#[derive(Encodable, Debug, Clone)]
 pub struct Transaction {
     inputs: Vec<Input>,
     outputs: Vec<Output>,
-    signature: Signature,
+    signature: Option<secp256k1_zkp::schnorr::Signature>,
 }
 
 impl Transaction {

@@ -4,12 +4,11 @@ use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
 use fedimint_api::module::ModuleDecoder;
+use fedimint_api::module::Transaction;
 use fedimint_api::{BitcoinHash, PeerId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
-
-use crate::transaction::Transaction;
 
 // TODO: encoding here is a bit meh now (two level prefix). Consider custom impl
 // to flatten it?

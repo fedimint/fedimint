@@ -1,11 +1,8 @@
-use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::XOnlyPublicKey;
-use fedimint_api::encoding::{Decodable, Encodable};
 // use fedimint_api::module::{Input, Output};
-use fedimint_api::{Amount, TransactionId};
+use fedimint_api::Amount;
 use rand::Rng;
 use secp256k1_zkp::{schnorr, Secp256k1, Signing, Verification};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // /// An atomic value transfer operation within the Fedimint system and consensus
@@ -66,61 +63,61 @@ use thiserror::Error;
 //     }
 // }
 
-impl Transaction {
-    /// Hash of the transaction (excluding the signature).
-    ///
-    /// Transaction signature commits to this hash.
-    /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
-    pub fn tx_hash(&self) -> TransactionId {
-        Self::tx_hash_from_parts(&self.inputs, &self.outputs)
-    }
+// impl Transaction {
+//     /// Hash of the transaction (excluding the signature).
+//     ///
+//     /// Transaction signature commits to this hash.
+//     /// To generate it without already having a signature use [`Self::tx_hash_from_parts`].
+//     pub fn tx_hash(&self) -> TransactionId {
+//         Self::tx_hash_from_parts(&self.inputs, &self.outputs)
+//     }
 
-    /// Generate the transaction hash.
-    pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
-        let mut engine = TransactionId::engine();
-        inputs
-            .consensus_encode(&mut engine)
-            .expect("write to hash engine can't fail");
-        outputs
-            .consensus_encode(&mut engine)
-            .expect("write to hash engine can't fail");
-        TransactionId::from_engine(engine)
-    }
+//     /// Generate the transaction hash.
+//     pub fn tx_hash_from_parts(inputs: &[Input], outputs: &[Output]) -> TransactionId {
+//         let mut engine = TransactionId::engine();
+//         inputs
+//             .consensus_encode(&mut engine)
+//             .expect("write to hash engine can't fail");
+//         outputs
+//             .consensus_encode(&mut engine)
+//             .expect("write to hash engine can't fail");
+//         TransactionId::from_engine(engine)
+//     }
 
-    /// Validate the aggregated Schnorr Signature signed over the tx_hash
-    pub fn validate_signature(
-        &self,
-        keys: impl Iterator<Item = XOnlyPublicKey>,
-    ) -> Result<(), TransactionError> {
-        let keys = keys.collect::<Vec<_>>();
+//     /// Validate the aggregated Schnorr Signature signed over the tx_hash
+//     pub fn validate_signature(
+//         &self,
+//         keys: impl Iterator<Item = XOnlyPublicKey>,
+//     ) -> Result<(), TransactionError> {
+//         let keys = keys.collect::<Vec<_>>();
 
-        // If there are no keys from inputs there are no inputs to protect from re-binding. This
-        // behavior is useful for non-monetary transactions that just announce something, like LN
-        // incoming contract offers.
-        if keys.is_empty() {
-            return Ok(());
-        }
+//         // If there are no keys from inputs there are no inputs to protect from re-binding. This
+//         // behavior is useful for non-monetary transactions that just announce something, like LN
+//         // incoming contract offers.
+//         if keys.is_empty() {
+//             return Ok(());
+//         }
 
-        // Unless keys were empty we require a signature
-        let signature = self
-            .signature
-            .as_ref()
-            .ok_or(TransactionError::MissingSignature)?;
+//         // Unless keys were empty we require a signature
+//         let signature = self
+//             .signature
+//             .as_ref()
+//             .ok_or(TransactionError::MissingSignature)?;
 
-        let agg_pub_key = agg_keys(&keys);
-        let msg =
-            secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
+//         let agg_pub_key = agg_keys(&keys);
+//         let msg =
+//             secp256k1_zkp::Message::from_slice(&self.tx_hash()[..]).expect("hash has right length");
 
-        if secp256k1_zkp::global::SECP256K1
-            .verify_schnorr(signature, &msg, &agg_pub_key)
-            .is_ok()
-        {
-            Ok(())
-        } else {
-            Err(TransactionError::InvalidSignature)
-        }
-    }
-}
+//         if secp256k1_zkp::global::SECP256K1
+//             .verify_schnorr(signature, &msg, &agg_pub_key)
+//             .is_ok()
+//         {
+//             Ok(())
+//         } else {
+//             Err(TransactionError::InvalidSignature)
+//         }
+//     }
+// }
 
 /// Aggregate a stream of public keys.
 ///

@@ -4,7 +4,6 @@ use thiserror::Error;
 pub mod config;
 pub mod epoch;
 pub mod outcome;
-pub mod transaction;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
