@@ -1,36 +1,33 @@
 [package]
-name = "fedimint-ln"
+name = "fedimint-mint"
 version = "0.1.0"
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-ln is a lightning payment service module."
+description = "fedimint-mint is a chaumian ecash mint module."
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-name = "fedimint_ln"
+name = "fedimint_mint"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = "1.0.65"
 async-trait = "0.1"
-bincode = "1"
-bitcoin_hashes = "0.11.0"
-futures = "0.3.24"
+bincode = "1.3.1"
+counter = "0.5.7"
 itertools = "0.10.5"
-lightning = "0.0.111"
-lightning-invoice = "0.19.0"
 fedimint-api = { path = "../../fedimint-api" }
-secp256k1 = { version="0.24.0", default-features=false }
-serde = {version = "1.0.145", features = [ "derive" ] }
+rand = "0.8"
+rayon = "1.5.0"
+secp256k1-zkp = "0.7.0"
+serde = { version = "1.0.145", features = [ "derive" ] }
+tbs = { path = "../../crypto/tbs" }
 thiserror = "1.0.37"
 threshold_crypto = { git = "https://github.com/jkitman/threshold_crypto", branch = "upgrade-threshold-crypto-libs" }
-tracing = "0.1.37"
-serde_json = "1.0.86"
-url = { version = "2.3.1", features = ["serde"] }
-hbbft = { git = "https://github.com/jkitman/hbbft", branch = "upgrade-threshold-crypto-libs" }
+tracing ="0.1.37"
 
 [dev-dependencies]
-tokio = {version = "1.21.2", features = [ "full" ] }
+rand = "0.8"
 tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

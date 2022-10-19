@@ -1,6 +1,8 @@
-use std::collections::BTreeMap;
 use std::path::Path;
 
+use fedimint_ln::config::LightningModuleClientConfig;
+use fedimint_mint::config::MintClientConfig;
+use fedimint_wallet::config::WalletClientConfig;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -11,11 +13,13 @@ pub struct Node {
     pub name: String,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ClientConfig {
     pub federation_name: String,
     pub nodes: Vec<Node>,
-    pub module: BTreeMap<String, serde_json::Value>,
+    pub mint: MintClientConfig,
+    pub wallet: WalletClientConfig,
+    pub ln: LightningModuleClientConfig,
 }
 
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> T {
