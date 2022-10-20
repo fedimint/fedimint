@@ -502,7 +502,6 @@
           dirs = [
             "core"
             "crypto/tbs"
-            "ln-gateway"
             "client/client-lib"
             "crypto/tbs"
             "fedimintd"
@@ -512,7 +511,7 @@
             "fedimint-derive"
             "fedimint-rocksdb"
             "fedimint-server"
-            "ln-gateway"
+            "gateway/ln-gateway"
             "modules/fedimint-ln"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
@@ -537,7 +536,31 @@
             "fedimint-rocksdb"
             "fedimint-server"
             "fedimint-build"
-            "ln-gateway"
+            "gateway/ln-gateway"
+            "modules/fedimint-mint"
+            "modules/fedimint-wallet"
+            "modules/mint-client"
+            "modules/mint-common"
+            "modules/mint-server"
+          ];
+        };
+
+        gateway-cli = pkg {
+          name = "gateway-cli";
+          bin = "gateway-cli";
+          dirs = [
+            "core"
+            "crypto/tbs"
+            "client/client-lib"
+            "modules/fedimint-ln"
+            "fedimint-api"
+            "fedimint-core"
+            "fedimint-derive"
+            "fedimint-rocksdb"
+            "fedimint-server"
+            "fedimint-build"
+            "gateway/cli"
+            "gateway/ln_gateway"
             "modules/fedimint-mint"
             "modules/fedimint-wallet"
             "modules/mint-client"
@@ -615,7 +638,7 @@
             "client/client-lib"
             "client/clientd"
             "crypto/tbs"
-            "ln-gateway"
+            "gateway/ln-gateway"
             "fedimint-api"
             "fedimint-core"
             "fedimint-derive"
@@ -677,7 +700,7 @@
         outputsPackages = {
           default = fedimintd;
 
-          inherit fedimintd ln-gateway clientd fedimint-cli fedimint-tests;
+          inherit fedimintd ln-gateway gateway-cli clientd fedimint-cli fedimint-tests;
 
         };
       in
