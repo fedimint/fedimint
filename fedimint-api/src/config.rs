@@ -18,7 +18,7 @@ use tbs::hash::hash_bytes_to_curve;
 use tbs::poly::Poly;
 use tbs::serde_impl;
 use tbs::Scalar;
-use tracing::log::warn;
+use tracing::warn;
 
 use crate::net::peers::AnyPeerConnections;
 use crate::PeerId;

@@ -177,7 +177,7 @@ impl Decodable for EncryptedPreimage {
         modules: &ModuleRegistry<M>,
     ) -> Result<Self, DecodeError>
     where
-        M: Decodable,
+        M: ModuleDecoder,
     {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(EncryptedPreimage(
@@ -200,7 +200,7 @@ impl Decodable for PreimageDecryptionShare {
         modules: &ModuleRegistry<M>,
     ) -> Result<Self, DecodeError>
     where
-        M: Decodable,
+        M: ModuleDecoder,
     {
         let bytes = Vec::<u8>::consensus_decode(d, modules)?;
         Ok(PreimageDecryptionShare(

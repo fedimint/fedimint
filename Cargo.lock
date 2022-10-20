@@ -847,12 +847,14 @@ dependencies = [
 name = "fedimint-core"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
  "bincode",
  "bitcoin",
  "bitcoin_hashes",
  "fedimint-api",
+ "fedimint-ln",
+ "fedimint-mint",
+ "fedimint-wallet",
  "futures",
  "hex",
  "itertools",
@@ -920,6 +922,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-ln"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "bitcoin_hashes",
+ "fedimint-api",
+ "futures",
+ "hbbft",
+ "itertools",
+ "lightning",
+ "lightning-invoice",
+ "secp256k1",
+ "serde",
+ "serde_json",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "fedimint-ln-client"
 version = "0.1.0"
 dependencies = [
@@ -965,6 +992,28 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "fedimint-mint"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "counter",
+ "fedimint-api",
+ "itertools",
+ "rand",
+ "rayon",
+ "secp256k1-zkp",
+ "serde",
+ "tbs",
+ "test-log",
+ "thiserror",
+ "threshold_crypto",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1042,7 +1091,6 @@ dependencies = [
  "bytes",
  "fedimint-api",
  "fedimint-build",
- "fedimint-core",
  "futures",
  "hbbft",
  "hex",
@@ -1115,6 +1163,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-wallet"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bitcoin",
+ "bitcoincore-rpc",
+ "fedimint-api",
+ "hex",
+ "miniscript",
+ "rand",
+ "secp256k1",
+ "serde",
+ "test-log",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "validator",
+]
+
+[[package]]
 name = "fedimintd"
 version = "0.1.0"
 dependencies = [
@@ -1126,7 +1196,6 @@ dependencies = [
  "clap",
  "fedimint-api",
  "fedimint-build",
- "fedimint-core",
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",

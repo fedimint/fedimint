@@ -1,10 +1,8 @@
-use fedimint_api::FederationModule;
 use fedimint_ln::contracts::incoming::OfferId;
 use fedimint_ln::contracts::{AccountContractOutcome, ContractOutcome, OutgoingContractOutcome};
 use fedimint_ln::contracts::{DecryptedPreimage, Preimage};
-use fedimint_ln::LightningModule;
 use fedimint_mint::SigResponse;
-use fedimint_wallet::{PegOutOutcome, Wallet};
+use fedimint_wallet::PegOutOutcome;
 use serde::{Deserialize, Serialize};
 
 use crate::CoreError;
@@ -23,11 +21,7 @@ pub enum TransactionStatus {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub enum OutputOutcome {
-    Mint(Option<SigResponse>),
-    Wallet(<Wallet as FederationModule>::TxOutputOutcome),
-    LN(<LightningModule as FederationModule>::TxOutputOutcome),
-}
+pub struct OutputOutcome;
 
 pub trait Final {
     fn is_final(&self) -> bool;

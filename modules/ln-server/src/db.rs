@@ -1,10 +1,13 @@
 use fedimint_api::db::DatabaseKeyPrefixConst;
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::{OutPoint, PeerId};
+use fedimint_ln_common::contracts::{
+    incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare,
+};
+use fedimint_ln_common::LightningOutputOutcome;
 use secp256k1::PublicKey;
 
-use crate::contracts::{incoming::IncomingContractOffer, ContractId, PreimageDecryptionShare};
-use crate::{ContractAccount, LightningGateway, OutputOutcome};
+use crate::{ContractAccount, LightningGateway};
 
 const DB_PREFIX_CONTRACT: u8 = 0x40;
 const DB_PREFIX_OFFER: u8 = 0x41;
@@ -37,7 +40,7 @@ pub struct ContractUpdateKey(pub OutPoint);
 impl DatabaseKeyPrefixConst for ContractUpdateKey {
     const DB_PREFIX: u8 = DB_PREFIX_CONTRACT_UPDATE;
     type Key = Self;
-    type Value = OutputOutcome;
+    type Value = LightningOutputOutcome;
 }
 
 #[derive(Debug, Encodable, Decodable)]

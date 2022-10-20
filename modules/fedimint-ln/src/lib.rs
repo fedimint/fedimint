@@ -25,9 +25,7 @@ use thiserror::Error;
 use tracing::error;
 use url::Url;
 
-use crate::contracts::{
-    incoming::OfferId, ContractId, ContractOutcome, IdentifyableContract, Preimage,
-};
+use crate::contracts::{incoming::OfferId, ContractId, ContractOutcome, Preimage};
 
 /// The lightning module implements an account system. It does not have the privacy guarantees of
 /// the e-cash mint module but instead allows for smart contracting. There exist three contract

@@ -41,13 +41,21 @@ module_plugin_trait_define!(
 pub enum Error {
     #[error("oops")]
     SomethingWentWrong,
+    #[error("Internal Module Error")]
+    Other(#[from] anyhow::Error),
 }
 
 #[derive(Error, Debug)]
-pub enum InputValidationError {
-    #[error("oops")]
-    SomethingWentWrong,
-}
+#[error("Input Validation Error")]
+pub struct InputValidationError(#[from] anyhow::Error);
+//     #[error("oops")]
+//     SomethingWentWrong,
+
+//     #[error("The the input reference {0} does not exist")]
+//     UnknownReference(String),
+//     #[error("The input contract has too little funds, got {0}, input spends {1}")]
+//     InsufficientFunds(Amount, Amount),
+// }
 
 #[derive(Error, Debug)]
 pub enum OutputValidationError {
@@ -67,6 +75,7 @@ pub trait RpcHandlerCtx: Sync + Send {}
 /// An interface exposed to Fedimint modules
 pub trait InitHandle {
     /// Register an rpc handler at a given path
+    #[allow(clippy::type_complexity)]
     fn register_endpoint(
         &mut self,
         path: &'static str,

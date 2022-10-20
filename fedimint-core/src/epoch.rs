@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashSet};
 use bitcoin_hashes::sha256::Hash as Sha256;
 use bitcoin_hashes::sha256::HashEngine;
 use fedimint_api::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry, UnzipConsensus};
-use fedimint_api::{BitcoinHash, FederationModule, PeerId};
+use fedimint_api::{BitcoinHash, PeerId};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use threshold_crypto::{PublicKey, PublicKeySet, Signature, SignatureShare};
@@ -16,9 +16,6 @@ use crate::transaction::Transaction;
 pub enum ConsensusItem {
     EpochInfo(EpochSignatureShare),
     Transaction(Transaction),
-    Mint(<fedimint_mint::Mint as FederationModule>::ConsensusItem),
-    Wallet(<fedimint_wallet::Wallet as FederationModule>::ConsensusItem),
-    LN(<fedimint_ln::LightningModule as FederationModule>::ConsensusItem),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]

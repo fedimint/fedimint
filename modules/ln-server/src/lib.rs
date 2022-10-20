@@ -13,33 +13,44 @@ extern crate core;
 pub mod config;
 mod db;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Sub;
 
 use async_trait::async_trait;
+use config::{FeeConsensus, LightningModuleClientConfig};
 use db::{LightningGatewayKey, LightningGatewayKeyPrefix};
 use fedimint_api::bitcoin_hashes::Hash as BitcoinHash;
+use fedimint_api::config::DkgRunner;
 use fedimint_api::db::{Database, DatabaseTransaction};
 use fedimint_api::encoding::{Decodable, Encodable};
 use fedimint_api::module::audit::Audit;
 use fedimint_api::module::interconnect::ModuleInterconect;
-use fedimint_api::module::{api_endpoint, ApiEndpoint, ApiError, TransactionItemAmount};
-use fedimint_api::{Amount, FederationModule, PeerId};
+use fedimint_api::module::{
+    setup, ApiError, ConfigValidationError, InputValidationError, OutputValidationError,
+    PluginVerificationCache, TransactionItemAmount,
+};
+use fedimint_api::module::{Error, RegisterTypedEndpointExt};
+use fedimint_api::module::{InitHandle, ServerModulePlugin};
+use fedimint_api::net::peers::AnyPeerConnections;
+use fedimint_api::{Amount, PeerId};
 use fedimint_api::{InputMeta, OutPoint};
-use fedimint_core_server::{InitHandle, ServerModulePlugin};
+use fedimint_ln_common::contracts::{
+    incoming::IncomingContractOffer, Contract, ContractId, ContractOutcome, DecryptedPreimage,
+    EncryptedPreimage, FundedContract, IdentifyableContract, Preimage, PreimageDecryptionShare,
+};
+use fedimint_ln_common::{
+    contracts, ContractInput, ContractOrOfferOutput, DecryptionShareCI, LightningModuleDecoder,
+    LightningOutputOutcome, LightningPendingOutput, LightningSpendableOutput, LN_MODULE_KEY,
+};
 use itertools::Itertools;
-use secp256k1::rand::{CryptoRng, RngCore};
+use secp256k1::rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{debug, error, info_span, instrument, trace, warn};
+use threshold_crypto::serde_impl::SerdeSecret;
+use tracing::{debug, error, info_span, trace, warn};
 use url::Url;
 
 use crate::config::LightningModuleConfig;
-use crate::contracts::{
-    incoming::{IncomingContractOffer, OfferId},
-    Contract, ContractId, ContractOutcome, DecryptedPreimage, EncryptedPreimage, FundedContract,
-    IdentifyableContract, Preimage, PreimageDecryptionShare,
-};
 use crate::db::{
     AgreedDecryptionShareKey, AgreedDecryptionShareKeyPrefix, ContractKey, ContractKeyPrefix,
     ContractUpdateKey, OfferKey, OfferKeyPrefix, ProposeDecryptionShareKey,
@@ -70,49 +81,6 @@ pub struct LightningModule {
     db: Database,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct ContractInput {
-    pub contract_id: contracts::ContractId,
-    /// While for now we only support spending the entire contract we need to avoid
-    pub amount: Amount,
-    /// Of the three contract types only the outgoing one needs any other witness data than a
-    /// signature. The signature is aggregated on the transaction level, so only the optional
-    /// preimage remains.
-    pub witness: Option<Preimage>,
-}
-
-/// Represents an output of the Lightning module.
-///
-/// There are three sub-types:
-///   * Normal contracts users may lock funds in
-///   * Offers to buy preimages (see `contracts::incoming` docs)
-///   * Early cancellation of outgoing contracts before their timeout
-///
-/// The offer type exists to register `IncomingContractOffer`s. Instead of patching in a second way
-/// of letting clients submit consensus items outside of transactions we let offers be a 0-amount
-/// output. We need to take care to allow 0-input, 1-output transactions for that to allow users
-/// to receive their fist tokens via LN without already having tokens.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum ContractOrOfferOutput {
-    /// Fund contract
-    Contract(ContractOutput),
-    /// Creat incoming contract offer
-    Offer(contracts::incoming::IncomingContractOffer),
-    /// Allow early refund of outgoing contract
-    CancelOutgoing {
-        /// Contract to update
-        contract: ContractId,
-        /// Signature of gateway
-        gateway_signature: secp256k1::schnorr::Signature,
-    },
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct ContractOutput {
-    pub amount: fedimint_api::Amount,
-    pub contract: contracts::Contract,
-}
-
 #[derive(Debug, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize, Clone)]
 pub struct ContractAccount {
     pub amount: fedimint_api::Amount,
@@ -126,22 +94,26 @@ pub struct LightningGateway {
     pub api: Url,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
-pub struct DecryptionShareCI {
-    pub contract_id: ContractId,
-    pub share: PreimageDecryptionShare,
+#[derive(Clone)]
+pub struct VerificationCache;
+
+impl PluginVerificationCache for VerificationCache {
+    fn module_key(&self) -> fedimint_api::module::ModuleKey {
+        LN_MODULE_KEY
+    }
 }
 
 #[async_trait(?Send)]
 impl ServerModulePlugin for LightningModule {
-    type Decoder = LightningModuleCommon;
+    type Decoder = LightningModuleDecoder;
     type Input = ContractInput;
     type Output = ContractOrOfferOutput;
     type PendingOutput = LightningPendingOutput;
     type SpendableOutput = LightningSpendableOutput;
     type OutputOutcome = LightningOutputOutcome;
     type ConsensusItem = DecryptionShareCI;
-    type VerificationCache = ();
+    type VerificationCache = VerificationCache;
+    type ClientConfig = LightningModuleClientConfig;
 
     fn init(&self, backend: &mut dyn InitHandle) {
         // TODO: delete this dummy endpoint
@@ -152,15 +124,14 @@ impl ServerModulePlugin for LightningModule {
                         .ok_or_else(|| ApiError::not_found(String::from("Contract not found")))
                 })
             })
-            .register_typed_endpoint(
-                "/offers" | (),
-                _ctx | { Box::pin(async move { Ok(self.get_offers()) }) },
-            )
+            .register_typed_endpoint("/offers", |(), _ctx| {
+                Box::pin(async move { Ok(self.get_offers()) })
+            })
             .register_typed_endpoint(
                 "/offer",
-                |payment_hash: bitcoin_hashes::sha256::Hash, _ctx| -> IncomingContractOffer {
+                |payment_hash: bitcoin_hashes::sha256::Hash, _ctx| {
                     Box::pin(async move {
-                        let offer = self
+                        let offer: IncomingContractOffer = self
                             .get_offer(payment_hash)
                             .ok_or_else(|| ApiError::not_found(String::from("Offer not found")))?;
 
@@ -170,18 +141,18 @@ impl ServerModulePlugin for LightningModule {
                 },
             )
             .register_typed_endpoint("/list_gateways", |(), _ctx| {
-                Box::pin(async move { Ok(module.list_gateways()) })
+                Box::pin(async move { Ok(self.list_gateways()) })
             })
             .register_typed_endpoint("/register_gateway", |gateway: LightningGateway, _ctx| {
                 Box::pin(async move {
-                    module.register_gateway(gateway);
+                    self.register_gateway(gateway);
                     Ok(())
                 })
             });
     }
 
     async fn await_consensus_proposal<'a>(&'a self) {
-        if self.consensus_proposal(rng).await.is_empty() {
+        if self.consensus_proposal().await.is_empty() {
             std::future::pending().await
         }
     }
@@ -196,9 +167,9 @@ impl ServerModulePlugin for LightningModule {
             .collect()
     }
 
-    async fn begin_consensus_epoch<'a>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'a>,
+    async fn begin_consensus_epoch(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
         consensus_items: Vec<(PeerId, Self::ConsensusItem)>,
     ) {
         consensus_items
@@ -224,16 +195,16 @@ impl ServerModulePlugin for LightningModule {
 
     fn validate_input<'a>(
         &self,
-        _interconnect: &dyn ModuleInterconect,
-        _verification_cache: &Self::VerificationCache,
-        _input: &'a Self::Input,
-    ) -> Result<InputMeta, Error> {
+        interconnect: &dyn ModuleInterconect,
+        verification_cache: &Self::VerificationCache,
+        input: &'a Self::Input,
+    ) -> Result<InputMeta, InputValidationError> {
         let account: ContractAccount = self
             .get_contract_account(input.contract_id)
             .ok_or(LightningModuleError::UnknownContract(input.contract_id))?;
 
         if account.amount < input.amount {
-            return Err(LightningModuleError::InsufficientFunds(
+            return Err(InputValidationError::InsufficientFunds(
                 account.amount,
                 input.amount,
             ));
@@ -290,12 +261,11 @@ impl ServerModulePlugin for LightningModule {
 
     fn apply_input<'a, 'b>(
         &'a self,
-
         interconnect: &'a dyn ModuleInterconect,
-        dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b Self::TxInput,
+        dbtx: &mut DatabaseTransaction,
+        input: &'b Self::Input,
         cache: &Self::VerificationCache,
-    ) -> Result<InputMeta, Error> {
+    ) -> Result<InputMeta, fedimint_api::module::Error> {
         let meta = self.validate_input(interconnect, cache, input)?;
 
         let account_db_key = ContractKey(input.contract_id);
@@ -311,7 +281,10 @@ impl ServerModulePlugin for LightningModule {
         Ok(meta)
     }
 
-    fn validate_output(&self, _output: &Self::Output) -> Result<Amount, Error> {
+    fn validate_output(
+        &self,
+        output: &Self::Output,
+    ) -> Result<TransactionItemAmount, OutputValidationError> {
         match output {
             ContractOrOfferOutput::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
@@ -379,10 +352,10 @@ impl ServerModulePlugin for LightningModule {
 
     fn apply_output<'a>(
         &'a self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        output: &'a Self::TxOutput,
+        dbtx: &mut DatabaseTransaction,
+        output: &'a Self::Output,
         out_point: OutPoint,
-    ) -> Result<Amount, Error> {
+    ) -> Result<Amount, fedimint_api::module::Error> {
         let amount = self.validate_output(output)?;
 
         match output {
@@ -405,7 +378,7 @@ impl ServerModulePlugin for LightningModule {
 
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &OutputOutcome::Contract {
+                    &LightningOutputOutcome::Contract {
                         id: contract.contract.contract_id(),
                         outcome: contract.contract.to_outcome(),
                     },
@@ -435,7 +408,7 @@ impl ServerModulePlugin for LightningModule {
             ContractOrOfferOutput::Offer(offer) => {
                 dbtx.insert_new_entry(
                     &ContractUpdateKey(out_point),
-                    &OutputOutcome::Offer { id: offer.id() },
+                    &LightningOutputOutcome::Offer { id: offer.id() },
                 )
                 .expect("DB Error");
                 // TODO: sanity-check encrypted preimage size
@@ -470,7 +443,7 @@ impl ServerModulePlugin for LightningModule {
         Ok(amount)
     }
 
-    async fn end_consensus_epoch<'a>(
+    async fn end_consensus_epoch(
         &'a self,
         consensus_peers: &HashSet<PeerId>,
         dbtx: &mut DatabaseTransaction<'a>,
@@ -617,7 +590,7 @@ impl ServerModulePlugin for LightningModule {
                 .expect("DB error")
                 .expect("outcome was created on funding");
             let incoming_contract_outcome_preimage = match &mut outcome {
-                OutputOutcome::Contract {
+                LightningOutputOutcome::Contract {
                     outcome: ContractOutcome::Incoming(decryption_outcome),
                     ..
                 } => decryption_outcome,
@@ -631,16 +604,81 @@ impl ServerModulePlugin for LightningModule {
         bad_peers
     }
 
-    fn output_status(&self, _out_point: OutPoint) -> Option<Self::OutputOutcome> {
+    fn output_status(&self, out_point: OutPoint) -> Option<Self::OutputOutcome> {
         self.db
             .get_value(&ContractUpdateKey(out_point))
             .expect("DB error")
     }
 
-    fn audit(&self, _audit: &mut Audit) {
+    fn audit(&self, audit: &mut Audit) {
         audit.add_items(&self.db, &ContractKeyPrefix, |_, v| {
             -(v.amount.milli_sat as i64)
         });
+    }
+
+    fn trusted_dealer_gen(
+        peers: &[PeerId],
+        params: &setup::ConfigParams,
+    ) -> (BTreeMap<PeerId, serde_json::Value>, serde_json::Value) {
+        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
+        let pks = sks.public_keys();
+
+        let server_cfg = peers
+            .iter()
+            .map(|&peer| {
+                let sk = sks.secret_key_share(peer.to_usize());
+
+                (
+                    peer,
+                    LightningModuleConfig {
+                        threshold_pub_keys: pks.clone(),
+                        threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
+                        threshold: peers.threshold(),
+                        fee_consensus: FeeConsensus::default(),
+                    },
+                )
+            })
+            .collect();
+
+        let client_cfg = LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: FeeConsensus::default(),
+        };
+
+        (server_cfg, client_cfg)
+    }
+
+    fn validate_config(&self, identity: &PeerId) {
+        assert_eq!(
+            self.threshold_sec_key.public_key_share(),
+            self.threshold_pub_keys
+                .public_key_share(identity.to_usize()),
+            "Lightning private key doesn't match pubkey share"
+        )
+    }
+
+    async fn distributed_gen(
+        connections: &mut AnyPeerConnections,
+        our_id: &PeerId,
+        peers: &[PeerId],
+        params: &setup::ConfigParams,
+    ) -> Result<(Self, Self::ClientConfig), ConfigValidationError> {
+        let mut dkg = DkgRunner::new((), peers.threshold(), our_id, peers);
+        let (pks, sks) = dkg.run_g1(connections, &mut OsRng).await[&()].threshold_crypto();
+
+        let server = LightningModuleConfig {
+            threshold_pub_keys: pks.clone(),
+            threshold_sec_key: SerdeSecret(sks),
+            threshold: peers.threshold(),
+            fee_consensus: Default::default(),
+        };
+
+        let client = LightningModuleClientConfig {
+            threshold_pub_key: pks.public_key(),
+            fee_consensus: Default::default(),
+        };
+
+        Ok((server, client))
     }
 }
 
