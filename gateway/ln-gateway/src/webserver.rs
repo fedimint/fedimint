@@ -9,8 +9,8 @@ use tower_http::cors::CorsLayer;
 use tracing::{debug, instrument};
 
 use crate::{
-    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, GatewayRequest,
-    LnGatewayError, PayInvoicePayload, WithdrawPayload,
+    rpc::GatewayRpcSender, BalancePayload, DepositAddressPayload, DepositPayload, FederationId,
+    GatewayRequest, LnGatewayError, PayInvoicePayload, WithdrawPayload,
 };
 
 pub async fn run_webserver(
@@ -97,6 +97,14 @@ async fn pay_invoice(
     Json(contract_id): Json<ContractId>,
 ) -> Result<impl IntoResponse, LnGatewayError> {
     debug!(%contract_id, "Received request to pay invoice");
-    rpc.send(PayInvoicePayload { contract_id }).await?;
+
+    // TODO: Require clients to pass in a federation id on request to pay invoice
+    let federation_id = FederationId("".into());
+
+    rpc.send(PayInvoicePayload {
+        federation_id,
+        contract_id,
+    })
+    .await?;
     Ok(())
 }
