@@ -15,9 +15,11 @@ use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
 
+pub use crate::core::{client, server};
 use crate::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
 pub mod config;
+pub mod core;
 pub mod db;
 pub mod encoding;
 pub mod macros;

@@ -13,7 +13,6 @@ path = "src/lib.rs"
 
 [dependencies]
 async-trait = "*"
-fedimint-core-server = { path = "../../core/server" }
 fedimint-api = { path = "../../fedimint-api" }
 fedimint-mint-common = { path = "../mint-common/" }
 tracing ="0.1.37"

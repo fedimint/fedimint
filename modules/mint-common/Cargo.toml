@@ -12,6 +12,5 @@ name = "fedimint_mint_common"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-core-api = { path = "../../core/api" }
 fedimint-api = { path = "../../fedimint-api" }
 tracing ="0.1.37"

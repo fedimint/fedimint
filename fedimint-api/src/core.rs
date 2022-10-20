@@ -19,6 +19,9 @@ pub mod encode;
 pub mod client;
 pub mod server;
 
+pub use self::client::*;
+pub use self::server::*;
+
 /// A module key identifing a module
 ///
 /// Used as an unique ID, and also as prefix in serialization
@@ -49,7 +52,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::server::ServerModule>,
             ) -> Result<Self, DecodeError> {
-                $crate::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
+                $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
             }
@@ -60,7 +63,7 @@ macro_rules! module_dyn_newtype_impl_encode_decode {
                 r: &mut R,
                 modules: &BTreeMap<ModuleKey, $crate::client::ClientModule>,
             ) -> Result<Self, DecodeError> {
-                $crate::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
+                $crate::core::encode::module_decode_key_prefixed_decodable(r, modules, |r, m| {
                     m.$decode_fn(r)
                 })
             }

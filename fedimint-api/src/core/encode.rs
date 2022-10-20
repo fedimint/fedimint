@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, io};
 
 use fedimint_api::encoding::{Decodable, DecodeError};
 
-use crate::ModuleKey;
+use crate::encoding::ModuleKey;
 
 pub fn module_decode_key_prefixed_decodable<T, F, R, M>(
     mut d: &mut R,

@@ -1,15 +1,15 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
+use fedimint_api::core::{
+    Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache, ServerModulePlugin,
+};
+use fedimint_api::server::InitHandle;
 use fedimint_api::{
     db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
-};
-use fedimint_core_server::{
-    Error, InitHandle, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
-    ServerModulePlugin,
 };
 use fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
