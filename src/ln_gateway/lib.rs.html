@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `ln-gateway/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../ln_gateway/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../ln_gateway/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/lib.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>lib.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" href="../../normalize.css"><link rel="stylesheet" href="../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" href="../../ayu.css" disabled><link rel="stylesheet" href="../../dark.css" disabled><link rel="stylesheet" href="../../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../../storage.js"></script><script defer src="../../source-script.js"></script><script defer src="../../source-files.js"></script><script defer src="../../main.js"></script><noscript><link rel="stylesheet" href="../../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../../favicon.svg"></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><a class="sidebar-logo" href="../../ln_gateway/index.html"><div class="logo-container"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></div></a></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../../ln_gateway/index.html"><img class="rust-logo" src="../../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../wheel.svg"></a></div></div></form></nav></div><section id="main-content" class="content"><div class="example-wrap"><pre class="src-line-numbers"><span id="1">1</span>
 <span id="2">2</span>
 <span id="3">3</span>
 <span id="4">4</span>
@@ -437,6 +437,25 @@
 <span id="437">437</span>
 <span id="438">438</span>
 <span id="439">439</span>
+<span id="440">440</span>
+<span id="441">441</span>
+<span id="442">442</span>
+<span id="443">443</span>
+<span id="444">444</span>
+<span id="445">445</span>
+<span id="446">446</span>
+<span id="447">447</span>
+<span id="448">448</span>
+<span id="449">449</span>
+<span id="450">450</span>
+<span id="451">451</span>
+<span id="452">452</span>
+<span id="453">453</span>
+<span id="454">454</span>
+<span id="455">455</span>
+<span id="456">456</span>
+<span id="457">457</span>
+<span id="458">458</span>
 </pre><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ln;
 <span class="kw">pub mod </span>rpc;
@@ -462,7 +481,7 @@
 <span class="kw">use </span>mint_client::mint::MintClientError;
 <span class="kw">use </span>mint_client::{ClientError, GatewayClient, PaymentParameters};
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
-<span class="kw">use </span>serde::{Deserialize, Deserializer};
+<span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::{mpsc, oneshot};
 <span class="kw">use </span>tracing::{debug, error, instrument, warn};
@@ -472,23 +491,28 @@
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, LnGatewayError&gt;;
 
-<span class="attribute">#[derive(Debug)]
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>BalancePayload;
 
-<span class="attribute">#[derive(Debug)]
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>DepositAddressPayload;
 
-<span class="attribute">#[derive(Debug, Deserialize)]
-</span><span class="kw">pub struct </span>DepositPayload(
-    TxOutProof,
-    <span class="attribute">#[serde(deserialize_with = <span class="string">&quot;serde_hex_deserialize&quot;</span>)] </span>Transaction,
-);
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>DepositPayload {
+    <span class="kw">pub </span>txout_proof: TxOutProof,
+    <span class="attribute">#[serde(
+        deserialize_with = <span class="string">&quot;serde_hex_deserialize&quot;</span>,
+        serialize_with = <span class="string">&quot;serde_hex_serialize&quot;
+    </span>)]
+    </span><span class="kw">pub </span>transaction: Transaction,
+}
 
-<span class="attribute">#[derive(Debug, Deserialize)]
-</span><span class="kw">pub struct </span>WithdrawPayload(
-    Address,
-    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)] </span>bitcoin::Amount,
-);
+<span class="attribute">#[derive(Debug, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>WithdrawPayload {
+    <span class="attribute">#[serde(with = <span class="string">&quot;bitcoin::util::amount::serde::as_sat&quot;</span>)]
+    </span><span class="kw">pub </span>amount: bitcoin::Amount,
+    <span class="kw">pub </span>address: Address,
+}
 
 <span class="attribute">#[derive(Debug)]
 </span><span class="kw">pub enum </span>GatewayRequest {
@@ -762,7 +786,7 @@
     <span class="kw">async fn </span>handle_deposit_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, deposit: DepositPayload) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionId&gt; {
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="self">self</span>.federation_client
-            .peg_in(deposit.<span class="number">0</span>, deposit.<span class="number">1</span>, rng)
+            .peg_in(deposit.txout_proof, deposit.transaction, rng)
             .<span class="kw">await
             </span>.map_err(LnGatewayError::ClientError)
     }
@@ -771,7 +795,7 @@
         <span class="kw">let </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>peg_out = <span class="self">self
             </span>.federation_client
-            .new_peg_out_with_fees(withdraw.<span class="number">1</span>, withdraw.<span class="number">0</span>)
+            .new_peg_out_with_fees(withdraw.amount, withdraw.address)
             .<span class="kw">await
             </span>.unwrap();
         <span class="self">self</span>.federation_client
@@ -866,6 +890,20 @@
         <span class="kw">let </span>bytes: Vec&lt;u8&gt; = Deserialize::deserialize(d)<span class="question-mark">?</span>;
         T::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw-2">&amp;</span>bytes))
             .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">&quot;{:?}&quot;</span>, e)))
+    }
+}
+
+<span class="kw">pub fn </span>serde_hex_serialize&lt;T: bitcoin::consensus::Encodable, S: Serializer&gt;(
+    t: <span class="kw-2">&amp;</span>T,
+    s: S,
+) -&gt; std::result::Result&lt;S::Ok, S::Error&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
+    T::consensus_encode(t, <span class="kw-2">&amp;mut </span>bytes).map_err(serde::ser::Error::custom)<span class="question-mark">?</span>;
+
+    <span class="kw">if </span>s.is_human_readable() {
+        s.serialize_str(<span class="kw-2">&amp;</span>hex::encode(bytes))
+    } <span class="kw">else </span>{
+        s.serialize_bytes(<span class="kw-2">&amp;</span>bytes)
     }
 }
 

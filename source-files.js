@@ -22,6 +22,7 @@ var sourcesIndex = JSON.parse('{\
 "fedimint_sled":["",[],["lib.rs"]],\
 "fedimint_wallet":["",[],["bitcoincore_rpc.rs","bitcoind.rs","config.rs","db.rs","keys.rs","lib.rs","tweakable.rs","txoproof.rs"]],\
 "fedimintd":["",[],["main.rs"]],\
+"gateway_cli":["",[],["main.rs"]],\
 "ln_gateway":["",[],["cln.rs","lib.rs","ln.rs","rpc.rs","webserver.rs"]],\
 "mint_client":["",[["ln",[],["db.rs","incoming.rs","mod.rs","outgoing.rs"]],["mint",[],["db.rs","mod.rs"]],["wallet",[],["db.rs","mod.rs"]]],["api.rs","lib.rs","query.rs","transaction.rs","utils.rs"]],\
 "mint_rpc_client":["",[],["mint-rpc-client.rs"]],\
