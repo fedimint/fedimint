@@ -248,19 +248,19 @@
     }
 }
 
-<span class="kw">impl </span>fedimint_core_api::server::RpcHandlerCtx <span class="kw">for </span>FedimintConsensus {}
+<span class="kw">impl </span>fedimint_api::server::RpcHandlerCtx <span class="kw">for </span>FedimintConsensus {}
 
 <span class="kw">struct </span>InitHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
     rpc_module: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw-2">mut </span>RpcModule&lt;RpcHandlerCtx&gt;,
 }
 
-<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fedimint_core_api::server::InitHandle <span class="kw">for </span>InitHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;a</span>&gt; fedimint_api::server::InitHandle <span class="kw">for </span>InitHandle&lt;<span class="lifetime">&#39;a</span>&gt; {
     <span class="kw">fn </span>register_endpoint(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         path: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
         handler: <span class="kw">fn</span>(
             serde_json::Value,
-            <span class="kw-2">&amp;</span><span class="kw">dyn </span>fedimint_core_api::server::RpcHandlerCtx,
+            <span class="kw-2">&amp;</span><span class="kw">dyn </span>fedimint_api::server::RpcHandlerCtx,
         ) -&gt; BoxFuture&lt;<span class="lifetime">&#39;static</span>, <span class="prelude-ty">Result</span>&lt;serde_json::Value, ApiError&gt;&gt;,
     ) {
         <span class="self">self</span>.rpc_module

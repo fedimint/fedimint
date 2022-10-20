@@ -534,7 +534,7 @@
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::XOnlyPublicKey;
 <span class="kw">use </span>fedimint_api::{
-    db::DatabaseTransaction,
+    db::batch::BatchTx,
     encoding::DynEncodable,
     module::{__reexports::serde_json, audit::Audit, interconnect::ModuleInterconect, ApiError},
     Amount, OutPoint, PeerId,
@@ -630,9 +630,9 @@
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>begin_consensus_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
         consensus_items: Vec&lt;(PeerId, ConsensusItem)&gt;,
     );
 
@@ -660,10 +660,10 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
         verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, Error&gt;;
@@ -684,9 +684,9 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    </span><span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">fn </span>apply_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, Error&gt;;
@@ -696,10 +696,10 @@
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>end_consensus_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
@@ -742,9 +742,9 @@
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         consensus_items: Vec&lt;(PeerId, <span class="self">Self</span>::ConsensusItem)&gt;,
     );
 
@@ -775,10 +775,10 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span><span class="self">Self</span>::Input,
         verification_cache: <span class="kw-2">&amp;</span><span class="self">Self</span>::VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, Error&gt;;
@@ -799,9 +799,9 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    </span><span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         output: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">Self</span>::Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, Error&gt;;
@@ -811,10 +811,10 @@
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
+    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;b</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt;;
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data
@@ -883,14 +883,14 @@
     /// items of this round are supplied as `consensus_items`. The batch will be committed to the
     /// database after all other modules ran `begin_consensus_epoch`, so the results are available
     /// when processing transactions.
-    </span><span class="kw">async fn </span>begin_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>begin_consensus_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
         consensus_items: Vec&lt;(PeerId, ConsensusItem)&gt;,
     ) {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::begin_consensus_epoch(
             <span class="self">self</span>,
-            dbtx,
+            batch,
             consensus_items
                 .into_iter()
                 .map(|(peer, item)| {
@@ -956,17 +956,17 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transaction have been
     /// processed.
-    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>, <span class="lifetime">&#39;c</span>&gt;(
+    </span><span class="kw">fn </span>apply_input&lt;<span class="lifetime">&#39;a</span>, <span class="lifetime">&#39;b</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="self">self</span>,
         interconnect: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a </span><span class="kw">dyn </span>ModuleInterconect,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;c</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;a</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">&#39;b </span>Input,
         verification_cache: <span class="kw-2">&amp;</span>VerificationCache,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, Error&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::apply_input(
             <span class="self">self</span>,
             interconnect,
-            dbtx,
+            batch,
             input
                 .as_any()
                 .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Input&gt;()
@@ -1003,15 +1003,15 @@
     /// This function may only be called after `begin_consensus_epoch` and before
     /// `end_consensus_epoch`. Data is only written to the database once all transactions have been
     /// processed.
-    </span><span class="kw">fn </span>apply_output&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">fn </span>apply_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
         output: <span class="kw-2">&amp;</span>Output,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, Error&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::apply_output(
             <span class="self">self</span>,
-            dbtx,
+            batch,
             output
                 .as_any()
                 .downcast_ref::&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::Output&gt;()
@@ -1025,12 +1025,12 @@
     ///
     /// Passes in the `consensus_peers` that contributed to this epoch and returns a list of peers
     /// to drop if any are misbehaving.
-    </span><span class="kw">async fn </span>end_consensus_epoch&lt;<span class="lifetime">&#39;a</span>&gt;(
+    </span><span class="kw">async fn </span>end_consensus_epoch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         consensus_peers: <span class="kw-2">&amp;</span>HashSet&lt;PeerId&gt;,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">&#39;a</span>&gt;,
+        batch: BatchTx&lt;<span class="lifetime">&#39;_</span>&gt;,
     ) -&gt; Vec&lt;PeerId&gt; {
-        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, dbtx).<span class="kw">await
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModulePlugin&gt;::end_consensus_epoch(<span class="self">self</span>, consensus_peers, batch).<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Retrieve the current status of the output. Depending on the module this might contain data

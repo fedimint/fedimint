@@ -119,13 +119,13 @@
 <span id="119">119</span>
 </pre><pre class="rust"><code><span class="kw">use </span>std::{collections::BTreeMap, io};
 
+<span class="kw">use </span>fedimint_api::core::{
+    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
+    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
+};
 <span class="kw">use </span>fedimint_api::{
     encoding::{Decodable, DecodeError, Encodable},
     Amount,
-};
-<span class="kw">use </span>fedimint_core_api::{
-    Input, ModuleCommon, ModuleKey, Output, OutputOutcome, PendingOutput, PluginInput,
-    PluginOutput, PluginOutputOutcome, PluginPendingOutput, PluginSpendableOutput, SpendableOutput,
 };
 
 <span class="kw">pub const </span>MINT_MODULE_KEY: u16 = <span class="number">0</span>;

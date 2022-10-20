@@ -303,6 +303,8 @@
 <span id="303">303</span>
 <span id="304">304</span>
 <span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
 </pre><pre class="rust"><code><span class="kw">extern crate </span><span class="self">self </span><span class="kw">as </span>fedimint_api;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -320,9 +322,11 @@
 <span class="kw">pub use </span>tiered::Tiered;
 <span class="kw">pub use </span>tiered_multi::<span class="kw-2">*</span>;
 
+<span class="kw">pub use </span><span class="kw">crate</span>::core::{client, server};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable, ModuleRegistry};
 
 <span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>core;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>encoding;
 <span class="kw">pub mod </span>macros;

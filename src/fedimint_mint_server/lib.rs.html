@@ -135,15 +135,15 @@
 </pre><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>fedimint_api::core::{
+    Error, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache, ServerModulePlugin,
+};
+<span class="kw">use </span>fedimint_api::server::InitHandle;
 <span class="kw">use </span>fedimint_api::{
     db::DatabaseTransaction,
     encoding::{Decodable, Encodable},
     module::{audit::Audit, interconnect::ModuleInterconect},
     Amount, OutPoint, PeerId,
-};
-<span class="kw">use </span>fedimint_core_server::{
-    Error, InitHandle, InputMeta, ModuleKey, PluginConsensusItem, PluginVerificationCache,
-    ServerModulePlugin,
 };
 <span class="kw">use </span>fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,

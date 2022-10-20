@@ -74,10 +74,10 @@
 <span id="74">74</span>
 <span id="75">75</span>
 <span id="76">76</span>
-</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::Amount;
-<span class="kw">use </span>fedimint_core_client::{
+</pre><pre class="rust"><code><span class="kw">use </span>fedimint_api::core::{
     ClientModulePlugin, FedimintClientCore, Output, PendingOutput, PollPendingOutputs,
 };
+<span class="kw">use </span>fedimint_api::Amount;
 <span class="kw">use </span>fedimint_mint_common::{
     MintInput, MintModuleCommon, MintOutput, MintOutputOutcome, MintPendingOutput,
     MintSpendableOutput,
@@ -145,7 +145,7 @@
         _outputs: Vec&lt;MintPendingOutput&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         PollPendingOutputs&lt;MintSpendableOutput, MintPendingOutput&gt;,
-        fedimint_core_client::FinalizationError,
+        fedimint_api::core::FinalizationError,
     &gt; {
         <span class="macro">todo!</span>()
     }

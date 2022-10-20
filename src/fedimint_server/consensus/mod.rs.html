@@ -736,18 +736,18 @@
 <span class="kw">use </span>std::iter::FromIterator;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>fedimint_api::core::ModuleKey;
 <span class="kw">use </span>fedimint_api::db::{Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_api::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_api::module::audit::Audit;
 <span class="kw">use </span>fedimint_api::module::TransactionItemAmount;
+<span class="kw">use </span>fedimint_api::server::ServerModule;
 <span class="kw">use </span>fedimint_api::{Amount, FederationModule, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_core::epoch::<span class="kw-2">*</span>;
 <span class="kw">use </span>fedimint_core::modules::ln::{LightningModule, LightningModuleError};
 <span class="kw">use </span>fedimint_core::modules::mint::{Mint, MintError};
-<span class="kw">use </span>fedimint_core::modules::wallet::{Wallet, WalletError};
 <span class="kw">use </span>fedimint_core::outcome::TransactionStatus;
-<span class="kw">use </span>fedimint_core_api::server::ServerModule;
-<span class="kw">use </span>fedimint_core_api::ModuleKey;
+<span class="kw">use </span>fedimint_wallet::{Wallet, WalletError};
 <span class="kw">use </span>futures::future::select_all;
 <span class="kw">use </span>hbbft::honey_badger::Batch;
 <span class="kw">use </span>rand::rngs::OsRng;
