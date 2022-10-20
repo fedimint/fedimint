@@ -33,24 +33,36 @@ use crate::ln::{LightningError, LnRpc};
 
 pub type Result<T> = std::result::Result<T, LnGatewayError>;
 
+// Placeholder struct for identifying federations within a gateway
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FederationId(pub String);
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReceiveInvoicePayload {
-    htlc_accepted: HtlcAccepted,
+    // NOTE: On ReceiveInvoice, we extract the relevant federation id from the accepted htlc
+    pub htlc_accepted: HtlcAccepted,
 }
 
 #[derive(Debug)]
 pub struct PayInvoicePayload {
-    contract_id: ContractId,
+    #[allow(dead_code)]
+    pub federation_id: FederationId,
+    pub contract_id: ContractId,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BalancePayload;
+pub struct BalancePayload {
+    pub federation_id: FederationId,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct DepositAddressPayload;
+pub struct DepositAddressPayload {
+    pub federation_id: FederationId,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DepositPayload {
+    pub federation_id: FederationId,
     pub txout_proof: TxOutProof,
     #[serde(
         deserialize_with = "serde_hex_deserialize",
@@ -61,6 +73,7 @@ pub struct DepositPayload {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WithdrawPayload {
+    pub federation_id: FederationId,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     pub address: Address,
